@@ -1,0 +1,1302 @@
+{
+  "results": [
+    {
+      "check_id": "CWE-798",
+      "path": "app.py",
+      "start": {
+        "line": 12,
+        "col": 1
+      },
+      "end": {
+        "line": 13,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hardcoded JWT Secret Key\n\nThe JWT secret key is hardcoded as the string 'dvga'. This is a well-known, trivially guessable value. Any attacker can forge valid JWT access and refresh tokens by signing them with this secret, bypassing all JWT-based authentication and authorization.\n\nImpact: An attacker can forge arbitrary JWT tokens, impersonate any user, and bypass all authentication controls. This allows full unauthorized access to all protected endpoints and data including PII.\n\nFix: Use a cryptographically random secret key loaded from an environment variable or secrets manager. For example: app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') with a strong random value.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "finding_id": "6ecba0b1-dc84-4cd6-903a-f64396c2bc03"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-347",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 18,
+        "col": 1
+      },
+      "end": {
+        "line": 19,
+        "col": 100
+      },
+      "extra": {
+        "message": "JWT Decode Without Signature Verification\n\nThe get_identity function decodes JWT tokens with both signature verification and expiration verification explicitly disabled (verify_signature=False, verify_exp=False). This means any attacker can forge a JWT token with any identity claim and it will be accepted as valid.\n\nImpact: An attacker can craft arbitrary JWT tokens to impersonate any user, including admin accounts, bypassing all authentication controls that rely on this function.\n\nFix: Enable signature verification by providing the secret key and setting verify_signature=True. Also enable expiration verification (verify_exp=True) to prevent use of expired tokens.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-347"
+          ],
+          "finding_id": "d2b87168-da1a-4371-b9af-1d1591e99841"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-22",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 21,
+        "col": 1
+      },
+      "end": {
+        "line": 27,
+        "col": 100
+      },
+      "extra": {
+        "message": "Arbitrary File Write via Path Traversal in save_file\n\nThe save_file function concatenates a user-controlled filename directly with WEB_UPLOADDIR to construct a file path. There is no validation or sanitization of the filename parameter, allowing path traversal sequences (e.g., '../../etc/cron.d/malicious') to write files to arbitrary locations on the filesystem.\n\nImpact: An attacker can write arbitrary files anywhere on the filesystem that the application process has write access to, potentially overwriting configuration files, injecting cron jobs, or achieving remote code execution.\n\nFix: Sanitize the filename by stripping path separators and traversal sequences. Use os.path.basename() to extract only the filename component. Validate that the resolved path (os.path.realpath) is within the intended upload directory.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "finding_id": "d31a0b1e-e8a5-4a7e-93a4-9817612c41fd"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-78",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 9,
+        "col": 1
+      },
+      "end": {
+        "line": 10,
+        "col": 100
+      },
+      "extra": {
+        "message": "OS Command Injection via os.popen in run_cmd\n\nThe run_cmd function passes its argument directly to os.popen(), which executes the command in a shell. This function is called from resolvers (e.g., system_diagnostics, system_debug, system_health) with user-controlled input. Even in 'hard' mode, the sanitization in strip_dangerous_characters only removes ';' and '&', which can be bypassed using other shell metacharacters like $(), backticks, pipes '|', newlines, etc.\n\nImpact: An attacker can execute arbitrary OS commands on the server, leading to full system compromise, data exfiltration, and lateral movement.\n\nFix: Replace os.popen with subprocess.run() using a list of arguments (no shell=True). Implement a strict allowlist of commands and validate all parameters. Never pass user input directly to shell execution.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "finding_id": "aaa75750-0203-4bd3-83e0-c18358b668d0"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-918",
+      "path": "core/views.py",
+      "start": {
+        "line": 244,
+        "col": 1
+      },
+      "end": {
+        "line": 246,
+        "col": 100
+      },
+      "extra": {
+        "message": "SSRF via ImportPaste mutation (server-side request to arbitrary URLs)\n\nThe ImportPaste mutation allows an unauthenticated user to specify arbitrary `host`, `port`, `path`, and `scheme` values which are used to make a server-side HTTP request via curl. This enables SSRF attacks to access internal services, cloud metadata endpoints (e.g., http://169.254.169.254/latest/meta-data/), and other resources not accessible from the internet.\n\nImpact: An attacker can scan internal networks, access cloud metadata services to steal credentials, interact with internal APIs, and potentially pivot to other internal systems.\n\nFix: Implement URL validation with a whitelist of allowed hosts/schemes. Block requests to private/internal IP ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x, 127.x.x.x). Use Python's requests library with proper SSRF protections instead of curl.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "finding_id": "8f19eeef-429c-4443-934a-86e05924e8b1"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-89",
+      "path": "core/views.py",
+      "start": {
+        "line": 367,
+        "col": 1
+      },
+      "end": {
+        "line": 370,
+        "col": 100
+      },
+      "extra": {
+        "message": "SQL Injection via raw text() filter in resolve_pastes\n\nThe `filter` parameter from the GraphQL query is directly interpolated into a raw SQL expression using Python string formatting (`%s`) inside `text()`. This allows an attacker to inject arbitrary SQL by crafting a malicious `filter` value. For example, a filter value of `' OR 1=1 --` would bypass the intended query logic.\n\nImpact: An attacker can read, modify, or delete arbitrary data from the database, including user credentials (stored in plaintext), PII (IP addresses, user agents), and all paste content.\n\nFix: Use parameterized queries with SQLAlchemy's `text()` bind parameters: `result = result.filter(text(\"title = :filter or content = :filter\").params(filter=filter))` or use SQLAlchemy ORM expressions like `Paste.title == filter`.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "finding_id": "ba19428b-8341-4f15-adb3-0509cd2e26d3"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-78",
+      "path": "core/views.py",
+      "start": {
+        "line": 395,
+        "col": 1
+      },
+      "end": {
+        "line": 401,
+        "col": 100
+      },
+      "extra": {
+        "message": "OS Command Injection via system_diagnostics resolver\n\nThe `cmd` parameter from the GraphQL query is passed to `helpers.run_cmd(cmd)` which executes it as a shell command. Although there is a `security.allowed_cmds(cmd)` check, this is a whitelist check that may be bypassable (e.g., via command chaining with `;`, `&&`, `|`, or backticks appended to an allowed command). The user-controlled `cmd` argument flows directly to shell execution.\n\nImpact: An attacker with valid admin credentials can execute arbitrary OS commands on the server, leading to full system compromise, data exfiltration, and lateral movement.\n\nFix: Never pass user input directly to shell commands. Use a strict whitelist of allowed commands and validate the exact command string matches (no additional characters). Better yet, implement the diagnostic functionality in Python without shell execution.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "finding_id": "436869fe-854b-4c38-aeb6-de0781e3da20"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-200",
+      "path": "core/views.py",
+      "start": {
+        "line": 71,
+        "col": 1
+      },
+      "end": {
+        "line": 76,
+        "col": 100
+      },
+      "extra": {
+        "message": "Unscoped Data Access - resolve_users exposes all users without authentication\n\nThe `resolve_users` resolver returns all users from the database without any authentication or authorization check. When no `id` parameter is provided, it returns the entire user table including sensitive fields. This allows any unauthenticated user to enumerate all users and their data.\n\nImpact: Any unauthenticated user can query all user records including usernames and masked/unmasked passwords. Combined with the password disclosure vulnerability, this enables full credential harvesting.\n\nFix: Add authentication checks to the resolver. Restrict the fields returned to non-sensitive data only. Implement proper authorization to ensure users can only access their own data.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "finding_id": "b63f5d2d-626a-4b77-9329-67e850b5b6cd"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 430,
+        "col": 1
+      },
+      "end": {
+        "line": 434,
+        "col": 100
+      },
+      "extra": {
+        "message": "Plaintext password exposure via resolve_password with identity check bypass\n\nThe `resolve_password` method returns the actual plaintext password when `info.context.json.get('identity') == 'admin'`. Since the identity is set from a potentially forged JWT token in `resolve_me`, and passwords are stored in plaintext, any attacker who can set the identity to 'admin' (via JWT forgery with the hardcoded 'dvga' secret) can retrieve any user's plaintext password.\n\nImpact: An attacker can retrieve plaintext passwords for all users in the system, enabling account takeover and credential stuffing attacks against other services where users may reuse passwords.\n\nFix: Never return plaintext passwords via any API. Passwords should be hashed (using bcrypt/argon2) and never exposed through any resolver. Remove the password field from the GraphQL schema entirely.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "finding_id": "e2f4d3a5-7d19-4135-93cb-09bc162a20e9"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-307",
+      "path": "core/views.py",
+      "start": {
+        "line": 260,
+        "col": 1
+      },
+      "end": {
+        "line": 272,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing rate limiting on Login mutation\n\nThe Login mutation has no rate limiting, allowing unlimited authentication attempts. An attacker can perform brute-force attacks against user credentials. The plaintext password storage makes this especially dangerous as there is no computational cost to password verification.\n\nImpact: An attacker can perform unlimited brute-force login attempts to guess user credentials, especially effective given that passwords are stored and compared in plaintext.\n\nFix: Implement rate limiting on the login mutation (e.g., limit to 5 attempts per minute per IP/username). Consider adding account lockout after repeated failures.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "finding_id": "25e172aa-a0b1-467b-bdbc-29ce703d77a1"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-532",
+      "path": "core/models.py",
+      "start": {
+        "line": 35,
+        "col": 1
+      },
+      "end": {
+        "line": 37,
+        "col": 100
+      },
+      "extra": {
+        "message": "Raw GraphQL Queries Stored in Audit Log\n\nThe Audit model stores the full GraphQL query string (gqlquery column) which may contain sensitive data beyond just tokens and passwords. The clean_query function only attempts to redact 'token' and 'password' fields, but other sensitive data like email addresses, personal information, API keys, or other credentials passed as query arguments will be stored in plaintext.\n\nImpact: Sensitive user data embedded in GraphQL queries (beyond tokens and passwords) is persisted in the audit log. Anyone with database access can view this data. Combined with SQL injection vulnerabilities in the app, this data could be exfiltrated.\n\nFix: Implement comprehensive sanitization that redacts all potentially sensitive fields from GraphQL queries before logging. Consider logging only operation names and sanitized variable names rather than full query strings.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "finding_id": "e4b87247-8331-439b-b83b-f8ff826ffb10"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-20",
+      "path": "core/security.py",
+      "start": {
+        "line": 25,
+        "col": 1
+      },
+      "end": {
+        "line": 30,
+        "col": 100
+      },
+      "extra": {
+        "message": "Insufficient Command Validation\n\nThe allowed_cmds() function has weak validation logic with a syntax error and insufficient command restrictions, allowing potential bypass of security controls.\n\nImpact: The missing comma between 'ps' and 'whoami' creates a syntax error, and the validation only checks command prefixes, allowing bypass with command chaining.\n\nFix: Fix the syntax error and implement strict command whitelisting. Validate the entire command string, not just prefixes.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-20"
+          ],
+          "finding_id": "7240b8cf-71cc-4b35-a021-2f88f1ce7cea"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-639",
+      "path": "core/views.py",
+      "start": {
+        "line": 180,
+        "col": 1
+      },
+      "end": {
+        "line": 194,
+        "col": 100
+      },
+      "extra": {
+        "message": "Insecure Direct Object Reference\n\nThe EditPaste mutation allows editing any paste by ID without checking if the user owns the paste or has permission to edit it.\n\nImpact: Any user can modify any paste in the system by guessing or enumerating paste IDs, leading to unauthorized data modification.\n\nFix: Implement proper authorization checks to ensure users can only edit their own pastes or pastes they have permission to modify.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "finding_id": "63d0bc40-bc58-4c5d-9dae-5261c0dc1a1f"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-204",
+      "path": "core/security.py",
+      "start": {
+        "line": 39,
+        "col": 1
+      },
+      "end": {
+        "line": 46,
+        "col": 100
+      },
+      "extra": {
+        "message": "Information Disclosure in Authentication\n\nThe check_creds() function returns different error messages for invalid usernames versus incorrect passwords, enabling username enumeration.\n\nImpact: An attacker can enumerate valid usernames by observing different error messages, facilitating targeted attacks.\n\nFix: Return generic error messages for all authentication failures to prevent username enumeration.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "finding_id": "3de3fa20-df04-490a-a24f-41e36ac2749a"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-321",
+      "path": "app.py",
+      "start": {
+        "line": 14,
+        "col": 1
+      },
+      "end": {
+        "line": 14,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hardcoded Flask SECRET_KEY\n\nThe Flask SECRET_KEY is hardcoded as the string 'dvga'. This key is used for signing session cookies and other security-sensitive operations. Note that line 10 sets a random secret_key, but line 14 overwrites it with the hardcoded value 'dvga'.\n\nImpact: An attacker can forge Flask session cookies, potentially leading to session hijacking, CSRF token bypass, and other attacks that rely on the integrity of the secret key.\n\nFix: Use a strong, randomly generated secret key stored in an environment variable or secrets manager. Remove the hardcoded override on line 14.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-321"
+          ],
+          "finding_id": "16e8015d-acc9-4dea-92f0-58250236ce1d"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 20,
+        "col": 1
+      },
+      "end": {
+        "line": 21,
+        "col": 100
+      },
+      "extra": {
+        "message": "JWT decode without signature verification\n\nThe `get_identity` function decodes JWT tokens with `verify_signature: False` and `verify_exp: False`. This means any attacker can forge a JWT token with any identity claim and it will be accepted as valid. There is no cryptographic verification of the token's authenticity.\n\nImpact: An attacker can craft arbitrary JWT tokens to impersonate any user, including admin, completely bypassing authentication.\n\nFix: Enable signature verification by setting `verify_signature: True` and provide the correct secret key. Also enable expiration verification with `verify_exp: True`.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "9a3f811d-b1df-4f56-b320-ef72b8142205"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-862",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 44,
+        "col": 1
+      },
+      "end": {
+        "line": 45,
+        "col": 100
+      },
+      "extra": {
+        "message": "CostProtectionMiddleware bypassed in easy mode\n\nCostProtectionMiddleware skips all cost analysis when in easy mode, allowing resource-exhaustion attacks via expensive queries.\n\nImpact: Attackers can send arbitrarily expensive queries causing denial of service.\n\nFix: Enforce cost protection regardless of application mode.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "finding_id": "88a480e9-6bd1-44f5-9b5b-575ba56a14b4"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-312",
+      "path": "core/models.py",
+      "start": {
+        "line": 14,
+        "col": 1
+      },
+      "end": {
+        "line": 14,
+        "col": 100
+      },
+      "extra": {
+        "message": "Plaintext Password Storage in User Model\n\nThe User model stores passwords as a plain String column (db.Column(db.String(60))) with no hashing. The create_user classmethod at line 17-22 stores whatever is passed in **kw directly, meaning passwords are stored in plaintext in the database. This is confirmed by the application context noting 'stores user credentials (plaintext passwords)'.\n\nImpact: If the database is compromised (via SQL injection or other means), all user passwords are immediately exposed in plaintext. Given the application has known SQL injection vulnerabilities, this is directly exploitable for credential theft.\n\nFix: Hash passwords using a strong adaptive hashing algorithm like bcrypt, scrypt, or Argon2 before storing them. Implement password hashing in the create_user method.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "finding_id": "335f5522-1787-4e42-a285-c90224dff2a6"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-862",
+      "path": "core/security.py",
+      "start": {
+        "line": 33,
+        "col": 1
+      },
+      "end": {
+        "line": 35,
+        "col": 100
+      },
+      "extra": {
+        "message": "Command allowlist bypassed in easy mode\n\nThe `allowed_cmds` function returns True for any command when in easy mode, completely disabling the command allowlist. This allows arbitrary command execution.\n\nImpact: Any OS command can be executed without restriction when the application is in easy mode.\n\nFix: Enforce command allowlisting regardless of application mode.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "finding_id": "92b4401c-ae9b-419d-8894-636df1616569"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "core/views.py",
+      "start": {
+        "line": 118,
+        "col": 1
+      },
+      "end": {
+        "line": 130,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Authentication on CreatePaste mutation\n\nThe CreatePaste mutation allows any unauthenticated user to create paste entries. There is no authentication check (no token verification, no session check) in the mutate handler. The paste is always assigned to the hardcoded 'DVGAUser' owner rather than an authenticated user.\n\nImpact: Any unauthenticated user can create pastes, potentially filling the database with spam or malicious content, and abusing the system as an anonymous data store.\n\nFix: Add authentication checks to the CreatePaste mutation by verifying a valid JWT token before allowing paste creation.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "c2e84d21-6c69-41a6-b86b-0f36e0534612"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-22",
+      "path": "core/views.py",
+      "start": {
+        "line": 186,
+        "col": 1
+      },
+      "end": {
+        "line": 186,
+        "col": 100
+      },
+      "extra": {
+        "message": "Path Traversal in UploadPaste file upload\n\nThe `filename` parameter from the GraphQL mutation is passed directly to `helpers.save_file(filename, content)` without any sanitization or validation. An attacker can use path traversal sequences (e.g., `../../etc/cron.d/malicious` or `../../../app/core/views.py`) to write files to arbitrary locations on the filesystem.\n\nImpact: An attacker can write arbitrary files anywhere on the filesystem that the application process has write access to. This can lead to remote code execution (overwriting application code, cron jobs, SSH keys), denial of service (overwriting critical files), or data corruption.\n\nFix: Sanitize the filename by stripping path separators and directory traversal sequences. Use `os.path.basename()` to extract only the filename, validate against a whitelist of allowed extensions, and ensure the resolved path is within the intended upload directory using `os.path.realpath()` comparison.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "finding_id": "541dd495-253f-495d-83a7-8a2a291d6d74"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-347",
+      "path": "core/views.py",
+      "start": {
+        "line": 283,
+        "col": 1
+      },
+      "end": {
+        "line": 296,
+        "col": 100
+      },
+      "extra": {
+        "message": "Insecure JWT Token Validation in resolve_me\n\nThe resolve_me query accepts a token parameter and calls get_identity() to extract the identity. Given the application context mentions JWT with hardcoded secret 'dvga' and potential lack of signature verification, an attacker can forge tokens to impersonate any user, including admin.\n\nImpact: An attacker can forge JWT tokens to impersonate any user including admin, gaining access to sensitive user data including passwords (since the identity is set to 'admin' which triggers password disclosure in resolve_password).\n\nFix: Use a strong, randomly generated JWT secret stored securely. Ensure proper signature verification is performed on all tokens.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-347"
+          ],
+          "finding_id": "d3d022ab-535e-44e5-a2e4-50ef3ad592c4"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-798",
+      "path": "setup.py",
+      "start": {
+        "line": 48,
+        "col": 1
+      },
+      "end": {
+        "line": 50,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hardcoded Weak Default Password for Admin User\n\nThe random_password() function only contains a single weak password 'changeme' in its list. This password is used for the admin user account created during database seeding. Since this is a known default credential, any attacker can authenticate as the admin user using 'admin'/'changeme'.\n\nImpact: An attacker can log in as the admin user with the well-known default credentials admin/changeme, gaining full administrative access to the application and all stored PII data.\n\nFix: Generate a strong random password for the admin account during setup, or require the administrator to set a password during initial configuration. Never use hardcoded weak passwords.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "finding_id": "27fc9e15-6343-45c0-bd38-df5e7d9a629c"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-312",
+      "path": "setup.py",
+      "start": {
+        "line": 63,
+        "col": 1
+      },
+      "end": {
+        "line": 63,
+        "col": 100
+      },
+      "extra": {
+        "message": "Plaintext Password Storage for Admin User\n\nThe admin user is created with the password passed directly to the User constructor without any hashing. Based on the application context, passwords are stored in plaintext in the database, meaning anyone with database access can read all user passwords.\n\nImpact: If the database is compromised (e.g., via SQL injection, which this app is known to have), all user passwords are immediately exposed in plaintext, including PII like email addresses.\n\nFix: Hash passwords using a strong adaptive hashing algorithm such as bcrypt, scrypt, or Argon2 before storing them in the database.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "finding_id": "a846c877-3bf5-4cf2-98e2-0134b8490cd2"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-16",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 14,
+        "col": 1
+      },
+      "end": {
+        "line": 16,
+        "col": 100
+      },
+      "extra": {
+        "message": "Security Middleware Bypassed in Easy Mode\n\nAll security middleware classes (DepthProtectionMiddleware, CostProtectionMiddleware, OpNameProtectionMiddleware, processMiddleware, IntrospectionMiddleware) check is_level_easy() and immediately return next() without applying any security checks when the application is in 'easy' mode. This means all depth limiting, cost analysis, operation name filtering, denylist checking, and introspection blocking are completely disabled in easy mode.\n\nImpact: When the application is in easy mode, all GraphQL security protections are disabled, allowing deep recursion attacks, resource exhaustion, introspection, and execution of denylisted queries.\n\nFix: Security controls should not be entirely toggleable via application state. Consider always enforcing baseline security protections regardless of mode.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-16"
+          ],
+          "finding_id": "e8d6d3aa-7448-4d05-b036-048005da371b"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-863",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 15,
+        "col": 1
+      },
+      "end": {
+        "line": 16,
+        "col": 100
+      },
+      "extra": {
+        "message": "All Security Middleware Bypassed in Easy Mode\n\nEvery security middleware (DepthProtectionMiddleware, CostProtectionMiddleware, OpNameProtectionMiddleware, processMiddleware, IntrospectionMiddleware) checks is_level_easy() and immediately returns next() without any security checks when the application is in easy mode. This means all depth limiting, cost analysis, operation name restrictions, denylist enforcement, and introspection controls are completely disabled in easy mode.\n\nImpact: When the application is in easy mode (which appears to be the default), all GraphQL security protections are completely bypassed, allowing deep recursion attacks, resource exhaustion, introspection, and execution of denylisted queries.\n\nFix: Security controls should not be entirely toggleable. At minimum, maintain baseline protections regardless of mode. Consider making the mode toggle only affect the strictness of limits rather than completely disabling them.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-863"
+          ],
+          "finding_id": "7d4d3a7b-ea53-4c99-8fe9-b0f4334247a2"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-915",
+      "path": "core/models.py",
+      "start": {
+        "line": 17,
+        "col": 1
+      },
+      "end": {
+        "line": 22,
+        "col": 100
+      },
+      "extra": {
+        "message": "Mass Assignment in User.create_user via **kw\n\nThe create_user classmethod accepts arbitrary keyword arguments (**kw) and passes them directly to the SQLAlchemy model constructor (cls(**kw)). There is no whitelist of allowed fields. An attacker could potentially set any model field including 'id' or other fields that should not be user-controllable.\n\nImpact: An attacker could set arbitrary fields on the User model, potentially overriding the primary key (id) or other fields that should be system-controlled.\n\nFix: Whitelist allowed fields explicitly: only accept 'username', 'email', and 'password' parameters. Validate and sanitize each field before creating the user object.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "finding_id": "55598775-6a52-4844-98af-3e13410e3f6d"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-200",
+      "path": "core/models.py",
+      "start": {
+        "line": 9,
+        "col": 1
+      },
+      "end": {
+        "line": 14,
+        "col": 100
+      },
+      "extra": {
+        "message": "User Model Exposes All Fields Including Password via SQLAlchemy Object\n\nThe User model has no field-level access control or serialization restrictions. When User objects are passed to GraphQL resolvers or template contexts, all fields including the plaintext password are accessible. Any GraphQL type that maps to this model could inadvertently expose the password field unless explicitly excluded at the schema level.\n\nImpact: If User objects are returned in GraphQL responses or passed to templates, the plaintext password field is available for exposure. Combined with the lack of password hashing, this directly leaks user credentials.\n\nFix: Add a custom serialization method that excludes sensitive fields. Use @hybrid_property or exclude password from any GraphQL type definitions. Implement field-level access control.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "finding_id": "acdfa287-7ed6-464e-9618-1481fcea3c9c"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-862",
+      "path": "core/models.py",
+      "start": {
+        "line": 9,
+        "col": 1
+      },
+      "end": {
+        "line": 22,
+        "col": 100
+      },
+      "extra": {
+        "message": "User Model Exposes All Fields Including Password Without Access Control\n\nThe User model has no field-level access control. All columns including 'password' (stored in plaintext) are accessible when the model is queried. Any GraphQL resolver that returns User objects or any query that accesses the users table can expose the password field. There is no mechanism to exclude sensitive fields from serialization or query results.\n\nImpact: If any GraphQL query or resolver returns User objects, the plaintext password field is accessible. Combined with the lack of authentication on the GraphQL endpoint, any unauthenticated user could potentially query and retrieve all user passwords.\n\nFix: Implement field-level access control on the User model. Exclude the password field from GraphQL type definitions. Use a property or method that prevents password from being serialized. At minimum, hash passwords so even if exposed, they aren't immediately usable.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "finding_id": "3c5bbca9-edc7-4b79-aeaa-b4983142a9d6"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-183",
+      "path": "core/security.py",
+      "start": {
+        "line": 33,
+        "col": 1
+      },
+      "end": {
+        "line": 39,
+        "col": 100
+      },
+      "extra": {
+        "message": "Command Allowlist Bypass Due to Missing Comma (String Concatenation Bug)\n\nIn the allowed_cmds function, the tuple passed to str.startswith() has a missing comma between 'ps' and 'whoami', resulting in Python string concatenation: ('echo', 'pswhoami', 'tail'). This means 'ps' is not actually in the allowlist (it becomes 'pswhoami'), and 'whoami' is also not individually allowed. More critically, this weakens the allowlist since commands starting with 'ps' or 'whoami' won't be recognized as allowed, but the real security issue is that the allowlist approach itself is bypassable.\n\nImpact: The allowlist does not function as intended. 'ps' and 'whoami' commands are not individually allowed. Additionally, commands starting with 'echo' or 'tail' can be followed by shell metacharacters to execute arbitrary commands (e.g., 'echo; cat /etc/passwd' after character stripping bypass).\n\nFix: Add the missing comma: ('echo', 'ps', 'whoami', 'tail'). Additionally, validate the entire command, not just the prefix, and use subprocess with shell=False.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-183"
+          ],
+          "finding_id": "80fbb6c6-0c81-409a-9377-ee1c431cfe55"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-78",
+      "path": "core/security.py",
+      "start": {
+        "line": 37,
+        "col": 1
+      },
+      "end": {
+        "line": 37,
+        "col": 100
+      },
+      "extra": {
+        "message": "Command Allowlist Bypass Due to Missing Comma (String Concatenation Bug)\n\nIn the allowed_cmds function, the tuple passed to str.startswith() has a missing comma between 'ps' and 'whoami', resulting in Python's implicit string concatenation: ('echo', 'pswhoami', 'tail'). This means 'ps' and 'whoami' are never individually matched as allowed commands. More critically, any command starting with 'echo' is allowed, which can be abused for command injection (e.g., 'echo $(cat /etc/passwd)').\n\nImpact: The allowlist is weaker than intended. Commands starting with 'echo' can be used for command injection via shell expansion (e.g., echo $(malicious_command)). Additionally, 'ps' and 'whoami' commands are unintentionally blocked.\n\nFix: Add the missing comma: ('echo', 'ps', 'whoami', 'tail'). Additionally, the allowlist approach is insufficient \u2014 commands starting with allowed prefixes can still inject via shell metacharacters. Use subprocess with argument lists instead of shell execution.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "finding_id": "1073990d-5fa5-459c-bdbf-5ad06ea7e0ea"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-184",
+      "path": "core/security.py",
+      "start": {
+        "line": 57,
+        "col": 1
+      },
+      "end": {
+        "line": 66,
+        "col": 100
+      },
+      "extra": {
+        "message": "Denylist Bypass via Query Aliases, Fragments, or Variations\n\nThe on_denylist function performs a simple string comparison after removing whitespace. It only checks for two exact query patterns: 'query{systemHealth}' and '{systemHealth}'. This can be trivially bypassed using GraphQL aliases (e.g., '{a:systemHealth}'), fragments, variables, additional fields, comments, or different query structures.\n\nImpact: An attacker can bypass the denylist and execute the systemHealth query (which likely contains command injection) by using any query variation not in the exact denylist, such as aliases, fragments, or adding dummy fields.\n\nFix: Instead of string-matching denylists, parse the GraphQL query AST and check for the presence of the systemHealth field regardless of query structure. Alternatively, remove the dangerous resolver entirely or implement proper authorization on it.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-184"
+          ],
+          "finding_id": "0a79a94e-58c2-481c-9b1a-8766461bf08d"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "core/view_override.py",
+      "start": {
+        "line": 157,
+        "col": 1
+      },
+      "end": {
+        "line": 178,
+        "col": 100
+      },
+      "extra": {
+        "message": "WebSocket Subscription Messages Not Authenticated\n\nThe GeventSubscriptionServerCustom.handle method processes WebSocket messages without any authentication or authorization checks. It directly processes incoming messages, creates audit entries, and forwards them to on_message without verifying the identity or permissions of the WebSocket client. Any client that can establish a WebSocket connection can subscribe to data.\n\nImpact: Unauthenticated users can establish WebSocket connections and subscribe to real-time data streams, potentially accessing sensitive information without proper authorization.\n\nFix: Implement authentication checks in the WebSocket handler. Verify JWT tokens or session credentials before allowing subscription operations. Reject unauthenticated connections.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "f32c4c3f-534c-4c13-bc02-192969d97345"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-209",
+      "path": "core/view_override.py",
+      "start": {
+        "line": 48,
+        "col": 1
+      },
+      "end": {
+        "line": 55,
+        "col": 100
+      },
+      "extra": {
+        "message": "Stack Trace and File Path Disclosure in Error Responses\n\nThe format_custom_error function exposes full stack traces (traceback.format_stack, traceback.format_exc) and the absolute file path of the caller frame to the client in the error response extensions. This leaks internal server details including file paths, code structure, library versions, and potentially sensitive variable values from stack frames. This information is returned in every GraphQL error response (except GraphiQL Access Rejected errors).\n\nImpact: An attacker can trigger GraphQL errors to obtain full stack traces, internal file paths, code structure, and potentially sensitive data from stack frames. This information aids in further attacks by revealing the application's internal architecture.\n\nFix: Remove stack trace and file path information from error responses sent to clients. Only include these details in server-side logs. Use generic error messages in production responses.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "finding_id": "e8def353-03d0-44cd-8f48-a1a020408ad6"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-312",
+      "path": "core/views.py",
+      "start": {
+        "line": 234,
+        "col": 1
+      },
+      "end": {
+        "line": 234,
+        "col": 100
+      },
+      "extra": {
+        "message": "Plaintext password comparison in Login mutation\n\nThe Login mutation queries the database filtering by both username and plaintext password (`User.query.filter_by(username=username, password=password)`). This confirms that passwords are stored in plaintext in the database, which is a severe security issue. If the database is compromised, all user credentials are immediately exposed.\n\nImpact: All user passwords are stored and compared in plaintext. A database breach exposes all credentials immediately, enabling account takeover across the application and potentially other services where users reuse passwords.\n\nFix: Hash passwords using a strong adaptive hashing algorithm (bcrypt, argon2, or scrypt) before storage. Compare passwords using the hash verification function rather than direct string comparison.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "finding_id": "baaee4a6-5543-4771-aee6-4ac4ffb93798"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-770",
+      "path": "core/views.py",
+      "start": {
+        "line": 508,
+        "col": 1
+      },
+      "end": {
+        "line": 514,
+        "col": 100
+      },
+      "extra": {
+        "message": "GraphQL batch query enabled allowing DoS and brute force attacks\n\nThe GraphQL endpoint at `/graphql` is configured with `batch=True`, allowing clients to send multiple queries in a single HTTP request. This can be abused for brute force attacks (e.g., sending hundreds of login mutations in one request to bypass rate limiting) or denial of service (sending many expensive queries simultaneously).\n\nImpact: An attacker can bypass rate limiting by batching many operations in a single request, perform brute force credential attacks via batched login mutations, or cause denial of service through resource exhaustion.\n\nFix: Disable batch queries by setting `batch=False` unless specifically needed. If batch queries are required, implement per-operation rate limiting and limit the maximum number of operations per batch request.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "finding_id": "bcc5dc54-c9d3-4d46-bbfb-adf72fc7bf8e"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "templates/audit.html",
+      "start": {
+        "line": 32,
+        "col": 1
+      },
+      "end": {
+        "line": 32,
+        "col": 100
+      },
+      "extra": {
+        "message": "Unescaped template variables in audit log - gqloperation\n\nThe template renders {{i.gqloperation}} which contains user-controlled GraphQL operation names from audit logs. If Jinja2 autoescape is disabled, this allows stored XSS since attackers can set arbitrary operation names in their GraphQL queries that get logged and then rendered on the audit page.\n\nImpact: An attacker can craft GraphQL queries with malicious operation names containing JavaScript that will execute when an administrator views the audit log page.\n\nFix: Ensure Jinja2 autoescape is enabled, or explicitly escape with {{ i.gqloperation | e }}.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "a3a7a8e7-c25b-49f0-8502-874d85694840"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "templates/index.html",
+      "start": {
+        "line": 15,
+        "col": 1
+      },
+      "end": {
+        "line": 15,
+        "col": 100
+      },
+      "extra": {
+        "message": "Unescaped template variable {{msg}} allows XSS\n\nThe template variable {{msg}} is rendered without explicit escaping. If Jinja2 autoescape is disabled (which is common in Flask apps that don't explicitly enable it), any user-controlled content in the 'msg' variable will be rendered as raw HTML, enabling Cross-Site Scripting. Even if autoescape is enabled, this should be verified since the application context notes this is an intentionally vulnerable app.\n\nImpact: An attacker could inject malicious JavaScript that executes in the context of other users' browsers, potentially stealing session tokens or performing actions on their behalf.\n\nFix: Ensure Jinja2 autoescape is enabled globally, or explicitly escape the variable using {{ msg | e }}.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "faf71891-7ef2-4b06-b5d8-06724ff01111"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "templates/paste.html",
+      "start": {
+        "line": 65,
+        "col": 1
+      },
+      "end": {
+        "line": 74,
+        "col": 100
+      },
+      "extra": {
+        "message": "DOM-based XSS via unsanitized paste content in WebSocket handler\n\nThe WebSocket message handler constructs HTML using template literals with unsanitized paste data (paste.title, paste.content, paste.owner.name, paste.ipAddr, paste.userAgent) and injects it directly into the DOM via jQuery's prependTo(). This allows stored XSS through malicious paste content received via WebSocket subscriptions.\n\nImpact: An attacker can create a paste with malicious JavaScript in the title, content, owner name, IP address, or user agent fields. When other users view the pastes page, the malicious script executes in their browser context, enabling session hijacking, data theft, or account takeover.\n\nFix: Sanitize all data before inserting into the DOM. Use textContent instead of innerHTML, or use a DOM sanitization library like DOMPurify. Alternatively, create DOM elements programmatically and set text content safely.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "638060f5-5973-472b-bdae-d3f89cdb116f"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-330",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 14,
+        "col": 1
+      },
+      "end": {
+        "line": 15,
+        "col": 100
+      },
+      "extra": {
+        "message": "Weak UUID generation - truncated to 6 characters\n\nThe `generate_uuid` function truncates UUIDs to only 6 hex characters, providing only ~16.7 million possible values instead of the full UUID4 space. If these are used as identifiers for resources, they become guessable/brute-forceable.\n\nImpact: Resource identifiers become predictable and brute-forceable, potentially enabling IDOR attacks if used for access control.\n\nFix: Use full UUID4 values without truncation for resource identifiers.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-330"
+          ],
+          "finding_id": "6ab1a3c8-498d-4ad9-918c-4e1f77b6d82a"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-209",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 28,
+        "col": 1
+      },
+      "end": {
+        "line": 29,
+        "col": 100
+      },
+      "extra": {
+        "message": "Error Message Leaks Exception Details in save_file\n\nWhen save_file() encounters an exception, it converts the exception to a string and returns it. This can leak internal filesystem paths, permission details, and other system information to the caller (and potentially to the end user via GraphQL responses).\n\nImpact: Information disclosure of internal file paths, directory structure, and permission configurations that can aid further attacks.\n\nFix: Return a generic error message instead of the raw exception string. Log the detailed error server-side for debugging.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "finding_id": "8500cbe0-92a5-46be-a863-63a28fee02e6"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-693",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 111,
+        "col": 1
+      },
+      "end": {
+        "line": 111,
+        "col": 100
+      },
+      "extra": {
+        "message": "Introspection Middleware Only Checks __schema, Not __type\n\nThe IntrospectionMiddleware only blocks queries containing the '__schema' field name. GraphQL introspection can also be performed using '__type' queries (e.g., '{__type(name:\"Query\"){name fields{name}}}'), which would bypass this middleware entirely.\n\nImpact: An attacker can enumerate the GraphQL schema using __type queries even when introspection is supposedly disabled in hard mode, revealing all types, fields, mutations, and their arguments.\n\nFix: Add '__type' to the blocked field names list: `if info.field_name.lower() in ['__schema', '__type']:`",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-693"
+          ],
+          "finding_id": "2fadd67b-802c-4c8b-9fda-0abbe9601b01"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-670",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 35,
+        "col": 1
+      },
+      "end": {
+        "line": 35,
+        "col": 100
+      },
+      "extra": {
+        "message": "Depth Calculation Bug - Mutation Branch Uses Wrong Variable\n\nIn the DepthProtectionMiddleware, when a mutation is detected (elif mutation:), the code calls parser.get_depth(query) instead of parser.get_depth(mutation). Since 'query' is None in this branch, this will either cause an error or return depth 0, effectively bypassing depth protection for all mutations.\n\nImpact: Depth protection is completely bypassed for GraphQL mutations, allowing deep recursion attacks via mutation queries even in hard mode.\n\nFix: Change `parser.get_depth(query)` to `parser.get_depth(mutation)` on line 35.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-670"
+          ],
+          "finding_id": "6d77249a-08bc-43d1-a486-05d78e665463"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-284",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 76,
+        "col": 1
+      },
+      "end": {
+        "line": 84,
+        "col": 100
+      },
+      "extra": {
+        "message": "Operation Name Allowlist is Easily Bypassed by Omitting Operation Name\n\nThe OpNameProtectionMiddleware allows queries through when no operation name is provided (opname == 'No Operation'). An attacker can bypass the operation name allowlist simply by not providing an operation name in their query, which is valid GraphQL.\n\nImpact: An attacker can execute any query or mutation without an operation name, completely bypassing the operation name protection.\n\nFix: Reject queries that don't have an operation name when in hard mode. Change the logic to require an operation name and validate it against the allowlist.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-284"
+          ],
+          "finding_id": "61833735-27b9-4963-a440-88b753d9f71b"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-184",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 94,
+        "col": 1
+      },
+      "end": {
+        "line": 103,
+        "col": 100
+      },
+      "extra": {
+        "message": "Denylist Middleware Only Checks Dict Payloads, Not List (Batch) Payloads\n\nThe processMiddleware (denylist) only processes dict-type JSON payloads but does not handle list-type payloads (batch queries). Unlike other middleware classes that handle both dict and list, this middleware skips batch queries entirely, allowing denylisted queries to be executed via batching.\n\nImpact: An attacker can bypass the denylist by sending denylisted queries as part of a batch request (JSON array), since the middleware only checks single dict payloads.\n\nFix: Add handling for list-type payloads similar to other middleware classes: elif isinstance(info.context.json, list): array_qry = info.context.json",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-184"
+          ],
+          "finding_id": "98c04fb4-ed72-498e-8d79-b540560babe8"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-116",
+      "path": "core/models.py",
+      "start": {
+        "line": 26,
+        "col": 1
+      },
+      "end": {
+        "line": 27,
+        "col": 100
+      },
+      "extra": {
+        "message": "Greedy Regex in clean_query May Fail to Properly Redact Sensitive Data\n\nThe regex patterns use greedy matching (.*) between lookbehind and lookahead assertions. For input like 'token:\"secret\" other:\"data\"', the greedy .* will match 'secret\" other:\"data' (everything up to the last quote), potentially corrupting the query while still failing to properly redact in edge cases with multiple quoted fields on the same line.\n\nImpact: Sensitive tokens and passwords may not be properly redacted in audit logs, leading to plaintext credential storage.\n\nFix: Use non-greedy matching (.*?) instead of greedy (.*), or better yet, use a proper GraphQL AST parser to identify and redact sensitive argument values.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-116"
+          ],
+          "finding_id": "f9f80830-d124-4552-8c22-bae58a18d355"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-862",
+      "path": "core/parser.py",
+      "start": {
+        "line": 5,
+        "col": 1
+      },
+      "end": {
+        "line": 10,
+        "col": 100
+      },
+      "extra": {
+        "message": "Depth parser uses naive whitespace splitting instead of proper parsing\n\nThe `get_depth` function counts depth by splitting on whitespace and counting '{' tokens. This can be bypassed by writing queries without spaces around braces (e.g., `{pastes{owner{pastes{title}}}}`) since `split()` won't separate the braces from field names, and the comparison `i == '{'` will fail for tokens like `{pastes`.\n\nImpact: Attackers can bypass depth protection by writing queries without whitespace around braces, enabling deep recursion attacks.\n\nFix: Use a proper GraphQL parser to determine query depth, or count all '{' characters in the string rather than relying on whitespace splitting.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "finding_id": "bc59d2f6-1fc3-4a9f-88f7-097f158de710"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-693",
+      "path": "core/parser.py",
+      "start": {
+        "line": 5,
+        "col": 1
+      },
+      "end": {
+        "line": 9,
+        "col": 100
+      },
+      "extra": {
+        "message": "Weak Depth Calculation Based on Simple String Splitting\n\nThe get_depth function calculates query depth by splitting the query string on whitespace and counting '{' tokens. This is easily bypassed by not separating '{' with spaces (e.g., 'query{pastes{owner{pastes{title}}}}' would count as 0 depth since '{' is never a standalone token after splitting).\n\nImpact: An attacker can bypass depth protection entirely by writing queries without spaces before opening braces, enabling deep recursion/denial-of-service attacks even in hard mode.\n\nFix: Use a proper GraphQL parser (e.g., graphql-core's parse function) to build an AST and calculate the actual query depth from the parsed tree, rather than relying on string splitting.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-693"
+          ],
+          "finding_id": "79fd24af-497b-494b-8b7d-da1dc157a650"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-209",
+      "path": "core/security.py",
+      "start": {
+        "line": 48,
+        "col": 1
+      },
+      "end": {
+        "line": 55,
+        "col": 100
+      },
+      "extra": {
+        "message": "Username enumeration via distinct error messages in check_creds\n\nThe `check_creds` function returns different error messages for invalid username ('Username is invalid') vs incorrect password ('Password Incorrect'). This allows attackers to enumerate valid usernames.\n\nImpact: Attackers can determine whether a username exists in the system, facilitating targeted brute-force attacks.\n\nFix: Return a generic error message like 'Invalid credentials' for both cases.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "finding_id": "24036e86-9f98-4ac7-b73d-4113b93b2b32"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-770",
+      "path": "core/security.py",
+      "start": {
+        "line": 80,
+        "col": 1
+      },
+      "end": {
+        "line": 95,
+        "col": 100
+      },
+      "extra": {
+        "message": "Cost analysis only tracks one field (systemUpdate)\n\nThe `cost_exceeded` function only assigns cost to the 'systemUpdate' field. All other fields have zero cost, meaning expensive queries using any other fields will never trigger cost protection, even in hard mode.\n\nImpact: Attackers can craft resource-intensive queries using fields other than systemUpdate without triggering cost limits, enabling denial of service.\n\nFix: Assign appropriate costs to all fields, especially those that trigger database queries or expensive operations. Use a default cost for unlisted fields.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "finding_id": "620a90e0-48d1-4ce6-a1f6-fc858311be7a"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-20",
+      "path": "core/view_override.py",
+      "start": {
+        "line": 172,
+        "col": 1
+      },
+      "end": {
+        "line": 175,
+        "col": 100
+      },
+      "extra": {
+        "message": "Unvalidated JSON Parsing of WebSocket Messages\n\nThe WebSocket handler parses incoming messages with json.loads without validation, then directly accesses nested keys msg['payload']['query'] without checking if they exist. A malicious client could send malformed JSON or messages missing expected keys, causing KeyError exceptions. More importantly, the raw user-controlled query string is passed directly to Audit.create_audit_entry and then to graphql's parse() function.\n\nImpact: Malformed WebSocket messages could cause unhandled exceptions. The raw query string from untrusted WebSocket input flows into the GraphQL parser and audit log without sanitization.\n\nFix: Validate the structure of WebSocket messages before processing. Wrap payload access in try/except blocks. Sanitize the query string before logging.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-20"
+          ],
+          "finding_id": "0933091c-b422-4319-8964-5c18a2f11053"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-200",
+      "path": "core/view_override.py",
+      "start": {
+        "line": 49,
+        "col": 1
+      },
+      "end": {
+        "line": 55,
+        "col": 100
+      },
+      "extra": {
+        "message": "Full Server File Path Disclosure in Error Responses\n\nThe format_custom_error function retrieves the full filesystem path of the caller frame using inspect.stack() and includes it in the error response sent to clients. This reveals the server's directory structure and deployment paths.\n\nImpact: Attackers learn the server's filesystem layout, which aids in path traversal attacks, identifying the technology stack, and crafting more targeted exploits.\n\nFix: Do not include server file paths in error responses. Log this information server-side only.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "finding_id": "099c9f7e-e717-4f52-9a29-39a0b8bdd9fe"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-770",
+      "path": "core/view_override.py",
+      "start": {
+        "line": 95,
+        "col": 1
+      },
+      "end": {
+        "line": 155,
+        "col": 100
+      },
+      "extra": {
+        "message": "No Rate Limiting on GraphQL Dispatch Request Handler\n\nThe OverriddenView.dispatch_request method processes all GraphQL HTTP requests without any rate limiting. This includes authentication-related mutations (login, token creation) and all other operations. An attacker can send unlimited requests to brute-force credentials or abuse expensive queries.\n\nImpact: Attackers can perform brute-force attacks against authentication mutations, execute resource-intensive queries repeatedly for denial of service, or abuse batch query support to amplify attacks.\n\nFix: Implement rate limiting on the GraphQL endpoint. Apply stricter limits on authentication-related operations. Consider query complexity analysis to prevent resource-intensive queries.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "finding_id": "878eff61-1d03-4399-bc2f-bffb01887e1f"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-352",
+      "path": "core/views.py",
+      "start": {
+        "line": 508,
+        "col": 1
+      },
+      "end": {
+        "line": 523,
+        "col": 100
+      },
+      "extra": {
+        "message": "No CSRF protection on GraphQL endpoints\n\nThe GraphQL endpoints (/graphql and /graphiql) are registered without any CSRF protection. The Flask application does not appear to use Flask-WTF or any other CSRF middleware. GraphQL mutations (login, create_paste, delete_paste, etc.) can be triggered via cross-site requests.\n\nImpact: An attacker can craft a malicious page that, when visited by an authenticated user, performs mutations such as deleting pastes, creating users, or modifying data without the user's consent.\n\nFix: Implement CSRF protection for all state-changing GraphQL operations. Use CSRF tokens or require a custom header (e.g., X-Requested-With) that cannot be set by cross-origin requests.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "finding_id": "8f197909-cad2-4e8b-b1c2-ee9286826415"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-200",
+      "path": "templates/audit.html",
+      "start": {
+        "line": 27,
+        "col": 1
+      },
+      "end": {
+        "line": 37,
+        "col": 100
+      },
+      "extra": {
+        "message": "Sensitive Data Exposure in Audit Log - Full GraphQL Queries Displayed\n\nThe audit log page renders full GraphQL queries including potentially sensitive data such as passwords, tokens, and other credentials that may be passed as query arguments (e.g., `systemDiagnostics(username:\"admin\", password:\"password\", cmd:\"id\")`).\n\nImpact: Credentials and sensitive parameters passed in GraphQL queries are visible to anyone who can access the audit page, potentially exposing passwords and authentication tokens.\n\nFix: Sanitize or redact sensitive parameters (passwords, tokens) from GraphQL queries before storing them in the audit log. Restrict access to the audit page to authorized administrators only.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "finding_id": "e7c17107-03f4-4095-bc81-abd7e40db6bb"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-352",
+      "path": "templates/partials/pastes/create_paste.html",
+      "start": {
+        "line": 1,
+        "col": 1
+      },
+      "end": {
+        "line": 48,
+        "col": 100
+      },
+      "extra": {
+        "message": "CSRF protection absent on all forms\n\nThe create paste form and all other paste forms (import, upload) lack CSRF tokens. While the forms submit via JavaScript fetch() to the GraphQL endpoint rather than traditional form submission, the GraphQL endpoint accepts requests with Content-Type: application/json which may bypass some CSRF protections but the forms themselves have no anti-CSRF mechanism.\n\nImpact: An attacker could craft a malicious page that triggers paste creation, import, or upload actions on behalf of an authenticated user.\n\nFix: Implement CSRF tokens in all forms and include them in the fetch() request headers. Consider using the SameSite cookie attribute as an additional defense.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "finding_id": "6906a5fa-8888-4251-9e58-67132c7c9675"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-319",
+      "path": "templates/paste.html",
+      "start": {
+        "line": 46,
+        "col": 1
+      },
+      "end": {
+        "line": 46,
+        "col": 100
+      },
+      "extra": {
+        "message": "Insecure WebSocket connection (ws:// instead of wss://)\n\nThe WebSocket connection for paste subscriptions uses the unencrypted ws:// protocol with host and port injected from server-side template variables. This transmits all paste data including PII (IP addresses, user agents) in cleartext.\n\nImpact: All data transmitted over the WebSocket connection, including paste content and PII, can be intercepted by network attackers via man-in-the-middle attacks.\n\nFix: Use wss:// (WebSocket Secure) protocol for WebSocket connections, or dynamically determine the protocol based on the page's protocol (http vs https).",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-319"
+          ],
+          "finding_id": "42c8dcef-f0a8-4e94-b426-2275d1b4cd7b"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-200",
+      "path": "templates/paste.html",
+      "start": {
+        "line": 73,
+        "col": 1
+      },
+      "end": {
+        "line": 73,
+        "col": 100
+      },
+      "extra": {
+        "message": "Sensitive PII data (IP addresses, user agents) rendered in client-side templates\n\nThe paste display templates render IP addresses (ipAddr) and user agent strings (userAgent) of paste creators directly in the HTML. This PII is exposed to any user viewing public or private pastes, including via the WebSocket subscription which broadcasts to all connected clients.\n\nImpact: IP addresses and user agent strings of paste creators are exposed to all users, potentially enabling tracking, fingerprinting, or targeted attacks against specific users.\n\nFix: Avoid exposing IP addresses and user agents to other users. Remove these fields from the GraphQL subscription and query responses, or restrict access to authorized administrators only.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "finding_id": "b606e995-4f93-47fd-ba24-9870698c6b66"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-770",
+      "path": "app.py",
+      "start": {
+        "line": 26,
+        "col": 1
+      },
+      "end": {
+        "line": 26,
+        "col": 100
+      },
+      "extra": {
+        "message": "Excessive Recursion Limit\n\nThe recursion limit is set to 100,000, which is extremely high (default is 1,000). This could facilitate denial-of-service attacks through deeply nested GraphQL queries that consume excessive stack memory.\n\nImpact: An attacker could craft deeply nested GraphQL queries that exploit this high recursion limit to cause stack overflow or excessive memory consumption, leading to denial of service.\n\nFix: Reduce the recursion limit to a reasonable value. Rely on GraphQL query depth limiting (MAX_DEPTH in config.py) rather than increasing the Python recursion limit.",
+        "severity": "LOW",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "finding_id": "109f3aef-9642-458d-9129-5e5ae39f3bee"
+        }
+      }
+    }
+  ]
+}

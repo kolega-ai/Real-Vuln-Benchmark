@@ -1,0 +1,906 @@
+{
+  "results": [
+    {
+      "check_id": "CWE-916",
+      "path": "sqli/schema/config.py",
+      "start": {
+        "line": 1,
+        "col": 1
+      },
+      "end": {
+        "line": 20,
+        "col": 100
+      },
+      "extra": {
+        "message": "Weak Password Hashing - MD5 Used for Passwords\n\nBased on the application context noting MD5 password hashing, the application uses MD5 for password hashing. MD5 is cryptographically broken and unsuitable for password storage. While the actual hashing code may be in other files, the configuration and schema do not enforce or support proper password hashing configuration.\n\nImpact: Attackers who obtain the password database can crack MD5 hashes extremely quickly using rainbow tables or brute force, compromising all user accounts.\n\nFix: Replace MD5 password hashing with bcrypt, argon2, or scrypt with appropriate work factors.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-916"
+          ],
+          "finding_id": "edcb2646-4dc4-4289-8444-dfb46fba37b2"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-384",
+      "path": "sqli/utils/auth.py",
+      "start": {
+        "line": 26,
+        "col": 1
+      },
+      "end": {
+        "line": 31,
+        "col": 100
+      },
+      "extra": {
+        "message": "No Session Regeneration After Authentication (Session Fixation)\n\nThe authentication utility `get_auth_user` retrieves the user from the session but there is no mechanism anywhere in the auth utilities to regenerate the session ID after successful login. If the login handler (which uses these utilities) does not regenerate the session, the application is vulnerable to session fixation attacks. An attacker can set a known session ID on a victim's browser, wait for them to authenticate, and then use that same session ID to access the victim's account. The auth utilities provide no helper or enforcement for session regeneration.\n\nImpact: An attacker can fixate a session ID on a victim, and after the victim logs in, the attacker can hijack their authenticated session to access PII and perform actions as the victim.\n\nFix: Ensure the login handler regenerates the session after successful authentication. In aiohttp-session, create a new session (invalidate the old one) after setting user_id. Consider adding session regeneration logic to the auth utilities or documenting it as a requirement for login handlers.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-384"
+          ],
+          "finding_id": "36c2daa9-bca4-431b-ab2e-7f289c9a7620"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-862",
+      "path": "sqli/dao/mark.py",
+      "start": {
+        "line": 29,
+        "col": 1
+      },
+      "end": {
+        "line": 37,
+        "col": 100
+      },
+      "extra": {
+        "message": "No Authorization Check in Mark.create() DAO \u2014 Unrestricted INSERT for Any Student/Course\n\nThe Mark.create() method allows inserting marks for any student_id and course_id combination without verifying that the caller has permission to assign marks to that student or course. This is an IDOR risk \u2014 a caller can specify arbitrary student_id values.\n\nImpact: An attacker could create marks for any student in any course with arbitrary point values, manipulating academic records.\n\nFix: Enforce authorization at the handler level to verify the caller has permission to create marks for the specified student and course. Validate that student_id and course_id exist and that the caller is authorized.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "finding_id": "8112476e-5394-4271-a0c1-de324b973a6b"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 33,
+        "col": 1
+      },
+      "end": {
+        "line": 35,
+        "col": 100
+      },
+      "extra": {
+        "message": "Jinja2 Autoescape Globally Disabled\n\nThe Jinja2 template engine is configured with `autoescape=False`. This disables automatic HTML escaping for all template expressions across the entire application, making every `{{ variable }}` expression that renders user-controlled or database-sourced data a potential XSS sink. Since this application handles PII and is public-facing, this is a critical root-cause misconfiguration.\n\nImpact: All template expressions rendering user-supplied or database-sourced data are vulnerable to Cross-Site Scripting (XSS). Attackers can inject malicious scripts to steal session cookies, perform actions on behalf of users, or exfiltrate PII.\n\nFix: Set `autoescape=True` in the `setup_jinja()` call, or use `jinja2.select_autoescape()` to enable autoescaping for HTML/XML templates. Example: `autoescape=jinja2.select_autoescape(['html', 'jinja2', 'xml'])`.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "d0b1ea22-0757-4ec9-9229-a9e1cdddc18e"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-89",
+      "path": "sqli/dao/student.py",
+      "start": {
+        "line": 42,
+        "col": 1
+      },
+      "end": {
+        "line": 45,
+        "col": 100
+      },
+      "extra": {
+        "message": "SQL Injection via Python String Interpolation in Student.create()\n\nThe Student.create() method constructs a SQL query using Python's `%` string formatting operator (`\"VALUES ('%(name)s')\" % {'name': name}`), which directly interpolates the user-supplied `name` parameter into the SQL string BEFORE it is passed to `cur.execute()`. This is NOT parameterized query execution \u2014 the `%` operator here is Python string formatting, not psycopg2's parameter substitution. An attacker can inject arbitrary SQL by providing a crafted name value such as `'); DROP TABLE students; --`.\n\nImpact: An attacker can execute arbitrary SQL commands against the PostgreSQL database, including reading, modifying, or deleting any data (including PII), dropping tables, or potentially gaining OS-level access via PostgreSQL extensions. Since this application handles PII, this is a critical data breach risk.\n\nFix: Use psycopg2's built-in parameterized query mechanism by passing parameters as the second argument to `cur.execute()`. Replace with: `q = 'INSERT INTO students (name) VALUES (%(name)s)'` and `await cur.execute(q, {'name': name})`. Never use Python string formatting (`%`, `.format()`, or f-strings) to construct SQL queries with user input.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "finding_id": "6eb1ce3f-d93d-45bd-ba13-0c712797a5f1"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-916",
+      "path": "sqli/dao/user.py",
+      "start": {
+        "line": 41,
+        "col": 1
+      },
+      "end": {
+        "line": 41,
+        "col": 100
+      },
+      "extra": {
+        "message": "Weak MD5 Password Hashing\n\nThe check_password method uses MD5 to hash passwords for comparison. MD5 is a cryptographically broken hash function that is extremely fast to compute, making it trivial to brute-force passwords. MD5 has no salting mechanism here either, meaning identical passwords produce identical hashes, enabling rainbow table attacks. For a public-facing application storing PII, this is critical.\n\nImpact: An attacker who gains access to the database (e.g., via SQL injection elsewhere in the app) can crack user passwords extremely quickly using rainbow tables or brute force. MD5 can be computed at billions of hashes per second on modern GPUs.\n\nFix: Replace MD5 with a purpose-built password hashing algorithm such as bcrypt, scrypt, or argon2. Use a library like `passlib` or `bcrypt` that handles salting automatically. Example: `from passlib.hash import bcrypt; bcrypt.verify(password, self.pwd_hash)`.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-916"
+          ],
+          "finding_id": "4bf16195-e171-40b2-a795-1971b6d5cb3c"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/base.jinja2",
+      "start": {
+        "line": 25,
+        "col": 1
+      },
+      "end": {
+        "line": 25,
+        "col": 100
+      },
+      "extra": {
+        "message": "Stored XSS via auth_user fields in base.jinja2\n\nWith autoescape=False, auth_user.first_name, auth_user.middle_name, and auth_user.last_name are rendered without escaping. While these come from the database, if user registration allows arbitrary names, this is exploitable.\n\nImpact: XSS if user names contain malicious scripts, executing in the context of any authenticated page view.\n\nFix: Use {{ auth_user.first_name | e }} {{ auth_user.middle_name | e }} {{ auth_user.last_name | e }} or enable autoescape globally.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "754989e7-7f19-486a-9f55-ceb319028704"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/course.jinja2",
+      "start": {
+        "line": 9,
+        "col": 1
+      },
+      "end": {
+        "line": 9,
+        "col": 100
+      },
+      "extra": {
+        "message": "Stored XSS via Course Title in course.jinja2\n\nWith autoescape=False, course.title is rendered without escaping in the breadcrumb on the course detail page.\n\nImpact: Stored XSS allowing JavaScript execution in the context of any user viewing a course page.\n\nFix: Use {{ course.title | e }} or enable autoescape globally.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "ddb3bb3e-1de7-4313-93e8-d794971e3295"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/courses.jinja2",
+      "start": {
+        "line": 17,
+        "col": 1
+      },
+      "end": {
+        "line": 17,
+        "col": 100
+      },
+      "extra": {
+        "message": "Stored XSS via Course Title in courses.jinja2\n\nWith autoescape=False, course.title is rendered without escaping in the courses list page.\n\nImpact: Stored XSS allowing JavaScript execution in the context of any user viewing the courses list.\n\nFix: Use {{ course.title | e }} or enable autoescape globally.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "e1a650b8-6d8a-43aa-b190-2e9d21c49694"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/evaluate.jinja2",
+      "start": {
+        "line": 25,
+        "col": 1
+      },
+      "end": {
+        "line": 25,
+        "col": 100
+      },
+      "extra": {
+        "message": "Stored XSS via Student Name in evaluate.jinja2\n\nWith autoescape=False, student.name is rendered without escaping in the aside section.\n\nImpact: Stored XSS allowing JavaScript execution when viewing the evaluate error page.\n\nFix: Use {{ student.name | e }} or enable autoescape globally.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "b9ad8674-a0cb-4a18-8bc7-f4f5286c3b9b"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/review.jinja2",
+      "start": {
+        "line": 32,
+        "col": 1
+      },
+      "end": {
+        "line": 32,
+        "col": 100
+      },
+      "extra": {
+        "message": "Stored XSS via Course Title in review.jinja2\n\nWith autoescape=False, course.title is rendered without escaping in the review form card title.\n\nImpact: Stored XSS allowing JavaScript execution when a user visits the review page for a course with a malicious title.\n\nFix: Use {{ course.title | e }} or enable autoescape globally.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "af6c166c-8db1-4db9-bdec-d5f759b597a7"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/student.jinja2",
+      "start": {
+        "line": 19,
+        "col": 1
+      },
+      "end": {
+        "line": 19,
+        "col": 100
+      },
+      "extra": {
+        "message": "Stored XSS via Course Title in student.jinja2\n\nWith autoescape=False, course.title is rendered without escaping. Course titles are user-supplied data stored in the database.\n\nImpact: Stored XSS allowing JavaScript execution in the context of any user viewing a student's page.\n\nFix: Use {{ course.title | e }} or enable autoescape globally.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "a9260e3c-2f5e-447b-a7a5-9b8b393fc3e8"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/students.jinja2",
+      "start": {
+        "line": 16,
+        "col": 1
+      },
+      "end": {
+        "line": 16,
+        "col": 100
+      },
+      "extra": {
+        "message": "Stored XSS via Student Name in students.jinja2\n\nWith autoescape=False globally, the student name is rendered without escaping via {{ name }}. Since student names are user-supplied and stored in the database, this is a stored XSS vulnerability. An attacker can inject malicious JavaScript through the student name field.\n\nImpact: An attacker can inject JavaScript that executes in the browsers of all users viewing the students list, enabling session hijacking, credential theft, or actions on behalf of other users.\n\nFix: Enable autoescape=True globally in Jinja2 configuration, or use the |e filter on all user-controlled outputs: {{ name | e }}.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "e7263806-63bf-42b4-bf3a-00c1944e65ad"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 54,
+        "col": 1
+      },
+      "end": {
+        "line": 57,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Authentication on Student Creation (POST)\n\nThe students() handler accepts POST requests to create new students without any authentication check. The template hides the form behind `{% if auth_user %}`, but this is frontend-only gating \u2014 the handler itself never verifies the caller's identity. Any unauthenticated user can POST to /students/ to create arbitrary student records.\n\nImpact: Unauthenticated users can create arbitrary student records in the database, polluting data and potentially enabling further attacks (e.g., SQL injection via the student name field).\n\nFix: Add server-side authentication check at the beginning of the POST branch, e.g., `auth_user = await get_auth_user(request); if not auth_user: raise HTTPForbidden()`",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "51056bfe-dfef-46b3-a0c2-1dbb2ec24e82"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-89",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 57,
+        "col": 1
+      },
+      "end": {
+        "line": 57,
+        "col": 100
+      },
+      "extra": {
+        "message": "SQL Injection via Student Name in Student.create()\n\nThe students view passes user-supplied 'name' from POST data directly to Student.create() without any sanitization. Based on the application context, Student.create() uses raw SQL string interpolation, making this a SQL injection vulnerability. The user-controlled input flows from request.post()['name'] directly into a SQL query.\n\nImpact: An attacker can execute arbitrary SQL commands against the PostgreSQL database, potentially reading, modifying, or deleting all data including PII, or gaining control of the database server.\n\nFix: Use parameterized queries in Student.create() instead of string interpolation. Pass the name as a parameter to the SQL query execution.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "finding_id": "63c5165f-578e-491a-949e-b54fb18a0f4d"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-798",
+      "path": "config/dev.yaml",
+      "start": {
+        "line": 2,
+        "col": 1
+      },
+      "end": {
+        "line": 3,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hardcoded Database Credentials in Configuration File\n\nThe database credentials (user: postgres, password: postgres) are hardcoded in the configuration file with weak default values. This file is committed to version control and the default config path is hardcoded in app.py. These are trivially guessable credentials.\n\nImpact: An attacker who gains access to the source code repository or the deployed configuration file obtains database credentials. The weak default credentials (postgres/postgres) could also be used to directly access the database if the port is exposed.\n\nFix: Use environment variables or a secrets management system for database credentials. Never commit credentials to version control. Use strong, unique passwords.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "finding_id": "937178d3-4353-4ce9-87b9-d26eecef850e"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-352",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 27,
+        "col": 1
+      },
+      "end": {
+        "line": 27,
+        "col": 100
+      },
+      "extra": {
+        "message": "CSRF Middleware Commented Out\n\nThe CSRF middleware is commented out (`# csrf_middleware,`) in the application middleware stack. This means all POST endpoints (login, student creation, course creation, evaluation, review submission, logout) are unprotected against Cross-Site Request Forgery attacks. Any external site can craft forms that submit state-changing requests on behalf of authenticated users.\n\nImpact: An attacker can trick authenticated users into performing unintended actions such as creating students, courses, submitting evaluations, writing reviews, or logging out by hosting a malicious page that submits forms to the application.\n\nFix: Uncomment the csrf_middleware in the middlewares list to enable CSRF protection for all POST requests.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "finding_id": "a04c33d2-f47b-4c67-a8cd-342335ddde95"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-1004",
+      "path": "sqli/middlewares.py",
+      "start": {
+        "line": 20,
+        "col": 1
+      },
+      "end": {
+        "line": 20,
+        "col": 100
+      },
+      "extra": {
+        "message": "Session Cookie httponly=False Allows JavaScript Access\n\nThe session storage is configured with `httponly=False`, which means the session cookie can be accessed by client-side JavaScript. Combined with the XSS vulnerabilities in this application (autoescape=False), this makes session hijacking trivial.\n\nImpact: If an attacker exploits any XSS vulnerability, they can steal session cookies via `document.cookie` and hijack user sessions, gaining full access to the victim's account.\n\nFix: Set `httponly=True` in the RedisStorage constructor to prevent JavaScript access to session cookies.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-1004"
+          ],
+          "finding_id": "50dcf564-e753-44aa-b3ca-50e639836a6f"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-307",
+      "path": "sqli/routes.py",
+      "start": {
+        "line": 10,
+        "col": 1
+      },
+      "end": {
+        "line": 11,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Login Endpoint\n\nThe index route (GET/POST at '/') handles login functionality but has no rate limiting. The views.index handler processes authentication POST requests without any throttling, allowing brute-force password attacks.\n\nImpact: An attacker can perform unlimited login attempts to brute-force user credentials.\n\nFix: Add rate limiting middleware or decorator to the login/index endpoint to restrict the number of authentication attempts per IP/session.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "finding_id": "21dc1085-127f-4698-9b58-500cc9b176cb"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-312",
+      "path": "sqli/utils/jinja2.py",
+      "start": {
+        "line": 19,
+        "col": 1
+      },
+      "end": {
+        "line": 21,
+        "col": 100
+      },
+      "extra": {
+        "message": "Full User Object (Including pwd_hash) Passed to Template Context\n\nThe auth_user_processor context processor passes the full User object (which includes the pwd_hash field and is_admin flag) into every template rendering context as 'auth_user'. The User NamedTuple contains sensitive fields: pwd_hash (the MD5 password hash) and is_admin. Since autoescape=False is configured in this application, any template rendering {{ auth_user }} or {{ auth_user.pwd_hash }} would expose the password hash directly in HTML output. Even without explicit template rendering of the field, the sensitive data crosses a trust boundary from server to rendered output context.\n\nImpact: Password hashes and admin status are available in every template context. If any template renders the full object (e.g., for debugging or via {{ auth_user }}), the MD5 password hash is exposed to the end user. Combined with autoescape=False, this data could be rendered in page source.\n\nFix: Instead of passing the full User object, create a safe view/dict with only the fields needed for display: {'auth_user': {'id': auth_user.id, 'first_name': auth_user.first_name, 'last_name': auth_user.last_name, 'username': auth_user.username, 'is_admin': auth_user.is_admin}} \u2014 explicitly excluding pwd_hash.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "finding_id": "aa63aae2-6d4b-45af-af48-b4557eefc326"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-352",
+      "path": "sqli/utils/jinja2.py",
+      "start": {
+        "line": 8,
+        "col": 1
+      },
+      "end": {
+        "line": 16,
+        "col": 100
+      },
+      "extra": {
+        "message": "CSRF Token Generated But Middleware Commented Out\n\nThe csrf_processor generates CSRF tokens and makes them available in templates, but based on the application context, the CSRF middleware is commented out. This means CSRF tokens are generated but never validated on the server side, providing no actual CSRF protection. All state-changing endpoints (POST/PUT/DELETE) are vulnerable to cross-site request forgery attacks.\n\nImpact: An attacker can craft malicious pages that submit forged requests on behalf of authenticated users, potentially modifying data, creating/deleting records, or performing administrative actions.\n\nFix: Re-enable the CSRF middleware so that CSRF tokens are validated on every state-changing request. Ensure all POST/PUT/DELETE forms include the CSRF token and that the middleware rejects requests with missing or invalid tokens.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "finding_id": "2206217c-3883-43cb-b999-1b37454b6ff0"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-307",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 33,
+        "col": 1
+      },
+      "end": {
+        "line": 45,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Login Endpoint\n\nThe index() handler processes login POST requests without any rate limiting. An attacker can perform unlimited brute-force password guessing attempts against user accounts.\n\nImpact: Attackers can brute-force user credentials by submitting unlimited login attempts, potentially compromising user accounts.\n\nFix: Implement rate limiting on the login endpoint, such as limiting attempts per IP address or per username, with exponential backoff or account lockout after repeated failures.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "finding_id": "d026db6e-5163-46bd-b1b9-f793f553f03d"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-384",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 33,
+        "col": 1
+      },
+      "end": {
+        "line": 48,
+        "col": 100
+      },
+      "extra": {
+        "message": "Session Fixation - No Session Regeneration After Login\n\nAfter successful authentication (line 41-42), the session ID is not regenerated. The code sets session['user_id'] = user.id but never calls session.invalidate() or creates a new session. An attacker who knows or sets a victim's session ID before login can hijack the authenticated session.\n\nImpact: An attacker can fixate a session ID on a victim's browser (e.g., via a subdomain cookie or URL parameter), wait for the victim to log in, and then use the same session ID to access the victim's authenticated session.\n\nFix: Regenerate the session after successful authentication. With aiohttp-session, create a new session by invalidating the old one: `session.invalidate()` followed by getting a new session and setting user_id.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-384"
+          ],
+          "finding_id": "3b8c19f8-5751-46e5-9f5d-ef6341bc6cc7"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-284",
+      "path": "docker-compose.yml",
+      "start": {
+        "line": 8,
+        "col": 1
+      },
+      "end": {
+        "line": 9,
+        "col": 100
+      },
+      "extra": {
+        "message": "PostgreSQL Port Exposed to Host Network\n\nThe PostgreSQL port 5432 is mapped to the host with `ports: - 5432:5432`, making the database directly accessible from outside the Docker network. Combined with the weak hardcoded credentials (postgres/postgres), this allows direct database access.\n\nImpact: An attacker on the host network or, if the host is internet-facing, from the internet can directly connect to PostgreSQL with the default credentials and access or modify all application data including PII.\n\nFix: Remove the port mapping for PostgreSQL in docker-compose.yml. If external access is needed for development, bind only to localhost (127.0.0.1:5432:5432).",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-284"
+          ],
+          "finding_id": "16b4a7c9-843e-4731-9cea-7706366b1ed9"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-489",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 24,
+        "col": 1
+      },
+      "end": {
+        "line": 24,
+        "col": 100
+      },
+      "extra": {
+        "message": "Debug Mode Enabled in Production Application\n\nThe application is initialized with `debug=True` hardcoded. In aiohttp, debug mode can expose detailed error information, stack traces, and internal application state to end users, aiding attackers in reconnaissance.\n\nImpact: Detailed error messages and stack traces may be exposed to attackers, revealing internal application structure, file paths, library versions, and other information useful for crafting targeted attacks.\n\nFix: Set `debug=False` for production deployments, or make the debug flag configurable via the application configuration file.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "finding_id": "25ccc544-f61e-4a56-b8d1-177165584d66"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-312",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 34,
+        "col": 1
+      },
+      "end": {
+        "line": 34,
+        "col": 100
+      },
+      "extra": {
+        "message": "Auth User Processor Injects User Data into All Template Contexts\n\nThe auth_user_processor context processor is registered globally, injecting user data into every template rendering context. Without seeing the implementation, context processors that pass full user objects (rather than cherry-picked safe fields) risk exposing sensitive fields like password hashes or tokens to template output, especially with autoescape=False.\n\nImpact: If the auth_user_processor passes a full user model object to templates, sensitive fields (password hashes, internal IDs) cross a trust boundary into rendered output, potentially exposing PII.\n\nFix: Ensure auth_user_processor only passes safe, non-sensitive user fields (e.g., username, display name) to the template context, not the full user/session object.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "finding_id": "8168b01c-3aee-4fe9-8171-6fa7e65d705c"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-862",
+      "path": "sqli/dao/review.py",
+      "start": {
+        "line": 28,
+        "col": 1
+      },
+      "end": {
+        "line": 36,
+        "col": 100
+      },
+      "extra": {
+        "message": "No Authorization Check in Review.create() DAO \u2014 Unrestricted INSERT\n\nThe Review.create() method allows inserting reviews for any course_id without verifying the caller's identity or permissions. There is no association between the review and the authenticated user.\n\nImpact: Any user (or unauthenticated caller if the handler lacks auth) can post reviews for any course, enabling spam or abuse.\n\nFix: Enforce authentication and authorization at the handler level. Consider associating reviews with the authenticated user's ID.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "finding_id": "d2fdde76-ccc0-4b92-8a5c-1bc91795ab21"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-862",
+      "path": "sqli/dao/student.py",
+      "start": {
+        "line": 25,
+        "col": 1
+      },
+      "end": {
+        "line": 38,
+        "col": 100
+      },
+      "extra": {
+        "message": "Unscoped Student.get_many() Returns All Students Without Authorization Filtering\n\nThe Student.get_many() method returns all students from the database without any filtering by the authenticated user's identity or role. Any caller can retrieve the full list of students (PII). While this is a DAO method and authorization should ideally be enforced at the handler level, the DAO provides no mechanism to scope results by caller identity.\n\nImpact: Any authenticated (or unauthenticated, depending on handler) user can enumerate all student records, exposing PII.\n\nFix: Add authorization filtering at the handler level or pass the authenticated user's context to the DAO to scope queries appropriately.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "finding_id": "0992794f-6aa9-4117-9043-71cb64755092"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-200",
+      "path": "sqli/dao/user.py",
+      "start": {
+        "line": 21,
+        "col": 1
+      },
+      "end": {
+        "line": 28,
+        "col": 100
+      },
+      "extra": {
+        "message": "Password Hash Stored and Returned in User Object\n\nThe User.get() and User.get_by_username() methods select pwd_hash from the database and include it in the User NamedTuple. This User object is then passed to templates via auth_user_processor (jinja2.py:19-21), making the password hash available in the template context as `auth_user.pwd_hash`. With autoescape=False (noted in application context), this hash could be rendered in HTML responses, leaking sensitive credential data.\n\nImpact: The MD5 password hash is exposed in the template context for every request. If any template accidentally renders the full user object or the pwd_hash field, the hash is leaked to the browser, enabling offline password cracking.\n\nFix: Avoid selecting pwd_hash in queries used for session/template context. Create a separate method or DTO that excludes sensitive fields like pwd_hash for use in templates. Only fetch pwd_hash when needed for authentication checks.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "finding_id": "35d857ce-f8a1-4790-858e-8d3a0919cd14"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-312",
+      "path": "sqli/dao/user.py",
+      "start": {
+        "line": 7,
+        "col": 1
+      },
+      "end": {
+        "line": 14,
+        "col": 100
+      },
+      "extra": {
+        "message": "User Object NamedTuple Exposes pwd_hash Field in String Representation\n\nThe User class is a NamedTuple which includes pwd_hash as a field. NamedTuple's default __repr__ and __str__ methods include all fields. If a User object is ever logged, printed, or rendered as a string (e.g., in error messages, debug output, or template rendering via {{ auth_user }}), the password hash will be included in the output. Given that auth_user_processor injects this into every template context, this is a concrete risk.\n\nImpact: If the User object is ever converted to string (logging, error handling, template rendering), the password hash is exposed.\n\nFix: Override __repr__ and __str__ on the User class to exclude pwd_hash, or switch to a dataclass/regular class with a custom __repr__ that redacts sensitive fields.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "finding_id": "1a6e6caf-54ba-4d61-8031-fc7c5226b093"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-209",
+      "path": "sqli/middlewares.py",
+      "start": {
+        "line": 61,
+        "col": 1
+      },
+      "end": {
+        "line": 65,
+        "col": 100
+      },
+      "extra": {
+        "message": "Error Handler Passes Exception Object to Template Context\n\nThe handle_40x error handler passes the full exception object to the template context as 'error'. With autoescape=False configured in the application, if the template renders exception details (e.g., error message, status, headers, or __dict__), internal server information could be disclosed to users.\n\nImpact: Exception objects may contain internal paths, configuration details, or stack trace information that could help an attacker understand the application's internals and plan further attacks.\n\nFix: Pass only safe, user-friendly error information to templates instead of the full exception object. For example: {'status': exc.status, 'message': 'Page not found'}.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "finding_id": "e2ec6e5b-f447-4d9c-8163-1884cf4db3ca"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-770",
+      "path": "sqli/routes.py",
+      "start": {
+        "line": 14,
+        "col": 1
+      },
+      "end": {
+        "line": 14,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Student Creation Endpoint\n\nThe POST /students/ endpoint for creating students has no rate limiting, allowing unlimited form submissions.\n\nImpact: An attacker could flood the system with student creation requests, causing resource exhaustion or data pollution.\n\nFix: Add rate limiting to the student creation endpoint.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "finding_id": "03406c15-e1b6-482f-ba0d-4208149674eb"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "sqli/schema/config.py",
+      "start": {
+        "line": 12,
+        "col": 1
+      },
+      "end": {
+        "line": 15,
+        "col": 100
+      },
+      "extra": {
+        "message": "Redis Connection Without Authentication\n\nThe Redis configuration schema defines only host, port, and db \u2014 there is no password field. Redis is used to store session data, so unauthenticated access to Redis allows session manipulation. The connection in services/redis.py also passes no password.\n\nImpact: If Redis is accessible on the network, an attacker can connect without authentication, read/modify session data, and potentially hijack any user's session or escalate privileges.\n\nFix: Add a 'password' field to the Redis configuration schema and pass it to the aioredis.create_pool() call. Configure Redis to require authentication.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "07a8b0b7-dbe9-40cd-9e32-d0dfd01ddc1e"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-319",
+      "path": "sqli/services/db.py",
+      "start": {
+        "line": 15,
+        "col": 1
+      },
+      "end": {
+        "line": 19,
+        "col": 100
+      },
+      "extra": {
+        "message": "Database Connection Without TLS/SSL\n\nThe PostgreSQL connection DSN is constructed without any SSL/TLS parameters (e.g., sslmode=require). Database traffic including credentials and PII data is transmitted in cleartext between the application and the database server.\n\nImpact: An attacker with network access between the application and database can intercept database credentials and all query data (including PII) via network sniffing.\n\nFix: Add `sslmode=require` (or `sslmode=verify-full`) to the DSN string to encrypt database connections. Add SSL configuration options to the config schema.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-319"
+          ],
+          "finding_id": "1b72bf0e-d72a-4515-aca5-b2efa48be39c"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-209",
+      "path": "sqli/templates/errors/50x.jinja2",
+      "start": {
+        "line": 6,
+        "col": 1
+      },
+      "end": {
+        "line": 6,
+        "col": 100
+      },
+      "extra": {
+        "message": "Information Disclosure via Error Details in 50x.jinja2\n\nThe 500 error template renders the full error.__dict__ which may contain internal server details, stack traces, file paths, database connection information, and other sensitive implementation details.\n\nImpact: Attackers can trigger server errors to obtain internal implementation details that aid in further attacks.\n\nFix: Remove the error.__dict__ output from the production error template. Only show a generic error message to users.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "finding_id": "cf6d40a8-52e8-4df5-a619-5877c847df0d"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/index.jinja2",
+      "start": {
+        "line": 5,
+        "col": 1
+      },
+      "end": {
+        "line": 5,
+        "col": 100
+      },
+      "extra": {
+        "message": "XSS: Unescaped last_visited in index.jinja2\n\nThe expression {{ last_visited }} renders session data without escaping. While the value is typically set by the application (datetime.now().isoformat()), with autoescape=False, if session data were manipulated, this could be an XSS vector.\n\nImpact: Potential XSS if session data is tampered with.\n\nFix: Apply the |e escape filter: {{ last_visited | e }}.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "daf896aa-9537-480f-ac50-b84c34b31df8"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-862",
+      "path": "sqli/utils/auth.py",
+      "start": {
+        "line": 12,
+        "col": 1
+      },
+      "end": {
+        "line": 23,
+        "col": 100
+      },
+      "extra": {
+        "message": "authorize Decorator Does Not Pass User to Handler (Authorization Gap)\n\nThe `authorize` decorator fetches the authenticated user and checks authentication/admin status, but does not pass the user object to the handler. The handler must independently re-fetch the user or rely on the session. This creates a pattern where handlers may skip authorization checks on specific resources (IDOR) because they don't have convenient access to the authenticated user object for scoping queries. Handlers that accept resource IDs may query by ID alone without filtering by the authenticated user.\n\nImpact: Handlers protected by `authorize()` know the user is authenticated but don't receive the user object, making it easy to write handlers that don't scope data access to the authenticated user, leading to IDOR vulnerabilities.\n\nFix: Modify the authorize decorator to attach the authenticated user to the request object (e.g., `request['user'] = user`) so handlers can easily use it to scope database queries to the authenticated user's permissions.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "finding_id": "33235411-5612-4137-9671-fbd21c7e4ff9"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-312",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 46,
+        "col": 1
+      },
+      "end": {
+        "line": 48,
+        "col": 100
+      },
+      "extra": {
+        "message": "Full User Object Passed to Template Context\n\nThe index view passes the full `auth_user` (User model object) to the template context. This object likely contains sensitive fields such as password hash, internal IDs, and other user metadata. The data crosses a trust boundary from server to rendered output.\n\nImpact: Sensitive user data (password hashes, internal fields) is available in the template context and could be accidentally rendered or accessed via template debugging.\n\nFix: Pass only the specific safe fields needed for display (e.g., first_name, last_name, is_admin) rather than the full User model object.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "finding_id": "45fa2a47-3cdb-4703-90cc-23892870b18d"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-20",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 55,
+        "col": 1
+      },
+      "end": {
+        "line": 57,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Input Validation on Student Name\n\nThe student name from form data is passed directly to Student.create() without any validation or sanitization. Combined with the known SQL injection in Student.create() (raw string interpolation), this is a critical attack vector.\n\nImpact: Allows injection of arbitrary content including SQL injection payloads and XSS payloads.\n\nFix: Validate and sanitize the student name input before passing to the database layer. Use parameterized queries in Student.create().",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-20"
+          ],
+          "finding_id": "fac904cf-ebb8-4e9d-bbdc-b5d27cd3acd7"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-200",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 58,
+        "col": 1
+      },
+      "end": {
+        "line": 60,
+        "col": 100
+      },
+      "extra": {
+        "message": "Unscoped Data Access: All Students Returned Without Auth Filtering\n\nThe students view returns all students from the database via `Student.get_many(conn)` without any ownership or permission scoping. Any user (or unauthenticated visitor) can view all student records.\n\nImpact: PII exposure \u2014 all student names and IDs are accessible to any visitor without authentication.\n\nFix: Add authentication checks and scope queries to the authenticated user's permissions. At minimum, require authentication to view student data.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "finding_id": "f6b2dc7d-0319-4c03-a3ef-ac9fc4a79fa7"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-862",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 63,
+        "col": 1
+      },
+      "end": {
+        "line": 80,
+        "col": 100
+      },
+      "extra": {
+        "message": "IDOR on Student Detail Endpoint - No Access Control\n\nThe student() handler retrieves student details by ID from the URL path without any authentication or authorization check. Any user (including unauthenticated) can access any student's details, marks, and course information by iterating through sequential student IDs.\n\nImpact: Unauthenticated users can enumerate and access all student records and their academic marks/grades, exposing PII.\n\nFix: Add authentication check and consider authorization to restrict access to student records. At minimum, require authentication; ideally, implement role-based access control.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "finding_id": "e9b3c0e6-ffe1-4c0c-8d08-c4d6c44819af"
+        }
+      }
+    }
+  ]
+}

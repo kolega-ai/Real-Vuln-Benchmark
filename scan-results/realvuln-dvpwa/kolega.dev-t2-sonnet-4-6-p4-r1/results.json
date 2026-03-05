@@ -1,0 +1,620 @@
+{
+  "results": [
+    {
+      "check_id": "CWE-862",
+      "path": "sqli/dao/mark.py",
+      "start": {
+        "line": 19,
+        "col": 1
+      },
+      "end": {
+        "line": 27,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Authorization Check in Mark.get_for_student() - Any Student ID Accepted\n\nThe `Mark.get_for_student()` method retrieves all marks for any given `student_id` without any ownership or authorization check. If the calling handler passes an arbitrary `student_id` from user input without verifying the authenticated user owns that student record, any authenticated user can retrieve marks for any student. This is an IDOR vulnerability at the DAO layer \u2014 the query is scoped only by `student_id`, not by the authenticated user's identity.\n\nImpact: An authenticated user can enumerate and retrieve marks/grades (PII) for any student by supplying arbitrary student IDs, leading to unauthorized access to student academic records.\n\nFix: Ensure the calling handler verifies the authenticated user is authorized to view marks for the requested student_id. Add an ownership/role check in the handler before calling this DAO method, or add a JOIN to the users table in the query to enforce ownership.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "finding_id": "36f280f1-deec-4e92-92e9-9f4fd909f2d5"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-89",
+      "path": "sqli/dao/student.py",
+      "start": {
+        "line": 42,
+        "col": 1
+      },
+      "end": {
+        "line": 45,
+        "col": 100
+      },
+      "extra": {
+        "message": "SQL Injection via String Formatting in Student.create()\n\nThe `Student.create()` method constructs the SQL query using Python string formatting (`%` operator) with user-supplied `name` directly interpolated into the query string: `\"VALUES ('%(name)s')\" % {'name': name}`. This is classic SQL injection \u2014 the value is interpolated before being passed to `cur.execute()`, so the database driver's parameterization never applies. An attacker can inject arbitrary SQL by supplying a crafted name value (e.g., `'); DROP TABLE students; --`).\n\nImpact: Full SQL injection allowing arbitrary query execution, data exfiltration, data modification, or database destruction.\n\nFix: Use parameterized queries: `q = 'INSERT INTO students (name) VALUES (%s)'` and pass `(name,)` as the parameter to `cur.execute(q, (name,))`. Never use Python string formatting to build SQL queries.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "finding_id": "776f406e-ec89-48bb-b316-8f66080677e2"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/course.jinja2",
+      "start": {
+        "line": 22,
+        "col": 1
+      },
+      "end": {
+        "line": 22,
+        "col": 100
+      },
+      "extra": {
+        "message": "XSS via Unescaped review_text in course.jinja2\n\nThe `review.review_text` field is rendered without escaping in the course template. Since autoescape is globally disabled and no `| e` filter is applied, stored XSS is possible. Any user who submits a review with malicious HTML/JavaScript will have it executed in the browsers of all users viewing the course page.\n\nImpact: Stored XSS: attackers can inject persistent JavaScript that executes in all users' browsers when viewing a course, enabling session theft, credential harvesting, and other attacks.\n\nFix: Apply the `| e` escape filter: `{{ review.review_text | e }}`, or enable global autoescape.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "e8363222-186b-4018-8abd-2be7b066d121"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 52,
+        "col": 1
+      },
+      "end": {
+        "line": 60,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Authentication on students POST Handler (Create Student)\n\nThe `students` handler accepts POST requests to create new students without any authentication check. The template shows the form only to authenticated users (`{% if auth_user %}`), but the backend handler performs no server-side authentication check. Any unauthenticated user can POST directly to `/students/` to create students.\n\nImpact: Unauthenticated users can create arbitrary student records in the database.\n\nFix: Add an authentication check at the start of the POST handler, e.g., using the `@authorize()` decorator or checking `get_auth_user(request)` and raising `HTTPUnauthorized` if not authenticated.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "04f7eb91-954c-4bf1-9e0a-35fb6be99e46"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-798",
+      "path": "config/dev.yaml",
+      "start": {
+        "line": 2,
+        "col": 1
+      },
+      "end": {
+        "line": 3,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hardcoded Database Credentials in Configuration File\n\nThe database credentials (`user: postgres`, `password: postgres`) are hardcoded in plaintext in the configuration file `config/dev.yaml`. If this file is committed to version control or exposed, the database credentials are immediately compromised. The password is also a default/weak value.\n\nImpact: An attacker who gains access to the repository or the file system can obtain database credentials and directly access the PostgreSQL database containing PII.\n\nFix: Use environment variables or a secrets management system (e.g., HashiCorp Vault, AWS Secrets Manager) for credentials. Never commit credentials to version control. Use a `.env` file excluded from version control, or inject secrets at runtime.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "finding_id": "abd2491e-55c8-49bc-8fc4-694c0183cc7f"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "config/dev.yaml",
+      "start": {
+        "line": 8,
+        "col": 1
+      },
+      "end": {
+        "line": 11,
+        "col": 100
+      },
+      "extra": {
+        "message": "Redis Configuration Schema Missing Password Field\n\nThe Redis configuration block in `config/dev.yaml` defines `host`, `port`, and `db` but has no `password` field. This means the application cannot be configured to authenticate to Redis, leaving the session store unauthenticated.\n\nImpact: No mechanism exists to configure Redis authentication, so the session store is permanently unauthenticated, exposing all session data.\n\nFix: Add a `password` field to the Redis configuration block and update `sqli/services/redis.py` to pass it to `aioredis.create_pool()`.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "fee65ef3-45a8-4a8c-8372-eb822846037d"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-352",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 27,
+        "col": 1
+      },
+      "end": {
+        "line": 27,
+        "col": 100
+      },
+      "extra": {
+        "message": "CSRF Middleware Disabled\n\nThe CSRF middleware is commented out (`# csrf_middleware`). While individual templates include CSRF tokens in forms, the middleware that validates those tokens is not active, meaning all POST endpoints are unprotected against CSRF attacks.\n\nImpact: Any authenticated user can be tricked into performing state-changing actions (creating students, courses, evaluations, reviews, logout) via a malicious third-party website.\n\nFix: Uncomment `csrf_middleware` in the middleware list to re-enable CSRF protection.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "finding_id": "ca23c7c5-fc42-491b-b914-ce8c140b50e3"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 35,
+        "col": 1
+      },
+      "end": {
+        "line": 35,
+        "col": 100
+      },
+      "extra": {
+        "message": "Jinja2 Autoescape Disabled Globally\n\nJinja2 is configured with `autoescape=False`, which disables HTML escaping for all template variables globally. This means any user-supplied data rendered in templates will not be automatically escaped, enabling XSS attacks.\n\nImpact: Stored or reflected XSS attacks across all templates that render user-controlled data.\n\nFix: Set `autoescape=True` or use `autoescape=select_autoescape(['html', 'xml'])` to enable automatic HTML escaping for all templates.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "ea9637e8-fb79-4401-834c-5f1bc056d57d"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-916",
+      "path": "sqli/dao/user.py",
+      "start": {
+        "line": 40,
+        "col": 1
+      },
+      "end": {
+        "line": 41,
+        "col": 100
+      },
+      "extra": {
+        "message": "Weak Password Hashing Using MD5\n\nThe `User.check_password()` method uses MD5 to hash passwords: `md5(password.encode('utf-8')).hexdigest()`. MD5 is a cryptographically broken hash function that is extremely fast to compute, making it trivial to brute-force or crack using rainbow tables. It also lacks salting, meaning identical passwords produce identical hashes.\n\nImpact: If the database is compromised, all user passwords can be rapidly cracked using precomputed rainbow tables or GPU-accelerated brute force, exposing user credentials.\n\nFix: Replace MD5 with a proper password hashing algorithm such as `bcrypt`, `argon2`, or `scrypt` via the `passlib` library. These algorithms are slow by design and include built-in salting.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-916"
+          ],
+          "finding_id": "8000ee2f-f76e-462c-af8b-c6d9bd31a82c"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-1004",
+      "path": "sqli/middlewares.py",
+      "start": {
+        "line": 20,
+        "col": 1
+      },
+      "end": {
+        "line": 20,
+        "col": 100
+      },
+      "extra": {
+        "message": "Session Cookie Missing HttpOnly Flag\n\nThe Redis session storage is configured with `httponly=False`. This means the session cookie is accessible via JavaScript, making it vulnerable to theft via XSS attacks.\n\nImpact: If an XSS vulnerability is exploited, an attacker can steal the session cookie via `document.cookie` and hijack authenticated sessions.\n\nFix: Set `httponly=True` on the RedisStorage to prevent JavaScript access to the session cookie.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-1004"
+          ],
+          "finding_id": "77ddf7fb-1dd7-462c-8a02-0e61008ae21f"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "sqli/schema/config.py",
+      "start": {
+        "line": 12,
+        "col": 1
+      },
+      "end": {
+        "line": 16,
+        "col": 100
+      },
+      "extra": {
+        "message": "Redis Configuration Missing Password Authentication\n\nThe Redis configuration schema defines only `host`, `port`, and `db` fields \u2014 there is no `password` field. This means the application cannot be configured to authenticate to Redis, leaving the session store unauthenticated.\n\nImpact: If Redis is accessible on the network, any attacker can read, modify, or delete session data without authentication, enabling session hijacking and privilege escalation.\n\nFix: Add a `password` field to the Redis config schema and pass it when creating the Redis connection.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "6841acf6-ec30-4b8a-8786-84e4b5b318e4"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "sqli/services/redis.py",
+      "start": {
+        "line": 12,
+        "col": 1
+      },
+      "end": {
+        "line": 13,
+        "col": 100
+      },
+      "extra": {
+        "message": "Redis Connection Without Authentication\n\nThe Redis connection is established without any authentication (`password` parameter is absent from `aioredis.create_pool()`). The `config/dev.yaml` Redis configuration also has no `password` field. An unauthenticated Redis instance is accessible to anyone who can reach the Redis port, allowing session data to be read, modified, or deleted.\n\nImpact: An attacker with network access to the Redis instance can read all session data (including session tokens), forge sessions, hijack authenticated user sessions, or delete all sessions causing a denial of service.\n\nFix: Configure Redis with a strong password and pass it via `password=conf['password']` in `aioredis.create_pool()`. Add a `password` field to the Redis configuration schema. Also consider enabling Redis ACLs and binding Redis to localhost or a private network interface.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "5435ebe4-201f-4609-9e73-be8e6542c72c"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/base.jinja2",
+      "start": {
+        "line": 25,
+        "col": 1
+      },
+      "end": {
+        "line": 25,
+        "col": 100
+      },
+      "extra": {
+        "message": "XSS via Unescaped auth_user name fields in base.jinja2\n\nThe authenticated user's `first_name`, `middle_name`, and `last_name` fields are rendered without HTML escaping in the navigation bar. With autoescape disabled, malicious content in these fields will execute as JavaScript for all pages.\n\nImpact: Stored XSS via user name fields, affecting all authenticated pages.\n\nFix: Apply `| e` filter to each name field.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "e3642ceb-6fb9-4abf-9116-3355d405d595"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/courses.jinja2",
+      "start": {
+        "line": 17,
+        "col": 1
+      },
+      "end": {
+        "line": 17,
+        "col": 100
+      },
+      "extra": {
+        "message": "XSS via Unescaped course.title in courses.jinja2\n\nThe `course.title` is rendered without escaping in the courses list template.\n\nImpact: Stored XSS via course title field affecting all users viewing the courses list.\n\nFix: Apply `| e` filter: `{{ course.title | e }}`.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "ade4c20b-5d13-431f-95af-676111000b05"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/errors/50x.jinja2",
+      "start": {
+        "line": 6,
+        "col": 1
+      },
+      "end": {
+        "line": 6,
+        "col": 100
+      },
+      "extra": {
+        "message": "XSS via Unescaped error.__dict__ in 50x.jinja2\n\nThe 500 error template renders `{{ error.__dict__ }}` without escaping. This exposes internal exception details and could render attacker-controlled data if the exception message contains user input.\n\nImpact: Information disclosure of internal server state; potential XSS if exception messages contain user-controlled data.\n\nFix: Remove `{{ error.__dict__ }}` from the error template, or at minimum apply `| e` filter. Do not expose internal exception details to users.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "d16dc283-4de4-4c19-b7c6-ebb9e9509ef5"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/review.jinja2",
+      "start": {
+        "line": 32,
+        "col": 1
+      },
+      "end": {
+        "line": 32,
+        "col": 100
+      },
+      "extra": {
+        "message": "XSS via Unescaped course.title in review.jinja2\n\nThe `course.title` is rendered without escaping in the review form template.\n\nImpact: Stored XSS via course title field.\n\nFix: Apply `| e` filter: `{{ course.title | e }}`.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "4e119595-58bb-4b74-968c-8b65a0e2ef5a"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-352",
+      "path": "sqli/templates/review.jinja2",
+      "start": {
+        "line": 33,
+        "col": 1
+      },
+      "end": {
+        "line": 33,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing CSRF Token on review.jinja2 Form\n\nThe review form includes a `_csrf_token` hidden field (`<input type=\"hidden\" name=\"_csrf_token\" value=\"{{ csrf_token() }}\">`), but since the CSRF middleware is disabled (finding #2), this token is never validated. However, if the CSRF middleware were re-enabled, the review form would be protected. This is noted for completeness \u2014 the real issue is the disabled middleware.\n\nImpact: With CSRF middleware disabled, all POST endpoints including review submission are vulnerable to CSRF attacks.\n\nFix: Re-enable the CSRF middleware in app.py.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "finding_id": "2ada733e-5627-4ca9-8458-1ed3d53a3bf5"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/student.jinja2",
+      "start": {
+        "line": 19,
+        "col": 1
+      },
+      "end": {
+        "line": 19,
+        "col": 100
+      },
+      "extra": {
+        "message": "XSS via Unescaped course.title in student.jinja2\n\nThe `course.title` is rendered without escaping in the student detail template.\n\nImpact: Stored XSS via course title field.\n\nFix: Apply `| e` filter: `{{ course.title | e }}`.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "3c8b4a79-a3bf-483e-930e-b3d258876ad5"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/students.jinja2",
+      "start": {
+        "line": 16,
+        "col": 1
+      },
+      "end": {
+        "line": 16,
+        "col": 100
+      },
+      "extra": {
+        "message": "XSS via Unescaped student.name in students.jinja2\n\nThe student `name` field is rendered without HTML escaping in the students list template. With autoescape disabled, malicious content in student names will execute as JavaScript.\n\nImpact: Stored XSS via student name field affecting all users viewing the students list.\n\nFix: Apply `| e` filter: `{{ name | e }}`.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "3ada87d8-91dc-4679-93c3-1460cad710ef"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-307",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 22,
+        "col": 1
+      },
+      "end": {
+        "line": 48,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Login Endpoint\n\nThe `index` handler processes login POST requests without any rate limiting. An attacker can make unlimited login attempts to brute-force credentials.\n\nImpact: Brute-force attacks against user credentials are possible without restriction.\n\nFix: Implement rate limiting on the login endpoint, e.g., using IP-based throttling or account lockout after N failed attempts.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "finding_id": "15254009-fcb1-4230-8088-8872dbcb5940"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-384",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 33,
+        "col": 1
+      },
+      "end": {
+        "line": 43,
+        "col": 100
+      },
+      "extra": {
+        "message": "Session Fixation - No Session Regeneration After Login\n\nAfter successful authentication, the login handler sets `session['user_id'] = user.id` but does not regenerate the session ID. An attacker who can set a victim's session ID before login (session fixation) can then use that same session ID to impersonate the victim after they log in.\n\nImpact: Session fixation attack: an attacker can pre-set a session ID, wait for the victim to log in, and then use that session ID to access the victim's account.\n\nFix: Regenerate the session ID after successful authentication. With aiohttp-session, this may require creating a new session and invalidating the old one.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-384"
+          ],
+          "finding_id": "11ae53c8-a808-4976-8e89-c3e23b7fb6c0"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-489",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 24,
+        "col": 1
+      },
+      "end": {
+        "line": 24,
+        "col": 100
+      },
+      "extra": {
+        "message": "Debug Mode Enabled in Production\n\nThe application is initialized with `debug=True`. In aiohttp, debug mode enables verbose error output, detailed tracebacks, and other development features that should never be enabled in production.\n\nImpact: Exposes internal application details, stack traces, and configuration information to users, aiding attackers in reconnaissance.\n\nFix: Set `debug=False` or read the debug flag from configuration. Never hardcode `debug=True` in production code.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "finding_id": "ef3723fe-896f-455d-9855-201127b5cc50"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-319",
+      "path": "sqli/schema/config.py",
+      "start": {
+        "line": 5,
+        "col": 1
+      },
+      "end": {
+        "line": 11,
+        "col": 100
+      },
+      "extra": {
+        "message": "Database Connection Missing TLS/SSL Configuration\n\nThe database configuration schema defines `user`, `password`, `host`, `port`, and `database` fields but has no `sslmode` or SSL-related field. This means the application cannot be configured to use TLS for database connections, and all database traffic (including credentials and PII) is transmitted in cleartext.\n\nImpact: Database credentials and all PII transmitted between the application and database are exposed to network eavesdropping.\n\nFix: Add an `sslmode` field to the database configuration schema and configure the database connection pool to use SSL/TLS.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-319"
+          ],
+          "finding_id": "3b3f3506-f51d-4c45-a4e6-c4b74fb618f0"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-319",
+      "path": "sqli/services/db.py",
+      "start": {
+        "line": 15,
+        "col": 1
+      },
+      "end": {
+        "line": 19,
+        "col": 100
+      },
+      "extra": {
+        "message": "Database Connection Without TLS/SSL Encryption\n\nThe PostgreSQL connection DSN constructed in `_init_pg()` does not include any SSL/TLS parameters (`sslmode`, `sslcert`, `sslkey`, etc.). The `aiopg.create_pool()` call also has no `ssl` parameter. All database traffic (including queries containing PII and the password) is transmitted in cleartext.\n\nImpact: Database traffic including queries, results (containing PII), and authentication credentials can be intercepted by a network attacker via man-in-the-middle attacks.\n\nFix: Add `sslmode=require` (or `sslmode=verify-full` for production) to the DSN string, and configure the PostgreSQL server with TLS certificates.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-319"
+          ],
+          "finding_id": "f98b3540-4d5d-4886-a892-de70f9147186"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "sqli/templates/evaluate.jinja2",
+      "start": {
+        "line": 17,
+        "col": 1
+      },
+      "end": {
+        "line": 17,
+        "col": 100
+      },
+      "extra": {
+        "message": "XSS via Unescaped evaluate errors in evaluate.jinja2\n\nValidation error messages are rendered without escaping in the evaluate error template.\n\nImpact: If error messages contain user-controlled data, XSS is possible.\n\nFix: Apply `| e` filter: `{{ fieldname | e }}: {{ errors | e }}`.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "ab1ec1a0-8c37-4e59-b5fd-d4cbe324b0c1"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-613",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 156,
+        "col": 1
+      },
+      "end": {
+        "line": 160,
+        "col": 100
+      },
+      "extra": {
+        "message": "Logout Handler Does Not Invalidate Full Session\n\nThe `logout` handler only removes `user_id` from the session (`session.pop('user_id', None)`) but does not invalidate or clear the entire session. Other session data (like `_csrf_token`, `last_visited`) remains. More critically, the session ID itself is not regenerated or invalidated, meaning a stolen session token could still be used to access session data.\n\nImpact: After logout, the session cookie remains valid. If an attacker obtained the session cookie before logout, they could potentially reuse it or access residual session data.\n\nFix: Call `session.invalidate()` or clear the entire session on logout to fully terminate the session.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "finding_id": "d29e744d-8b14-4a5d-9a49-25aa59b35db1"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-20",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 54,
+        "col": 1
+      },
+      "end": {
+        "line": 57,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Input Validation on students POST Handler\n\nThe `students` POST handler uses `data['name']` directly without validating it against `STUDENT_SCHEMA` (which is defined in forms.py but never used in the handler). There is no length limit or format validation on the student name.\n\nImpact: Arbitrary-length or malformed student names can be inserted into the database.\n\nFix: Validate input using `STUDENT_SCHEMA.check_and_return(data)` before passing to `Student.create()`.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-20"
+          ],
+          "finding_id": "41fddf4a-33ea-4186-b220-999dc551070d"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-862",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 63,
+        "col": 1
+      },
+      "end": {
+        "line": 80,
+        "col": 100
+      },
+      "extra": {
+        "message": "Unscoped Student Detail - No Authorization Check\n\nThe `student` handler returns detailed student information including marks without any authentication check. Any unauthenticated user can view any student's academic records by guessing or enumerating student IDs.\n\nImpact: Exposure of student PII and academic records to unauthenticated users.\n\nFix: Add authentication requirement to the student detail endpoint.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "finding_id": "f5622f28-708e-4d4a-90d7-91901da3cb93"
+        }
+      }
+    }
+  ]
+}
