@@ -444,6 +444,8 @@ def build_html(
     aggregates: dict[str, dict],
     repos: list[str],
     detail_dir: str = "scanners",
+    gt_total_vulns: int = 0,
+    gt_total_repos: int = 0,
 ) -> str:
     """Build standalone HTML index dashboard with links to scanner detail pages."""
     total_repos = len(repos)
@@ -487,8 +489,7 @@ def build_html(
         w('<div class="summary-cards">')
         w(f'<div class="summary-card"><div class="sc-label">Best Scanner (F2)</div><div class="sc-value" style="color:#3b82f6"><a href="{detail_dir}/{best["slug"]}.html">{best["label"]}</a></div><div class="sc-sub">micro-F2 = {best["f2"]:.1f}</div></div>')
         w(f'<div class="summary-card"><div class="sc-label">Best F2</div><div class="sc-value" style="color:#16a34a">{best["f2"]:.1f}</div><div class="sc-sub">Recall {best["recall"]:.1f}% &middot; Prec {best["precision"]:.1f}%</div></div>')
-        total_gt = sum(d["tp"] + d["fn"] for d in chart_data[:1])
-        w(f'<div class="summary-card"><div class="sc-label">Ground Truth</div><div class="sc-value">{total_gt}</div><div class="sc-sub">vulnerabilities across {best["repos"]} repos</div></div>')
+        w(f'<div class="summary-card"><div class="sc-label">Ground Truth</div><div class="sc-value">{gt_total_vulns}</div><div class="sc-sub">vulnerabilities across {gt_total_repos} repos</div></div>')
         w(f'<div class="summary-card"><div class="sc-label">Scanners Compared</div><div class="sc-value">{total_scanners}</div><div class="sc-sub">click any scanner below</div></div>')
         w('</div>')
 
@@ -1175,6 +1176,16 @@ def main() -> int:
     with open(families_path) as f:
         cwe_families = json.load(f)
 
+    # Compute ground truth totals directly from GT files
+    gt_total_vulns = 0
+    gt_total_repos = 0
+    for repo in discover_repos(gt_dir):
+        gt_path = gt_dir / repo / "ground-truth.json"
+        if gt_path.exists():
+            gt_data = json.load(open(gt_path))
+            gt_total_vulns += sum(1 for f in gt_data["findings"] if f["is_vulnerable"])
+            gt_total_repos += 1
+
     # Score everything
     grid = score_all(repos, scanners, gt_dir, scan_dir, cwe_families)
 
@@ -1194,7 +1205,8 @@ def main() -> int:
     # Build outputs
     output_path = Path(args.output)
     detail_dir_name = "scanners"
-    html = build_html(grid, scanners, aggregates, repos, detail_dir=detail_dir_name)
+    html = build_html(grid, scanners, aggregates, repos, detail_dir=detail_dir_name,
+                      gt_total_vulns=gt_total_vulns, gt_total_repos=gt_total_repos)
     report = build_json_report(grid, scanners, aggregates)
 
     # Write main dashboard

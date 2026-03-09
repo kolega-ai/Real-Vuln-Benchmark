@@ -6,7 +6,9 @@ Application security scanners routinely fail to catch basic vulnerabilities — 
 
 ### Dataset at a Glance
 
-**28 repos · 866 findings · 736 vulnerabilities · 130 FP traps**
+**27 repos · 823 findings · 698 vulnerabilities · 125 FP traps**
+
+> **Note:** The current dataset is Python-only (Flask, Django, FastAPI, aiohttp, Tornado). Additional languages are planned for future releases.
 
 | Repo | Language | Framework | Vulns | FP Traps |
 |------|----------|-----------|------:|--------:|
@@ -23,7 +25,6 @@ Application security scanners routinely fail to catch basic vulnerabilities — 
 | realvuln-insecure-web | python | flask | 9 | 2 |
 | realvuln-intentionally-vulnerable-python-application | python | flask | 7 | 2 |
 | realvuln-lets-be-bad-guys | python | django | 24 | 4 |
-| realvuln-oss-oopssec-store | typescript | nextjs | 38 | 5 |
 | realvuln-owasp-web-playground | python | flask | 29 | 6 |
 | realvuln-pygoat | python | django | 70 | 10 |
 | realvuln-python-app | python | flask | 20 | 4 |
