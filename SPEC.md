@@ -38,7 +38,7 @@ Every target carries authorship metadata, independent of Type:
 | `llm_generated`  | Primarily or entirely LLM-generated |
 | `unknown`        | Post-2023, no authorship disclosure |
 
-These axes are orthogonal. OpenClaw is both `llm_generated` and Type 1 (intentionally vulnerable app) — LLM-generated does not mean synthetic.
+These axes are orthogonal. LLM-generated does not mean synthetic.
 
 ---
 
@@ -114,15 +114,15 @@ Every ground truth submission requires: evidence source (CVE ID, walkthrough URL
 
 ### Finding Matching
 
-Scanner findings are matched against ground truth at configurable granularity:
+Scanner findings are matched against ground truth using a single fixed matching mode: **file + CWE + line tolerance**. A scanner finding matches a ground truth entry when all three criteria are met:
 
-| Mode                 | Match Criteria                              | Use Case                                                             |
-| -------------------- | ------------------------------------------- | -------------------------------------------------------------------- |
-| `file+cwe` (default) | Same file + CWE in acceptable set           | Fair cross-tool comparison                                           |
-| `function+cwe`       | Same file + function name + CWE             | Tighter, requires function-level reporting                           |
-| `line+cwe`           | Same file + line within ±10 tolerance + CWE | Strictest; accommodates scanners pointing at source vs sink vs route |
+1. **File path** — normalised paths must match exactly
+2. **CWE** — the scanner's CWE must appear in the GT entry's `acceptable_cwes` list
+3. **Line proximity** — the scanner's reported line must fall within `[start_line - 10, end_line + 10]` (or `±10` of `start_line` if no `end_line`). If either side lacks line information, the check is skipped (no penalty).
 
-Multiple scanner findings for the same CWE in the same file are deduplicated to prevent inflated TP counts.
+When multiple GT entries match a single finding, `is_vulnerable: true` entries are preferred so the scanner gets credit for real vulnerabilities rather than being penalised by a co-located FP trap.
+
+Each GT entry can only be matched once (`matched_gt_ids` set). Once a GT entry is claimed by a finding, subsequent findings cannot match it — additional unmatched findings are scored as FP.
 
 ### Finding Classification
 
@@ -137,7 +137,22 @@ Unmatched scanner findings (no ground truth entry) are scored as false positives
 
 ### Metrics
 
-Recall, F1, per-CWE-family breakdown, Youden's J (for OWASP Benchmark compatibility), per-Type breakdown, and optional breakdown by authorship axis.
+**Primary metric: F2 Score** (0–100 scale). F-beta with beta=2 weights recall 4× more than precision — missing a real vulnerability is far worse than a false alarm.
+
+Full metrics computed per scorer run:
+
+| Metric | Formula |
+| --- | --- |
+| Precision | TP / (TP + FP) |
+| Recall (= TPR) | TP / (TP + FN) |
+| F1 | 2 × (Prec × Recall) / (Prec + Recall) |
+| F2 | 5 × (Prec × Recall) / (4 × Prec + Recall) |
+| F2 Score | F2 × 100 |
+| FPR | FP / (FP + TN) |
+
+Breakdowns: **per-CWE-family** (TP/FP/FN/precision/recall) and **per-severity** (TP/FP/FN/recall), both derived from ground truth entry metadata.
+
+For non-deterministic scanners (e.g. AI agents), the scorer supports **multi-run mode** (`--runs`): each result file is scored independently, and mean ± stddev are reported for all metrics.
 
 ---
 
