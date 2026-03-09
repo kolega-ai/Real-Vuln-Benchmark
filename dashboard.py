@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import sys
 from datetime import datetime, timezone
@@ -23,6 +24,16 @@ from scorer.matcher import load_ground_truth, match_findings
 from scorer.metrics import compute_scorecard
 
 BASELINE_SCANNERS = {"semgrep", "snyk", "sonarqube"}
+
+# Display-friendly names for scanner slugs
+SCANNER_DISPLAY_NAMES: dict[str, str] = {
+    "our-scanner-manual-opt-opus-4.6": "our-scanner manual opt opus 4.6",
+}
+
+
+def display_name(scanner: str) -> str:
+    """Return display name for a scanner slug."""
+    return SCANNER_DISPLAY_NAMES.get(scanner, scanner)
 
 
 # ---------------------------------------------------------------------------
@@ -290,8 +301,23 @@ tbody tr:hover .repo-name { background: #1e293b; }
 .tooltip .tt-sep { border-top: 1px solid #334155; margin: 4px 0; }
 
 /* Scanner link in table header */
-th a { color: #e2e8f0; }
-th a:hover { color: #3b82f6; text-decoration: underline; }
+th a { color: #60a5fa; text-decoration: none; }
+th a:hover { color: #93c5fd; text-decoration: underline; }
+
+/* Scanner directory cards */
+.scanner-directory {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px; margin-bottom: 32px;
+}
+.scanner-card {
+  background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+  padding: 16px; text-decoration: none; color: #e2e8f0;
+  transition: all 0.15s; cursor: pointer; display: block;
+}
+.scanner-card:hover { border-color: #3b82f6; background: #1e3a5f; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59,130,246,0.15); text-decoration: none; }
+.sc-card-name { font-size: 14px; font-weight: 600; margin-bottom: 6px; color: #60a5fa; }
+.sc-card-f2 { font-size: 28px; font-weight: 700; }
+.sc-card-sub { font-size: 11px; color: #94a3b8; margin-top: 4px; }
 """
 
 
@@ -429,7 +455,8 @@ def build_html(
         sa = aggregates.get(scanner, {})
         micro = sa.get("micro", {})
         chart_data.append({
-            "label": scanner,
+            "slug": scanner,
+            "label": display_name(scanner),
             "f2": micro.get("f2_score", 0),
             "recall": round(micro.get("recall", 0) * 100, 1),
             "precision": round(micro.get("precision", 0) * 100, 1),
@@ -458,12 +485,24 @@ def build_html(
     best = chart_data[0] if chart_data else None
     if best:
         w('<div class="summary-cards">')
-        w(f'<div class="summary-card"><div class="sc-label">Best Scanner (F2)</div><div class="sc-value" style="color:#3b82f6"><a href="{detail_dir}/{best["label"]}.html">{best["label"]}</a></div><div class="sc-sub">micro-F2 = {best["f2"]:.1f}</div></div>')
+        w(f'<div class="summary-card"><div class="sc-label">Best Scanner (F2)</div><div class="sc-value" style="color:#3b82f6"><a href="{detail_dir}/{best["slug"]}.html">{best["label"]}</a></div><div class="sc-sub">micro-F2 = {best["f2"]:.1f}</div></div>')
         w(f'<div class="summary-card"><div class="sc-label">Best F2</div><div class="sc-value" style="color:#16a34a">{best["f2"]:.1f}</div><div class="sc-sub">Recall {best["recall"]:.1f}% &middot; Prec {best["precision"]:.1f}%</div></div>')
         total_gt = sum(d["tp"] + d["fn"] for d in chart_data[:1])
         w(f'<div class="summary-card"><div class="sc-label">Ground Truth</div><div class="sc-value">{total_gt}</div><div class="sc-sub">vulnerabilities across {best["repos"]} repos</div></div>')
-        w(f'<div class="summary-card"><div class="sc-label">Scanners Compared</div><div class="sc-value">{total_scanners}</div><div class="sc-sub">click any scanner for details</div></div>')
+        w(f'<div class="summary-card"><div class="sc-label">Scanners Compared</div><div class="sc-value">{total_scanners}</div><div class="sc-sub">click any scanner below</div></div>')
         w('</div>')
+
+    # ── Scanner Directory — prominent clickable cards ──
+    w('<h2>Scanner Directory</h2>')
+    w('<div class="scanner-directory">')
+    for d in chart_data:
+        rank_color = "#16a34a" if d["f2"] >= 60 else ("#ca8a04" if d["f2"] >= 40 else "#dc2626")
+        w(f'<a href="{detail_dir}/{d["slug"]}.html" class="scanner-card">')
+        w(f'  <div class="sc-card-name">{d["label"]}</div>')
+        w(f'  <div class="sc-card-f2" style="color:{rank_color}">{d["f2"]:.1f}</div>')
+        w(f'  <div class="sc-card-sub">Recall {d["recall"]:.1f}% &middot; Prec {d["precision"]:.1f}%</div>')
+        w(f'</a>')
+    w('</div>')
 
     # ── Plotly charts ──
     scatter_json = json.dumps(chart_data)
@@ -499,7 +538,7 @@ def build_html(
     w("<thead><tr>")
     w('<th class="repo-name" data-col="repo">Repository <span class="sort-arrow"></span></th>')
     for i, scanner in enumerate(scanners):
-        w(f'<th data-col="{i}"><a href="{detail_dir}/{scanner}.html">{scanner}</a> <span class="sort-arrow"></span></th>')
+        w(f'<th data-col="{i}"><a href="{detail_dir}/{scanner}.html">{display_name(scanner)}</a> <span class="sort-arrow"></span></th>')
     w("</tr></thead>")
 
     # Body
@@ -562,8 +601,8 @@ def build_html(
     w("<script>")
     w(f"const chartData = {scatter_json};")
     w(f"const barData = {bar_json};")
-    # Scanner detail links for Plotly click-through
-    scanner_links = {d["label"]: f"{detail_dir}/{d['label']}.html" for d in chart_data}
+    # Scanner detail links for Plotly click-through (keyed by display label)
+    scanner_links = {d["label"]: f"{detail_dir}/{d['slug']}.html" for d in chart_data}
     w(f"const scannerLinks = {json.dumps(scanner_links)};")
     w("(function() {")
     w(_plotly_theme_js())
@@ -731,7 +770,7 @@ def build_scanner_detail_html(
     w('<html lang="en">')
     w("<head>")
     w('<meta charset="UTF-8">')
-    w(f"<title>{scanner} — RealVuln Scanner Detail</title>")
+    w(f"<title>{display_name(scanner)} — RealVuln Scanner Detail</title>")
     w(f"<style>{_common_css()}")
     # Additional detail-page CSS
     w("""
@@ -755,7 +794,7 @@ def build_scanner_detail_html(
     w("</head>")
     w("<body>")
     w('<a href="../dashboard.html" class="back-link">&larr; Back to Dashboard</a>')
-    w(f"<h1>{scanner}</h1>")
+    w(f"<h1>{display_name(scanner)}</h1>")
     w(f'<div class="subtitle">Scanner detail &middot; {repos_scored} repositories scored &middot; generated {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}</div>')
 
     # ── Summary cards ──
@@ -1075,6 +1114,12 @@ def main() -> int:
         help="Scanner slugs to exclude",
     )
     parser.add_argument(
+        "--exclude-pattern",
+        nargs="+",
+        default=[],
+        help="Glob patterns to exclude scanners (e.g. 'kolega.dev-*')",
+    )
+    parser.add_argument(
         "--scanner-group",
         choices=["baseline", "all"],
         default="baseline",
@@ -1116,6 +1161,8 @@ def main() -> int:
     # Apply exclusions
     exclude = set(args.exclude_scanners)
     scanners = [s for s in scanners if s not in exclude]
+    for pat in args.exclude_pattern:
+        scanners = [s for s in scanners if not fnmatch.fnmatch(s, pat)]
 
     if not scanners:
         print("Error: No scanners to score.", file=sys.stderr)
