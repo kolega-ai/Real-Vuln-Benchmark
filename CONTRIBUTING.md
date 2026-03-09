@@ -14,7 +14,7 @@ We welcome contributions from security researchers, tool vendors, and practition
 
 ### 1. Choose a repo
 
-Pick a repo that fits one of the [target types](SPEC.md#2-target-classification). Intentionally vulnerable apps (Type 1) and previously-vulnerable platforms with CVEs (Type 2) are highest priority.
+Pick a repo that fits one of the [target types](README.md#target-classification). Intentionally vulnerable apps (Type 1) and previously-vulnerable platforms with CVEs (Type 2) are highest priority.
 
 ### 2. Create ground truth
 
