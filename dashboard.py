@@ -19,45 +19,10 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from parsers import get_parser
-from parsers.semgrep import SemgrepParser
 from scorer.matcher import load_ground_truth, match_findings
 from scorer.metrics import compute_scorecard
 
-BASELINE_SCANNERS = {"our-scanner", "semgrep", "snyk", "sonarqube"}
-
-PROMPT_EVAL_DIR = SCRIPT_DIR.parent / "prompt_eval" / "results"
-
-# Map prompt_eval short repo names -> realvuln GT directory names
-PROMPT_EVAL_REPO_MAP = {
-    "dvpwa": "realvuln-dvpwa",
-    "vampi": "realvuln-VAmPI",
-    "dsvw": "RealVuln-DSVW",
-    "dvga": "Reavuln-Damn-Vulnerable-GraphQL-Application",
-    "oss-oopssec-store": "realvuln-oss-oopssec-store",
-    "pygoat": "realvuln-pygoat",
-    "vulpy": "realvuln-vulpy",
-    "vulnerable-flask-app": "realvuln-Vulnerable-Flask-App",
-    "djangoat": "realvuln-DjanGoat",
-    "vulnpy": "realvuln-vulnpy",
-    "vulnerable-api": "realvuln-Vulnerable-API",
-    "threatbyte": "realvuln-ThreatByte",
-    "dvblab": "realvuln-DVBLab",
-    "lets-be-bad-guys": "realvuln-lets-be-bad-guys",
-    "dsvpwa": "realvuln-DSVPWA",
-    "vulnerable-tornado-app": "realvuln-Vulnerable_Tornado_App",
-    "vfapi": "realvuln-vfapi",
-    "pythonssti": "realvuln-PythonSSTI",
-    "python-insecure-app": "realvuln-python-insecure-app",
-    "damn-vulnerable-flask": "realvuln-Damn-Vulnerable-Flask-Application",
-    "extremely-vulnerable-flask": "realvuln-extremely-vulnerable-flask-app",
-    "insecure-web": "realvuln-insecure-web",
-    "owasp-web-playground": "realvuln-OWASP-Web-Playground-",
-    "ivpa": "realvuln-Intentionally-Vulnerable-Python-Application",
-    "python-app": "realvuln-python-app",
-    "defdev-app": "realvuln-defdev-app",
-    "flask-xss": "realvuln-Flask_XSS",
-    "vulnerable-python-apps": "realvuln-Vulnerable_Python_Apps",
-}
+BASELINE_SCANNERS = {"semgrep", "snyk", "sonarqube"}
 
 
 # ---------------------------------------------------------------------------
@@ -96,14 +61,6 @@ def _find_result_files(scanner_dir: Path) -> list[Path]:
     return sorted(scanner_dir.glob("*.json"))
 
 
-def _get_parser_safe(slug: str):
-    """Get parser, falling back to SemgrepParser for unknown scanners."""
-    try:
-        return get_parser(slug)
-    except ValueError:
-        return SemgrepParser(scanner_slug=slug)
-
-
 def score_all(
     repos: list[str],
     scanners: list[str],
@@ -133,7 +90,7 @@ def score_all(
                 grid[repo][scanner] = None
                 continue
 
-            parser = _get_parser_safe(scanner)
+            parser = get_parser(scanner)
             try:
                 findings = parser.parse(str(result_files[0]))
                 results = match_findings(findings, ground_truth)
@@ -146,89 +103,6 @@ def score_all(
                 grid[repo][scanner] = None
 
     return grid
-
-
-# ---------------------------------------------------------------------------
-# Prompt eval integration
-# ---------------------------------------------------------------------------
-
-def load_prompt_eval_manifest(experiment_id: str) -> dict | None:
-    """Load a prompt_eval manifest.json by experiment ID."""
-    manifest_path = PROMPT_EVAL_DIR / experiment_id / "manifest.json"
-    if not manifest_path.exists():
-        return None
-    with open(manifest_path) as f:
-        return json.load(f)
-
-
-def inject_prompt_eval(
-    grid: dict[str, dict[str, dict | None]],
-    experiment_ids: list[str],
-) -> list[str]:
-    """Load prompt_eval manifests and inject into grid.
-
-    Returns list of scanner slugs added.
-    """
-    added_scanners: list[str] = []
-
-    for eid in experiment_ids:
-        manifest = load_prompt_eval_manifest(eid)
-        if manifest is None:
-            print(f"Warning: no manifest for prompt_eval '{eid}' at {PROMPT_EVAL_DIR / eid}", file=sys.stderr)
-            continue
-
-        scanner_slug = eid  # Use experiment ID as the scanner name
-        added_scanners.append(scanner_slug)
-
-        # Support both manifest formats:
-        #   - "repos" as dict with per-category "totals" (run_eval format)
-        #   - "repos_detail" as dict with flat tp/fp/fn (kimi format)
-        repos_dict = manifest.get("repos", {})
-        if isinstance(repos_dict, list):
-            repos_dict = manifest.get("repos_detail", {})
-
-        for short_repo, repo_data in repos_dict.items():
-            gt_repo = PROMPT_EVAL_REPO_MAP.get(short_repo)
-            if gt_repo is None:
-                continue
-
-            # Flat format (tp/fp/fn at top level) or nested (totals sub-dict)
-            if "totals" in repo_data:
-                totals = repo_data["totals"]
-            else:
-                totals = repo_data
-            tp = totals.get("tp", 0)
-            fp = totals.get("fp", 0)
-            fn = totals.get("fn", 0)
-
-            prec = _safe_div(tp, tp + fp)
-            rec = _safe_div(tp, tp + fn)
-            f2 = _safe_div(5.0 * prec * rec, 4.0 * prec + rec)
-
-            cell = {
-                "scanner": scanner_slug,
-                "tp": tp,
-                "fp": fp,
-                "fn": fn,
-                "tn": 0,
-                "precision": round(prec, 4),
-                "recall": round(rec, 4),
-                "f1": round(_safe_div(2.0 * prec * rec, prec + rec), 4),
-                "f2": round(f2, 4),
-                "f2_score": round(f2 * 100, 1),
-                "tpr": round(rec, 4),
-                "fpr": 0.0,
-                "youden_j": round(rec, 4),
-                "per_family": {},
-                "per_severity": {},
-                "details": [],
-            }
-
-            if gt_repo not in grid:
-                grid[gt_repo] = {}
-            grid[gt_repo][scanner_slug] = cell
-
-    return added_scanners
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +210,7 @@ def build_html(
         sa = aggregates.get(scanner, {})
         micro = sa.get("micro", {})
         chart_data.append({
-            "label": scanner.replace("kolega.dev-", ""),
+            "label": scanner,
             "f2": micro.get("f2_score", 0),
             "recall": round(micro.get("recall", 0) * 100, 1),
             "precision": round(micro.get("precision", 0) * 100, 1),
@@ -531,7 +405,7 @@ tbody tr:hover .repo-name { background: #1e293b; }
     w("<thead><tr>")
     w('<th class="repo-name" data-col="repo">Repository <span class="sort-arrow"></span></th>')
     for i, scanner in enumerate(scanners):
-        short = scanner.replace("kolega.dev-", "")
+        short = scanner
         w(f'<th data-col="{i}">{short} <span class="sort-arrow"></span></th>')
     w("</tr></thead>")
 
@@ -810,7 +684,7 @@ tbody tr:hover .repo-name { background: #1e293b; }
 def _build_tooltip_html(repo: str, scanner: str, cell: dict) -> str:
     """Build tooltip div for a cell."""
     short_repo = repo.replace("realvuln-", "").replace("Reavuln-", "").replace("RealVuln-", "")
-    short_scanner = scanner.replace("kolega.dev-", "")
+    short_scanner = scanner
     lines = f'<div class="tt-title">{short_repo} / {short_scanner}</div>'
     lines += '<div class="tt-sep"></div>'
     lines += f'<div class="tt-row"><span class="tt-label">F2 Score</span><span class="tt-val">{cell["f2_score"]:.1f}</span></div>'
@@ -889,13 +763,6 @@ def main() -> int:
         help="Scanner group: baseline (4 scanners) or all (default: baseline)",
     )
     parser.add_argument(
-        "--prompt-eval",
-        nargs="+",
-        default=[],
-        metavar="EXPERIMENT_ID",
-        help="Include prompt_eval experiments (e.g. baseline-sonnet baseline-haiku)",
-    )
-    parser.add_argument(
         "--min-repos",
         type=int,
         default=0,
@@ -945,17 +812,6 @@ def main() -> int:
 
     # Score everything
     grid = score_all(repos, scanners, gt_dir, scan_dir, cwe_families)
-
-    # Inject prompt_eval experiments
-    if args.prompt_eval:
-        pe_scanners = inject_prompt_eval(grid, args.prompt_eval)
-        scanners = scanners + pe_scanners
-        # Add any repos that only exist in prompt_eval to the repo list
-        for repo in grid:
-            if repo not in repos:
-                repos.append(repo)
-        repos.sort()
-        print(f"Added {len(pe_scanners)} prompt_eval experiments: {', '.join(pe_scanners)}")
 
     aggregates = compute_aggregates(grid, scanners)
 
