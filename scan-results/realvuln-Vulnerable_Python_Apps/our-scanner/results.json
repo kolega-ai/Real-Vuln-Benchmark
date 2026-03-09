@@ -1,0 +1,620 @@
+{
+  "results": [
+    {
+      "check_id": "CWE-79",
+      "path": "Other/app.py",
+      "start": {
+        "line": 16,
+        "col": 1
+      },
+      "end": {
+        "line": 18,
+        "col": 100
+      },
+      "extra": {
+        "message": "Reflected XSS via search query in template rendering\n\nThe search_query parameter from request.args.get('q') is passed directly to render_template as 'search_query'. If the index.html template renders this value without proper escaping (e.g., in a JavaScript context or with |safe filter), it would be vulnerable to reflected XSS. However, Flask/Jinja2 auto-escapes by default in HTML context, so this depends on how the template uses the variable. Without seeing the template, this is a potential concern if the template uses |safe or renders in a JS context.\n\nImpact: An attacker could craft a URL with malicious JavaScript in the 'q' parameter that executes in victims' browsers when they click the link.\n\nFix: Ensure the index.html template does not use |safe filter or {% autoescape false %} when rendering search_query. Verify Jinja2 auto-escaping is enabled (it is by default in Flask).",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "379ce403-7199-47ee-8521-01689a7901b5"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-184",
+      "path": "Directory_Traversal/Dir_Traversal.py",
+      "start": {
+        "line": 10,
+        "col": 1
+      },
+      "end": {
+        "line": 11,
+        "col": 100
+      },
+      "extra": {
+        "message": "Incomplete Denylist Pattern for Directory Traversal Prevention\n\nThe regex pattern r'/\\.\\.\\/\\.\\.\\/'' used to block directory traversal is fundamentally broken as a security control. It only matches the exact literal string '/../../' at the beginning of the path. This is an incomplete denylist that fails to catch: single-level traversal ('/../'), triple-level traversal ('/../../../'), traversal not at the start of the path, URL-encoded traversal ('%2e%2e%2f'), mixed separators, and many other bypass techniques.\n\nImpact: The protection mechanism is trivially bypassed, rendering the directory traversal check ineffective. Attackers can access any file readable by the server process.\n\nFix: Replace the regex-based denylist with a proper allowlist approach: resolve the canonical path using os.path.realpath() and verify it falls within the allowed base directory. Denylist approaches for path traversal are inherently fragile.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-184"
+          ],
+          "finding_id": "f342537b-fc1b-4ff1-bb03-63396acf1f21"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-22",
+      "path": "Directory_Traversal/Dir_Traversal.py",
+      "start": {
+        "line": 22,
+        "col": 1
+      },
+      "end": {
+        "line": 22,
+        "col": 100
+      },
+      "extra": {
+        "message": "Path Traversal via Weak Regex Bypass in Directory Traversal Server\n\nThe regex pattern `r'/\\.\\.\\/\\.\\.\\/` used to block directory traversal is extremely weak and easily bypassed. It only matches the exact literal string `/../../` at the start of the path (due to `re.match`). Attackers can bypass this with: (1) single `../` traversal like `/../etc/passwd`, (2) encoded traversal like `/%2e%2e/%2e%2e/etc/passwd`, (3) different traversal patterns like `/..\\..\\`, (4) triple or more `../../../` sequences, (5) paths not starting with `/../../../` but containing traversal elsewhere. The user-controlled `self.path` is directly concatenated to `os.getcwd()` at line 14 and then used to open and read files at line 22.\n\nImpact: An attacker can read arbitrary files on the server filesystem, including /etc/passwd, /etc/shadow, application source code, configuration files, and any PII stored on the system.\n\nFix: Use `os.path.realpath()` or `os.path.abspath()` to resolve the path, then verify it starts with the intended base directory. Do not rely on regex-based blocklists for path traversal prevention. Example: `resolved = os.path.realpath(path); if not resolved.startswith(os.getcwd()): return 404`.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "finding_id": "a66cb303-c3b5-499d-869b-ca8e788981ab"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "Directory_Traversal/Dir_Traversal.py",
+      "start": {
+        "line": 8,
+        "col": 1
+      },
+      "end": {
+        "line": 24,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Authentication on Directory Traversal File Server\n\nThe do_GET handler serves files from the filesystem without any authentication check. Any unauthenticated user can request any file path. Combined with the directory traversal vulnerability, this allows anonymous access to arbitrary files on the server.\n\nImpact: Any unauthenticated user can access the file server and read files, including sensitive PII data stored on the server.\n\nFix: Implement authentication for the file server endpoint. Require valid credentials or session tokens before serving any files.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "ac346f41-376e-4917-9937-d12af7de706b"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-94",
+      "path": "Insecure_Deserialization/serialize_server.py",
+      "start": {
+        "line": 12,
+        "col": 1
+      },
+      "end": {
+        "line": 14,
+        "col": 100
+      },
+      "extra": {
+        "message": "Insecure Deserialization via pickle.loads on User-Supplied Cookie\n\nThe server reads a 'username' cookie from user-supplied HTTP headers at line 12-13, and the code is designed to call `pickle.loads(base64.b64decode(cookies.get('username').value))` on it (as shown in the commented-out line 15 and the call to `Username.pickle()` at line 14). The `Username.pickle()` method performs insecure deserialization of user-controlled data. Pickle deserialization of untrusted input allows arbitrary code execution through crafted pickle payloads (as demonstrated by the companion exploit file `exploitApickle.py` which creates a reverse shell payload).\n\nImpact: Remote Code Execution (RCE). An attacker can craft a malicious pickle payload (as demonstrated in exploitApickle.py), base64-encode it, and send it as the 'username' cookie to achieve arbitrary command execution on the server, including spawning reverse shells.\n\nFix: Never use pickle to deserialize untrusted user input. Use safe serialization formats like JSON. If pickle must be used, implement HMAC-based signing to verify data integrity before deserialization, and use a restricted unpickler that only allows safe classes.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "finding_id": "cc0b9167-4a5e-4a76-a125-2118be39d9d0"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "Other/url_fetch.py",
+      "start": {
+        "line": 11,
+        "col": 1
+      },
+      "end": {
+        "line": 17,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Authentication on URL Fetch Endpoint (SSRF)\n\nThe /fetch endpoint has no authentication. Any unauthenticated user can make the server fetch arbitrary URLs. While there is a domain prefix check, it is bypassable and the endpoint itself requires no identity verification.\n\nImpact: Unauthenticated attackers can abuse the server as a proxy to access internal resources, scan internal networks, or exfiltrate data via SSRF.\n\nFix: Add authentication to the /fetch endpoint. Require valid session or API token before processing any URL fetch requests.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "279686f1-5f3e-4a78-8b93-46bb199a1012"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-502",
+      "path": "RCE/sentry_rce.py",
+      "start": {
+        "line": 56,
+        "col": 1
+      },
+      "end": {
+        "line": 57,
+        "col": 100
+      },
+      "extra": {
+        "message": "Insecure Deserialization via Pickle in RCE/sentry_rce.py\n\nThe script uses cPickle.dumps() to serialize a PickleExploit object whose __reduce__ method returns subprocess.Popen, creating a malicious pickle payload. When deserialized on the target server, this achieves arbitrary command execution.\n\nImpact: The pickle payload, when deserialized by the target Sentry instance, executes arbitrary commands (a reverse shell), achieving full remote code execution on the target server.\n\nFix: In production applications, never deserialize untrusted pickle data. Use safe serialization formats like JSON. The target application should validate and reject pickle-serialized data.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "finding_id": "cd99fc17-2b08-4215-acea-0146a55d84a8"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "SQLI/main.py",
+      "start": {
+        "line": 93,
+        "col": 1
+      },
+      "end": {
+        "line": 109,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Authentication on Edit Post Handler\n\nThe edit() handler accepts POST requests to modify existing posts without any authentication check. Any anonymous user can edit any post by its ID.\n\nImpact: Any unauthenticated user can modify any post in the database, leading to data tampering.\n\nFix: Add authentication and authorization checks to the edit() handler to ensure only the post owner can edit it.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "d6070bff-9cc5-4653-a362-b0e222fd4cc9"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-89",
+      "path": "SQLI/main.py",
+      "start": {
+        "line": 70,
+        "col": 1
+      },
+      "end": {
+        "line": 70,
+        "col": 100
+      },
+      "extra": {
+        "message": "SQL Injection via String Concatenation in get_db_connection\n\nThe second definition of get_db_connection() constructs a SQL query by concatenating user input (post_id) directly into the query string: `conn.execute('SELECT * FROM posts WHERE id = '+post_id)`. Although there is a regex check (`re.compile(r'^\\d+$', re.M)`), the use of `re.M` (multiline flag) makes the regex vulnerable to bypass. With `re.M`, `^` and `$` match the start/end of each line rather than the entire string, so an input like `1\\nOR 1=1--` would pass the check because the first line `1` matches `^\\d+$`.\n\nImpact: An attacker can inject arbitrary SQL commands, potentially reading, modifying, or deleting all data in the database, including PII.\n\nFix: Use parameterized queries with placeholders (?) instead of string concatenation. Remove the vulnerable function and use the safe get_post() function that already uses parameterized queries.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "finding_id": "2cc0776d-c551-4ffa-8791-edd6d0c6da60"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "SQLI/main_safe.py",
+      "start": {
+        "line": 84,
+        "col": 1
+      },
+      "end": {
+        "line": 92,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Authentication on Create Post Handler (main_safe.py)\n\nThe create() handler in main_safe.py accepts POST requests to create new posts without any authentication check. Any anonymous user can create posts.\n\nImpact: Any unauthenticated user can create arbitrary posts in the database.\n\nFix: Add authentication checks to the create() handler.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "6d548cb9-4281-4916-bdd2-eac90921e8f2"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "Insecure_Deserialization/serialize_server.py",
+      "start": {
+        "line": 30,
+        "col": 1
+      },
+      "end": {
+        "line": 30,
+        "col": 100
+      },
+      "extra": {
+        "message": "Reflected XSS via username variable in HTML response\n\nThe `username` variable is interpolated directly into an HTML response using string formatting (`\"<h1>Hello %s</h1>\" % username`) without any HTML escaping. While in the current code path the `username` is hardcoded to 'stranger' in the else branch, the comment on line 29 explicitly notes this is an XSS vector. If the code in the `if` branch (lines 13-19) were completed to set `username` from the cookie (as the commented-out code on line 15 suggests), the cookie-sourced username would be rendered directly into HTML without escaping, enabling reflected XSS. The architectural pattern of writing unescaped data into HTML via `wfile.write` with string formatting is inherently unsafe.\n\nImpact: An attacker could inject arbitrary JavaScript into the page by setting a crafted username cookie value, leading to session hijacking, credential theft, or other client-side attacks.\n\nFix: HTML-escape the username before embedding it in the HTML response. Use `html.escape(username)` to sanitize the value before interpolation: `self.wfile.write(bytes(\"<h1>Hello %s</h1>\" % html.escape(username), \"utf-8\"))`.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "d545af56-66fe-4635-80bf-07c8b2371984"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-354",
+      "path": "Insecure_Frameworks/bad_mvc.py",
+      "start": {
+        "line": 15,
+        "col": 1
+      },
+      "end": {
+        "line": 20,
+        "col": 100
+      },
+      "extra": {
+        "message": "AES-CBC Padding Oracle Vulnerability\n\nThe decrypt method uses AES-CBC mode and calls unpad() on the decrypted data. When the padding is invalid, an exception is raised and a 500 error is returned. This differential error response (500 for bad padding vs 200 for valid padding) creates a padding oracle that an attacker can exploit to decrypt any ciphertext without knowing the key, by making repeated requests with modified ciphertext blocks.\n\nImpact: An attacker can decrypt the session cookie and potentially forge arbitrary session cookies, leading to authentication bypass and impersonation of any user.\n\nFix: Use authenticated encryption (AES-GCM) instead of AES-CBC, or add an HMAC over the ciphertext to verify integrity before decryption. Ensure error responses do not leak padding validity information.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-354"
+          ],
+          "finding_id": "af037fb4-ea73-48ab-b085-dbe931979205"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-79",
+      "path": "Insecure_Frameworks/bad_mvc.py",
+      "start": {
+        "line": 37,
+        "col": 1
+      },
+      "end": {
+        "line": 37,
+        "col": 100
+      },
+      "extra": {
+        "message": "Reflected XSS via Username in HTTP Response\n\nThe username value, derived from decrypting a user-controlled cookie, is directly interpolated into the HTML response using string formatting ('Hello %s' % username) without any HTML encoding or escaping. If an attacker can craft an encrypted cookie containing malicious JavaScript (or if the decryption yields attacker-controlled content), the response will contain unescaped HTML/JavaScript.\n\nImpact: An attacker could inject arbitrary JavaScript into the page, leading to session hijacking, credential theft, or other client-side attacks against users.\n\nFix: HTML-encode the username before including it in the response. Use html.escape(username) to prevent XSS.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "finding_id": "a9b7706a-9bc3-4b26-8ab2-998459a2ce83"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-295",
+      "path": "Other/host_header_injection.py",
+      "start": {
+        "line": 6,
+        "col": 1
+      },
+      "end": {
+        "line": 6,
+        "col": 100
+      },
+      "extra": {
+        "message": "SSL Hostname Verification Disabled - Host Header Injection\n\nThe SSL context has check_hostname explicitly set to False, which disables hostname verification during TLS connections. This allows man-in-the-middle attacks where an attacker with a valid certificate for any domain can intercept the connection to 'website.com'.\n\nImpact: An attacker performing a man-in-the-middle attack can intercept and modify traffic, potentially stealing sensitive data or injecting malicious content.\n\nFix: Set context.check_hostname = True to enable hostname verification. This ensures the server's certificate matches the expected hostname.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-295"
+          ],
+          "finding_id": "21d92ee0-4674-4734-9f39-ced5ddd6779c"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-328",
+      "path": "Other/length_extension_attack.py",
+      "start": {
+        "line": 12,
+        "col": 1
+      },
+      "end": {
+        "line": 18,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hash Length Extension Attack - Using SHA256 with Secret Prefix Instead of HMAC\n\nThe sign_for_payment function computes a signature by concatenating a secret with the payment information and hashing with SHA-256 (secret + payment_information). This construction is vulnerable to hash length extension attacks. An attacker who knows the hash output and the length of the secret can compute valid signatures for messages with appended data, without knowing the secret.\n\nImpact: An attacker can forge valid signatures for modified payment information (e.g., changing the amount or adding additional parameters), enabling payment fraud and transaction tampering.\n\nFix: Use HMAC (hashlib or hmac module) instead of raw SHA-256 with secret prefix. Replace with hmac.new(secret.encode(), payment_information.encode(), hashlib.sha256).hexdigest().",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-328"
+          ],
+          "finding_id": "5dc95e15-826e-432c-8016-ec1d716bb6a7"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-312",
+      "path": "Other/length_extension_attack.py",
+      "start": {
+        "line": 7,
+        "col": 1
+      },
+      "end": {
+        "line": 7,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hardcoded Secret in Payment Signing - length_extension_attack.py\n\nA secret value is hardcoded in the source code as `secret = \"[....]\"`. While this appears to be a placeholder, the pattern of storing secrets directly in source code is a cleartext storage vulnerability. In a real deployment, this secret would be committed to version control.\n\nImpact: Anyone with access to the source code can read the signing secret, allowing them to forge payment signatures and tamper with payment amounts.\n\nFix: Store secrets in environment variables or a secrets management system, never in source code.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "finding_id": "a16a53a4-c76f-494a-bafe-eafe0e6970d9"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-918",
+      "path": "Other/url_fetch.py",
+      "start": {
+        "line": 13,
+        "col": 1
+      },
+      "end": {
+        "line": 17,
+        "col": 100
+      },
+      "extra": {
+        "message": "SSRF via URL Fetch with Insufficient Domain Validation\n\nThe /fetch endpoint takes a user-supplied URL and fetches it using urllib.request.urlopen(). The validation only checks if the URL starts with 'https://insecurewebapp.com', which can be trivially bypassed. An attacker can craft URLs like 'https://insecurewebapp.com.evil.com/...' or 'https://insecurewebapp.com@attacker.com/' to bypass the startswith check and make the server fetch arbitrary URLs, including internal network resources.\n\nImpact: An attacker can make the server fetch arbitrary internal or external URLs, potentially accessing internal services, cloud metadata endpoints (e.g., http://169.254.169.254/), or other sensitive resources.\n\nFix: Use a proper URL parser to validate the hostname strictly. Parse the URL with urllib.parse.urlparse() and compare the hostname exactly against an allowlist. Also consider blocking private/internal IP ranges.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "finding_id": "914e8330-d7e8-4cf6-af28-a074d08aa6c8"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-22",
+      "path": "Other/url_fetch.py",
+      "start": {
+        "line": 14,
+        "col": 1
+      },
+      "end": {
+        "line": 16,
+        "col": 100
+      },
+      "extra": {
+        "message": "Path Traversal via URL Parameter in url_fetch\n\nThe startswith check for the URL can be bypassed using path traversal in the URL. An attacker can use URLs like 'https://insecurewebapp.com/../../../etc/passwd' or 'https://insecurewebapp.com/..%2f..%2f' combined with file:// protocol tricks. Additionally, the URL could use 'https://insecurewebapp.com@evil.com' to redirect to an attacker-controlled server while passing the startswith check.\n\nImpact: An attacker could bypass the URL validation to access arbitrary URLs or local files, potentially reading sensitive server-side files or accessing internal services.\n\nFix: Parse the URL properly using urllib.parse.urlparse() and validate the scheme, hostname, and port individually. Block file:// and other non-HTTP schemes. Validate the resolved IP address is not internal.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "finding_id": "b983355a-e57c-42a1-a3ab-0de635b38304"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-312",
+      "path": "Other/vuln_payment_code.py",
+      "start": {
+        "line": 5,
+        "col": 1
+      },
+      "end": {
+        "line": 5,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hardcoded Secret in Payment Signing - vuln_payment_code.py\n\nA secret value is hardcoded in the source code as `secret = \"[....]\"`. The pattern of storing secrets directly in source code is a cleartext storage vulnerability. This secret is used to sign payment information.\n\nImpact: Anyone with access to the source code can read the signing secret, allowing them to forge payment signatures and tamper with payment amounts.\n\nFix: Store secrets in environment variables or a secrets management system, never in source code.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "finding_id": "0666fd54-a705-4ed6-9046-f49bc8a9cde1"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-328",
+      "path": "Other/vuln_payment_code.py",
+      "start": {
+        "line": 9,
+        "col": 1
+      },
+      "end": {
+        "line": 13,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hash Length Extension Attack - Vulnerable Payment Signature (vuln_payment_code)\n\nThe sign_for_payment function uses SHA-256 with a secret prefix (secret + payment_information) instead of HMAC. This is vulnerable to hash length extension attacks where an attacker can forge valid signatures for modified payment data without knowing the secret.\n\nImpact: An attacker can forge valid payment signatures, potentially modifying transaction amounts or other payment parameters to commit fraud.\n\nFix: Use HMAC instead of raw hash with secret prefix: hmac.new(secret.encode(), payment_information.encode(), hashlib.sha256).hexdigest().",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-328"
+          ],
+          "finding_id": "f02963e2-b2d0-489c-91e0-131df0d88bb3"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-798",
+      "path": "SQLI/main.py",
+      "start": {
+        "line": 52,
+        "col": 1
+      },
+      "end": {
+        "line": 52,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hardcoded Flask SECRET_KEY in main.py\n\nThe Flask application's SECRET_KEY is hardcoded as 'qwerty12345'. This key is used for signing session cookies and flash messages. A known secret key allows attackers to forge session cookies and potentially escalate privileges.\n\nImpact: An attacker can forge Flask session cookies, potentially impersonating other users or escalating privileges. The value 'qwerty12345' is also an extremely weak, easily guessable value.\n\nFix: Use a cryptographically random secret key loaded from environment variables or a secrets management system: `app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')`",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "finding_id": "c45f0f75-ac65-4b60-97d6-2db72fec7d0b"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-798",
+      "path": "SQLI/main_safe.py",
+      "start": {
+        "line": 26,
+        "col": 1
+      },
+      "end": {
+        "line": 26,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hardcoded Flask SECRET_KEY in main_safe.py\n\nThe Flask application's SECRET_KEY is hardcoded as '55555'. This key is used for signing session cookies and flash messages. A known secret key allows attackers to forge session cookies.\n\nImpact: An attacker can forge Flask session cookies, potentially impersonating other users or escalating privileges. The value '55555' is an extremely weak, easily guessable value.\n\nFix: Use a cryptographically random secret key loaded from environment variables or a secrets management system: `app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')`",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "finding_id": "13e2618e-cae7-4c7b-9244-31139e509333"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-755",
+      "path": "Insecure_Frameworks/bad_mvc.py",
+      "start": {
+        "line": 27,
+        "col": 1
+      },
+      "end": {
+        "line": 29,
+        "col": 100
+      },
+      "extra": {
+        "message": "Bare Exception Handler Suppresses All Errors\n\nThe bare 'except:' clause catches all exceptions including SystemExit and KeyboardInterrupt, and returns a 500 response without any logging. This suppresses all error information, making it difficult to detect attacks and debug issues. Combined with the padding oracle vulnerability, this error handling pattern enables the attack by providing a distinguishable error response.\n\nImpact: Suppresses error details that could help detect attacks, and the differential response (500 vs 200) enables padding oracle attacks.\n\nFix: Catch specific exceptions, log errors appropriately, and return consistent error responses regardless of the type of decryption failure.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-755"
+          ],
+          "finding_id": "d21a9737-e5d6-4746-9fc2-021d8145122f"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-312",
+      "path": "Insecure_Frameworks/bad_mvc.py",
+      "start": {
+        "line": 9,
+        "col": 1
+      },
+      "end": {
+        "line": 9,
+        "col": 100
+      },
+      "extra": {
+        "message": "AES Encryption Key Generated at Module Load Without Persistence\n\nThe AES encryption key `KEY = Random.new().read(AES.block_size)` is generated randomly at module load time and stored only in memory. While the key itself is random, it uses AES.block_size (16 bytes / 128 bits) for the key length. More importantly, this key is effectively a hardcoded runtime secret with no secure key management - it's regenerated on every restart, invalidating all existing sessions.\n\nImpact: The encryption key has no persistence or secure management. Session cookies become invalid on server restart, and the key exists only in process memory with no rotation or backup mechanism.\n\nFix: Use a proper key management system or derive keys from securely stored secrets. Consider using a proper session management framework instead of custom cookie encryption.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "finding_id": "f6f38970-a56f-4f72-8506-b8ca51f56dd4"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-352",
+      "path": "Other/app.py",
+      "start": {
+        "line": 7,
+        "col": 1
+      },
+      "end": {
+        "line": 17,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing CSRF Protection in Flask Application (Other/app.py)\n\nThe Flask application at Other/app.py handles POST requests on the '/' route (adding comments) without any CSRF protection. Flask does not include CSRF protection by default, and no Flask-WTF or other CSRF middleware is configured. An attacker could craft a malicious page that submits a POST request to add comments on behalf of an authenticated user.\n\nImpact: An attacker can forge cross-site requests to add arbitrary comments on behalf of other users.\n\nFix: Integrate Flask-WTF or another CSRF protection library and validate CSRF tokens on all state-changing requests.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "finding_id": "1aaad7b2-ae84-4292-9638-c023127d5391"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "Other/app.py",
+      "start": {
+        "line": 9,
+        "col": 1
+      },
+      "end": {
+        "line": 10,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Authentication on Comment Submission (POST)\n\nThe POST handler for adding comments at the '/' route has no authentication check. Any unauthenticated user can submit comments by sending a POST request with a 'comment' form field. There is no session check, login requirement, or any form of identity verification.\n\nImpact: Anonymous users can flood the application with spam comments or malicious content without any accountability.\n\nFix: Add authentication checks before allowing comment submission. Require users to be logged in and verify their session before processing the POST request.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "fd844904-cd79-4566-9969-4721d0e64058"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-400",
+      "path": "Other/url_fetch.py",
+      "start": {
+        "line": 15,
+        "col": 1
+      },
+      "end": {
+        "line": 15,
+        "col": 100
+      },
+      "extra": {
+        "message": "SSRF via urllib.request.urlopen Without Timeout\n\nThe urllib.request.urlopen() call has no timeout parameter. An attacker can provide a URL to a slow-responding server, causing the Flask worker to hang indefinitely, leading to denial of service.\n\nImpact: An attacker can exhaust all Flask worker threads by making requests to slow-responding URLs, causing denial of service for legitimate users.\n\nFix: Add a timeout parameter to urlopen: urllib.request.urlopen(url, timeout=5). Also implement response size limits.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "finding_id": "b1c80a87-40a0-4720-a3b4-07552ea48f05"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-352",
+      "path": "Other/vuln_payment_code.py",
+      "start": {
+        "line": 6,
+        "col": 1
+      },
+      "end": {
+        "line": 6,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing CSRF Protection in Flask Payment Code App\n\nThe Flask application does not configure any CSRF protection. The '/redirect_for_payment' endpoint handles payment redirects without CSRF tokens.\n\nImpact: Payment redirect operations could be triggered via cross-site request forgery.\n\nFix: Integrate Flask-WTF or another CSRF protection library.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "finding_id": "1be21ba7-30f3-4e02-acfb-4a2f175cf111"
+        }
+      }
+    }
+  ]
+}
