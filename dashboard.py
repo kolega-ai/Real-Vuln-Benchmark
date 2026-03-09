@@ -194,52 +194,21 @@ def f2_text_color(score: float | None) -> str:
 # HTML Dashboard
 # ---------------------------------------------------------------------------
 
-def build_html(
-    grid: dict[str, dict[str, dict | None]],
-    scanners: list[str],
-    aggregates: dict[str, dict],
-    repos: list[str],
-) -> str:
-    """Build standalone HTML dashboard."""
-    total_repos = len(repos)
-    total_scanners = len(scanners)
-
-    # Build summary bar chart data
-    chart_data = []
-    for scanner in scanners:
-        sa = aggregates.get(scanner, {})
-        micro = sa.get("micro", {})
-        chart_data.append({
-            "label": scanner,
-            "f2": micro.get("f2_score", 0),
-            "recall": round(micro.get("recall", 0) * 100, 1),
-            "precision": round(micro.get("precision", 0) * 100, 1),
-            "tp": micro.get("tp", 0),
-            "fp": micro.get("fp", 0),
-            "fn": micro.get("fn", 0),
-            "repos": sa.get("repos_scored", 0),
-        })
-    # Sort chart_data by F2 descending
-    chart_data.sort(key=lambda x: x["f2"], reverse=True)
-
-    lines: list[str] = []
-    w = lines.append
-
-    w("<!DOCTYPE html>")
-    w('<html lang="en">')
-    w("<head>")
-    w('<meta charset="UTF-8">')
-    w("<title>RealVuln Multi-Scanner Dashboard</title>")
-    w("<style>")
-    w("""
+def _common_css() -> str:
+    """Shared CSS for all dashboard pages."""
+    return """
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   background: #0f172a; color: #e2e8f0; padding: 24px;
 }
+a { color: #3b82f6; text-decoration: none; }
+a:hover { text-decoration: underline; }
 h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
 h2 { font-size: 16px; font-weight: 600; margin: 28px 0 12px 0; color: #f8fafc; }
 .subtitle { color: #94a3b8; font-size: 13px; margin-bottom: 24px; }
+.back-link { display: inline-block; margin-bottom: 16px; font-size: 13px; color: #3b82f6; }
+.back-link:hover { text-decoration: underline; }
 
 /* Summary cards */
 .summary-cards {
@@ -253,30 +222,6 @@ h2 { font-size: 16px; font-weight: 600; margin: 28px 0 12px 0; color: #f8fafc; }
 .summary-card .sc-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
 .summary-card .sc-value { font-size: 28px; font-weight: 700; }
 .summary-card .sc-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
-
-/* Bar charts */
-.charts-grid {
-  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 28px;
-}
-@media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } }
-.chart-panel {
-  background: #1e293b; border-radius: 8px; padding: 16px; border: 1px solid #334155;
-}
-.chart-panel h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #f8fafc; }
-.bar-chart { display: flex; flex-direction: column; gap: 6px; }
-.bar-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
-.bar-label { width: 120px; text-align: right; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
-.bar-track { flex: 1; height: 20px; background: #0f172a; border-radius: 3px; position: relative; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; }
-.bar-fill span { font-size: 10px; font-weight: 700; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
-
-/* TP/FP/FN stacked bar */
-.stacked-bar { display: flex; height: 100%; border-radius: 3px; overflow: hidden; }
-.stacked-bar .seg-tp { background: #16a34a; }
-.stacked-bar .seg-fp { background: #dc2626; }
-.stacked-bar .seg-fn { background: #ea580c; }
-.stacked-legend { display: flex; gap: 12px; margin-top: 8px; font-size: 10px; color: #94a3b8; }
-.stacked-legend .sl-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 3px; }
 
 /* Metric toggle */
 .metric-toggle {
@@ -343,40 +288,196 @@ tbody tr:hover .repo-name { background: #1e293b; }
 .tooltip .tt-label { color: #94a3b8; }
 .tooltip .tt-val { font-weight: 600; }
 .tooltip .tt-sep { border-top: 1px solid #334155; margin: 4px 0; }
-""")
-    w("</style>")
+
+/* Scanner link in table header */
+th a { color: #e2e8f0; }
+th a:hover { color: #3b82f6; text-decoration: underline; }
+"""
+
+
+def _plotly_theme_js() -> str:
+    """Shared Plotly theme constants."""
+    return """
+  const darkBg = '#0f172a';
+  const panelBg = '#1e293b';
+  const gridColor = '#334155';
+  const textColor = '#e2e8f0';
+  const mutedText = '#94a3b8';
+  const colors = ['#3b82f6','#10b981','#a855f7','#f59e0b','#ec4899','#06b6d4','#ef4444','#84cc16','#f97316','#14b8a6'];
+"""
+
+
+def _metric_toggle_sort_js() -> str:
+    """Shared JS for metric toggle and table sorting."""
+    return """
+(function() {
+  const table = document.getElementById('dashboard-table');
+  if (!table) return;
+  const thead = table.querySelector('thead');
+  const tbody = table.querySelector('tbody');
+  let sortCol = null;
+  let sortAsc = true;
+  let currentMetric = 'f2';
+
+  function metricColor(score, metric) {
+    if (score === null || score === undefined || isNaN(score)) return '#334155';
+    if (metric === 'precision') {
+      if (score >= 60) return '#16a34a';
+      if (score >= 40) return '#65a30d';
+      if (score >= 25) return '#ca8a04';
+      if (score >= 10) return '#ea580c';
+      return '#dc2626';
+    }
+    if (score >= 80) return '#16a34a';
+    if (score >= 60) return '#65a30d';
+    if (score >= 40) return '#ca8a04';
+    if (score >= 20) return '#ea580c';
+    return '#dc2626';
+  }
+
+  var toggle = document.querySelector('.metric-toggle');
+  if (toggle) {
+    toggle.addEventListener('click', function(e) {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      currentMetric = btn.dataset.metric;
+      document.querySelectorAll('.metric-toggle button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateCells();
+    });
+  }
+
+  function updateCells() {
+    table.querySelectorAll('td.cell').forEach(td => {
+      const val = td.dataset[currentMetric];
+      const inner = td.querySelector('.cell-inner');
+      if (!inner) return;
+      if (val === '' || val === undefined) {
+        inner.style.background = '#334155';
+        inner.style.color = '#64748b';
+        inner.innerHTML = '&mdash;';
+      } else {
+        const num = parseFloat(val);
+        inner.style.background = metricColor(num, currentMetric);
+        inner.style.color = '#fff';
+        inner.textContent = num.toFixed(1);
+      }
+    });
+  }
+
+  thead.addEventListener('click', function(e) {
+    const th = e.target.closest('th');
+    if (!th) return;
+    const col = th.dataset.col;
+    if (col === undefined || col === null) return;
+    if (sortCol === col) { sortAsc = !sortAsc; }
+    else { sortCol = col; sortAsc = true; }
+
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const dataRows = rows.filter(r => !r.classList.contains('agg-row'));
+    const aggRows = rows.filter(r => r.classList.contains('agg-row'));
+
+    dataRows.sort(function(a, b) {
+      if (col === 'repo') {
+        const va = a.cells[0].textContent.trim().toLowerCase();
+        const vb = b.cells[0].textContent.trim().toLowerCase();
+        return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      }
+      const idx = parseInt(col) + 1;
+      const ca = a.cells[idx];
+      const cb = b.cells[idx];
+      const va = ca ? parseFloat(ca.dataset[currentMetric]) || -1 : -1;
+      const vb = cb ? parseFloat(cb.dataset[currentMetric]) || -1 : -1;
+      return sortAsc ? va - vb : vb - va;
+    });
+
+    dataRows.forEach(r => tbody.appendChild(r));
+    aggRows.forEach(r => tbody.appendChild(r));
+
+    thead.querySelectorAll('.sort-arrow').forEach(s => s.textContent = '');
+    th.querySelector('.sort-arrow').textContent = sortAsc ? ' \\u25B2' : ' \\u25BC';
+  });
+})();
+"""
+
+
+def _legend_html() -> str:
+    """Build legend HTML."""
+    parts = []
+    for label, color in [
+        ("80-100", "#16a34a"), ("60-79", "#65a30d"), ("40-59", "#ca8a04"),
+        ("20-39", "#ea580c"), ("0-19", "#dc2626"), ("No data", "#334155"),
+    ]:
+        parts.append(f'  <div class="legend-item"><div class="legend-box" style="background:{color}"></div> {label}</div>')
+    return '<div class="legend">' + "\n".join(parts) + "</div>"
+
+
+def build_html(
+    grid: dict[str, dict[str, dict | None]],
+    scanners: list[str],
+    aggregates: dict[str, dict],
+    repos: list[str],
+    detail_dir: str = "scanners",
+) -> str:
+    """Build standalone HTML index dashboard with links to scanner detail pages."""
+    total_repos = len(repos)
+    total_scanners = len(scanners)
+
+    # Build summary bar chart data
+    chart_data = []
+    for scanner in scanners:
+        sa = aggregates.get(scanner, {})
+        micro = sa.get("micro", {})
+        chart_data.append({
+            "label": scanner,
+            "f2": micro.get("f2_score", 0),
+            "recall": round(micro.get("recall", 0) * 100, 1),
+            "precision": round(micro.get("precision", 0) * 100, 1),
+            "tp": micro.get("tp", 0),
+            "fp": micro.get("fp", 0),
+            "fn": micro.get("fn", 0),
+            "repos": sa.get("repos_scored", 0),
+        })
+    chart_data.sort(key=lambda x: x["f2"], reverse=True)
+
+    lines: list[str] = []
+    w = lines.append
+
+    w("<!DOCTYPE html>")
+    w('<html lang="en">')
+    w("<head>")
+    w('<meta charset="UTF-8">')
+    w("<title>RealVuln Multi-Scanner Dashboard</title>")
+    w(f"<style>{_common_css()}</style>")
     w("</head>")
     w("<body>")
     w("<h1>RealVuln Multi-Scanner Dashboard</h1>")
     w(f'<div class="subtitle">{total_repos} repositories &middot; {total_scanners} scanners &middot; generated {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}</div>')
 
-    # ── Summary cards for best scanner ──
+    # ── Summary cards ──
     best = chart_data[0] if chart_data else None
     if best:
         w('<div class="summary-cards">')
-        w(f'<div class="summary-card"><div class="sc-label">Best Scanner (F2)</div><div class="sc-value" style="color:#3b82f6">{best["label"]}</div><div class="sc-sub">micro-F2 = {best["f2"]:.1f}</div></div>')
-        w(f'<div class="summary-card"><div class="sc-label">Best F2</div><div class="sc-value" style="color:#16a34a">{best["f2"]:.1f}</div><div class="sc-sub">Recall {best["recall"]:.1f}% · Prec {best["precision"]:.1f}%</div></div>')
+        w(f'<div class="summary-card"><div class="sc-label">Best Scanner (F2)</div><div class="sc-value" style="color:#3b82f6"><a href="{detail_dir}/{best["label"]}.html">{best["label"]}</a></div><div class="sc-sub">micro-F2 = {best["f2"]:.1f}</div></div>')
+        w(f'<div class="summary-card"><div class="sc-label">Best F2</div><div class="sc-value" style="color:#16a34a">{best["f2"]:.1f}</div><div class="sc-sub">Recall {best["recall"]:.1f}% &middot; Prec {best["precision"]:.1f}%</div></div>')
         total_gt = sum(d["tp"] + d["fn"] for d in chart_data[:1])
         w(f'<div class="summary-card"><div class="sc-label">Ground Truth</div><div class="sc-value">{total_gt}</div><div class="sc-sub">vulnerabilities across {best["repos"]} repos</div></div>')
-        w(f'<div class="summary-card"><div class="sc-label">Scanners Compared</div><div class="sc-value">{total_scanners}</div><div class="sc-sub">incl. baselines & optimized</div></div>')
+        w(f'<div class="summary-card"><div class="sc-label">Scanners Compared</div><div class="sc-value">{total_scanners}</div><div class="sc-sub">click any scanner for details</div></div>')
         w('</div>')
 
-    # ── Plotly-based charts ──
+    # ── Plotly charts ──
     scatter_json = json.dumps(chart_data)
     bar_data_reversed = list(reversed(chart_data))
     bar_json = json.dumps(bar_data_reversed)
 
     w('<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>')
 
-    # Precision-Recall scatter
     w('<h2>Precision vs Recall</h2>')
     w('<div id="pr-scatter" style="width:100%;height:520px;margin-bottom:28px"></div>')
 
-    # Grouped bar: F2 / Recall / Precision
     w('<h2>Scanner Comparison (Micro-Averaged)</h2>')
     w('<div id="metric-bars" style="width:100%;height:400px;margin-bottom:28px"></div>')
 
-    # TP/FP/FN stacked bar
     w('<h2>Finding Breakdown (TP / FP / FN)</h2>')
     w('<div id="finding-bars" style="width:100%;height:380px;margin-bottom:28px"></div>')
 
@@ -388,25 +489,17 @@ tbody tr:hover .repo-name { background: #1e293b; }
     w('<button data-metric="precision">Precision</button>')
     w('</div>')
 
-    # Legend
-    w('<div class="legend">')
-    for label, color in [
-        ("80-100", "#16a34a"), ("60-79", "#65a30d"), ("40-59", "#ca8a04"),
-        ("20-39", "#ea580c"), ("0-19", "#dc2626"), ("No data", "#334155"),
-    ]:
-        w(f'  <div class="legend-item"><div class="legend-box" style="background:{color}"></div> {label}</div>')
-    w("</div>")
+    w(_legend_html())
 
-    # Table — embed all three metrics as data attributes
+    # Table
     w('<div class="container">')
     w('<table id="dashboard-table">')
 
-    # Header
+    # Header — scanner names are clickable links
     w("<thead><tr>")
     w('<th class="repo-name" data-col="repo">Repository <span class="sort-arrow"></span></th>')
     for i, scanner in enumerate(scanners):
-        short = scanner
-        w(f'<th data-col="{i}">{short} <span class="sort-arrow"></span></th>')
+        w(f'<th data-col="{i}"><a href="{detail_dir}/{scanner}.html">{scanner}</a> <span class="sort-arrow"></span></th>')
     w("</tr></thead>")
 
     # Body
@@ -462,115 +555,21 @@ tbody tr:hover .repo-name { background: #1e293b; }
     w("</table>")
     w("</div>")
 
-    # JavaScript: sort + metric toggle
+    # JavaScript
     w("<script>")
-    w("""
-(function() {
-  const table = document.getElementById('dashboard-table');
-  const thead = table.querySelector('thead');
-  const tbody = table.querySelector('tbody');
-  let sortCol = null;
-  let sortAsc = true;
-  let currentMetric = 'f2';
-
-  // Color mapping
-  function metricColor(score, metric) {
-    if (score === null || score === undefined || isNaN(score)) return '#334155';
-    if (metric === 'precision') {
-      if (score >= 60) return '#16a34a';
-      if (score >= 40) return '#65a30d';
-      if (score >= 25) return '#ca8a04';
-      if (score >= 10) return '#ea580c';
-      return '#dc2626';
-    }
-    if (score >= 80) return '#16a34a';
-    if (score >= 60) return '#65a30d';
-    if (score >= 40) return '#ca8a04';
-    if (score >= 20) return '#ea580c';
-    return '#dc2626';
-  }
-
-  // Metric toggle
-  document.querySelector('.metric-toggle').addEventListener('click', function(e) {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    currentMetric = btn.dataset.metric;
-    document.querySelectorAll('.metric-toggle button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    updateCells();
-  });
-
-  function updateCells() {
-    table.querySelectorAll('td.cell').forEach(td => {
-      const val = td.dataset[currentMetric];
-      const inner = td.querySelector('.cell-inner');
-      if (!inner) return;
-      if (val === '' || val === undefined) {
-        inner.style.background = '#334155';
-        inner.style.color = '#64748b';
-        inner.innerHTML = '&mdash;';
-      } else {
-        const num = parseFloat(val);
-        inner.style.background = metricColor(num, currentMetric);
-        inner.style.color = '#fff';
-        inner.textContent = num.toFixed(1);
-      }
-    });
-  }
-
-  // Sort
-  thead.addEventListener('click', function(e) {
-    const th = e.target.closest('th');
-    if (!th) return;
-    const col = th.dataset.col;
-    if (sortCol === col) { sortAsc = !sortAsc; }
-    else { sortCol = col; sortAsc = true; }
-
-    const rows = Array.from(tbody.querySelectorAll('tr'));
-    const dataRows = rows.filter(r => !r.classList.contains('agg-row'));
-    const aggRows = rows.filter(r => r.classList.contains('agg-row'));
-
-    dataRows.sort(function(a, b) {
-      if (col === 'repo') {
-        const va = a.cells[0].textContent.trim().toLowerCase();
-        const vb = b.cells[0].textContent.trim().toLowerCase();
-        return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
-      }
-      const idx = parseInt(col) + 1;
-      const ca = a.cells[idx];
-      const cb = b.cells[idx];
-      const va = ca ? parseFloat(ca.dataset[currentMetric]) || -1 : -1;
-      const vb = cb ? parseFloat(cb.dataset[currentMetric]) || -1 : -1;
-      return sortAsc ? va - vb : vb - va;
-    });
-
-    dataRows.forEach(r => tbody.appendChild(r));
-    aggRows.forEach(r => tbody.appendChild(r));
-
-    thead.querySelectorAll('.sort-arrow').forEach(s => s.textContent = '');
-    th.querySelector('.sort-arrow').textContent = sortAsc ? ' \\u25B2' : ' \\u25BC';
-  });
-})();
-""")
-
-    # Plotly charts JS
+    w(_metric_toggle_sort_js())
     w("</script>")
     w("<script>")
     w(f"const chartData = {scatter_json};")
     w(f"const barData = {bar_json};")
+    # Scanner detail links for Plotly click-through
+    scanner_links = {d["label"]: f"{detail_dir}/{d['label']}.html" for d in chart_data}
+    w(f"const scannerLinks = {json.dumps(scanner_links)};")
+    w("(function() {")
+    w(_plotly_theme_js())
     w("""
-(function() {
-  const darkBg = '#0f172a';
-  const panelBg = '#1e293b';
-  const gridColor = '#334155';
-  const textColor = '#e2e8f0';
-  const mutedText = '#94a3b8';
-  const colors = ['#3b82f6','#10b981','#a855f7','#f59e0b','#ec4899','#06b6d4','#ef4444','#84cc16','#f97316','#14b8a6'];
-
   // ── 1. Precision-Recall Scatter with F2 iso-lines ──
   const scatterTraces = [];
-
-  // F2 iso-lines
   const f2Vals = [20, 30, 40, 50, 60, 80];
   const f2LineColors = ['#dc262640','#ea580c50','#ca8a0450','#65a30d50','#16a34a50','#16a34a30'];
   f2Vals.forEach((f2v, idx) => {
@@ -588,7 +587,6 @@ tbody tr:hover .repo-name { background: #1e293b; }
     });
   });
 
-  // Scanner points
   chartData.forEach((d, i) => {
     scatterTraces.push({
       x: [d.recall], y: [d.precision], mode: 'markers+text',
@@ -601,10 +599,8 @@ tbody tr:hover .repo-name { background: #1e293b; }
     });
   });
 
-  // Add F2 iso-line annotations
   const annotations = f2Vals.map(f2v => {
     const f2 = f2v / 100;
-    // Find a good position for label near right edge
     for (let r = 98; r >= 10; r--) {
       const denom = 5 * (r/100) - 4 * f2;
       if (denom <= 0) continue;
@@ -617,7 +613,8 @@ tbody tr:hover .repo-name { background: #1e293b; }
     return null;
   }).filter(Boolean);
 
-  Plotly.newPlot('pr-scatter', scatterTraces, {
+  const prScatter = document.getElementById('pr-scatter');
+  Plotly.newPlot(prScatter, scatterTraces, {
     paper_bgcolor: darkBg, plot_bgcolor: panelBg,
     xaxis: {title: {text: 'Recall (%)', font: {color: textColor, size: 13}},
       range: [0, 105], gridcolor: gridColor, zerolinecolor: gridColor,
@@ -630,6 +627,12 @@ tbody tr:hover .repo-name { background: #1e293b; }
     annotations: annotations,
     hoverlabel: {bgcolor: panelBg, bordercolor: gridColor, font: {color: textColor, size: 12}}
   }, {responsive: true, displayModeBar: false});
+
+  // Click on scatter points to navigate to scanner detail
+  prScatter.on('plotly_click', function(data) {
+    const label = data.points[0].data.name;
+    if (scannerLinks[label]) window.location.href = scannerLinks[label];
+  });
 
   // ── 2. Grouped horizontal bar: F2 / Recall / Precision ──
   const barLabels = barData.map(d => d.label);
@@ -673,9 +676,324 @@ tbody tr:hover .repo-name { background: #1e293b; }
     margin: {l: 140, r: 30, t: 30, b: 50},
     hoverlabel: {bgcolor: panelBg, bordercolor: gridColor, font: {color: textColor}}
   }, {responsive: true, displayModeBar: false});
-})();
 """)
+    w("})();")
     w("</script>")
+    w("</body></html>")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Scanner Detail Page
+# ---------------------------------------------------------------------------
+
+def build_scanner_detail_html(
+    scanner: str,
+    grid: dict[str, dict[str, dict | None]],
+    repos: list[str],
+    aggregates: dict[str, dict],
+) -> str:
+    """Build a detail page for a single scanner."""
+    sa = aggregates.get(scanner, {})
+    micro = sa.get("micro", {})
+    macro = sa.get("macro", {})
+    repos_scored = sa.get("repos_scored", 0)
+
+    # Collect per-repo data for this scanner
+    repo_data = []
+    for repo in repos:
+        cell = grid.get(repo, {}).get(scanner)
+        if cell is not None:
+            repo_data.append((repo, cell))
+
+    # Collect all CWE families seen across repos
+    all_families: dict[str, str] = {}  # slug -> label
+    for _, cell in repo_data:
+        for fam_slug, fam_info in cell.get("per_family", {}).items():
+            if fam_slug not in all_families:
+                all_families[fam_slug] = fam_info.get("label", fam_slug)
+    family_slugs = sorted(all_families.keys())
+
+    # Collect all severities
+    all_severities: list[str] = []
+    sev_order = ["critical", "high", "medium", "low", "info", "unknown"]
+    sev_set: set[str] = set()
+    for _, cell in repo_data:
+        for sev in cell.get("per_severity", {}).keys():
+            sev_set.add(sev)
+    all_severities = [s for s in sev_order if s in sev_set]
+
+    lines: list[str] = []
+    w = lines.append
+
+    w("<!DOCTYPE html>")
+    w('<html lang="en">')
+    w("<head>")
+    w('<meta charset="UTF-8">')
+    w(f"<title>{scanner} — RealVuln Scanner Detail</title>")
+    w(f"<style>{_common_css()}")
+    # Additional detail-page CSS
+    w("""
+/* Detail page extras */
+.family-name {
+  text-align: left; padding: 6px 10px; font-weight: 500;
+  position: sticky; left: 0; background: #0f172a; z-index: 1;
+  border-right: 2px solid #334155; max-width: 200px;
+  overflow: hidden; text-overflow: ellipsis; font-size: 11px;
+}
+.family-name code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; color: #e2e8f0; }
+.severity-card {
+  background: #1e293b; border-radius: 8px; padding: 16px; border: 1px solid #334155;
+  display: inline-block; min-width: 140px; text-align: center; margin: 0 8px 8px 0;
+}
+.severity-card .sev-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; }
+.severity-card .sev-recall { font-size: 24px; font-weight: 700; }
+.severity-card .sev-counts { font-size: 11px; color: #64748b; margin-top: 4px; }
+""")
+    w("</style>")
+    w("</head>")
+    w("<body>")
+    w('<a href="../dashboard.html" class="back-link">&larr; Back to Dashboard</a>')
+    w(f"<h1>{scanner}</h1>")
+    w(f'<div class="subtitle">Scanner detail &middot; {repos_scored} repositories scored &middot; generated {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}</div>')
+
+    # ── Summary cards ──
+    f2_val = micro.get("f2_score", 0)
+    rec_val = round(micro.get("recall", 0) * 100, 1)
+    prec_val = round(micro.get("precision", 0) * 100, 1)
+    tp_total = micro.get("tp", 0)
+    fp_total = micro.get("fp", 0)
+    fn_total = micro.get("fn", 0)
+
+    w('<div class="summary-cards">')
+    w(f'<div class="summary-card"><div class="sc-label">Micro F2 Score</div><div class="sc-value" style="color:{f2_color(f2_val)}">{f2_val:.1f}</div><div class="sc-sub">macro-F2 = {macro.get("f2_score", 0):.1f}</div></div>')
+    w(f'<div class="summary-card"><div class="sc-label">Recall</div><div class="sc-value" style="color:#10b981">{rec_val:.1f}%</div><div class="sc-sub">found {tp_total} of {tp_total + fn_total} vulns</div></div>')
+    w(f'<div class="summary-card"><div class="sc-label">Precision</div><div class="sc-value" style="color:#a855f7">{prec_val:.1f}%</div><div class="sc-sub">{fp_total} false positives</div></div>')
+    w(f'<div class="summary-card"><div class="sc-label">Repos Scored</div><div class="sc-value">{repos_scored}</div><div class="sc-sub">TP {tp_total} &middot; FP {fp_total} &middot; FN {fn_total}</div></div>')
+    w('</div>')
+
+    w('<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>')
+
+    # ── Per-repo TP/FP/FN chart ──
+    w('<h2>Per-Repository Breakdown</h2>')
+    w('<div id="repo-bars" style="width:100%;height:' + str(max(300, len(repo_data) * 28 + 80)) + 'px;margin-bottom:28px"></div>')
+
+    # ── Per-repo metric table ──
+    w('<h2>Per-Repository Scores</h2>')
+    w('<div class="metric-toggle">')
+    w('<button class="active" data-metric="f2">F2 Score</button>')
+    w('<button data-metric="recall">Recall</button>')
+    w('<button data-metric="precision">Precision</button>')
+    w('</div>')
+    w(_legend_html())
+    w('<div class="container">')
+    w('<table id="dashboard-table">')
+    w('<thead><tr>')
+    w('<th class="repo-name" data-col="repo">Repository <span class="sort-arrow"></span></th>')
+    w(f'<th data-col="0">F2 <span class="sort-arrow"></span></th>')
+    w(f'<th data-col="1">Recall <span class="sort-arrow"></span></th>')
+    w(f'<th data-col="2">Precision <span class="sort-arrow"></span></th>')
+    w(f'<th data-col="3">TP <span class="sort-arrow"></span></th>')
+    w(f'<th data-col="4">FP <span class="sort-arrow"></span></th>')
+    w(f'<th data-col="5">FN <span class="sort-arrow"></span></th>')
+    w('</tr></thead>')
+    w('<tbody>')
+    for repo, cell in repo_data:
+        short_repo = repo.replace("realvuln-", "").replace("Reavuln-", "").replace("RealVuln-", "")
+        f2 = cell["f2_score"]
+        rec = round(cell["recall"] * 100, 1)
+        prec = round(cell["precision"] * 100, 1)
+        bg = f2_color(f2)
+        fg = f2_text_color(f2)
+        w("<tr>")
+        w(f'<td class="repo-name"><code>{short_repo}</code></td>')
+        w(f'<td class="cell" data-f2="{f2}" data-recall="{rec}" data-precision="{prec}"><span class="cell-inner" style="background:{bg};color:{fg}">{f2:.1f}</span></td>')
+        w(f'<td class="cell" data-f2="{f2}" data-recall="{rec}" data-precision="{prec}"><span class="cell-inner" style="background:{f2_color(rec)};color:#fff">{rec:.1f}</span></td>')
+        w(f'<td class="cell" data-f2="{f2}" data-recall="{rec}" data-precision="{prec}"><span class="cell-inner" style="background:{f2_color(prec)};color:#fff">{prec:.1f}</span></td>')
+        w(f'<td style="color:#16a34a;font-weight:600">{cell["tp"]}</td>')
+        w(f'<td style="color:#dc2626;font-weight:600">{cell["fp"]}</td>')
+        w(f'<td style="color:#ea580c;font-weight:600">{cell["fn"]}</td>')
+        w("</tr>")
+    w('</tbody>')
+    w('</table>')
+    w('</div>')
+
+    # ── Severity breakdown ──
+    # Aggregate severity across repos (computed regardless for chart JS below)
+    sev_agg: dict[str, dict] = {}
+    for _, cell in repo_data:
+        for sev, sdata in cell.get("per_severity", {}).items():
+            if sev not in sev_agg:
+                sev_agg[sev] = {"tp": 0, "fp": 0, "fn": 0}
+            sev_agg[sev]["tp"] += sdata["tp"]
+            sev_agg[sev]["fp"] += sdata["fp"]
+            sev_agg[sev]["fn"] += sdata["fn"]
+
+    if all_severities:
+        w('<h2>Detection by Severity</h2>')
+        w('<div id="severity-bars" style="width:100%;height:300px;margin-bottom:16px"></div>')
+
+        w('<div style="display:flex;flex-wrap:wrap;margin-bottom:20px">')
+        for sev in all_severities:
+            if sev in sev_agg:
+                sd = sev_agg[sev]
+                sev_recall = sd["tp"] / (sd["tp"] + sd["fn"]) if (sd["tp"] + sd["fn"]) > 0 else 0
+                sev_color = f2_color(sev_recall * 100)
+                w(f'<div class="severity-card"><div class="sev-label">{sev}</div><div class="sev-recall" style="color:{sev_color}">{sev_recall:.0%}</div><div class="sev-counts">TP {sd["tp"]} / FP {sd["fp"]} / FN {sd["fn"]}</div></div>')
+        w('</div>')
+
+    # ── CWE Family Heatmap ──
+    if family_slugs:
+        w('<h2>CWE Family Heatmap (Recall by Repository)</h2>')
+        w(_legend_html())
+        w('<div class="container">')
+        w('<table>')
+        w('<thead><tr>')
+        w('<th class="repo-name">Repository</th>')
+        for fam_slug in family_slugs:
+            label = all_families[fam_slug]
+            short_label = label if len(label) <= 18 else label[:16] + ".."
+            w(f'<th title="{label}" style="font-size:10px;max-width:80px;overflow:hidden;text-overflow:ellipsis">{short_label}</th>')
+        w('</tr></thead>')
+        w('<tbody>')
+        for repo, cell in repo_data:
+            short_repo = repo.replace("realvuln-", "").replace("Reavuln-", "").replace("RealVuln-", "")
+            w("<tr>")
+            w(f'<td class="repo-name"><code>{short_repo}</code></td>')
+            per_fam = cell.get("per_family", {})
+            for fam_slug in family_slugs:
+                fam_data = per_fam.get(fam_slug)
+                if fam_data is None:
+                    w('<td class="cell"><span class="cell-inner" style="background:#334155;color:#64748b">&mdash;</span></td>')
+                else:
+                    recall_pct = round(fam_data["recall"] * 100, 1)
+                    bg = f2_color(recall_pct)
+                    tp_fn = fam_data["tp"] + fam_data["fn"]
+                    title_text = f'{all_families[fam_slug]}: {fam_data["tp"]}/{tp_fn} found'
+                    w(f'<td class="cell" title="{title_text}"><span class="cell-inner" style="background:{bg};color:#fff">{recall_pct:.0f}%</span></td>')
+            w("</tr>")
+        w('</tbody>')
+        w('</table>')
+        w('</div>')
+
+        # ── Aggregate CWE Family chart ──
+        w('<h2>CWE Family Detection (Aggregate)</h2>')
+        w('<div id="family-bars" style="width:100%;height:' + str(max(300, len(family_slugs) * 28 + 80)) + 'px;margin-bottom:28px"></div>')
+
+    # ── Plotly JS ──
+    w('<script>')
+    w('(function() {')
+    w(_plotly_theme_js())
+
+    # Repo breakdown bar chart data
+    repo_labels_json = json.dumps([r.replace("realvuln-", "").replace("Reavuln-", "").replace("RealVuln-", "") for r, _ in reversed(repo_data)])
+    repo_tp_json = json.dumps([c["tp"] for _, c in reversed(repo_data)])
+    repo_fp_json = json.dumps([c["fp"] for _, c in reversed(repo_data)])
+    repo_fn_json = json.dumps([c["fn"] for _, c in reversed(repo_data)])
+
+    w(f'  const repoLabels = {repo_labels_json};')
+    w(f'  const repoTP = {repo_tp_json};')
+    w(f'  const repoFP = {repo_fp_json};')
+    w(f'  const repoFN = {repo_fn_json};')
+
+    w("""
+  Plotly.newPlot('repo-bars', [
+    {y: repoLabels, x: repoTP, type: 'bar', orientation: 'h', name: 'TP', marker: {color: '#16a34a'},
+      hovertemplate: '%{y}<br>TP: %{x}<extra></extra>'},
+    {y: repoLabels, x: repoFP, type: 'bar', orientation: 'h', name: 'FP', marker: {color: '#dc2626'},
+      hovertemplate: '%{y}<br>FP: %{x}<extra></extra>'},
+    {y: repoLabels, x: repoFN, type: 'bar', orientation: 'h', name: 'FN', marker: {color: '#ea580c'},
+      hovertemplate: '%{y}<br>FN: %{x}<extra></extra>'},
+  ], {
+    paper_bgcolor: darkBg, plot_bgcolor: panelBg, barmode: 'stack',
+    xaxis: {title: {text: 'Count', font: {color: textColor, size: 13}},
+      gridcolor: gridColor, zerolinecolor: gridColor, tickfont: {color: mutedText, size: 11}},
+    yaxis: {tickfont: {color: textColor, size: 11}, automargin: true},
+    legend: {font: {color: textColor, size: 11}, bgcolor: 'rgba(0,0,0,0)', orientation: 'h', y: 1.08},
+    margin: {l: 160, r: 30, t: 30, b: 50},
+    hoverlabel: {bgcolor: panelBg, bordercolor: gridColor, font: {color: textColor}}
+  }, {responsive: true, displayModeBar: false});
+""")
+
+    # Severity chart
+    if all_severities:
+        sev_labels_json = json.dumps([s.title() for s in all_severities])
+        sev_tp_json = json.dumps([sev_agg.get(s, {}).get("tp", 0) for s in all_severities])
+        sev_fp_json = json.dumps([sev_agg.get(s, {}).get("fp", 0) for s in all_severities])
+        sev_fn_json = json.dumps([sev_agg.get(s, {}).get("fn", 0) for s in all_severities])
+
+        w(f'  const sevLabels = {sev_labels_json};')
+        w(f'  const sevTP = {sev_tp_json};')
+        w(f'  const sevFP = {sev_fp_json};')
+        w(f'  const sevFN = {sev_fn_json};')
+
+        w("""
+  Plotly.newPlot('severity-bars', [
+    {x: sevLabels, y: sevTP, type: 'bar', name: 'TP', marker: {color: '#16a34a'}},
+    {x: sevLabels, y: sevFP, type: 'bar', name: 'FP', marker: {color: '#dc2626'}},
+    {x: sevLabels, y: sevFN, type: 'bar', name: 'FN', marker: {color: '#ea580c'}},
+  ], {
+    paper_bgcolor: darkBg, plot_bgcolor: panelBg, barmode: 'group', bargap: 0.3,
+    xaxis: {tickfont: {color: textColor, size: 12}},
+    yaxis: {title: {text: 'Count', font: {color: textColor, size: 13}},
+      gridcolor: gridColor, zerolinecolor: gridColor, tickfont: {color: mutedText, size: 11}},
+    legend: {font: {color: textColor, size: 11}, bgcolor: 'rgba(0,0,0,0)', orientation: 'h', y: 1.1},
+    margin: {l: 50, r: 30, t: 30, b: 40},
+    hoverlabel: {bgcolor: panelBg, bordercolor: gridColor, font: {color: textColor}}
+  }, {responsive: true, displayModeBar: false});
+""")
+
+    # Family aggregate chart
+    if family_slugs:
+        fam_agg: dict[str, dict] = {}
+        for _, cell in repo_data:
+            for fam_slug, fam_info in cell.get("per_family", {}).items():
+                if fam_slug not in fam_agg:
+                    fam_agg[fam_slug] = {"tp": 0, "fp": 0, "fn": 0}
+                fam_agg[fam_slug]["tp"] += fam_info["tp"]
+                fam_agg[fam_slug]["fp"] += fam_info["fp"]
+                fam_agg[fam_slug]["fn"] += fam_info["fn"]
+
+        # Sort families by recall descending
+        sorted_fams = sorted(family_slugs, key=lambda s: fam_agg.get(s, {}).get("tp", 0) / max(fam_agg.get(s, {}).get("tp", 0) + fam_agg.get(s, {}).get("fn", 0), 1))
+        fam_labels_json = json.dumps([all_families[s] for s in sorted_fams])
+        fam_tp_json = json.dumps([fam_agg.get(s, {}).get("tp", 0) for s in sorted_fams])
+        fam_fp_json = json.dumps([fam_agg.get(s, {}).get("fp", 0) for s in sorted_fams])
+        fam_fn_json = json.dumps([fam_agg.get(s, {}).get("fn", 0) for s in sorted_fams])
+
+        w(f'  const famLabels = {fam_labels_json};')
+        w(f'  const famTP = {fam_tp_json};')
+        w(f'  const famFP = {fam_fp_json};')
+        w(f'  const famFN = {fam_fn_json};')
+
+        w("""
+  Plotly.newPlot('family-bars', [
+    {y: famLabels, x: famTP, type: 'bar', orientation: 'h', name: 'TP', marker: {color: '#16a34a'},
+      hovertemplate: '%{y}<br>TP: %{x}<extra></extra>'},
+    {y: famLabels, x: famFP, type: 'bar', orientation: 'h', name: 'FP', marker: {color: '#dc2626'},
+      hovertemplate: '%{y}<br>FP: %{x}<extra></extra>'},
+    {y: famLabels, x: famFN, type: 'bar', orientation: 'h', name: 'FN', marker: {color: '#ea580c'},
+      hovertemplate: '%{y}<br>FN: %{x}<extra></extra>'},
+  ], {
+    paper_bgcolor: darkBg, plot_bgcolor: panelBg, barmode: 'stack',
+    xaxis: {title: {text: 'Count', font: {color: textColor, size: 13}},
+      gridcolor: gridColor, zerolinecolor: gridColor, tickfont: {color: mutedText, size: 11}},
+    yaxis: {tickfont: {color: textColor, size: 11}, automargin: true},
+    legend: {font: {color: textColor, size: 11}, bgcolor: 'rgba(0,0,0,0)', orientation: 'h', y: 1.06},
+    margin: {l: 200, r: 30, t: 30, b: 50},
+    hoverlabel: {bgcolor: panelBg, bordercolor: gridColor, font: {color: textColor}}
+  }, {responsive: true, displayModeBar: false});
+""")
+
+    w('})();')
+    w('</script>')
+
+    # Table sort JS
+    w('<script>')
+    w(_metric_toggle_sort_js())
+    w('</script>')
+
     w("</body></html>")
 
     return "\n".join(lines)
@@ -827,14 +1145,24 @@ def main() -> int:
             print(f"Dropped {dropped} scanners with < {args.min_repos} repos")
 
     # Build outputs
-    html = build_html(grid, scanners, aggregates, repos)
+    output_path = Path(args.output)
+    detail_dir_name = "scanners"
+    html = build_html(grid, scanners, aggregates, repos, detail_dir=detail_dir_name)
     report = build_json_report(grid, scanners, aggregates)
 
-    # Write
-    output_path = Path(args.output)
+    # Write main dashboard
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html)
     print(f"HTML dashboard: {output_path}")
+
+    # Write scanner detail pages
+    scanner_detail_dir = output_path.parent / detail_dir_name
+    scanner_detail_dir.mkdir(parents=True, exist_ok=True)
+    for scanner in scanners:
+        detail_html = build_scanner_detail_html(scanner, grid, repos, aggregates)
+        detail_path = scanner_detail_dir / f"{scanner}.html"
+        detail_path.write_text(detail_html)
+    print(f"Scanner detail pages: {scanner_detail_dir}/ ({len(scanners)} pages)")
 
     json_path = Path(args.json)
     json_path.parent.mkdir(parents=True, exist_ok=True)
