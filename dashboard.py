@@ -729,8 +729,7 @@ def build_html(
 <div style="color:var(--text-tertiary);font-size:13px;line-height:1.7;margin-top:10px;padding:14px 16px;background:var(--bg-secondary);border:1px solid var(--border-secondary);border-radius:12px">
 <strong style="color:var(--text-secondary)">Recall</strong> — What percentage of real vulnerabilities did the scanner find? Higher is better. A scanner that misses nothing has 100% recall.<br><br>
 <strong style="color:var(--text-secondary)">Precision</strong> — Of everything the scanner flagged, what percentage were actual vulnerabilities? Higher is better. A scanner with no false alarms has 100% precision.<br><br>
-<strong style="color:var(--text-secondary)">Micro F2</strong> — Pools all findings across every repository into one calculation. Larger repos with more vulnerabilities have more influence on the score.<br><br>
-<strong style="color:var(--text-secondary)">Macro F2</strong> — Calculates F2 per repository first, then averages them equally. Every repo counts the same regardless of size.
+<strong style="color:var(--text-secondary)">F2 Score</strong> — Combines recall and precision into a single number (0–100), pooled across all repositories. Higher is better.
 </div>
 </details>
 <style>details[open] summary span{transform:rotate(90deg)}</style>""")
@@ -846,33 +845,30 @@ def build_html(
                 w(f'<td class="cell" data-f2="{f2_val}" data-recall="{rec_val}" data-precision="{prec_val}"><span class="hm-cell {hm_cls}">{f2_val:.1f}</span>{tooltip}</td>')
         w("</tr>")
 
-    # Aggregate rows
-    for agg_label, agg_key in [("MICRO-AVG", "micro"), ("MACRO-AVG", "macro")]:
-        w('<tr class="agg-row">')
-        w(f'<td>{agg_label}</td>')
-        for scanner in scanners:
-            sa = aggregates.get(scanner, {})
-            agg_data = sa.get(agg_key, {})
-            score = agg_data.get("f2_score")
-            repos_scored = sa.get("repos_scored", 0)
-            if score is None or repos_scored == 0:
-                w(f'<td class="cell" data-f2="" data-recall="" data-precision=""><span class="hm-cell hm-none">&mdash;</span></td>')
-            else:
-                hm_cls = _hm_class(score)
-                micro = sa.get("micro", {})
-                rec_agg = round(micro.get("recall", 0) * 100, 1) if agg_key == "micro" else ""
-                prec_agg = round(micro.get("precision", 0) * 100, 1) if agg_key == "micro" else ""
-                tooltip_lines = f'<div class="tt-title">{agg_label}</div>'
-                tooltip_lines += f'<div class="tt-row"><span class="tt-label">Repos scored</span><span class="tt-val">{repos_scored}</span></div>'
-                if agg_key == "micro":
-                    tooltip_lines += f'<div class="tt-sep"></div>'
-                    tooltip_lines += f'<div class="tt-row"><span class="tt-label">F2</span><span class="tt-val">{score:.1f}</span></div>'
-                    tooltip_lines += f'<div class="tt-row"><span class="tt-label">Recall</span><span class="tt-val">{micro["recall"]:.1%}</span></div>'
-                    tooltip_lines += f'<div class="tt-row"><span class="tt-label">Precision</span><span class="tt-val">{micro["precision"]:.1%}</span></div>'
-                    tooltip_lines += f'<div class="tt-sep"></div>'
-                    tooltip_lines += f'<div class="tt-row"><span class="tt-label">TP / FP / FN</span><span class="tt-val">{micro["tp"]} / {micro["fp"]} / {micro["fn"]}</span></div>'
-                w(f'<td class="cell" data-f2="{score}" data-recall="{rec_agg}" data-precision="{prec_agg}"><span class="hm-cell {hm_cls}">{score:.1f}</span><div class="tooltip">{tooltip_lines}</div></td>')
-        w("</tr>")
+    # Aggregate row (micro only)
+    w('<tr class="agg-row">')
+    w('<td>AVERAGE</td>')
+    for scanner in scanners:
+        sa = aggregates.get(scanner, {})
+        micro = sa.get("micro", {})
+        score = micro.get("f2_score")
+        repos_scored = sa.get("repos_scored", 0)
+        if score is None or repos_scored == 0:
+            w('<td class="cell" data-f2="" data-recall="" data-precision=""><span class="hm-cell hm-none">&mdash;</span></td>')
+        else:
+            hm_cls = _hm_class(score)
+            rec_agg = round(micro.get("recall", 0) * 100, 1)
+            prec_agg = round(micro.get("precision", 0) * 100, 1)
+            tooltip_lines = f'<div class="tt-title">Average</div>'
+            tooltip_lines += f'<div class="tt-row"><span class="tt-label">Repos scored</span><span class="tt-val">{repos_scored}</span></div>'
+            tooltip_lines += f'<div class="tt-sep"></div>'
+            tooltip_lines += f'<div class="tt-row"><span class="tt-label">F2</span><span class="tt-val">{score:.1f}</span></div>'
+            tooltip_lines += f'<div class="tt-row"><span class="tt-label">Recall</span><span class="tt-val">{micro["recall"]:.1%}</span></div>'
+            tooltip_lines += f'<div class="tt-row"><span class="tt-label">Precision</span><span class="tt-val">{micro["precision"]:.1%}</span></div>'
+            tooltip_lines += f'<div class="tt-sep"></div>'
+            tooltip_lines += f'<div class="tt-row"><span class="tt-label">TP / FP / FN</span><span class="tt-val">{micro["tp"]} / {micro["fp"]} / {micro["fn"]}</span></div>'
+            w(f'<td class="cell" data-f2="{score}" data-recall="{rec_agg}" data-precision="{prec_agg}"><span class="hm-cell {hm_cls}">{score:.1f}</span><div class="tooltip">{tooltip_lines}</div></td>')
+    w("</tr>")
 
     w("</tbody></table></div>")
 
@@ -1027,7 +1023,7 @@ def build_scanner_detail_html(
     prec_val = round(micro.get("precision", 0) * 100, 1)
 
     w('<div class="hero-stats">')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(22,163,74,0.1);color:{f2_color(f2_val)}">F2</div><div><div class="stat-value" style="color:{f2_color(f2_val)}">{f2_val:.1f}</div><div class="stat-label">Micro F2 Score</div></div></div>')
+    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(22,163,74,0.1);color:{f2_color(f2_val)}">F2</div><div><div class="stat-value" style="color:{f2_color(f2_val)}">{f2_val:.1f}</div><div class="stat-label">F2 Score</div></div></div>')
     w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(34,197,94,0.1);color:#22c55e">&#8593;</div><div><div class="stat-value" style="color:#22c55e">{rec_val:.1f}%</div><div class="stat-label">Recall</div></div></div>')
     w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(160,118,249,0.1);color:#A076F9">&#9670;</div><div><div class="stat-value" style="color:#A076F9">{prec_val:.1f}%</div><div class="stat-label">Precision</div></div></div>')
     w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(196,240,62,0.1);color:#C4F03E">&#9733;</div><div><div class="stat-value" style="color:#C4F03E">{repos_scored}</div><div class="stat-label">Repos Scored</div></div></div>')
@@ -1443,13 +1439,8 @@ def main() -> int:
     for scanner in scanners:
         sa = aggregates.get(scanner, {})
         micro = sa.get("micro", {})
-        macro = sa.get("macro", {})
         n = sa.get("repos_scored", 0)
-        print(
-            f"  {scanner:<20} micro-F2={micro.get('f2_score', 0):>5.1f}  "
-            f"macro-F2={macro.get('f2_score', 0):>5.1f}  "
-            f"repos={n}"
-        )
+        print(f"  {scanner:<20} F2={micro.get('f2_score', 0):>5.1f}  repos={n}")
 
     return 0
 
