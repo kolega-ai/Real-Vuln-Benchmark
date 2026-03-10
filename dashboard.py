@@ -927,7 +927,7 @@ def build_html(
 
   const prScatter = document.getElementById('pr-scatter');
   Plotly.newPlot(prScatter, scatterTraces, {
-    paper_bgcolor: darkBg, plot_bgcolor: panelBg,
+    paper_bgcolor: panelBg, plot_bgcolor: panelBg,
     xaxis: {title: {text: 'Recall (%)', font: {color: textColor, size: 13, family: 'Inter'}},
       range: [0, 105], gridcolor: gridColor, zerolinecolor: gridColor,
       tickfont: {color: mutedText, size: 11}, dtick: 10},
@@ -1156,7 +1156,7 @@ def build_scanner_detail_html(
     {y: repoLabels, x: repoFN, type: 'bar', orientation: 'h', name: 'FN', marker: {color: '#f97316'},
       hovertemplate: '%{y}<br>FN: %{x}<extra></extra>'},
   ], {
-    paper_bgcolor: darkBg, plot_bgcolor: panelBg, barmode: 'stack',
+    paper_bgcolor: panelBg, plot_bgcolor: panelBg, barmode: 'stack',
     xaxis: {title: {text: 'Count', font: {color: textColor, size: 13, family: 'Inter'}},
       gridcolor: gridColor, zerolinecolor: gridColor, tickfont: {color: mutedText, size: 11}},
     yaxis: {tickfont: {color: textColor, size: 11, family: 'Source Code Pro'}, automargin: true},
@@ -1184,7 +1184,7 @@ def build_scanner_detail_html(
     {x: sevLabels, y: sevFP, type: 'bar', name: 'FP', marker: {color: '#ef4444'}},
     {x: sevLabels, y: sevFN, type: 'bar', name: 'FN', marker: {color: '#f97316'}},
   ], {
-    paper_bgcolor: darkBg, plot_bgcolor: panelBg, barmode: 'group', bargap: 0.3,
+    paper_bgcolor: panelBg, plot_bgcolor: panelBg, barmode: 'group', bargap: 0.3,
     xaxis: {tickfont: {color: textColor, size: 12, family: 'Inter'}},
     yaxis: {title: {text: 'Count', font: {color: textColor, size: 13, family: 'Inter'}},
       gridcolor: gridColor, zerolinecolor: gridColor, tickfont: {color: mutedText, size: 11}},
@@ -1225,7 +1225,7 @@ def build_scanner_detail_html(
     {y: famLabels, x: famFN, type: 'bar', orientation: 'h', name: 'FN', marker: {color: '#f97316'},
       hovertemplate: '%{y}<br>FN: %{x}<extra></extra>'},
   ], {
-    paper_bgcolor: darkBg, plot_bgcolor: panelBg, barmode: 'stack',
+    paper_bgcolor: panelBg, plot_bgcolor: panelBg, barmode: 'stack',
     xaxis: {title: {text: 'Count', font: {color: textColor, size: 13, family: 'Inter'}},
       gridcolor: gridColor, zerolinecolor: gridColor, tickfont: {color: mutedText, size: 11}},
     yaxis: {tickfont: {color: textColor, size: 11, family: 'Source Code Pro'}, automargin: true},
