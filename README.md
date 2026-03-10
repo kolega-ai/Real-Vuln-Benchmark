@@ -4,11 +4,15 @@ An open benchmark for evaluating security scanners against ground-truth vulnerab
 
 Application security scanners routinely fail to catch basic vulnerabilities — missing authentication, broken access control, IDOR — in real-world code. Existing benchmarks use synthetic test cases (OWASP Benchmark), vendor-controlled methodology (DryRun, ZeroPath, Cycode/Bearer), or lack scoring tooling (NIST Juliet, CVEFixes). RealVuln provides machine-readable ground truth with CWE mappings, an automated scoring engine, and is designed for community contribution.
 
-### Dataset at a Glance
+## Current State
 
-**27 repos · 823 findings · 698 vulnerabilities · 125 FP traps**
+### Dataset
 
-> **Note:** The current dataset is Python-only (Flask, Django, FastAPI, aiohttp, Tornado). Additional languages are planned for future releases.
+**27 Python repos · 823 findings · 698 vulnerabilities · 125 FP traps**
+
+All targets are **Type 1 (intentionally vulnerable apps)** with `human_authored` authorship.
+
+> **Language coverage:** Python only (Flask, Django, FastAPI, aiohttp, Tornado). JavaScript/TypeScript, Go, and Java are planned — see [Roadmap](#roadmap).
 
 | Repo | Language | Framework | Vulns | FP Traps |
 |------|----------|-----------|------:|--------:|
@@ -39,6 +43,27 @@ Application security scanners routinely fail to catch basic vulnerabilities — 
 | realvuln-vulnerable-tornado-app | python | tornado | 14 | 3 |
 | realvuln-vulnpy | python | — | 78 | 16 |
 | realvuln-vulpy | python | flask | 54 | 6 |
+
+### What Works Today
+
+- Ground truth schema with validation (`validate_gt.py`)
+- Scoring engine with F2, precision, recall, per-CWE-family and per-severity breakdowns
+- Finding matching: file path + CWE + line tolerance (±10 lines)
+- FP traps (`is_vulnerable: false` entries) for measuring false positive rates
+- Semgrep-format parser with automatic fallback for unknown scanner slugs
+- Interactive HTML dashboard with Plotly heatmaps (`dashboard.py`)
+- Per-repo JSON + Markdown scorecards (`score.py`)
+- Multi-run mode (`--runs`) for mean ± stddev scoring of non-deterministic scanners
+- Pinned commit SHAs in every ground truth file
+
+### What Doesn't Exist Yet
+
+- Real scanner results (only `sample-scanner` placeholder data exists)
+- Scanner version strings or metadata manifests in result files
+- CI/CD pipeline (no GitHub Actions, no pre-commit hooks)
+- CLI packaging (`pip install realvuln`)
+- Multi-language support (Python only)
+- Target types beyond Type 1 (no CVE-based, library, or benchmark roll-up targets)
 
 ---
 
@@ -146,7 +171,7 @@ Key design decisions:
 
 ### Quality Gates
 
-Every ground truth submission requires: evidence source (CVE ID, walkthrough URL, or manual review with reviewer identity), at least one `is_vulnerable: false` entry per five `true` entries, a verified-cloneable pinned commit, and peer review before merge.
+Every ground truth submission requires: evidence source (CVE ID, walkthrough URL, or manual review with reviewer identity), at least one `is_vulnerable: false` entry per five `true` entries, and a verified-cloneable pinned commit.
 
 ---
 
@@ -225,23 +250,25 @@ Any scanner producing Semgrep-compatible JSON works automatically — unknown sc
 
 ---
 
-## Target Classification
+## Roadmap
 
-Targets are classified on two independent axes.
+The following describes planned capabilities that are not yet implemented.
 
-### Axis 1: Code Realism (Type)
+### Additional Target Types
+
+Targets will be classified on two independent axes.
+
+**Axis 1: Code Realism (Type)** — Currently only Type 1 exists.
 
 | Type | Description | Examples | Ground Truth Source |
 |------|-------------|----------|---------------------|
-| **1 — Intentionally Vulnerable Apps** | Deliberately insecure apps with documented vulns | DVWA, Juice Shop, WebGoat | Published walkthroughs, solution guides, manual expert review |
+| **1 — Intentionally Vulnerable Apps** | Deliberately insecure apps with documented vulns (current) | DVWA, Juice Shop, WebGoat | Published walkthroughs, solution guides, manual expert review |
 | **2 — Previously-Vulnerable Platforms** | Production apps pinned to pre-patch commits with disclosed CVEs | WordPress plugins, GitLab, Django | NVD/CVE → fix commit diff → file + CWE extraction → expert verification |
 | **3 — Previously-Vulnerable Libraries** | Libraries pinned to vulnerable versions | Known-vulnerable npm/PyPI packages | Same CVE/NVD approach as Type 2 |
 | **4 — Benchmark Roll-ups** | Existing benchmarks integrated as unified, scoreable targets | OWASP Benchmark, NIST Juliet | Direct import or adapter mapping |
 | **5 — Academic Reproduction** | Published scanner evaluations encoded as reproducible configs | Cycode/Bearer (2023), DryRun (2025) | Methodology extracted from papers, encoded as config |
 
-### Axis 2: Code Authorship
-
-Every target carries authorship metadata, independent of Type:
+**Axis 2: Code Authorship** — Currently all targets are `human_authored`.
 
 | Value | Definition |
 |-------|------------|
@@ -252,36 +279,24 @@ Every target carries authorship metadata, independent of Type:
 
 These axes are orthogonal. LLM-generated does not mean synthetic.
 
----
-
-## Reproducibility
+### Reproducibility
 
 _"Run version X against commit Y and you should get statistically similar results."_
 
-### What We Publish
+Planned per-run metadata:
 
 - Scanner version strings (semver) stamped into every result file
-- Pinned commit SHAs for every target repo
 - Exact commands used to run each scanner
-- All raw scan outputs
-- Supported languages and scanner capabilities
+- Scanner version, model backbone version (e.g. `claude-sonnet-4-20250514`), timestamp, target repo commit SHA, and config hash
 
-### Handling Non-Determinism
-
-AI agents are non-deterministic. Rather than hiding this, we surface stability as a measurable property:
+For non-deterministic scanners (AI agents), we plan to surface stability as a measurable property:
 
 - Run the agent **N times (5–10)** per benchmark target
 - Report **mean and variance** for each metric
 - Publish **all raw outputs** from all runs
 - Reproduction standard: another party runs N times and checks **distributional consistency**
 
-### Metadata Manifest (per run)
-
-Every published result includes: scanner version, model backbone version (e.g. `claude-sonnet-4-20250514`), timestamp, target repo commit SHA, and config hash (proves config is frozen without revealing contents).
-
----
-
-## Research Question: Scanner Performance vs Code Authorship
+### Research Question: Scanner Performance vs Code Authorship
 
 **Hypothesis:** LLM-based scanners may perform disproportionately well on LLM-generated code compared to human-authored code.
 
@@ -289,4 +304,11 @@ Every published result includes: scanner version, model backbone version (e.g. `
 
 **If confirmed:** _"If your codebase is primarily LLM-generated, AI-native scanners provide measurably better detection. If legacy human-written code, traditional SAST still holds up."_
 
-This is a publishable contribution independent of who wins the benchmark. No existing benchmark tracks authorship, and as codebases shift toward LLM-generated code, the industry needs data on whether scanner performance generalises.
+This would be a publishable contribution independent of who wins the benchmark. No existing benchmark tracks authorship, and as codebases shift toward LLM-generated code, the industry needs data on whether scanner performance generalises.
+
+### Other Planned Work
+
+- Multi-language support (JavaScript/TypeScript, Go, Java)
+- CI/CD pipeline (GitHub Actions for validation, testing, linting)
+- CLI packaging (`pip install realvuln`)
+- Real scanner integrations (Semgrep, Bandit, SonarQube, AI-native scanners)
