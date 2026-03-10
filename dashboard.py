@@ -409,30 +409,7 @@ a:hover { text-decoration: underline; }
   border-radius: 16px; padding: 24px; margin-bottom: 32px;
 }
 
-/* Finding breakdown bars */
-.fb-section { margin-bottom: 32px; }
-.fb-legend { display: flex; gap: 20px; margin-bottom: 14px; }
-.fb-legend-item {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 12px; color: var(--text-tertiary); font-weight: 500;
-}
-.fb-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
-.fb-row { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
-.fb-label {
-  width: 200px; text-align: right; font-size: 13px;
-  color: var(--text-secondary); font-weight: 500; flex-shrink: 0;
-}
-.fb-track {
-  flex: 1; height: 22px; display: flex; border-radius: 4px;
-  overflow: hidden; background: var(--bg-tertiary);
-}
-.fb-seg-tp { background: var(--score-great); }
-.fb-seg-fp { background: var(--score-bad); }
-.fb-seg-fn { background: var(--score-poor); opacity: 0.7; }
-.fb-counts {
-  font-size: 11px; color: var(--text-muted); width: 120px;
-  font-variant-numeric: tabular-nums;
-}
+/* Finding breakdown chart */
 
 /* CWE coverage cards */
 .cwe-grid {
@@ -765,27 +742,41 @@ def build_html(
     w('<div id="pr-scatter" style="width:100%;height:420px"></div>')
     w('</div>')
 
-    # ── Finding Breakdown — pure HTML/CSS bars ──
-    w('<div class="fb-section">')
+    # ── Finding Breakdown — Plotly horizontal stacked bar ──
     w('<div class="section-title">Finding Breakdown <span class="dim">TP / FP / FN per scanner</span></div>')
-    w('<div class="fb-legend">')
-    w('<div class="fb-legend-item"><div class="fb-legend-dot" style="background:var(--score-great)"></div> True Positives</div>')
-    w('<div class="fb-legend-item"><div class="fb-legend-dot" style="background:var(--score-bad)"></div> False Positives</div>')
-    w('<div class="fb-legend-item"><div class="fb-legend-dot" style="background:var(--score-poor);opacity:0.7"></div> False Negatives</div>')
+    w('<div class="chart-card">')
+    w('<div id="fb-chart" style="width:100%;height:' + str(max(200, len(chart_data) * 60 + 80)) + 'px"></div>')
     w('</div>')
-    for d in chart_data:
-        total = d["tp"] + d["fp"] + d["fn"]
-        if total == 0:
-            total = 1
-        tp_pct = d["tp"] / total * 100
-        fp_pct = d["fp"] / total * 100
-        fn_pct = d["fn"] / total * 100
-        w(f'<div class="fb-row">')
-        w(f'  <div class="fb-label">{d["label"]}</div>')
-        w(f'  <div class="fb-track"><div class="fb-seg-tp" style="width:{tp_pct:.1f}%"></div><div class="fb-seg-fp" style="width:{fp_pct:.1f}%"></div><div class="fb-seg-fn" style="width:{fn_pct:.1f}%"></div></div>')
-        w(f'  <div class="fb-counts">{d["tp"]} / {d["fp"]} / {d["fn"]}</div>')
-        w(f'</div>')
-    w('</div>')
+    fb_labels = json.dumps([d["label"] for d in reversed(chart_data)])
+    fb_tp = json.dumps([d["tp"] for d in reversed(chart_data)])
+    fb_fp = json.dumps([d["fp"] for d in reversed(chart_data)])
+    fb_fn = json.dumps([d["fn"] for d in reversed(chart_data)])
+    w(f"""<script>
+(function() {{
+  const _bg = '#171717', _grid = '#262626', _text = '#FFFFFF', _muted = '#666666';
+  const labels = {fb_labels};
+  const tp = {fb_tp};
+  const fp = {fb_fp};
+  const fn = {fb_fn};
+  const traces = [
+    {{y: labels, x: tp, name: 'True Positives', type: 'bar', orientation: 'h',
+      marker: {{color: '#22c55e'}}, hovertemplate: '%{{y}}: %{{x}} TP<extra></extra>'}},
+    {{y: labels, x: fp, name: 'False Positives', type: 'bar', orientation: 'h',
+      marker: {{color: '#ef4444'}}, hovertemplate: '%{{y}}: %{{x}} FP<extra></extra>'}},
+    {{y: labels, x: fn, name: 'False Negatives', type: 'bar', orientation: 'h',
+      marker: {{color: '#f97316'}}, hovertemplate: '%{{y}}: %{{x}} FN<extra></extra>'}}
+  ];
+  Plotly.newPlot('fb-chart', traces, {{
+    paper_bgcolor: _bg, plot_bgcolor: _bg, barmode: 'stack',
+    xaxis: {{title: {{text: 'Count', font: {{color: _text, size: 13, family: 'Inter'}}}},
+      gridcolor: _grid, zerolinecolor: _grid, tickfont: {{color: _muted, size: 11}}}},
+    yaxis: {{tickfont: {{color: _text, size: 13, family: 'Space Grotesk'}}, automargin: true}},
+    legend: {{font: {{color: _text, size: 12}}, orientation: 'h', y: 1.15, x: 0.5, xanchor: 'center'}},
+    margin: {{l: 10, r: 30, t: 40, b: 40}},
+    hoverlabel: {{bgcolor: _bg, bordercolor: _grid, font: {{color: _text, size: 12}}}}
+  }}, {{responsive: true, displayModeBar: false}});
+}})();
+</script>""")
 
     # ── CWE Detection Coverage ──
     if cwe_families:
