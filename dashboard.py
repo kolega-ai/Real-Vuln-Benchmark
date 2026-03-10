@@ -718,6 +718,22 @@ def build_html(
     # ── Leaderboard ──
     w('<div class="leaderboard">')
     w('<div class="section-title">Scanner Leaderboard <span class="dim">ranked by F2 Score</span></div>')
+    w('<p style="color:var(--text-tertiary);font-size:13px;margin:-8px 0 16px;max-width:720px;line-height:1.5">'
+      'F2 Score (0–100) measures how well a scanner finds vulnerabilities. '
+      'It rewards <strong style="color:var(--text-secondary)">finding real issues (recall) 4&times; more than avoiding false alarms (precision)</strong> '
+      '— because in security, missing a real vulnerability is far worse than a false positive.</p>')
+    w("""<details style="margin:-4px 0 18px;max-width:720px">
+<summary style="color:var(--accent-lime);font-size:13px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px">
+<span style="transition:transform 0.2s;display:inline-block">&#9654;</span> How scores work
+</summary>
+<div style="color:var(--text-tertiary);font-size:13px;line-height:1.7;margin-top:10px;padding:14px 16px;background:var(--bg-secondary);border:1px solid var(--border-secondary);border-radius:12px">
+<strong style="color:var(--text-secondary)">Recall</strong> — What percentage of real vulnerabilities did the scanner find? Higher is better. A scanner that misses nothing has 100% recall.<br><br>
+<strong style="color:var(--text-secondary)">Precision</strong> — Of everything the scanner flagged, what percentage were actual vulnerabilities? Higher is better. A scanner with no false alarms has 100% precision.<br><br>
+<strong style="color:var(--text-secondary)">Micro F2</strong> — Pools all findings across every repository into one calculation. Larger repos with more vulnerabilities have more influence on the score.<br><br>
+<strong style="color:var(--text-secondary)">Macro F2</strong> — Calculates F2 per repository first, then averages them equally. Every repo counts the same regardless of size.
+</div>
+</details>
+<style>details[open] summary span{transform:rotate(90deg)}</style>""")
     for rank, d in enumerate(chart_data, 1):
         row_class = "lb-row first" if rank == 1 else "lb-row"
         score_color = f2_color(d["f2"])
