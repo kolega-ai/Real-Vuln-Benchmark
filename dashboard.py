@@ -66,10 +66,16 @@ def discover_all_scanners(scan_dir: Path, repos: list[str]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def _find_result_files(scanner_dir: Path) -> list[Path]:
-    """Find JSON result files for a scanner."""
+    """Find JSON result files for a scanner.
+
+    Excludes .metrics.json files (operational metrics from LLM benchmark runs).
+    """
     if not scanner_dir.is_dir():
         return []
-    return sorted(scanner_dir.glob("*.json"))
+    return sorted(
+        f for f in scanner_dir.glob("*.json")
+        if not f.name.endswith(".metrics.json")
+    )
 
 
 def score_all(
