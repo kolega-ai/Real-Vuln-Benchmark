@@ -1,17 +1,27 @@
 #!/usr/bin/env python3
-"""Lightweight pilot runner — calls the Anthropic API directly.
+"""Agentic LLM benchmark runner — uses OpenHands CodeActAgent in Docker.
 
-Skips OpenHands/Docker. Sends each repo's file listing + file contents
-to the LLM in a single long prompt, gets findings back, validates, and scores.
+Unlike run_pilot.py (single-turn, whole-repo-in-prompt), this runner gives
+the LLM tools to explore the codebase iteratively: read files, grep, list
+dirs, run bash commands. The agent decides what to look at and when to stop.
+
+Requires: Docker running, openhands-ai installed (pip install openhands-ai).
 
 Usage:
-    python3 llm-bench/scripts/run_pilot.py --repos realvuln-pygoat --runs 1
-    python3 llm-bench/scripts/run_pilot.py --repos all --runs 1 --dry-run
+    # Test on one repo
+    python3.13 llm-bench/scripts/run_agentic.py --repos realvuln-vampi --runs 1
+
+    # 4 repos in parallel
+    python3.13 llm-bench/scripts/run_agentic.py --repos realvuln-vampi realvuln-dsvw realvuln-dvpwa realvuln-pygoat --runs 1 --max-concurrent 4
+
+    # All repos × 3 runs
+    python3.13 llm-bench/scripts/run_agentic.py --repos all --runs 3 --max-concurrent 4
 """
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -31,6 +41,13 @@ from harness.cost_calculator import calculate_cost, estimate_total_cost
 from harness.metrics_collector import RunMetrics, save_metrics
 from harness.output_validator import validate_output, save_validated_output
 from harness.prompt_builder import build_prompt, load_cwe_families
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("run_agentic")
 
 
 def discover_repos(gt_dir: Path) -> list[str]:
@@ -54,7 +71,6 @@ def clone_or_find_repo(repo_slug: str) -> Path | None:
     if repo_path.is_dir():
         return repo_path
 
-    # Try to get repo URL from ground truth
     gt_path = PROJECT_ROOT / "ground-truth" / repo_slug / "ground-truth.json"
     if not gt_path.exists():
         return None
@@ -68,16 +84,15 @@ def clone_or_find_repo(repo_slug: str) -> Path | None:
         return None
 
     repos_dir.mkdir(exist_ok=True)
-    print(f"  Cloning {repo_url} ...")
+    logger.info("Cloning %s ...", repo_url)
     result = subprocess.run(
         ["git", "clone", "--depth=1", repo_url, str(repo_path)],
         capture_output=True, text=True, timeout=120,
     )
     if result.returncode != 0:
-        print(f"  Clone failed: {result.stderr[:200]}")
+        logger.error("Clone failed: %s", result.stderr[:200])
         return None
 
-    # Checkout specific commit if shallow clone allows
     if commit_sha:
         subprocess.run(
             ["git", "-C", str(repo_path), "fetch", "--depth=1", "origin", commit_sha],
@@ -91,105 +106,19 @@ def clone_or_find_repo(repo_slug: str) -> Path | None:
     return repo_path
 
 
-def gather_repo_context(repo_path: Path) -> str:
-    """Read all Python/HTML/JS/config files into a single string for the prompt."""
-    extensions = {
-        ".py", ".html", ".htm", ".js", ".json", ".yaml", ".yml",
-        ".toml", ".cfg", ".ini", ".txt", ".md", ".xml",
-    }
-    skip_dirs = {
-        ".git", "__pycache__", "node_modules", ".venv", "venv",
-        "env", ".tox", ".eggs", "dist", "build", ".mypy_cache",
-    }
-
-    files: list[tuple[str, str]] = []
-    total_chars = 0
-    max_total = 500_000  # ~125K tokens budget for file content
-    max_file = 50_000    # Skip very large individual files
-    budget_exceeded = False
-
-    for p in sorted(repo_path.rglob("*")):
-        if not p.is_file():
-            continue
-        if any(skip in p.parts for skip in skip_dirs):
-            continue
-        if p.suffix.lower() not in extensions:
-            continue
-
-        rel = p.relative_to(repo_path)
-
-        if budget_exceeded:
-            files.append((str(rel), ""))
-            continue
-
-        try:
-            content = p.read_text(errors="replace")
-        except Exception:
-            continue
-
-        if len(content) > max_file:
-            content = content[:max_file] + f"\n... (truncated, {len(content)} chars total)"
-
-        if total_chars + len(content) > max_total:
-            budget_exceeded = True
-            files.append((str(rel), ""))
-            continue
-
-        files.append((str(rel), content))
-        total_chars += len(content)
-
-    parts = []
-    # File tree first
-    parts.append("## Repository File Listing\n")
-    for rel_path, _ in files:
-        parts.append(f"  {rel_path}")
-    parts.append(f"\nTotal: {len(files)} files\n")
-
-    # File contents
-    parts.append("\n## File Contents\n")
-    for rel_path, content in files:
-        if content == "... (budget exceeded, file skipped)":
-            parts.append(f"\n### {rel_path}\n(skipped — token budget reached)\n")
-        else:
-            parts.append(f"\n### {rel_path}\n```\n{content}\n```\n")
-
-    return "\n".join(parts)
-
-
-def call_anthropic(
-    system_prompt: str,
-    user_message: str,
-    model_id: str,
-    max_output_tokens: int = 16_000,
-) -> tuple[str, int, int]:
-    """Call Anthropic API and return (response_text, input_tokens, output_tokens)."""
-    import anthropic
-
-    client = anthropic.Anthropic()
-
-    response = client.messages.create(
-        model=model_id,
-        max_tokens=max_output_tokens,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_message}],
-    )
-
-    text = ""
-    for block in response.content:
-        if hasattr(block, "text"):
-            text += block.text
-
-    return text, response.usage.input_tokens, response.usage.output_tokens
-
-
-def run_one(
+def run_one_agentic(
     model_config: dict,
     repo_slug: str,
     run_id: int,
     system_prompt: str,
-    repo_context: str,
+    repo_path: Path,
+    max_iterations: int,
+    timeout: int,
+    max_output_tokens: int,
 ) -> dict:
-    """Run one (model, repo, run) evaluation. Returns result dict."""
+    """Run one agentic evaluation using OpenHands."""
+    import asyncio
+
     model_id = model_config["model_id"]
     scanner_slug = model_config["scanner_slug"]
     pricing = model_config["pricing"]
@@ -199,25 +128,53 @@ def run_one(
     metrics_path = output_dir / f"run-{run_id}.metrics.json"
 
     if result_path.exists():
-        print(f"  Skipping (already exists): {result_path}")
         return {"skipped": True}
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    user_msg = (
-        f"Analyze the following Python repository for security vulnerabilities.\n\n"
-        f"{repo_context}\n\n"
-        f"Output ONLY the JSON findings object — no explanation before or after."
+    from openhands.core.config import OpenHandsConfig, SandboxConfig, LLMConfig
+    from openhands.core.main import run_controller
+    from openhands.events.action import MessageAction
+
+    repo_abs = str(repo_path.resolve())
+
+    config = OpenHandsConfig(
+        default_agent="CodeActAgent",
+        max_iterations=max_iterations,
+        runtime="docker",
+        workspace_base=repo_abs,
+        sandbox=SandboxConfig(
+            base_container_image="nikolaik/python-nodejs:python3.12-nodejs22",
+            timeout=timeout,
+        ),
+    )
+    config.set_llm_config(LLMConfig(
+        model=model_id,
+        max_output_tokens=max_output_tokens,
+    ))
+
+    task = (
+        f"{system_prompt}\n\n"
+        f"The repository to audit is at /workspace. "
+        f"Explore it thoroughly and report all security vulnerabilities "
+        f"in the JSON format specified above. "
+        f"IMPORTANT: Do NOT modify any files. Only read and analyze."
     )
 
     start = time.time()
-    try:
-        raw_output, input_tokens, output_tokens = call_anthropic(
-            system_prompt, user_msg, model_id,
+
+    async def _run():
+        return await run_controller(
+            config=config,
+            initial_user_action=MessageAction(content=task),
+            headless_mode=True,
         )
+
+    try:
+        state = asyncio.run(_run())
     except Exception as e:
         elapsed = time.time() - start
-        print(f"  API error: {e}")
+        logger.error("OpenHands error for %s run-%d: %s", repo_slug, run_id, e)
         metrics = RunMetrics(
             model=model_id, repo=repo_slug, run_id=run_id,
             wall_clock_seconds=elapsed, exit_status="error",
@@ -228,12 +185,36 @@ def run_one(
 
     elapsed = time.time() - start
 
+    # Extract output from agent's last message
+    raw_output = ""
+    if state:
+        last_msg = state.get_last_agent_message()
+        if last_msg:
+            raw_output = last_msg.content
+        if not raw_output and state.history:
+            for event in reversed(list(state.history)):
+                content = getattr(event, "content", "")
+                if content and ('"results"' in content or '"findings"' in content):
+                    raw_output = content
+                    break
+
+    # Extract token usage from state metrics if available
+    input_tokens = 0
+    output_tokens = 0
+    if state and hasattr(state, "metrics") and state.metrics:
+        m = state.metrics
+        input_tokens = getattr(m, "accumulated_cost", 0)  # Will refine
+        # Try to get actual token counts
+        if hasattr(m, "costs"):
+            for cost_item in m.costs:
+                input_tokens += getattr(cost_item, "input_tokens", 0)
+                output_tokens += getattr(cost_item, "output_tokens", 0)
+
     # Validate output
     validation = validate_output(raw_output)
 
     if not validation.valid or validation.data is None:
-        print(f"  Validation failed: {validation.errors[:3]}")
-        # Save raw output for debugging
+        logger.warning("Validation failed for %s run-%d: %s", repo_slug, run_id, validation.errors[:3])
         (output_dir / f"run-{run_id}.raw.txt").write_text(raw_output)
         metrics = RunMetrics(
             model=model_id, repo=repo_slug, run_id=run_id,
@@ -253,10 +234,8 @@ def run_one(
     # Save validated results
     save_validated_output(validation.data, str(result_path))
 
-    # Calculate cost
     cost = calculate_cost(input_tokens, output_tokens, pricing["input_per_1m"], pricing["output_per_1m"])
 
-    # Save metrics
     metrics = RunMetrics(
         model=model_id, repo=repo_slug, run_id=run_id,
         input_tokens=input_tokens, output_tokens=output_tokens,
@@ -280,15 +259,17 @@ def run_one(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Pilot LLM benchmark runner (direct API)")
+    parser = argparse.ArgumentParser(description="Agentic LLM benchmark runner (OpenHands)")
     parser.add_argument("--model", default="claude-haiku-4", help="Model key from models.yaml")
     parser.add_argument("--repos", nargs="+", required=True, help="Repo slugs or 'all'")
     parser.add_argument("--runs", type=int, default=1, help="Runs per repo")
-    parser.add_argument("--max-concurrent", type=int, default=1, help="Max parallel API calls (default: 1)")
+    parser.add_argument("--max-concurrent", type=int, default=1, help="Max parallel runs")
+    parser.add_argument("--max-iterations", type=int, default=30, help="Max agent steps per run")
+    parser.add_argument("--timeout", type=int, default=600, help="Timeout per run in seconds")
+    parser.add_argument("--max-output-tokens", type=int, default=16_000, help="Max output tokens per turn")
     parser.add_argument("--dry-run", action="store_true", help="Show cost estimate only")
     args = parser.parse_args()
 
-    # Load config
     model_config = load_model_config(args.model)
     pricing = model_config["pricing"]
 
@@ -302,106 +283,109 @@ def main() -> int:
         per_run, total = estimate_total_cost(
             pricing["input_per_1m"], pricing["output_per_1m"],
             len(repos), args.runs,
+            200_000,   # Agentic uses more tokens
+            50_000,
         )
-        print(f"\n=== Dry Run: {args.model} ===")
+        print(f"\n=== Dry Run (Agentic): {args.model} ===")
         print(f"Model: {model_config['model_id']}")
-        print(f"Pricing: ${pricing['input_per_1m']}/1M in, ${pricing['output_per_1m']}/1M out")
-        print(f"Repos: {len(repos)}, Runs: {args.runs}")
+        print(f"Repos: {len(repos)}, Runs: {args.runs}, Max iterations: {args.max_iterations}")
         print(f"Est. cost per run: ${per_run.total_cost_usd:.2f}")
-        print(f"Est. total ({len(repos) * args.runs} runs): ${total:.2f}\n")
+        print(f"Est. total ({len(repos) * args.runs} runs): ${total:.2f}")
+        print(f"Note: Agentic runs use ~2-5x more tokens than single-turn\n")
         return 0
 
-    # Load API key from .env
+    # Load API key
     if not os.environ.get("ANTHROPIC_API_KEY"):
-        for env_path in [
-            PROJECT_ROOT / ".env",
-        ]:
-            if env_path.exists():
-                for line in env_path.read_text().splitlines():
-                    if line.startswith("ANTHROPIC_API_KEY="):
-                        os.environ["ANTHROPIC_API_KEY"] = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        print(f"Loaded API key from {env_path}")
-                        break
-                if os.environ.get("ANTHROPIC_API_KEY"):
+        env_path = PROJECT_ROOT / ".env"
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                if line.startswith("ANTHROPIC_API_KEY="):
+                    os.environ["ANTHROPIC_API_KEY"] = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    logger.info("Loaded API key from %s", env_path)
                     break
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("Error: ANTHROPIC_API_KEY not found. Set it or put it in .env", file=sys.stderr)
+        logger.error("ANTHROPIC_API_KEY not found. Set it or put it in .env")
         return 1
 
     # Build system prompt
     cwe_families = load_cwe_families()
     system_prompt = build_prompt(cwe_families)
 
-    cumulative_cost = 0.0
-    completed = 0
-
-    print(f"\n=== Pilot Run: {args.model} × {len(repos)} repos × {args.runs} runs ===\n")
-
-    # Pre-gather all repo contexts (sequential — disk I/O)
-    repo_contexts: dict[str, str] = {}
+    # Pre-clone all repos
+    repo_paths: dict[str, Path] = {}
     for repo_slug in repos:
         repo_path = clone_or_find_repo(repo_slug)
         if repo_path is None:
-            print(f"[{repo_slug}] Skipping — repo not found and couldn't clone")
+            logger.warning("Skipping %s — repo not found", repo_slug)
             continue
-        print(f"[{repo_slug}] Reading repo files...", end=" ", flush=True)
-        repo_contexts[repo_slug] = gather_repo_context(repo_path)
-        print(f"{len(repo_contexts[repo_slug]):,} chars")
+        repo_paths[repo_slug] = repo_path
 
-    # Build list of (repo_slug, run_id) jobs
+    # Build jobs
     jobs: list[tuple[str, int]] = []
     for repo_slug in repos:
-        if repo_slug not in repo_contexts:
+        if repo_slug not in repo_paths:
             continue
         for run_id in range(1, args.runs + 1):
             jobs.append((repo_slug, run_id))
 
     total_runs = len(jobs)
-    max_concurrent = args.max_concurrent
+    cumulative_cost = 0.0
+    completed = 0
+
+    logger.info(
+        "Starting agentic run: %s × %d repos × %d runs (%d total, %d concurrent)",
+        args.model, len(repo_paths), args.runs, total_runs, args.max_concurrent,
+    )
 
     def execute_job(job: tuple[str, int]) -> tuple[str, int, dict]:
         repo_slug, run_id = job
-        result = run_one(model_config, repo_slug, run_id, system_prompt, repo_contexts[repo_slug])
+        result = run_one_agentic(
+            model_config, repo_slug, run_id, system_prompt,
+            repo_paths[repo_slug],
+            max_iterations=args.max_iterations,
+            timeout=args.timeout,
+            max_output_tokens=args.max_output_tokens,
+        )
         return repo_slug, run_id, result
 
     def log_result(repo_slug: str, run_id: int, result: dict) -> None:
         nonlocal cumulative_cost, completed
         completed += 1
         if result.get("skipped"):
-            print(f"  [{repo_slug}] Run {run_id}: (skipped)")
+            logger.info("[%d/%d] %s run-%d: skipped", completed, total_runs, repo_slug, run_id)
             return
         if result.get("success"):
             cumulative_cost += result["cost"]
-            print(
-                f"  [{repo_slug}] Run {run_id}: OK — {result['findings']} findings, "
-                f"{result['input_tokens']:,}+{result['output_tokens']:,} tokens, "
-                f"${result['cost']:.4f}, {result['elapsed']:.1f}s"
+            logger.info(
+                "[%d/%d] %s run-%d: OK — %d findings, %.1fs, $%.4f (total: $%.4f)",
+                completed, total_runs, repo_slug, run_id,
+                result["findings"], result["elapsed"], result["cost"], cumulative_cost,
             )
         else:
             cost = result.get("cost", 0)
             cumulative_cost += cost
-            print(f"  [{repo_slug}] Run {run_id}: FAIL — {result.get('error', 'unknown')}, ${cost:.4f}")
-        print(f"  [{completed}/{total_runs}] Cumulative: ${cumulative_cost:.4f}")
+            logger.info(
+                "[%d/%d] %s run-%d: FAIL — %s, %.1fs, $%.4f",
+                completed, total_runs, repo_slug, run_id,
+                result.get("error", "unknown"), result.get("elapsed", 0), cost,
+            )
 
-    if max_concurrent <= 1:
+    if args.max_concurrent <= 1:
         for job in jobs:
             repo_slug, run_id, result = execute_job(job)
             log_result(repo_slug, run_id, result)
     else:
-        print(f"Running with {max_concurrent} concurrent workers\n")
-        with ThreadPoolExecutor(max_workers=max_concurrent) as executor:
+        with ThreadPoolExecutor(max_workers=args.max_concurrent) as executor:
             futures = {executor.submit(execute_job, job): job for job in jobs}
             for future in as_completed(futures):
                 repo_slug, run_id, result = future.result()
                 log_result(repo_slug, run_id, result)
 
-    print(f"\n=== Done ===")
-    print(f"Completed: {completed}/{total_runs} runs")
-    print(f"Total cost: ${cumulative_cost:.4f}")
+    logger.info("Done — %d/%d runs, total cost: $%.4f", completed, total_runs, cumulative_cost)
 
     # Score results
-    print(f"\n=== Scoring ===")
+    logger.info("Scoring results...")
     scanner_slug = model_config["scanner_slug"]
     for repo_slug in repos:
         scanner_dir = PROJECT_ROOT / "scan-results" / repo_slug / scanner_slug
@@ -409,13 +393,13 @@ def main() -> int:
             continue
         result_files = [f for f in scanner_dir.glob("run-*.json") if not f.name.endswith(".metrics.json")]
         if result_files:
-            print(f"  python3 score.py --repo {repo_slug} --scanner {scanner_slug}")
             proc = subprocess.run(
                 [sys.executable, str(PROJECT_ROOT / "score.py"),
                  "--repo", repo_slug, "--scanner", scanner_slug],
                 capture_output=True, text=True, cwd=str(PROJECT_ROOT),
             )
-            print(proc.stdout)
+            if proc.stdout.strip():
+                print(proc.stdout)
             if proc.stderr:
                 print(proc.stderr, file=sys.stderr)
 

@@ -207,75 +207,82 @@ def _run_openhands(
 ) -> tuple[str | None, str]:
     """Execute OpenHands agent and return (trajectory_path, raw_output).
 
-    This function interfaces with the OpenHands library. It:
-    1. Creates a sandbox with the repo mounted read-only
+    This function interfaces with the OpenHands library (v1.5+). It:
+    1. Creates a Docker sandbox with the repo mounted read-only
     2. Runs the CodeActAgent with the security auditor prompt
-    3. Returns the trajectory file path and the agent's final output
+    3. The agent can explore files, grep, run commands iteratively
+    4. Returns the trajectory file path and the agent's final output
 
     Raises:
         ImportError: If openhands is not installed.
         RuntimeError: If the agent fails to complete.
     """
+    import asyncio
+
     try:
-        from openhands.core.config import AppConfig, SandboxConfig, LLMConfig
-        from openhands.core.main import create_runtime, run_controller
+        from openhands.core.config import (
+            OpenHandsConfig,
+            SandboxConfig,
+            LLMConfig,
+        )
+        from openhands.core.main import run_controller
         from openhands.events.action import MessageAction
     except ImportError:
         raise ImportError(
             "OpenHands not installed. Install with: pip install openhands-ai"
         )
 
+    repo_path_str = str(run_config.repo_path.resolve())
+
     # Configure OpenHands
-    config = AppConfig(
+    config = OpenHandsConfig(
+        default_agent="CodeActAgent",
+        max_iterations=run_config.max_iterations,
+        runtime="docker",
+        workspace_base=repo_path_str,
         sandbox=SandboxConfig(
-            base_container_image="realvuln-sandbox:latest",
-            enable_auto_lint=False,
-            use_host_network=False,
+            base_container_image="nikolaik/python-nodejs:python3.12-nodejs22",
             timeout=run_config.timeout_seconds,
         ),
-        llm=LLMConfig(
-            model=run_config.model.model_id,
-            max_output_tokens=run_config.max_output_tokens,
-        ),
     )
-
-    # Create runtime with repo mounted
-    runtime = create_runtime(config)
-
-    # Mount repo read-only
-    runtime.add_mount(str(run_config.repo_path), "/workspace", read_only=True)
+    # Set LLM config
+    config.set_llm_config(LLMConfig(
+        model=run_config.model.model_id,
+        max_output_tokens=run_config.max_output_tokens,
+    ))
 
     # Build the task message
     task = (
         f"{prompt}\n\n"
-        f"The repository to audit is mounted at /workspace. "
+        f"The repository to audit is at /workspace. "
         f"Explore it thoroughly and report all security vulnerabilities "
-        f"in the JSON format specified above."
+        f"in the JSON format specified above. "
+        f"IMPORTANT: Do NOT modify any files. Only read and analyze."
     )
 
-    # Run the agent
-    state = run_controller(
-        config=config,
-        initial_user_action=MessageAction(content=task),
-        runtime=runtime,
-        max_iterations=run_config.max_iterations,
-    )
+    # Run the agent (async API)
+    async def _run() -> tuple[str | None, str]:
+        state = await run_controller(
+            config=config,
+            initial_user_action=MessageAction(content=task),
+            headless_mode=True,
+        )
 
-    # Extract output from the agent's last message
-    raw_output = ""
-    if state and state.history:
-        for event in reversed(state.history):
-            if hasattr(event, "content") and event.content:
-                content = event.content
-                # Look for JSON output in the message
-                if '"results"' in content or '"findings"' in content:
-                    raw_output = content
-                    break
-        if not raw_output and state.history:
-            last = state.history[-1]
-            raw_output = getattr(last, "content", "")
+        # Extract output from the agent's last message
+        raw_output = ""
+        if state:
+            last_msg = state.get_last_agent_message()
+            if last_msg:
+                raw_output = last_msg.content
+            # Fallback: search history for JSON output
+            if not raw_output and state.history:
+                for event in reversed(list(state.history)):
+                    content = getattr(event, "content", "")
+                    if content and ('"results"' in content or '"findings"' in content):
+                        raw_output = content
+                        break
 
-    # Get trajectory path
-    trajectory_path = getattr(state, "trajectory_path", None)
+        trajectory_path = getattr(state, "trajectory_path", None) if state else None
+        return trajectory_path, raw_output
 
-    return trajectory_path, raw_output
+    return asyncio.run(_run())
