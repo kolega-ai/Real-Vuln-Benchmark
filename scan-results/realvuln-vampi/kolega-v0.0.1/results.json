@@ -1,0 +1,378 @@
+{
+  "results": [
+    {
+      "check_id": "CWE-321",
+      "path": "config.py",
+      "start": {
+        "line": 13,
+        "col": 1
+      },
+      "end": {
+        "line": 13,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hardcoded Weak Secret Key for JWT Signing\n\nThe Flask application's SECRET_KEY is hardcoded as the string `'random'`. This key is used to sign JWT tokens. An attacker who knows this key (it is publicly visible in the source code) can forge arbitrary JWT tokens, impersonating any user including administrators.\n\nImpact: Complete authentication bypass. An attacker can craft a JWT token with any `sub` claim (e.g., `admin`) signed with the known key `'random'`, gaining full administrative access to the API.\n\nFix: Generate a cryptographically random secret key (at least 256 bits) and load it from an environment variable or secrets manager. Never hardcode secrets in source code. Example: `SECRET_KEY = os.environ.get('SECRET_KEY')` with a strong randomly generated value.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-321"
+          ],
+          "finding_id": "00a1763f-e915-4e70-88ad-11927eeb199f"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-256",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 15,
+        "col": 1
+      },
+      "end": {
+        "line": 15,
+        "col": 100
+      },
+      "extra": {
+        "message": "Plaintext Password Storage\n\nUser passwords are stored in plaintext in the database. The `password` column stores raw strings with no hashing. The `login_user` function compares passwords with `request_data.get('password') == user.password` (direct string comparison). The debug endpoint also exposes plaintext passwords. Initial seed users also use trivially guessable passwords (pass1, pass2).\n\nImpact: If the database is compromised (e.g., via SQL injection), all user passwords are immediately exposed in plaintext. Combined with the SQL injection vulnerability, this is a complete credential compromise.\n\nFix: Use a strong password hashing library such as `bcrypt` or `argon2`. Store only the hash and use the library's verify function for comparison. Never store plaintext passwords.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-256"
+          ],
+          "finding_id": "65eefc55-99df-495d-b469-6898bf083db8"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-89",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 72,
+        "col": 1
+      },
+      "end": {
+        "line": 72,
+        "col": 100
+      },
+      "extra": {
+        "message": "SQL Injection via Raw Query String Formatting\n\nThe `get_user` method constructs a raw SQL query using an f-string with unsanitized user input. The `username` parameter is directly interpolated into the SQL string: `f\"SELECT * FROM users WHERE username = '{username}'\"`. This allows an attacker to inject arbitrary SQL, potentially dumping the entire database, bypassing authentication, or modifying data.\n\nImpact: Full database compromise. An attacker can extract all user credentials (usernames, plaintext passwords, emails), bypass authentication, or potentially drop tables. Since passwords are stored in plaintext, this leads to complete account takeover.\n\nFix: Use parameterized queries: `db.session.execute(text(\"SELECT * FROM users WHERE username = :username\"), {\"username\": username})`. Better yet, use the ORM: `User.query.filter_by(username=username).first()`.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "finding_id": "fcec3a50-26b1-403c-bc6e-88ad601c265a"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-639",
+      "path": "api_views/books.py",
+      "start": {
+        "line": 50,
+        "col": 1
+      },
+      "end": {
+        "line": 50,
+        "col": 100
+      },
+      "extra": {
+        "message": "Broken Object Level Authorization (BOLA/IDOR) on Book Retrieval\n\nWhen `vuln=1`, the `get_by_title` endpoint retrieves a book by title without verifying that the requesting user owns the book. Any authenticated user can access any other user's book and its `secret_content` simply by knowing the book title. The authorization check (filtering by user) is intentionally bypassed.\n\nImpact: Any authenticated user can read the secret content of books belonging to other users, leading to unauthorized disclosure of sensitive/private data.\n\nFix: Always filter book queries by both the book title AND the authenticated user: `Book.query.filter_by(user=current_user, book_title=book_title).first()`. Remove the `vuln` flag bypass in production.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "finding_id": "a20ec67c-cc84-4ff6-80db-48338cc29d1d"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "api_views/main.py",
+      "start": {
+        "line": 6,
+        "col": 1
+      },
+      "end": {
+        "line": 6,
+        "col": 100
+      },
+      "extra": {
+        "message": "Unauthenticated Database Reset Endpoint\n\nThe `populate_db()` function drops and recreates all database tables and populates them with default data. There is no authentication or authorization check on this endpoint. Any unauthenticated user can call this endpoint to wipe the entire database.\n\nImpact: Any unauthenticated attacker can destroy all application data by calling this endpoint, causing complete data loss and Denial of Service.\n\nFix: Protect this endpoint with strong authentication and restrict it to administrator users only. Consider removing it entirely from production deployments.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "93119e72-9742-447d-8de8-0e64d5ddaacc"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-1333",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 144,
+        "col": 1
+      },
+      "end": {
+        "line": 144,
+        "col": 100
+      },
+      "extra": {
+        "message": "ReDoS (Regular Expression Denial of Service) Vulnerability\n\nWhen `vuln=1`, the `update_email` endpoint uses a vulnerable regular expression for email validation: `r\"^([0-9a-zA-Z]([-.\\w]*[0-9a-zA-Z])*@{1}([0-9a-zA-Z][-\\w]*[0-9a-zA-Z]\\.)+[a-zA-Z]{2,9})$\"`. This regex contains nested quantifiers and overlapping character classes that can cause catastrophic backtracking when given a specially crafted input string, causing the server to hang.\n\nImpact: An attacker can send a crafted email string (e.g., many repeated characters followed by an invalid character) to cause the regex engine to consume 100% CPU, effectively causing a Denial of Service for the entire application.\n\nFix: Use a simple, non-backtracking email validation approach (e.g., check for `@` presence and use a library like `email-validator`). Alternatively, set a timeout on regex operations or use the `re2` library which guarantees linear time matching.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-1333"
+          ],
+          "finding_id": "f70a7e0a-3e08-47f0-9ad3-815ca8f28b27"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-639",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 186,
+        "col": 1
+      },
+      "end": {
+        "line": 186,
+        "col": 100
+      },
+      "extra": {
+        "message": "Broken Object Level Authorization (BOLA) on Password Update\n\nWhen `vuln=1`, the `update_password` endpoint allows any authenticated user to update the password of ANY other user by specifying the target `username` in the URL path. The endpoint only validates that the requester has a valid token, but does not verify that the token's subject matches the target username.\n\nImpact: Any authenticated user can change the password of any other user, including administrators, leading to complete account takeover.\n\nFix: Always verify that `resp['sub'] == username` before allowing a password update, or restrict password changes to the currently authenticated user only. Admin-level overrides should require explicit admin role verification.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "finding_id": "21e62ef5-77a8-4052-ae4c-9a3185d6b454"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-200",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 24,
+        "col": 1
+      },
+      "end": {
+        "line": 24,
+        "col": 100
+      },
+      "extra": {
+        "message": "Debug Endpoint Exposes Plaintext Passwords and PII\n\nThe `/debug` endpoint calls `User.get_all_users_debug()` which returns all users' usernames, plaintext passwords, emails, and admin status. This endpoint has no authentication or authorization check whatsoever \u2014 it is publicly accessible.\n\nImpact: Any unauthenticated attacker can retrieve all user credentials (including plaintext passwords) and PII (emails) from the system, leading to complete account compromise for all users.\n\nFix: Remove the debug endpoint entirely from production deployments. If needed for development, protect it with strong authentication and authorization, and never return plaintext passwords.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "finding_id": "9e732e46-fd45-4cd0-b4a8-5454d502aa99"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-915",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 60,
+        "col": 1
+      },
+      "end": {
+        "line": 60,
+        "col": 100
+      },
+      "extra": {
+        "message": "Mass Assignment / Privilege Escalation via Admin Flag\n\nWhen `vuln=1`, the registration endpoint allows users to set their own `admin` flag by including `\"admin\": true` in the registration JSON body. This allows any user to self-promote to administrator during registration.\n\nImpact: Any user can register as an administrator, gaining access to privileged operations such as deleting other users.\n\nFix: Never accept privilege-level fields from user-supplied input. The `admin` flag should only be set by existing administrators through a separate, protected endpoint.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "finding_id": "3cf7e3fa-172f-4f1c-a7d8-66fad4945444"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-94",
+      "path": "app.py",
+      "start": {
+        "line": 17,
+        "col": 1
+      },
+      "end": {
+        "line": 17,
+        "col": 100
+      },
+      "extra": {
+        "message": "Debug Mode Enabled in Production\n\nThe Flask application is started with `debug=True`. In debug mode, Flask enables the Werkzeug interactive debugger, which allows arbitrary Python code execution via the browser if an unhandled exception occurs. The debugger is PIN-protected but the PIN can be brute-forced or bypassed in certain configurations.\n\nImpact: If an unhandled exception occurs, an attacker with network access can execute arbitrary Python code on the server, leading to full Remote Code Execution (RCE).\n\nFix: Set `debug=False` in production. Use environment variables to control debug mode: `debug=os.getenv('FLASK_DEBUG', 'false').lower() == 'true'`. Never run with debug=True in a public-facing deployment.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "finding_id": "35becf28-1997-4f21-8866-6a031771dc2d"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-798",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 99,
+        "col": 1
+      },
+      "end": {
+        "line": 99,
+        "col": 100
+      },
+      "extra": {
+        "message": "Hardcoded Default Credentials in Database Initialization\n\nThe database initialization function creates users with hardcoded, trivially guessable credentials: `name1/pass1`, `name2/pass2`, and `admin/pass1`. These default credentials are publicly visible in the source code and will be present after any database reset.\n\nImpact: Any attacker can log in as any user, including the admin account, using the publicly known default credentials. This grants full administrative access to the API.\n\nFix: Never hardcode credentials. Generate random passwords for initial users or require password setup on first run. At minimum, use strong, randomly generated passwords that are not committed to source control.",
+        "severity": "HIGH",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "finding_id": "b2d19c5e-d707-4a69-b81d-6ff93dac687a"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-20",
+      "path": "api_views/json_schemas.py",
+      "start": {
+        "line": 1,
+        "col": 1
+      },
+      "end": {
+        "line": 1,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Input Length Validation\n\nThe JSON schemas for user registration, login, email update, and book addition do not enforce any maximum length constraints on string fields. An attacker can submit arbitrarily long strings for username, password, email, book_title, and secret fields.\n\nImpact: Extremely long inputs can cause excessive memory consumption, database errors, or contribute to DoS conditions. Combined with the ReDoS vulnerability, very long email strings amplify the attack.\n\nFix: Add `maxLength` constraints to all string fields in the JSON schemas. For example: `\"username\": {\"type\": \"string\", \"maxLength\": 64}`. Also add `minLength` where appropriate.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-20"
+          ],
+          "finding_id": "7dc7a418-977c-4307-90a1-4e5775d331c7"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-204",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 101,
+        "col": 1
+      },
+      "end": {
+        "line": 101,
+        "col": 100
+      },
+      "extra": {
+        "message": "User Enumeration via Distinct Error Messages\n\nWhen `vuln=1`, the login endpoint returns different error messages depending on whether the username exists (`\"Password is not correct for the given username.\"`) versus does not exist (`\"Username does not exist\"`). This allows attackers to enumerate valid usernames.\n\nImpact: Attackers can enumerate valid usernames, which can be used to target specific accounts for brute-force or credential stuffing attacks.\n\nFix: Return a generic error message for all failed login attempts: e.g., `\"Username or password is incorrect.\"` regardless of whether the username exists or the password is wrong.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "finding_id": "6a7c5347-5103-4eee-af53-a1030d7bc140"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-116",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 12,
+        "col": 1
+      },
+      "end": {
+        "line": 12,
+        "col": 100
+      },
+      "extra": {
+        "message": "JSON Injection via String Concatenation in Error Messages\n\nThe `error_message_helper` function constructs JSON by string concatenation, directly embedding user-controlled or exception-derived content into a JSON string without escaping. If `msg` or `msg['error']` contains double quotes or other JSON special characters, the resulting JSON will be malformed or could inject additional JSON fields.\n\nImpact: Malformed JSON responses could cause client-side parsing errors. In some contexts, injected content could manipulate the JSON structure, potentially leading to client-side logic flaws or XSS if the response is rendered in a browser.\n\nFix: Use `json.dumps()` to properly serialize JSON responses: `json.dumps({'status': 'fail', 'message': msg})`. This ensures proper escaping of all special characters.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-116"
+          ],
+          "finding_id": "12d94fbf-c46b-47c7-b44b-4269b73da3fe"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-306",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 19,
+        "col": 1
+      },
+      "end": {
+        "line": 19,
+        "col": 100
+      },
+      "extra": {
+        "message": "Unauthenticated Access to All Users Listing\n\nThe `get_all_users()` endpoint returns a list of all registered usernames and email addresses without requiring any authentication. Any unauthenticated user can enumerate all users and their email addresses.\n\nImpact: Unauthenticated attackers can enumerate all user accounts and email addresses, facilitating targeted attacks, phishing, and credential stuffing.\n\nFix: Require authentication (at minimum) to access the user listing endpoint. Consider restricting it to admin users only. Implement pagination to prevent bulk data extraction.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "finding_id": "cc0b2d0d-ca3d-4e7f-bfee-0ef833a54143"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-307",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 85,
+        "col": 1
+      },
+      "end": {
+        "line": 85,
+        "col": 100
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Authentication Endpoints\n\nThe login endpoint (`login_user`) has no rate limiting or account lockout mechanism. An attacker can make unlimited login attempts without any throttling, enabling brute-force attacks against user accounts.\n\nImpact: Attackers can perform unlimited brute-force or credential stuffing attacks against any user account. Given that passwords are stored in plaintext and default passwords are trivially guessable, this is especially severe.\n\nFix: Implement rate limiting using Flask-Limiter or similar. Add account lockout after N failed attempts. Implement CAPTCHA for repeated failures. Log and alert on suspicious login patterns.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "finding_id": "4d1509d7-ffee-4125-b025-9bdf8ede6445"
+        }
+      }
+    },
+    {
+      "check_id": "CWE-532",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 27,
+        "col": 1
+      },
+      "end": {
+        "line": 27,
+        "col": 100
+      },
+      "extra": {
+        "message": "Sensitive Data Exposure via __repr__ Method\n\nThe `User.__repr__` method returns a JSON-like string containing the username and email. While it doesn't expose the password directly, this representation is used in `get_by_username` to return user data. More critically, if this object is ever logged (e.g., in error logs or debug output), PII (email addresses) will appear in logs.\n\nImpact: PII (email addresses) may be exposed in application logs, error messages, or debug output. Additionally, the f-string formatting does not escape special characters, so usernames or emails containing `\"` could break the JSON structure.\n\nFix: Use `json.dumps()` for serialization. Ensure logging configurations exclude or mask PII fields. Separate the serialization concern from the `__repr__` method.",
+        "severity": "MEDIUM",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "finding_id": "ff320d52-cca4-499e-bec8-ca6460e65b88"
+        }
+      }
+    }
+  ]
+}
