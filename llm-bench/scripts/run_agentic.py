@@ -37,7 +37,7 @@ sys.path.insert(0, str(LLM_BENCH_DIR))
 
 import yaml
 
-from harness.cost_calculator import calculate_cost, estimate_total_cost
+from harness.cost_calculator import estimate_total_cost
 from harness.metrics_collector import RunMetrics, save_metrics
 from harness.output_validator import validate_output, save_validated_output
 from harness.prompt_builder import build_prompt, load_cwe_families
@@ -117,7 +117,6 @@ def run_one_agentic(
     """Run one agentic evaluation using OpenCode CLI."""
     model_id = model_config["model_id"]
     scanner_slug = model_config["scanner_slug"]
-    pricing = model_config["pricing"]
 
     output_dir = PROJECT_ROOT / "scan-results" / repo_slug / scanner_slug
     result_path = output_dir / f"run-{run_id}.json"
@@ -149,15 +148,14 @@ def run_one_agentic(
 
     try:
         proc = subprocess.run(
-            ["opencode", "run", "-m", opencode_model, task],
+            ["opencode", "run", "--format", "json", "-m", opencode_model, task],
             capture_output=True,
             text=True,
             timeout=timeout,
             cwd=str(repo_path),
             env={**os.environ, "NO_COLOR": "1"},
         )
-        raw_output = proc.stdout
-        stderr = proc.stderr
+        raw_json_output = proc.stdout
     except subprocess.TimeoutExpired:
         elapsed = time.time() - start
         logger.error("Timeout for %s run-%d after %.0fs", repo_slug, run_id, elapsed)
@@ -181,9 +179,40 @@ def run_one_agentic(
 
     elapsed = time.time() - start
 
-    # Save raw output for debugging
-    raw_path = output_dir / f"run-{run_id}.raw.txt"
-    raw_path.write_text(raw_output)
+    # Parse JSON events to extract text output and real token/cost metrics
+    raw_output = ""
+    total_cost = 0.0
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_cache_read = 0
+    total_cache_write = 0
+    total_tokens = 0
+
+    for line in raw_json_output.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        # Collect text output from "text" events
+        if event.get("type") == "text":
+            part = event.get("part", {})
+            raw_output += part.get("text", "")
+
+        # Collect cost/token data from "step_finish" events
+        if event.get("type") == "step_finish":
+            part = event.get("part", {})
+            total_cost += part.get("cost", 0)
+            tokens = part.get("tokens", {})
+            total_input_tokens += tokens.get("input", 0)
+            total_output_tokens += tokens.get("output", 0)
+            total_tokens += tokens.get("total", 0)
+            cache = tokens.get("cache", {})
+            total_cache_read += cache.get("read", 0)
+            total_cache_write += cache.get("write", 0)
 
     # Validate output — extract JSON from the agent's response
     validation = validate_output(raw_output)
@@ -195,32 +224,26 @@ def run_one_agentic(
         )
         metrics = RunMetrics(
             model=model_id, repo=repo_slug, run_id=run_id,
+            input_tokens=total_input_tokens, output_tokens=total_output_tokens,
+            total_tokens=total_tokens,
+            cost_usd=total_cost,
             wall_clock_seconds=elapsed, exit_status="validation_failed",
             error_message=str(validation.errors[:3]),
         )
         save_metrics(metrics, str(metrics_path))
         return {
             "success": False, "error": "validation_failed",
-            "elapsed": elapsed, "cost": 0,
+            "elapsed": elapsed, "cost": total_cost,
         }
 
     # Save validated results
     save_validated_output(validation.data, str(result_path))
 
-    # We don't have exact token counts from opencode CLI, estimate from output size
-    # Rough estimate: 4 chars per token
-    est_input_tokens = len(task) // 4
-    est_output_tokens = len(raw_output) // 4
-    cost = calculate_cost(
-        est_input_tokens, est_output_tokens,
-        pricing["input_per_1m"], pricing["output_per_1m"],
-    )
-
     metrics = RunMetrics(
         model=model_id, repo=repo_slug, run_id=run_id,
-        input_tokens=est_input_tokens, output_tokens=est_output_tokens,
-        total_tokens=est_input_tokens + est_output_tokens,
-        cost_usd=cost.total_cost_usd,
+        input_tokens=total_input_tokens, output_tokens=total_output_tokens,
+        total_tokens=total_tokens,
+        cost_usd=total_cost,
         wall_clock_seconds=elapsed,
         exit_status="success",
     )
@@ -231,7 +254,7 @@ def run_one_agentic(
         "findings": validation.findings_count,
         "dropped": validation.dropped_count,
         "repaired": validation.repaired_count,
-        "cost": cost.total_cost_usd,
+        "cost": total_cost,
         "elapsed": elapsed,
     }
 
