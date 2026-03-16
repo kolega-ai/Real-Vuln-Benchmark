@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Agentic LLM benchmark runner — uses OpenHands CodeActAgent in Docker.
+"""Agentic LLM benchmark runner — uses OpenCode CLI.
 
 Unlike run_pilot.py (single-turn, whole-repo-in-prompt), this runner gives
 the LLM tools to explore the codebase iteratively: read files, grep, list
 dirs, run bash commands. The agent decides what to look at and when to stop.
 
-Requires: Docker running, openhands-ai installed (pip install openhands-ai).
+Requires: opencode CLI installed (brew install opencode).
 
 Usage:
     # Test on one repo
-    python3.13 llm-bench/scripts/run_agentic.py --repos realvuln-vampi --runs 1
+    python3 llm-bench/scripts/run_agentic.py --repos realvuln-vampi --runs 1
 
     # 4 repos in parallel
-    python3.13 llm-bench/scripts/run_agentic.py --repos realvuln-vampi realvuln-dsvw realvuln-dvpwa realvuln-pygoat --runs 1 --max-concurrent 4
+    python3 llm-bench/scripts/run_agentic.py --repos realvuln-vampi realvuln-dsvw realvuln-dvpwa realvuln-pygoat --runs 1 --max-concurrent 4
 
     # All repos × 3 runs
-    python3.13 llm-bench/scripts/run_agentic.py --repos all --runs 3 --max-concurrent 4
+    python3 llm-bench/scripts/run_agentic.py --repos all --runs 3 --max-concurrent 4
 """
 from __future__ import annotations
 
@@ -112,13 +112,9 @@ def run_one_agentic(
     run_id: int,
     system_prompt: str,
     repo_path: Path,
-    max_iterations: int,
     timeout: int,
-    max_output_tokens: int,
 ) -> dict:
-    """Run one agentic evaluation using OpenHands."""
-    import asyncio
-
+    """Run one agentic evaluation using OpenCode CLI."""
     model_id = model_config["model_id"]
     scanner_slug = model_config["scanner_slug"]
     pricing = model_config["pricing"]
@@ -132,114 +128,98 @@ def run_one_agentic(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    from openhands.core.config import OpenHandsConfig, SandboxConfig, LLMConfig
-    from openhands.core.main import run_controller
-    from openhands.events.action import MessageAction
-
-    repo_abs = str(repo_path.resolve())
-
-    config = OpenHandsConfig(
-        default_agent="CodeActAgent",
-        max_iterations=max_iterations,
-        runtime="docker",
-        workspace_base=repo_abs,
-        sandbox=SandboxConfig(
-            base_container_image="nikolaik/python-nodejs:python3.12-nodejs22",
-            timeout=timeout,
-        ),
-    )
-    config.set_llm_config(LLMConfig(
-        model=model_id,
-        max_output_tokens=max_output_tokens,
-    ))
+    # OpenCode model format: provider/model_id
+    provider = model_config.get("provider", "anthropic")
+    opencode_model = f"{provider}/{model_id}"
 
     task = (
         f"{system_prompt}\n\n"
-        f"The repository to audit is at /workspace. "
-        f"Explore it thoroughly and report all security vulnerabilities "
-        f"in the JSON format specified above. "
-        f"IMPORTANT: Do NOT modify any files. Only read and analyze."
+        f"The repository to audit is in the current directory.\n\n"
+        f"You MUST follow these steps IN ORDER:\n"
+        f"1. List all Python files in this repo\n"
+        f"2. Read each Python file to understand the code\n"
+        f"3. Look for SQL injection, XSS, command injection, path traversal, etc.\n"
+        f"4. ONLY after reading ALL files, output your findings\n\n"
+        f"CRITICAL: The example JSON in the prompt above is just a FORMAT TEMPLATE.\n"
+        f"Your findings must reference actual files and line numbers from THIS repo.\n"
+        f"Output ONLY the JSON findings object at the end — no markdown fences."
     )
 
     start = time.time()
 
-    async def _run():
-        return await run_controller(
-            config=config,
-            initial_user_action=MessageAction(content=task),
-            headless_mode=True,
-        )
-
     try:
-        state = asyncio.run(_run())
+        proc = subprocess.run(
+            ["opencode", "run", "-m", opencode_model, task],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=str(repo_path),
+            env={**os.environ, "NO_COLOR": "1"},
+        )
+        raw_output = proc.stdout
+        stderr = proc.stderr
+    except subprocess.TimeoutExpired:
+        elapsed = time.time() - start
+        logger.error("Timeout for %s run-%d after %.0fs", repo_slug, run_id, elapsed)
+        metrics = RunMetrics(
+            model=model_id, repo=repo_slug, run_id=run_id,
+            wall_clock_seconds=elapsed, exit_status="timeout",
+            error_message=f"Timed out after {timeout}s",
+        )
+        save_metrics(metrics, str(metrics_path))
+        return {"success": False, "error": "timeout", "elapsed": elapsed, "cost": 0}
     except Exception as e:
         elapsed = time.time() - start
-        logger.error("OpenHands error for %s run-%d: %s", repo_slug, run_id, e)
+        logger.error("Error for %s run-%d: %s", repo_slug, run_id, e)
         metrics = RunMetrics(
             model=model_id, repo=repo_slug, run_id=run_id,
             wall_clock_seconds=elapsed, exit_status="error",
             error_message=str(e),
         )
         save_metrics(metrics, str(metrics_path))
-        return {"success": False, "error": str(e), "elapsed": elapsed}
+        return {"success": False, "error": str(e), "elapsed": elapsed, "cost": 0}
 
     elapsed = time.time() - start
 
-    # Extract output from agent's last message
-    raw_output = ""
-    if state:
-        last_msg = state.get_last_agent_message()
-        if last_msg:
-            raw_output = last_msg.content
-        if not raw_output and state.history:
-            for event in reversed(list(state.history)):
-                content = getattr(event, "content", "")
-                if content and ('"results"' in content or '"findings"' in content):
-                    raw_output = content
-                    break
+    # Save raw output for debugging
+    raw_path = output_dir / f"run-{run_id}.raw.txt"
+    raw_path.write_text(raw_output)
 
-    # Extract token usage from state metrics if available
-    input_tokens = 0
-    output_tokens = 0
-    if state and hasattr(state, "metrics") and state.metrics:
-        m = state.metrics
-        input_tokens = getattr(m, "accumulated_cost", 0)  # Will refine
-        # Try to get actual token counts
-        if hasattr(m, "costs"):
-            for cost_item in m.costs:
-                input_tokens += getattr(cost_item, "input_tokens", 0)
-                output_tokens += getattr(cost_item, "output_tokens", 0)
-
-    # Validate output
+    # Validate output — extract JSON from the agent's response
     validation = validate_output(raw_output)
 
     if not validation.valid or validation.data is None:
-        logger.warning("Validation failed for %s run-%d: %s", repo_slug, run_id, validation.errors[:3])
-        (output_dir / f"run-{run_id}.raw.txt").write_text(raw_output)
+        logger.warning(
+            "Validation failed for %s run-%d: %s",
+            repo_slug, run_id, validation.errors[:3],
+        )
         metrics = RunMetrics(
             model=model_id, repo=repo_slug, run_id=run_id,
-            input_tokens=input_tokens, output_tokens=output_tokens,
             wall_clock_seconds=elapsed, exit_status="validation_failed",
             error_message=str(validation.errors[:3]),
         )
-        cost = calculate_cost(input_tokens, output_tokens, pricing["input_per_1m"], pricing["output_per_1m"])
-        metrics.cost_usd = cost.total_cost_usd
         save_metrics(metrics, str(metrics_path))
         return {
             "success": False, "error": "validation_failed",
-            "input_tokens": input_tokens, "output_tokens": output_tokens,
-            "cost": cost.total_cost_usd, "elapsed": elapsed,
+            "elapsed": elapsed, "cost": 0,
         }
 
     # Save validated results
     save_validated_output(validation.data, str(result_path))
 
-    cost = calculate_cost(input_tokens, output_tokens, pricing["input_per_1m"], pricing["output_per_1m"])
+    # We don't have exact token counts from opencode CLI, estimate from output size
+    # Rough estimate: 4 chars per token
+    est_input_tokens = len(task) // 4
+    est_output_tokens = len(raw_output) // 4
+    cost = calculate_cost(
+        est_input_tokens, est_output_tokens,
+        pricing["input_per_1m"], pricing["output_per_1m"],
+    )
 
     metrics = RunMetrics(
         model=model_id, repo=repo_slug, run_id=run_id,
-        input_tokens=input_tokens, output_tokens=output_tokens,
-        total_tokens=input_tokens + output_tokens,
+        input_tokens=est_input_tokens, output_tokens=est_output_tokens,
+        total_tokens=est_input_tokens + est_output_tokens,
         cost_usd=cost.total_cost_usd,
         wall_clock_seconds=elapsed,
         exit_status="success",
@@ -251,24 +231,27 @@ def run_one_agentic(
         "findings": validation.findings_count,
         "dropped": validation.dropped_count,
         "repaired": validation.repaired_count,
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
         "cost": cost.total_cost_usd,
         "elapsed": elapsed,
     }
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Agentic LLM benchmark runner (OpenHands)")
-    parser.add_argument("--model", default="claude-haiku-4", help="Model key from models.yaml")
+    parser = argparse.ArgumentParser(description="Agentic LLM benchmark runner (OpenCode)")
+    parser.add_argument("--model", default="claude-haiku-4-agentic", help="Model key from models.yaml")
     parser.add_argument("--repos", nargs="+", required=True, help="Repo slugs or 'all'")
     parser.add_argument("--runs", type=int, default=1, help="Runs per repo")
     parser.add_argument("--max-concurrent", type=int, default=1, help="Max parallel runs")
-    parser.add_argument("--max-iterations", type=int, default=30, help="Max agent steps per run")
     parser.add_argument("--timeout", type=int, default=600, help="Timeout per run in seconds")
-    parser.add_argument("--max-output-tokens", type=int, default=16_000, help="Max output tokens per turn")
     parser.add_argument("--dry-run", action="store_true", help="Show cost estimate only")
     args = parser.parse_args()
+
+    # Verify opencode is installed
+    try:
+        subprocess.run(["opencode", "--version"], capture_output=True, check=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        logger.error("opencode not found. Install with: brew install opencode")
+        return 1
 
     model_config = load_model_config(args.model)
     pricing = model_config["pricing"]
@@ -283,12 +266,11 @@ def main() -> int:
         per_run, total = estimate_total_cost(
             pricing["input_per_1m"], pricing["output_per_1m"],
             len(repos), args.runs,
-            200_000,   # Agentic uses more tokens
-            50_000,
+            200_000, 50_000,  # Agentic uses more tokens
         )
-        print(f"\n=== Dry Run (Agentic): {args.model} ===")
+        print(f"\n=== Dry Run (Agentic via OpenCode): {args.model} ===")
         print(f"Model: {model_config['model_id']}")
-        print(f"Repos: {len(repos)}, Runs: {args.runs}, Max iterations: {args.max_iterations}")
+        print(f"Repos: {len(repos)}, Runs: {args.runs}")
         print(f"Est. cost per run: ${per_run.total_cost_usd:.2f}")
         print(f"Est. total ({len(repos) * args.runs} runs): ${total:.2f}")
         print(f"Note: Agentic runs use ~2-5x more tokens than single-turn\n")
@@ -342,10 +324,7 @@ def main() -> int:
         repo_slug, run_id = job
         result = run_one_agentic(
             model_config, repo_slug, run_id, system_prompt,
-            repo_paths[repo_slug],
-            max_iterations=args.max_iterations,
-            timeout=args.timeout,
-            max_output_tokens=args.max_output_tokens,
+            repo_paths[repo_slug], timeout=args.timeout,
         )
         return repo_slug, run_id, result
 
@@ -366,9 +345,9 @@ def main() -> int:
             cost = result.get("cost", 0)
             cumulative_cost += cost
             logger.info(
-                "[%d/%d] %s run-%d: FAIL — %s, %.1fs, $%.4f",
+                "[%d/%d] %s run-%d: FAIL — %s, %.1fs",
                 completed, total_runs, repo_slug, run_id,
-                result.get("error", "unknown"), result.get("elapsed", 0), cost,
+                result.get("error", "unknown"), result.get("elapsed", 0),
             )
 
     if args.max_concurrent <= 1:
@@ -376,6 +355,7 @@ def main() -> int:
             repo_slug, run_id, result = execute_job(job)
             log_result(repo_slug, run_id, result)
     else:
+        logger.info("Running with %d concurrent workers", args.max_concurrent)
         with ThreadPoolExecutor(max_workers=args.max_concurrent) as executor:
             futures = {executor.submit(execute_job, job): job for job in jobs}
             for future in as_completed(futures):
