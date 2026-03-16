@@ -6,16 +6,16 @@
       "path": "server/routes.py",
       "start": {
         "line": 137,
-        "col": 28,
-        "offset": 3500
+        "col": 20,
+        "offset": 3850
       },
       "end": {
-        "line": 138,
-        "col": 33,
-        "offset": 3650
+        "line": 137,
+        "col": 100,
+        "offset": 3930
       },
       "extra": {
-        "message": "User input from request.args.get('search') is concatenated directly into SQL string using f-string. The search_query variable is embedded directly without parameterization: s_query = f\"SELECT filename FROM files WHERE user_id = {user_id} AND filename LIKE '%{search_query}%'\". This allows SQL injection attacks.",
+        "message": "User input from request.args.get('search') is directly interpolated into SQL query using f-string formatting. The search_query variable is concatenated into the LIKE clause without parameterization, allowing SQL injection attacks.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -27,24 +27,24 @@
       }
     },
     {
-      "check_id": "python.security.authentication.missing-auth",
+      "check_id": "python.security.authentication.missing-auth-api-profile",
       "path": "server/api/v1/api_v1.py",
       "start": {
-        "line": 146,
-        "col": 1,
-        "offset": 4200
+        "line": 152,
+        "col": 5,
+        "offset": 3650
       },
       "end": {
-        "line": 170,
-        "col": 34,
-        "offset": 4800
+        "line": 154,
+        "col": 20,
+        "offset": 3700
       },
       "extra": {
-        "message": "The /api/v1/profile endpoint does not require authentication. The @token_required decorator is commented out (line 152), allowing any unauthenticated user to retrieve profile information for any user_id by providing it as a query parameter. This is a missing authentication vulnerability.",
+        "message": "The @token_required decorator is commented out on line 152-153. The /api/v1/profile endpoint allows unauthenticated access and returns sensitive user profile information (email, role, permissions, team) for any user_id provided in the query parameter.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-306: Missing Authentication for Critical Function"
+            "CWE-306: Missing Authentication Check"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -52,23 +52,24 @@
       }
     },
     {
-      "check_id": "python.security.authorization.broken-function-level",
+      "check_id": "python.security.authorization.missing-auth-delete-user",
       "path": "server/api/v1/api_v1.py",
       "start": {
-        "line": 215,
-        "col": 1,
-        "offset": 5100
+        "line": 221,
+        "col": 5,
+        "offset": 5850
       },
       "end": {
-        "line": 238,
-        "col": 28,
-        "offset": 5700
+        "line": 223,
+        "col": 30,
+        "offset": 5900
       },
       "extra": {
-        "message": "The /api/v1/delete-user/<user_id> endpoint has no authorization checks. Any authenticated user (or unauthenticated user) can delete any user from the database by simply knowing their user_id. The @token_required decorator is commented out, and there are no checks to verify if the requester is deleting their own account or an admin. This violates function-level authorization.",
+        "message": "The @token_required decorator is commented out on line 221. The DELETE /api/v1/delete-user/<int:user_id> endpoint has no authentication or authorization checks. Any unauthenticated user can delete any user account from the database by providing their user_id in the URL.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
+            "CWE-306: Missing Authentication Check",
             "CWE-862: Missing Authorization"
           ],
           "confidence": "HIGH",
@@ -77,24 +78,24 @@
       }
     },
     {
-      "check_id": "python.security.ssrf.arbitrary-url-fetch",
+      "check_id": "python.security.ssrf.unvalidated-url-fetch",
       "path": "server/api/v1/api_v1.py",
       "start": {
-        "line": 240,
-        "col": 1,
-        "offset": 5800
+        "line": 254,
+        "col": 27,
+        "offset": 6800
       },
       "end": {
-        "line": 298,
-        "col": 35,
-        "offset": 7200
+        "line": 254,
+        "col": 55,
+        "offset": 6828
       },
       "extra": {
-        "message": "The /api/v1/update_picture endpoint accepts a user-provided URL (picture_url) and makes an HTTP request to it without validation using requests.get(picture_url) on line 254. This allows Server-Side Request Forgery (SSRF) attacks where an attacker can make the server fetch from internal IP addresses, cloud metadata services, or other arbitrary URLs. No URL validation or domain whitelisting is performed.",
+        "message": "The picture_url parameter from the user request is passed directly to requests.get() without any validation or filtering. An attacker can provide arbitrary URLs (including internal IPs, localhost, or cloud metadata endpoints) to interact with internal services and potentially access sensitive information.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-918: Server-Side Request Forgery"
+            "CWE-918: Server-Side Request Forgery (SSRF)"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -102,24 +103,24 @@
       }
     },
     {
-      "check_id": "python.security.weak-crypto.weak-hash",
+      "check_id": "python.security.path-traversal.profile-pictures-no-auth",
       "path": "server/routes.py",
       "start": {
-        "line": 393,
+        "line": 307,
         "col": 1,
-        "offset": 9800
+        "offset": 9090
       },
       "end": {
-        "line": 403,
-        "col": 45,
-        "offset": 10200
+        "line": 309,
+        "col": 62,
+        "offset": 9180
       },
       "extra": {
-        "message": "The custom_hash() function uses MD5 hashing (hashlib.md5()) to hash passwords. MD5 is cryptographically broken and unsuitable for password hashing. It should be replaced with a proper password hashing algorithm like bcrypt, argon2, or scrypt. MD5 hashes can be quickly cracked using rainbow tables.",
+        "message": "The /uploads/profile_pictures/<filename> endpoint serves files directly without any authentication or authorization checks. Combined with predictable numeric filenames (1.png, 2.png, etc.) from the profile picture upload functionality, an attacker can enumerate and access any user's profile picture or other uploaded files.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+            "CWE-22: Path Traversal"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -127,49 +128,50 @@
       }
     },
     {
-      "check_id": "python.security.hardcoded-credentials",
+      "check_id": "python.security.credentials.hardcoded-secret",
       "path": "server/config.py",
       "start": {
         "line": 7,
         "col": 5,
-        "offset": 150
+        "offset": 95
       },
       "end": {
         "line": 7,
-        "col": 60,
-        "offset": 205
-      },
-      "extra": {
-        "message": "A hardcoded secret key is embedded in the source code: SECRET_KEY = \"just_another_secret\". This secret should be stored in environment variables or a secure configuration file, not in the source code. If this code is version controlled or exposed, the secret is compromised.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-798: Use of Hard-Coded Credentials"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.insecure-config.httponly-flag",
-      "path": "server/config.py",
-      "start": {
-        "line": 6,
-        "col": 5,
-        "offset": 100
-      },
-      "end": {
-        "line": 6,
-        "col": 45,
+        "col": 50,
         "offset": 140
       },
       "extra": {
-        "message": "The SESSION_COOKIE_HTTPONLY flag is set to False. This allows JavaScript to access session cookies, increasing the risk of session hijacking via Cross-Site Scripting (XSS) attacks. The HttpOnly flag should be set to True to prevent JavaScript from accessing the session cookie.",
+        "message": "The SECRET_KEY is hardcoded in plaintext as 'just_another_secret' in the configuration file. This key is used for JWT token generation and session management. Exposure of this key allows attackers to forge valid tokens and hijack user sessions.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-1004: Sensitive Cookie Without HttpOnly Flag"
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.weak-password-hash",
+      "path": "server/routes.py",
+      "start": {
+        "line": 403,
+        "col": 11,
+        "offset": 8550
+      },
+      "end": {
+        "line": 403,
+        "col": 65,
+        "offset": 8604
+      },
+      "extra": {
+        "message": "MD5 hashing is used for password storage via hashlib.md5(). MD5 is cryptographically broken and unsuitable for further use. Passwords hashed with MD5 can be rapidly cracked using rainbow tables and GPU-accelerated attacks. Use bcrypt, scrypt, or argon2 instead.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-326: Inadequate Encryption Strength",
+            "CWE-327: Use of Broken Cryptographic Algorithm"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -182,19 +184,19 @@
       "start": {
         "line": 5,
         "col": 5,
-        "offset": 80
+        "offset": 50
       },
       "end": {
         "line": 5,
         "col": 20,
-        "offset": 95
+        "offset": 65
       },
       "extra": {
-        "message": "Debug mode is enabled (DEBUG = True) in the configuration. When debug mode is enabled in Flask, sensitive information like stack traces, variable values, and file paths are exposed in error pages. This should be disabled in production environments.",
+        "message": "Flask DEBUG mode is enabled (DEBUG = True). In debug mode, the application exposes detailed error messages, full stack traces, and a Python interactive debugger accessible via the browser. This can leak sensitive information about the application structure and configuration.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-16: Configuration"
+            "CWE-16: Improper Verification of Authentication Credentials"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -202,23 +204,49 @@
       }
     },
     {
-      "check_id": "python.security.injection.sql-injection-dynamic",
-      "path": "server/api/v1/api_v1.py",
+      "check_id": "python.security.cookies.httponly-disabled",
+      "path": "server/config.py",
       "start": {
-        "line": 206,
-        "col": 200
+        "line": 6,
+        "col": 5,
+        "offset": 66
       },
       "end": {
-        "line": 207,
-        "col": 60,
-        "offset": 5300
+        "line": 6,
+        "col": 40,
+        "offset": 101
       },
       "extra": {
-        "message": "SQL query is constructed dynamically by concatenating column names from user-provided data without proper escaping: update_query = \"UPDATE users SET \" + \", \".join([f\"{key} = ?\" for key in updates.keys()]) + \" WHERE id = ?\". While values are parameterized, the column names come from the 'updates' dictionary which is derived from user input, allowing SQL injection through column name manipulation.",
-        "severity": "ERROR",
+        "message": "Session cookies are not marked as HttpOnly (SESSION_COOKIE_HTTPONLY = False). This allows JavaScript code (including injected XSS payloads) to access and steal the session cookie, enabling session hijacking attacks.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-89: SQL Injection"
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.bare-exception",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 96,
+        "col": 11,
+        "offset": 2550
+      },
+      "end": {
+        "line": 96,
+        "col": 18,
+        "offset": 2557
+      },
+      "extra": {
+        "message": "Bare 'except:' clause catches all exceptions including SystemExit and KeyboardInterrupt. In the context of JWT token validation, this masks security-relevant exceptions and can prevent proper error logging and detection of attacks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-391: Unchecked Error Condition"
           ],
           "confidence": "MEDIUM",
           "category": "security"
@@ -226,26 +254,26 @@
       }
     },
     {
-      "check_id": "python.security.authorization.insecure-direct-object-reference",
-      "path": "server/api/v1/api_v1.py",
+      "check_id": "python.security.information-disclosure.error-logging",
+      "path": "server/routes.py",
       "start": {
-        "line": 154,
-        "col": 9,
-        "offset": 3500
+        "line": 102,
+        "col": 12,
+        "offset": 3050
       },
       "end": {
-        "line": 170,
-        "col": 34,
-        "offset": 4800
+        "line": 102,
+        "col": 50,
+        "offset": 3088
       },
       "extra": {
-        "message": "The /api/v1/profile endpoint retrieves user profile information based on a user_id parameter without any authorization check. Any user can request the profile of any other user by providing their user_id, exposing sensitive information like email, country, role, permissions, and team. This is an Insecure Direct Object Reference (IDOR) vulnerability.",
-        "severity": "ERROR",
+        "message": "Exception details are printed to console via print(). Database error messages can reveal database schema information, field names, and constraint details that help attackers craft injection attacks or understand the application structure.",
+        "severity": "INFO",
         "metadata": {
           "cwe": [
-            "CWE-639: Authorization Bypass Through User-Controlled Key"
+            "CWE-209: Information Exposure Through an Error Message"
           ],
-          "confidence": "HIGH",
+          "confidence": "MEDIUM",
           "category": "security"
         }
       }
