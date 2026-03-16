@@ -261,11 +261,21 @@ def _run_openhands(
     )
 
     # Run the agent (async API)
+    def fake_user_response(state, encapsulate_solution=False, try_parse=None) -> str:
+        """Auto-respond to keep the agent going until it produces JSON."""
+        last_msg = state.get_last_agent_message()
+        if last_msg and last_msg.content:
+            content = last_msg.content
+            if '"check_id"' in content and '"path"' in content and '"cwe"' in content.lower():
+                return "/exit"
+        return "Continue your analysis. When done, output ONLY the JSON findings."
+
     async def _run() -> tuple[str | None, str]:
         state = await run_controller(
             config=config,
             initial_user_action=MessageAction(content=task),
             headless_mode=True,
+            fake_user_response_fn=fake_user_response,
         )
 
         # Extract output from the agent's last message
