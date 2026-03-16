@@ -316,127 +316,6 @@ def build_markdown(
     return "\n".join(lines)
 
 
-def build_internal_markdown(
-    repo_id: str,
-    commit_sha: str,
-    timestamp: str,
-    application_id: str,
-    ground_truth: dict,
-    scorecards: dict[str, ScoreCard],
-) -> str:
-    """Build an internal scorecard with clickable links to the findings platform."""
-    base_url = f"https://comply.kolegatestapps.com/applications/{application_id}/findings"
-    gt_meta = ground_truth
-    gt_findings = gt_meta["findings"]
-    vuln_count = sum(1 for f in gt_findings if f["is_vulnerable"])
-    fp_trap_count = sum(1 for f in gt_findings if not f["is_vulnerable"])
-
-    lines: list[str] = []
-    w = lines.append
-
-    w(f"# Internal Scorecard — {repo_id}")
-    w("")
-    w(f"**Commit:** `{commit_sha[:12]}`  ")
-    w(f"**Generated:** {timestamp}  ")
-    w(f"**Ground Truth:** {vuln_count} vulnerabilities, {fp_trap_count} false-positive traps  ")
-    w(f"**Application:** [{application_id}](https://comply.kolegatestapps.com/applications/{application_id})")
-    w("")
-
-    for slug, card in scorecards.items():
-        w("---")
-        w("")
-        w(f"## {slug} — F2 Score: {card.f2_score:.1f} / 100")
-        w("")
-        w(f"| TP | FP | FN | TN | Precision | Recall | F1 |")
-        w(f"|---:|---:|---:|---:|----------:|-------:|---:|")
-        w(f"| {card.tp} | {card.fp} | {card.fn} | {card.tn} | {card.precision:.1%} | {card.recall:.1%} | {card.f1:.3f} |")
-        w("")
-
-        # Group details by classification
-        tp_items = [d for d in card.details if d.classification == "TP"]
-        fp_items = [d for d in card.details if d.classification == "FP"]
-        fn_items = [d for d in card.details if d.classification == "FN"]
-        tn_items = [d for d in card.details if d.classification == "TN"]
-
-        # True Positives
-        if tp_items:
-            w(f"### True Positives ({len(tp_items)})")
-            w("")
-            w("Scanner correctly identified these real vulnerabilities.")
-            w("")
-            for d in tp_items:
-                f = d.scanner_finding
-                gt = d.ground_truth_entry
-                assert f is not None
-                line_str = f":L{f.line}" if f.line else ""
-                gt_desc = ""
-                if gt:
-                    gt_desc = f" — {gt.get('vulnerability_class', '?')}"
-                    evidence = gt.get("evidence", {}).get("description", "")
-                    if evidence:
-                        gt_desc += f": {evidence}"
-                if f.finding_id:
-                    link = f"[{f.cwe} on {f.file}{line_str}]({base_url}/{f.finding_id})"
-                else:
-                    link = f"`{f.cwe}` on `{f.file}`{line_str}"
-                w(f"- \u2705 {link} \u2192 **{d.ground_truth_id}**{gt_desc}")
-            w("")
-
-        # False Positives
-        if fp_items:
-            w(f"### False Positives ({len(fp_items)})")
-            w("")
-            w("Scanner flagged these but they are not real vulnerabilities. Review and dismiss.")
-            w("")
-            for d in fp_items:
-                f = d.scanner_finding
-                assert f is not None
-                line_str = f":L{f.line}" if f.line else ""
-                if f.finding_id:
-                    link = f"[{f.cwe} on {f.file}{line_str}]({base_url}/{f.finding_id})"
-                else:
-                    link = f"`{f.cwe}` on `{f.file}`{line_str}"
-                if d.ground_truth_entry:
-                    reason = d.ground_truth_entry.get("evidence", {}).get("description", "matched FP trap")
-                    w(f"- \u274c {link} \u2014 {reason}")
-                else:
-                    # Summarise the scanner's own message (first line)
-                    msg = (f.message or "").split("\n")[0]
-                    w(f"- \u274c {link} \u2014 no GT entry. Scanner says: {msg}")
-            w("")
-
-        # False Negatives
-        if fn_items:
-            w(f"### False Negatives ({len(fn_items)})")
-            w("")
-            w("Scanner missed these real vulnerabilities.")
-            w("")
-            for d in fn_items:
-                gt = d.ground_truth_entry
-                assert gt is not None
-                loc = gt.get("location", {})
-                line_str = f":L{loc.get('start_line', '?')}"
-                evidence = gt.get("evidence", {}).get("description", "")
-                w(f"- \u26a0\ufe0f **{d.ground_truth_id}** `{gt.get('primary_cwe', '?')}` on `{gt.get('file', '?')}`{line_str} ({gt.get('severity', '?')}) \u2014 {evidence}")
-            w("")
-
-        # True Negatives
-        if tn_items:
-            w(f"### True Negatives ({len(tn_items)})")
-            w("")
-            w("Scanner correctly ignored these false-positive traps.")
-            w("")
-            for d in tn_items:
-                gt = d.ground_truth_entry
-                assert gt is not None
-                loc = gt.get("location", {})
-                line_str = f":L{loc.get('start_line', '?')}"
-                evidence = gt.get("evidence", {}).get("description", "")
-                w(f"- \u26aa **{d.ground_truth_id}** `{gt.get('primary_cwe', '?')}` on `{gt.get('file', '?')}`{line_str} \u2014 {evidence}")
-            w("")
-
-    return "\n".join(lines)
-
 
 def build_report(
     repo_id: str,
@@ -503,12 +382,6 @@ def main() -> int:
         action="store_true",
         help="Score each result file independently and report mean ± stddev",
     )
-    parser.add_argument(
-        "--application-id",
-        nargs="*",
-        default=None,
-        help="Application ID(s) for internal scorecards — one per run file, in sorted order",
-    )
     args = parser.parse_args()
 
     # Load ground truth
@@ -545,9 +418,6 @@ def main() -> int:
     timestamp = datetime.now(timezone.utc).isoformat()
     all_scorecards: dict[str, ScoreCard] = {}
     multirun_cards: dict[str, list[ScoreCard]] = {}
-    # Map (scanner_slug, run_stem) -> ScoreCard for per-run internal scorecards
-    per_run_cards: dict[str, list[tuple[str, ScoreCard]]] = {}
-
     for slug in scanner_slugs:
         scanner_dir = scan_dir / slug
         result_files = discover_result_files(scanner_dir)
@@ -575,7 +445,6 @@ def main() -> int:
                 run_entries.append((rf.stem, card))
 
             multirun_cards[slug] = run_cards
-            per_run_cards[slug] = run_entries
 
             # Use the mean as the "representative" scorecard (summary only, no details)
             avg_card = ScoreCard(
@@ -607,7 +476,6 @@ def main() -> int:
                 repo_id, slug, timestamp, results, cwe_families
             )
             all_scorecards[slug] = card
-            per_run_cards[slug] = [(rf.stem, card)]
 
     if not all_scorecards:
         print("Error: No results to score.", file=sys.stderr)
@@ -643,27 +511,6 @@ def main() -> int:
 
     print(f"Report written to: {report_path}")
     print(f"Markdown written to: {md_path}")
-
-    # Write internal scorecards with platform links — one per run
-    if args.application_id:
-        for slug, run_entries in per_run_cards.items():
-            if len(args.application_id) != len(run_entries):
-                print(
-                    f"Error: {len(args.application_id)} application-id(s) provided "
-                    f"but {slug} has {len(run_entries)} run(s). "
-                    f"Provide one application-id per run file, in sorted order.",
-                    file=sys.stderr,
-                )
-                return 1
-
-            for app_id, (run_stem, card) in zip(args.application_id, run_entries):
-                internal_md = build_internal_markdown(
-                    repo_id, commit_sha, timestamp, app_id,
-                    ground_truth, {slug: card},
-                )
-                internal_path = report_dir / f"internal_scorecard-{run_stem}.md"
-                internal_path.write_text(internal_md)
-                print(f"Internal scorecard: {internal_path}")
 
     return 0
 
