@@ -2,277 +2,325 @@
   "version": "1.0.0",
   "results": [
     {
-      "check_id": "python.security.injection.ssti",
-      "path": "app/app.py",
-      "start": {
-        "line": 112,
-        "col": 5,
-        "offset": 3585
-      },
-      "end": {
-        "line": 114,
-        "col": 85,
-        "offset": 3765
-      },
-      "extra": {
-        "message": "Server-Side Template Injection (SSTI) in 404 error handler. The request.url is directly interpolated into a template string via Python % formatting on line 112. The template is then rendered with render_template_string() on line 114, which processes Jinja2 syntax. Additionally, dangerous builtins (dir, help, locals) are passed to the template context, allowing an attacker to access these functions and execute arbitrary code. An attacker can craft a malicious URL with Jinja2 payloads like {{7*7}} or {{__import__('os').system('command')}} to achieve RCE.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-1336: Improper Neutralization of Special Elements used in a Templating Engine"
-          ],
-          "confidence": "HIGH",
-          "category": "injection"
-        }
-      }
-    },
-    {
       "check_id": "python.security.injection.sql-injection",
       "path": "app/app.py",
       "start": {
         "line": 261,
-        "col": 37,
-        "offset": 7280
+        "col": 31,
+        "offset": 6800
       },
       "end": {
-        "line": 265,
-        "col": 70,
-        "offset": 7420
+        "line": 261,
+        "col": 80,
+        "offset": 6849
       },
       "extra": {
-        "message": "SQL Injection in /search endpoint. User-supplied 'search' parameter from the JSON request body is directly interpolated into a SQL query string via Python % string formatting on line 261: \"SELECT first_name, last_name, username FROM customer WHERE username = '%s'\" % search_term. The raw SQL query is then executed directly via db.engine.execute() on line 265 without any parameterization or sanitization. An attacker can inject SQL metacharacters (e.g., ' OR '1'='1) to bypass the WHERE clause and extract all customer records.",
+        "message": "User input from request.json['search'] is concatenated directly into SQL query string without parameterization. This allows SQL injection attacks.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
             "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
           ],
           "confidence": "HIGH",
-          "category": "injection"
+          "category": "security"
         }
       }
     },
     {
-      "check_id": "python.security.injection.ssti-error",
+      "check_id": "python.security.injection.server-side-template-injection",
       "path": "app/app.py",
       "start": {
-        "line": 271,
-        "col": 42,
-        "offset": 7460
+        "line": 114,
+        "col": 12,
+        "offset": 3200
       },
       "end": {
-        "line": 281,
-        "col": 75,
-        "offset": 7825
+        "line": 114,
+        "col": 90,
+        "offset": 3278
       },
       "extra": {
-        "message": "Server-Side Template Injection (SSTI) in error handler of /search endpoint. When a SQL query exception occurs, the exception message str(e) is interpolated into a template string via % formatting on line 280, then rendered with render_template_string() on line 281. The template context includes dangerous builtins (dir, help, locals). An attacker can trigger a SQL error by submitting a malformed SQL injection payload that causes an exception, then leverage SSTI in the error message to execute arbitrary code.",
+        "message": "User-controlled input from request.url is rendered in template string via render_template_string(). This allows Server-Side Template Injection (SSTI) attacks with full code execution potential.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-1336: Improper Neutralization of Special Elements used in a Templating Engine"
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
           ],
           "confidence": "HIGH",
-          "category": "injection"
+          "category": "security"
         }
       }
     },
     {
-      "check_id": "python.security.insecure-deserialization.yaml",
+      "check_id": "python.security.injection.server-side-template-injection",
+      "path": "app/app.py",
+      "start": {
+        "line": 281,
+        "col": 12,
+        "offset": 7500
+      },
+      "end": {
+        "line": 281,
+        "col": 85,
+        "offset": 7573
+      },
+      "extra": {
+        "message": "Exception error message (user-influenced through SQL injection) is rendered in template string via render_template_string(). This allows Server-Side Template Injection (SSTI) attacks.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authentication.insecure-jwt-verification",
+      "path": "app/app.py",
+      "start": {
+        "line": 97,
+        "col": 50
+      },
+      "end": {
+        "line": 97,
+        "col": 50
+      },
+      "extra": {
+        "message": "JWT token is decoded with verify=False parameter, which disables signature verification. Any token will be accepted, bypassing authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.deserialization.unsafe-yaml-load",
       "path": "app/app.py",
       "start": {
         "line": 329,
-        "col": 22,
-        "offset": 8590
+        "col": 15,
+        "offset": 7850
       },
       "end": {
         "line": 329,
-        "col": 36,
-        "offset": 8604
+        "col": 30,
+        "offset": 7865
       },
       "extra": {
-        "message": "Insecure YAML deserialization via yaml.load() without a safe Loader on line 329. The file content is read from a user-uploaded file and passed directly to yaml.load(y). PyYAML's default Loader can instantiate arbitrary Python objects. An attacker can upload a YAML file containing directives like '!!python/object/apply:os.system' to execute arbitrary shell commands. Should use yaml.safe_load() instead.",
+        "message": "yaml.load() is called without a safe loader. This allows arbitrary Python code execution through deserialization of untrusted YAML input.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
             "CWE-502: Deserialization of Untrusted Data"
           ],
           "confidence": "HIGH",
-          "category": "injection"
+          "category": "security"
         }
       }
     },
     {
-      "check_id": "python.security.xxe",
+      "check_id": "python.security.access-control.broken-object-level-authorization",
       "path": "app/app.py",
       "start": {
-        "line": 303,
-        "col": 22,
-        "offset": 7145
+        "line": 221,
+        "col": 1,
+        "offset": 5800
       },
       "end": {
-        "line": 303,
-        "col": 40,
-        "offset": 7163
+        "line": 241,
+        "col": 47,
+        "offset": 6100
       },
       "extra": {
-        "message": "XXE (XML External Entity) vulnerability via untrusted DOCX file upload on /xxe_uploader endpoint. User-uploaded .docx files are parsed with python-docx's Document() constructor on line 303. DOCX files are ZIP archives containing XML. With vulnerable versions of python-docx (0.8.5) and lxml (4.2.1), maliciously crafted OOXML documents containing external entity declarations (e.g., <!ENTITY xxe SYSTEM \"file:///etc/passwd\">) can be processed. An attacker can read local files, perform SSRF attacks, or cause denial of service.",
+        "message": "The /get/<cust_id> endpoint accepts a customer ID from the URL but performs no authorization checks to verify the authenticated user is permitted to access that customer's data. This allows IDOR attacks where any authenticated user can access any customer's information.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-611: Improper Restriction of XML External Entity Reference"
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
           ],
           "confidence": "HIGH",
-          "category": "injection"
+          "category": "security"
         }
       }
     },
     {
-      "check_id": "python.security.hardcoded-credentials",
+      "check_id": "python.security.access-control.broken-object-level-authorization",
+      "path": "app/app.py",
+      "start": {
+        "line": 196,
+        "col": 1,
+        "offset": 5200
+      },
+      "end": {
+        "line": 218,
+        "col": 51,
+        "offset": 5800
+      },
+      "extra": {
+        "message": "The /fetch/customer endpoint accepts a customer ID from request JSON but performs no authorization checks. Any authenticated user can fetch any customer's sensitive data including credit card numbers (ccn field).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.weak-cryptography.hardcoded-secrets",
       "path": "app/app.py",
       "start": {
         "line": 26,
-        "col": 38,
-        "offset": 738
+        "col": 39,
+        "offset": 700
       },
       "end": {
         "line": 28,
-        "col": 52,
-        "offset": 855
+        "col": 46,
+        "offset": 900
       },
       "extra": {
-        "message": "Hardcoded credentials and secrets in source code. Multiple hardcoded secret keys are defined as Flask configuration on lines 26-28: 'secret', 'am0r3C0mpl3xK3y', and 'F12Zr47j\\3yX R~X@H!jmM]Lwf/,?KT'. These are used for JWT signing and session encryption. Hardcoded secrets can be extracted from source code repositories, Docker images, or binaries, compromising the security of all authenticated sessions and signed tokens.",
-        "severity": "WARNING",
+        "message": "Secret keys for HMAC and session security are hardcoded directly in source code, making them exposed in version control and to anyone with code access.",
+        "severity": "ERROR",
         "metadata": {
           "cwe": [
             "CWE-798: Use of Hard-Coded Credentials"
           ],
           "confidence": "HIGH",
-          "category": "security_misconfiguration"
+          "category": "security"
         }
       }
     },
     {
-      "check_id": "python.security.hardcoded-credentials-db",
+      "check_id": "python.security.weak-cryptography.plaintext-password-storage",
       "path": "app/app.py",
       "start": {
-        "line": 62,
+        "line": 63,
         "col": 24,
-        "offset": 1725
+        "offset": 1600
       },
       "end": {
         "line": 63,
-        "col": 24,
-        "offset": 1787
+        "col": 35,
+        "offset": 1611
       },
       "extra": {
-        "message": "Hardcoded default credentials for admin user. The setup_users() function creates a default admin user with hardcoded username 'admin' and password 'admin123' (lines 62-63). These credentials are present in the source code and database initialization, allowing any attacker with code access to authenticate as the admin user.",
-        "severity": "WARNING",
+        "message": "Admin password 'admin123' is stored in plaintext in the database initialization code.",
+        "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-798: Use of Hard-Coded Credentials"
+            "CWE-256: Plaintext Storage of a Password"
           ],
           "confidence": "HIGH",
-          "category": "security_misconfiguration"
+          "category": "security"
         }
       }
     },
     {
-      "check_id": "python.security.weak-jwt-verification",
+      "check_id": "python.security.weak-cryptography.base64-not-encryption",
       "path": "app/app.py",
       "start": {
-        "line": 96,
-        "col": 5,
-        "offset": 2557
+        "line": 74,
+        "col": 28,
+        "offset": 2000
       },
       "end": {
-        "line": 99,
-        "col": 18,
-        "offset": 2635
+        "line": 74,
+        "col": 62,
+        "offset": 2034
       },
       "extra": {
-        "message": "Insecure JWT verification function. The insecure_verify() function on lines 96-99 decodes JWT tokens with verify=False, completely bypassing signature verification. This allows an attacker to forge arbitrary JWT tokens without knowing the secret key. Although this function is defined, its presence in the codebase indicates a security anti-pattern and could be accidentally used in protected endpoints.",
-        "severity": "WARNING",
+        "message": "Customer passwords are encoded with base64(random_bytes) instead of being hashed. Base64 is encoding, not encryption, and provides no protection against password discovery.",
+        "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-347: Improper Verification of Cryptographic Signature"
+            "CWE-256: Plaintext Storage of a Password"
           ],
           "confidence": "HIGH",
-          "category": "cryptography"
+          "category": "security"
         }
       }
     },
     {
-      "check_id": "python.security.jwt-verification-misuse",
+      "check_id": "python.security.path-traversal.insecure-file-upload",
       "path": "app/app.py",
       "start": {
-        "line": 227,
-        "col": 27,
-        "offset": 6110
+        "line": 296,
+        "col": 21,
+        "offset": 6950
       },
       "end": {
-        "line": 227,
-        "col": 47,
-        "offset": 6130
+        "line": 300,
+        "col": 28,
+        "offset": 7100
       },
       "extra": {
-        "message": "Use of insecure JWT verification in /get/<cust_id> endpoint. The /get/ endpoint on line 227 uses insecure_verify(token) which disables JWT signature verification (verify=False). This allows an attacker to provide a forged or modified JWT token to access customer records without proper authentication. The endpoint should use the secure verify_jwt() function instead.",
+        "message": "File upload path is constructed by concatenating user-supplied filename with a directory path. Although secure_filename() is used, the resulting file_path could still be vulnerable if an attacker provides a crafted filename.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-347: Improper Verification of Cryptographic Signature"
-          ],
-          "confidence": "HIGH",
-          "category": "authentication"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.information-disclosure-xss",
-      "path": "app/app.py",
-      "start": {
-        "line": 308,
-        "col": 46,
-        "offset": 7635
-      },
-      "end": {
-        "line": 308,
-        "col": 60,
-        "offset": 7649
-      },
-      "extra": {
-        "message": "Stored/Reflected XSS vulnerability in /xxe_uploader endpoint. The para.text variable (extracted from DOCX file paragraphs) is passed to render_template() on line 308 and displayed in the Jinja2 template view.html on line 9 without any escaping: {{name}}. If an attacker uploads a DOCX file with malicious HTML/JavaScript in the paragraph text, it will be executed in the victim's browser context.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
           ],
           "confidence": "MEDIUM",
-          "category": "injection"
+          "category": "security"
         }
       }
     },
     {
-      "check_id": "python.security.information-disclosure-yaml-xss",
+      "check_id": "python.security.path-traversal.insecure-file-upload",
       "path": "app/app.py",
       "start": {
-        "line": 331,
-        "col": 46,
-        "offset": 8705
+        "line": 320,
+        "col": 21,
+        "offset": 7350
       },
       "end": {
-        "line": 331,
-        "col": 66,
-        "offset": 8725
+        "line": 324,
+        "col": 28,
+        "offset": 7500
       },
       "extra": {
-        "message": "Stored/Reflected XSS vulnerability in /yaml_hammer endpoint. The ydata dictionary is JSON-serialized and passed to render_template() on line 331, then displayed in view.html. If a user uploads a YAML file with XSS payloads in string values (e.g., '<script>alert(1)</script>'), the json.dumps() will not escape HTML entities, and Jinja2's default auto-escaping may not protect depending on template configuration.",
-        "severity": "INFO",
+        "message": "YAML file upload path is constructed by concatenating user-supplied filename with a directory path. Although secure_filename() is used, combined with unsafe yaml.load(), this poses a critical security risk.",
+        "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
           ],
           "confidence": "MEDIUM",
-          "category": "injection"
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.information-disclosure.error-message-exposure",
+      "path": "app/app.py",
+      "start": {
+        "line": 271,
+        "col": 31,
+        "offset": 7400
+      },
+      "end": {
+        "line": 280,
+        "col": 51,
+        "offset": 7700
+      },
+      "extra": {
+        "message": "Detailed exception error messages are displayed to users in rendered templates, potentially exposing sensitive information about the application's internal structure.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Information Exposure Through an Error Message"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
         }
       }
     }
