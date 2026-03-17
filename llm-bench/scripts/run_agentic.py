@@ -37,7 +37,7 @@ sys.path.insert(0, str(LLM_BENCH_DIR))
 
 import yaml
 
-from harness.cost_calculator import estimate_total_cost
+from harness.cost_calculator import calculate_cost, estimate_total_cost
 from harness.metrics_collector import RunMetrics, save_metrics
 from harness.output_validator import validate_output, save_validated_output
 from harness.prompt_builder import build_prompt, load_cwe_families
@@ -214,6 +214,15 @@ def run_one_agentic(
             total_cache_read += cache.get("read", 0)
             total_cache_write += cache.get("write", 0)
 
+    # If OpenCode didn't report cost (custom providers), calculate from tokens
+    if total_cost == 0 and (total_input_tokens > 0 or total_output_tokens > 0):
+        pricing = model_config["pricing"]
+        cost_est = calculate_cost(
+            total_input_tokens, total_output_tokens,
+            pricing["input_per_1m"], pricing["output_per_1m"],
+        )
+        total_cost = cost_est.total_cost_usd
+
     # Validate output — extract JSON from the agent's response
     validation = validate_output(raw_output)
 
@@ -299,19 +308,18 @@ def main() -> int:
         print(f"Note: Agentic runs use ~2-5x more tokens than single-turn\n")
         return 0
 
-    # Load API key
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        env_path = PROJECT_ROOT / ".env"
-        if env_path.exists():
-            for line in env_path.read_text().splitlines():
-                if line.startswith("ANTHROPIC_API_KEY="):
-                    os.environ["ANTHROPIC_API_KEY"] = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    logger.info("Loaded API key from %s", env_path)
-                    break
-
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        logger.error("ANTHROPIC_API_KEY not found. Set it or put it in .env")
-        return 1
+    # Load API keys from .env
+    env_path = PROJECT_ROOT / ".env"
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            val = val.strip().strip('"').strip("'")
+            if key not in os.environ:
+                os.environ[key] = val
+        logger.info("Loaded env from %s", env_path)
 
     # Build system prompt
     cwe_families = load_cwe_families()
