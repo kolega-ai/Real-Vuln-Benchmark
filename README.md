@@ -2,7 +2,20 @@
 
 An open benchmark for evaluating security scanners against ground-truth vulnerabilities in real-world code. Primary metric is **F2 Score** (0–100, recall-weighted).
 
-Application security scanners routinely fail to catch basic vulnerabilities — missing authentication, broken access control, IDOR — in real-world code. Existing benchmarks use synthetic test cases (OWASP Benchmark), vendor-controlled methodology (DryRun, ZeroPath, Cycode/Bearer), or lack scoring tooling (NIST Juliet, CVEFixes). RealVuln provides machine-readable ground truth with CWE mappings, an automated scoring engine, and is designed for community contribution.
+## Problem & Purpose
+
+Application security scanners routinely fail to catch basic vulnerabilities — missing authentication, broken access control, IDOR — in real-world code. No credible, open benchmark exists to measure this:
+
+- **OWASP Benchmark** uses synthetic single-file test cases. Scanners can be tuned to ace it without improving real-world detection.
+- **Vendor self-benchmarks** (DryRun, ZeroPath, Cycode/Bearer) use small samples, vendor-controlled methodology, and no reusable infrastructure.
+- **Academic benchmarks** (NIST Juliet, NIST SARD, CVEFixes, VulBench) lack scoring tooling, have inconsistent labelling, or target ML evaluation rather than scanner comparison.
+- **Academic papers** produce one-off results locked in PDFs that nobody reproduces.
+
+**RealVuln** is an open, extensible benchmark that uses real-world code, provides machine-readable ground truth with CWE mappings, includes an automated scoring engine, and is designed for community contribution. We launch as **RealVuln Beta** — publishing the framework, initial ground truth, and our results as an invitation for the security community to contribute, validate, and extend.
+
+Full story: [Why We Built Our Own Security Benchmark](https://kolega.dev/blog/why-we-built-our-own-security-benchmark)
+
+---
 
 ## Current State
 
@@ -312,3 +325,9 @@ This would be a publishable contribution independent of who wins the benchmark. 
 - CI/CD pipeline (GitHub Actions for validation, testing, linting)
 - CLI packaging (`pip install realvuln`)
 - Real scanner integrations (Semgrep, Bandit, SonarQube, AI-native scanners)
+
+---
+
+## Further Reading
+
+- Blog post: [Why We Built Our Own Security Benchmark](https://kolega.dev/blog/why-we-built-our-own-security-benchmark)
