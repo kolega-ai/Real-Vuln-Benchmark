@@ -24,6 +24,7 @@ class ValidationResult:
     findings_count: int = 0
     dropped_count: int = 0
     repaired_count: int = 0
+    llm_json_repair: bool = False  # True if GPT was used to fix JSON
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -184,6 +185,42 @@ def _validate_finding(finding: dict, index: int) -> tuple[dict | None, list[str]
     return repaired, errors, warnings
 
 
+def _llm_repair_json(broken_json: str) -> str | None:
+    """Use GPT-5-4-mini to repair malformed JSON.
+
+    Returns the repaired JSON string, or None if repair failed.
+    """
+    import os
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    try:
+        import openai
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-5.4-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a JSON repair tool. Fix the malformed JSON below so it parses correctly. "
+                        "Only output the repaired JSON — no explanation, no markdown fences. "
+                        "Common issues: trailing commas, single quotes instead of double quotes, "
+                        "unescaped characters in strings, missing closing braces."
+                    ),
+                },
+                {"role": "user", "content": broken_json},
+            ],
+            max_completion_tokens=16_000,
+            temperature=0,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return None
+
+
 def validate_output(raw_text: str) -> ValidationResult:
     """Validate and repair LLM output into Semgrep-compatible JSON.
 
@@ -201,14 +238,37 @@ def validate_output(raw_text: str) -> ValidationResult:
             errors=["Could not extract JSON from LLM output"],
         )
 
+    llm_repaired = False
     try:
         data = json.loads(json_str)
     except json.JSONDecodeError as e:
-        return ValidationResult(
-            valid=False,
-            data=None,
-            errors=[f"Invalid JSON: {e}"],
-        )
+        # Attempt LLM repair
+        repaired_str = _llm_repair_json(json_str)
+        if repaired_str:
+            # Extract JSON again in case GPT wrapped it in fences
+            repaired_json = extract_json_from_text(repaired_str)
+            if repaired_json:
+                try:
+                    data = json.loads(repaired_json)
+                    llm_repaired = True
+                except json.JSONDecodeError:
+                    return ValidationResult(
+                        valid=False,
+                        data=None,
+                        errors=[f"Invalid JSON (LLM repair also failed): {e}"],
+                    )
+            else:
+                return ValidationResult(
+                    valid=False,
+                    data=None,
+                    errors=[f"Invalid JSON (LLM repair returned no JSON): {e}"],
+                )
+        else:
+            return ValidationResult(
+                valid=False,
+                data=None,
+                errors=[f"Invalid JSON (no LLM repair available): {e}"],
+            )
 
     if not isinstance(data, dict):
         return ValidationResult(
@@ -267,12 +327,16 @@ def validate_output(raw_text: str) -> ValidationResult:
 
     data["results"] = validated_results
 
+    if llm_repaired:
+        all_warnings.append("JSON was repaired by gpt-5.4-mini")
+
     return ValidationResult(
         valid=len(validated_results) > 0 or len(results) == 0,
         data=data,
         findings_count=len(validated_results),
         dropped_count=dropped,
         repaired_count=repaired,
+        llm_json_repair=llm_repaired,
         errors=all_errors,
         warnings=all_warnings,
     )

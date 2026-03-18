@@ -255,6 +255,7 @@ def run_one_agentic(
         cost_usd=total_cost,
         wall_clock_seconds=elapsed,
         exit_status="success",
+        llm_json_repair=validation.llm_json_repair,
     )
     save_metrics(metrics, str(metrics_path))
 
@@ -263,6 +264,7 @@ def run_one_agentic(
         "findings": validation.findings_count,
         "dropped": validation.dropped_count,
         "repaired": validation.repaired_count,
+        "llm_json_repair": validation.llm_json_repair,
         "cost": total_cost,
         "elapsed": elapsed,
     }
