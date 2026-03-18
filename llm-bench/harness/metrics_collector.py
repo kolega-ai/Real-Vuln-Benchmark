@@ -44,6 +44,9 @@ class RunMetrics:
     exit_status: str = ""  # "success", "timeout", "error", "max_iterations"
     error_message: str = ""
 
+    # JSON repair tracking
+    llm_json_repair: bool = False
+
     def to_dict(self) -> dict:
         """JSON-serializable dict."""
         return asdict(self)
