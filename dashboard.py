@@ -130,6 +130,43 @@ def _safe_div(n: float, d: float) -> float:
     return n / d if d > 0 else 0.0
 
 
+def compute_scanner_costs(scan_dir: Path, scanners: list[str]) -> dict[str, dict]:
+    """Collect cost data from .metrics.json files per scanner.
+
+    Returns {scanner: {"total_cost": float, "successful_runs": int, "cost_per_run": float}}.
+    """
+    from collections import defaultdict
+    costs: dict[str, dict] = defaultdict(lambda: {"total_cost": 0.0, "successful_runs": 0})
+
+    for repo_dir in scan_dir.iterdir():
+        if not repo_dir.is_dir():
+            continue
+        for scanner_dir in repo_dir.iterdir():
+            if not scanner_dir.is_dir() or scanner_dir.name not in scanners:
+                continue
+            for mf in scanner_dir.glob("run-*.metrics.json"):
+                try:
+                    with open(mf) as f:
+                        d = json.load(f)
+                    cost = d.get("cost_usd", 0)
+                    costs[scanner_dir.name]["total_cost"] += cost
+                    if d.get("exit_status") == "success":
+                        costs[scanner_dir.name]["successful_runs"] += 1
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+    result = {}
+    for scanner in scanners:
+        c = costs.get(scanner, {"total_cost": 0.0, "successful_runs": 0})
+        runs = c["successful_runs"]
+        result[scanner] = {
+            "total_cost": round(c["total_cost"], 4),
+            "successful_runs": runs,
+            "cost_per_run": round(c["total_cost"] / runs, 4) if runs > 0 else 0,
+        }
+    return result
+
+
 def compute_aggregates(
     grid: dict[str, dict[str, dict | None]],
     scanners: list[str],
@@ -736,6 +773,8 @@ def build_html(
         sa = aggregates.get(scanner, {})
         micro = sa.get("micro", {})
         strict = sa.get("strict_micro", {})
+        cost_info = sa.get("cost", {})
+        cost_per_run = cost_info.get("cost_per_run", 0)
         chart_data.append({
             "slug": scanner,
             "label": display_name(scanner),
@@ -750,6 +789,8 @@ def build_html(
             "strict_f2": strict.get("f2_score", 0),
             "strict_recall": round(strict.get("recall", 0) * 100, 1),
             "strict_precision": round(strict.get("precision", 0) * 100, 1),
+            "cost_per_run": cost_per_run,
+            "total_cost": cost_info.get("total_cost", 0),
         })
     chart_data.sort(key=lambda x: x["f2"], reverse=True)
 
@@ -837,7 +878,9 @@ def build_html(
         w(f'  <div class="lb-name">{d["label"]} <span style="color:var(--text-tertiary);font-size:11px">{repos_label} repos</span></div>')
         w(f'  <div class="lb-bar-wrap"><div class="lb-bar-track"><div class="lb-bar-fill" style="width:{d["f2"]}%;background:{bar_gradient}"></div></div></div>')
         w(f'  <div class="lb-score" style="color:{score_color}">{d["f2"]:.1f}</div>')
-        w(f'  <div class="lb-meta"><strong>{d["recall"]:.1f}%</strong> recall &middot; <strong>{d["precision"]:.1f}%</strong> prec</div>')
+        cost_str = f'${d["cost_per_run"]:.2f}/run' if d["cost_per_run"] > 0 else ''
+        w(f'  <div class="lb-meta"><strong>{d["recall"]:.1f}%</strong> recall &middot; <strong>{d["precision"]:.1f}%</strong> prec'
+          f'{" &middot; " + cost_str if cost_str else ""}</div>')
         w(f'  <div class="lb-arrow">&rsaquo;</div>')
         w(f'</a>')
     w('</div>')
@@ -1521,6 +1564,11 @@ def main() -> int:
     # Score everything
     grid = score_all(repos, scanners, gt_dir, scan_dir, cwe_families)
     aggregates = compute_aggregates(grid, scanners, gt_dir)
+    scanner_costs = compute_scanner_costs(scan_dir, scanners)
+
+    # Merge costs into aggregates
+    for scanner in scanners:
+        aggregates.setdefault(scanner, {})["cost"] = scanner_costs.get(scanner, {})
 
     # Filter scanners by minimum repo count
     if args.min_repos > 0:
