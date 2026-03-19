@@ -909,7 +909,8 @@ def build_html(
         if d["cost_per_run"] > 0:
             cost_parts.append(f'${d["cost_per_run"]:.2f}/repo')
         if d["cost_per_100_loc"] > 0:
-            cost_parts.append(f'${d["cost_per_100_loc"]:.3f}/100 LOC')
+            est_per_100k = round(d["cost_per_100_loc"] * 1000)
+            cost_parts.append(f'~${est_per_100k:,}/100k LOC')
         cost_str = " &middot; ".join(cost_parts)
         w(f'  <div class="lb-meta"><strong>{d["recall"]:.1f}%</strong> recall &middot; <strong>{d["precision"]:.1f}%</strong> prec'
           f'{" &middot; " + cost_str if cost_str else ""}</div>')
