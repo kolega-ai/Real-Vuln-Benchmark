@@ -133,31 +133,66 @@ def _safe_div(n: float, d: float) -> float:
 def compute_aggregates(
     grid: dict[str, dict[str, dict | None]],
     scanners: list[str],
+    gt_dir: Path | None = None,
 ) -> dict[str, dict]:
-    """Compute micro-avg and macro-avg per scanner.
+    """Compute micro-avg and macro-avg per scanner in both optimistic and strict modes.
 
-    Returns {scanner: {"micro": {...}, "macro": {...}, "repos_scored": int}}.
+    Optimistic: only score repos where the scanner produced results.
+    Strict: failed repos count as 0 TP / all vulns FN (penalizes timeouts/failures).
+
+    Returns {scanner: {"micro": {...}, "macro": {...}, "repos_scored": int,
+                        "strict_micro": {...}, "strict_repos_total": int}}.
     """
+    # Pre-load vuln counts per repo for strict mode
+    repo_vuln_counts: dict[str, int] = {}
+    repo_trap_counts: dict[str, int] = {}
+    if gt_dir:
+        for repo in grid:
+            gt_path = gt_dir / repo / "ground-truth.json"
+            if gt_path.exists():
+                with open(gt_path) as f:
+                    gt = json.load(f)
+                findings = gt.get("findings", [])
+                repo_vuln_counts[repo] = sum(1 for f in findings if f.get("is_vulnerable", True))
+                repo_trap_counts[repo] = sum(1 for f in findings if not f.get("is_vulnerable", True))
+
     agg: dict[str, dict] = {}
 
     for scanner in scanners:
+        # Optimistic mode
         total_tp = total_fp = total_fn = total_tn = 0
         f2_scores: list[float] = []
+        # Strict mode
+        strict_tp = strict_fp = strict_fn = strict_tn = 0
 
         for repo in grid:
             cell = grid[repo].get(scanner)
-            if cell is None:
-                continue
-            total_tp += cell["tp"]
-            total_fp += cell["fp"]
-            total_fn += cell["fn"]
-            total_tn += cell["tn"]
-            f2_scores.append(cell["f2_score"])
+            if cell is not None:
+                # Scored successfully — both modes use real results
+                total_tp += cell["tp"]
+                total_fp += cell["fp"]
+                total_fn += cell["fn"]
+                total_tn += cell["tn"]
+                f2_scores.append(cell["f2_score"])
+                strict_tp += cell["tp"]
+                strict_fp += cell["fp"]
+                strict_fn += cell["fn"]
+                strict_tn += cell["tn"]
+            else:
+                # Failed — strict mode counts all vulns as missed
+                strict_fn += repo_vuln_counts.get(repo, 0)
+                strict_tn += repo_trap_counts.get(repo, 0)
 
         micro_prec = _safe_div(total_tp, total_tp + total_fp)
         micro_rec = _safe_div(total_tp, total_tp + total_fn)
         micro_f2 = _safe_div(
             5.0 * micro_prec * micro_rec, 4.0 * micro_prec + micro_rec
+        )
+
+        strict_prec = _safe_div(strict_tp, strict_tp + strict_fp)
+        strict_rec = _safe_div(strict_tp, strict_tp + strict_fn)
+        strict_f2 = _safe_div(
+            5.0 * strict_prec * strict_rec, 4.0 * strict_prec + strict_rec
         )
 
         agg[scanner] = {
@@ -170,12 +205,22 @@ def compute_aggregates(
                 "recall": round(micro_rec, 4),
                 "f2_score": round(micro_f2 * 100, 1),
             },
+            "strict_micro": {
+                "tp": strict_tp,
+                "fp": strict_fp,
+                "fn": strict_fn,
+                "tn": strict_tn,
+                "precision": round(strict_prec, 4),
+                "recall": round(strict_rec, 4),
+                "f2_score": round(strict_f2 * 100, 1),
+            },
             "macro": {
                 "f2_score": round(
                     sum(f2_scores) / len(f2_scores), 1
                 ) if f2_scores else 0.0,
             },
             "repos_scored": len(f2_scores),
+            "repos_total": len(grid),
         }
 
     return agg
@@ -690,6 +735,7 @@ def build_html(
     for scanner in scanners:
         sa = aggregates.get(scanner, {})
         micro = sa.get("micro", {})
+        strict = sa.get("strict_micro", {})
         chart_data.append({
             "slug": scanner,
             "label": display_name(scanner),
@@ -700,6 +746,10 @@ def build_html(
             "fp": micro.get("fp", 0),
             "fn": micro.get("fn", 0),
             "repos": sa.get("repos_scored", 0),
+            "repos_total": sa.get("repos_total", 0),
+            "strict_f2": strict.get("f2_score", 0),
+            "strict_recall": round(strict.get("recall", 0) * 100, 1),
+            "strict_precision": round(strict.get("precision", 0) * 100, 1),
         })
     chart_data.sort(key=lambda x: x["f2"], reverse=True)
 
@@ -758,17 +808,33 @@ def build_html(
 <div style="color:var(--text-tertiary);font-size:13px;line-height:1.7;margin-top:10px;padding:14px 16px;background:var(--bg-secondary);border:1px solid var(--border-secondary);border-radius:12px">
 <strong style="color:var(--text-secondary)">Recall</strong> — What percentage of real vulnerabilities did the scanner find? Higher is better. A scanner that misses nothing has 100% recall.<br><br>
 <strong style="color:var(--text-secondary)">Precision</strong> — Of everything the scanner flagged, what percentage were actual vulnerabilities? Higher is better. A scanner with no false alarms has 100% precision.<br><br>
-<strong style="color:var(--text-secondary)">F2 Score</strong> — Combines recall and precision into a single number (0–100), pooled across all repositories. Higher is better.
+<strong style="color:var(--text-secondary)">F2 Score</strong> — Combines recall and precision into a single number (0–100), pooled across all repositories. Higher is better.<br><br>
+<strong style="color:var(--text-secondary)">Optimistic vs Strict</strong> — <em>Optimistic</em> only scores repos where the scanner produced results. <em>Strict</em> penalizes failed/timed-out repos by counting all their vulnerabilities as missed (FN). Toggle between them with the buttons below.
 </div>
 </details>
 <style>details[open] summary span{transform:rotate(90deg)}</style>""")
+    # Scoring mode toggle
+    w('<div style="display:flex;gap:8px;margin-bottom:16px">')
+    w('<button class="mode-btn active" onclick="setScoreMode(\'optimistic\')">Optimistic</button>')
+    w('<button class="mode-btn" onclick="setScoreMode(\'strict\')">Strict</button>')
+    w('</div>')
+    w('<style>.mode-btn{background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border-secondary);padding:6px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-family:Inter,sans-serif;transition:all 0.2s}.mode-btn.active{background:var(--accent-lime);color:#000;border-color:var(--accent-lime)}.mode-btn:hover{border-color:var(--accent-lime)}</style>')
+
     for rank, d in enumerate(chart_data, 1):
         row_class = "lb-row first" if rank == 1 else "lb-row"
         score_color = f2_color(d["f2"])
+        strict_color = f2_color(d["strict_f2"])
         bar_gradient = f"linear-gradient(90deg,{score_color},{score_color}88)"
-        w(f'<a href="{detail_dir}/{d["slug"]}.html" class="{row_class}">')
+        strict_bar_gradient = f"linear-gradient(90deg,{strict_color},{strict_color}88)"
+        repos_label = f'{d["repos"]}/{d["repos_total"]}' if d["repos"] != d["repos_total"] else str(d["repos"])
+        w(f'<a href="{detail_dir}/{d["slug"]}.html" class="{row_class}"'
+          f' data-f2="{d["f2"]:.1f}" data-strict-f2="{d["strict_f2"]:.1f}"'
+          f' data-recall="{d["recall"]:.1f}" data-strict-recall="{d["strict_recall"]:.1f}"'
+          f' data-precision="{d["precision"]:.1f}" data-strict-precision="{d["strict_precision"]:.1f}"'
+          f' data-color="{score_color}" data-strict-color="{strict_color}"'
+          f' data-gradient="{bar_gradient}" data-strict-gradient="{strict_bar_gradient}">')
         w(f'  <div class="lb-rank">{rank}</div>')
-        w(f'  <div class="lb-name">{d["label"]}</div>')
+        w(f'  <div class="lb-name">{d["label"]} <span style="color:var(--text-tertiary);font-size:11px">{repos_label} repos</span></div>')
         w(f'  <div class="lb-bar-wrap"><div class="lb-bar-track"><div class="lb-bar-fill" style="width:{d["f2"]}%;background:{bar_gradient}"></div></div></div>')
         w(f'  <div class="lb-score" style="color:{score_color}">{d["f2"]:.1f}</div>')
         w(f'  <div class="lb-meta"><strong>{d["recall"]:.1f}%</strong> recall &middot; <strong>{d["precision"]:.1f}%</strong> prec</div>')
@@ -979,6 +1045,35 @@ def build_html(
 """)
     w("})();")
     w("</script>")
+
+    # ── Score mode toggle JS ──
+    w("""<script>
+function setScoreMode(mode) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.mode-btn[onclick*="${mode}"]`).classList.add('active');
+  const rows = document.querySelectorAll('.lb-row');
+  const sorted = [...rows].sort((a, b) => {
+    const aF2 = parseFloat(mode === 'strict' ? a.dataset.strictF2 : a.dataset.f2);
+    const bF2 = parseFloat(mode === 'strict' ? b.dataset.strictF2 : b.dataset.f2);
+    return bF2 - aF2;
+  });
+  sorted.forEach((row, i) => {
+    const f2 = mode === 'strict' ? row.dataset.strictF2 : row.dataset.f2;
+    const recall = mode === 'strict' ? row.dataset.strictRecall : row.dataset.recall;
+    const precision = mode === 'strict' ? row.dataset.strictPrecision : row.dataset.precision;
+    const color = mode === 'strict' ? row.dataset.strictColor : row.dataset.color;
+    const gradient = mode === 'strict' ? row.dataset.strictGradient : row.dataset.gradient;
+    row.querySelector('.lb-rank').textContent = i + 1;
+    row.querySelector('.lb-score').textContent = parseFloat(f2).toFixed(1);
+    row.querySelector('.lb-score').style.color = color;
+    row.querySelector('.lb-bar-fill').style.width = f2 + '%';
+    row.querySelector('.lb-bar-fill').style.background = gradient;
+    row.querySelector('.lb-meta').innerHTML = `<strong>${parseFloat(recall).toFixed(1)}%</strong> recall &middot; <strong>${parseFloat(precision).toFixed(1)}%</strong> prec`;
+    row.classList.toggle('first', i === 0);
+    row.parentNode.appendChild(row);
+  });
+}
+</script>""")
 
     # ── Footer ──
     w('<div class="page-footer">')
@@ -1425,7 +1520,7 @@ def main() -> int:
 
     # Score everything
     grid = score_all(repos, scanners, gt_dir, scan_dir, cwe_families)
-    aggregates = compute_aggregates(grid, scanners)
+    aggregates = compute_aggregates(grid, scanners, gt_dir)
 
     # Filter scanners by minimum repo count
     if args.min_repos > 0:
