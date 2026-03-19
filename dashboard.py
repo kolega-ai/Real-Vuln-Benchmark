@@ -130,13 +130,31 @@ def _safe_div(n: float, d: float) -> float:
     return n / d if d > 0 else 0.0
 
 
-def compute_scanner_costs(scan_dir: Path, scanners: list[str]) -> dict[str, dict]:
+def load_repo_loc(gt_dir: Path) -> dict[str, int]:
+    """Load LOC counts from ground-truth files."""
+    loc_map: dict[str, int] = {}
+    for d in gt_dir.iterdir():
+        gt_path = d / "ground-truth.json"
+        if gt_path.exists():
+            with open(gt_path) as f:
+                gt = json.load(f)
+            if "loc" in gt:
+                loc_map[d.name] = gt["loc"]
+    return loc_map
+
+
+def compute_scanner_costs(
+    scan_dir: Path, scanners: list[str], repo_loc: dict[str, int],
+) -> dict[str, dict]:
     """Collect cost data from .metrics.json files per scanner.
 
-    Returns {scanner: {"total_cost": float, "successful_runs": int, "cost_per_run": float}}.
+    Returns {scanner: {"total_cost", "successful_runs", "cost_per_run",
+                        "total_loc_scanned", "cost_per_100_loc"}}.
     """
     from collections import defaultdict
-    costs: dict[str, dict] = defaultdict(lambda: {"total_cost": 0.0, "successful_runs": 0})
+    costs: dict[str, dict] = defaultdict(
+        lambda: {"total_cost": 0.0, "successful_runs": 0, "repos_scanned": set()}
+    )
 
     for repo_dir in scan_dir.iterdir():
         if not repo_dir.is_dir():
@@ -152,17 +170,23 @@ def compute_scanner_costs(scan_dir: Path, scanners: list[str]) -> dict[str, dict
                     costs[scanner_dir.name]["total_cost"] += cost
                     if d.get("exit_status") == "success":
                         costs[scanner_dir.name]["successful_runs"] += 1
+                        costs[scanner_dir.name]["repos_scanned"].add(repo_dir.name)
                 except (json.JSONDecodeError, OSError):
                     pass
 
     result = {}
     for scanner in scanners:
-        c = costs.get(scanner, {"total_cost": 0.0, "successful_runs": 0})
+        c = costs.get(scanner, {"total_cost": 0.0, "successful_runs": 0, "repos_scanned": set()})
         runs = c["successful_runs"]
+        total_loc = sum(repo_loc.get(r, 0) for r in c["repos_scanned"])
+        # Cost per 100 LOC: total cost / (total LOC / 100)
+        cost_per_100_loc = round(c["total_cost"] / (total_loc / 100), 4) if total_loc > 0 else 0
         result[scanner] = {
             "total_cost": round(c["total_cost"], 4),
             "successful_runs": runs,
             "cost_per_run": round(c["total_cost"] / runs, 4) if runs > 0 else 0,
+            "total_loc_scanned": total_loc,
+            "cost_per_100_loc": cost_per_100_loc,
         }
     return result
 
@@ -762,6 +786,7 @@ def build_html(
     gt_total_vulns: int = 0,
     gt_total_traps: int = 0,
     gt_total_repos: int = 0,
+    gt_total_loc: int = 0,
     cwe_families: dict | None = None,
 ) -> str:
     """Build standalone HTML index dashboard."""
@@ -790,6 +815,7 @@ def build_html(
             "strict_recall": round(strict.get("recall", 0) * 100, 1),
             "strict_precision": round(strict.get("precision", 0) * 100, 1),
             "cost_per_run": cost_per_run,
+            "cost_per_100_loc": cost_info.get("cost_per_100_loc", 0),
             "total_cost": cost_info.get("total_cost", 0),
         })
     chart_data.sort(key=lambda x: x["f2"], reverse=True)
@@ -832,6 +858,7 @@ def build_html(
     w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(239,68,68,0.1);color:#ef4444">&#9888;</div><div><div class="stat-value" style="color:#ef4444">{gt_total_vulns}</div><div class="stat-label">Vulnerabilities</div></div></div>')
     w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308">&#9678;</div><div><div class="stat-value" style="color:#eab308">{gt_total_traps}</div><div class="stat-label">FP Traps</div></div></div>')
     w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(168,85,247,0.1);color:#A076F9">&#9881;</div><div><div class="stat-value" style="color:#A076F9">{gt_total_repos}</div><div class="stat-label">Repositories</div></div></div>')
+    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6">&#9998;</div><div><div class="stat-value" style="color:#3b82f6">{gt_total_loc:,}</div><div class="stat-label">Python LOC</div></div></div>')
     w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(196,240,62,0.1);color:#C4F03E">&#9733;</div><div><div class="stat-value" style="color:#C4F03E">{total_scanners}</div><div class="stat-label">Scanners Tested</div></div></div>')
     w('</div>')
 
@@ -878,7 +905,12 @@ def build_html(
         w(f'  <div class="lb-name">{d["label"]} <span style="color:var(--text-tertiary);font-size:11px">{repos_label} repos</span></div>')
         w(f'  <div class="lb-bar-wrap"><div class="lb-bar-track"><div class="lb-bar-fill" style="width:{d["f2"]}%;background:{bar_gradient}"></div></div></div>')
         w(f'  <div class="lb-score" style="color:{score_color}">{d["f2"]:.1f}</div>')
-        cost_str = f'${d["cost_per_run"]:.2f}/run' if d["cost_per_run"] > 0 else ''
+        cost_parts = []
+        if d["cost_per_run"] > 0:
+            cost_parts.append(f'${d["cost_per_run"]:.2f}/repo')
+        if d["cost_per_100_loc"] > 0:
+            cost_parts.append(f'${d["cost_per_100_loc"]:.3f}/100 LOC')
+        cost_str = " &middot; ".join(cost_parts)
         w(f'  <div class="lb-meta"><strong>{d["recall"]:.1f}%</strong> recall &middot; <strong>{d["precision"]:.1f}%</strong> prec'
           f'{" &middot; " + cost_str if cost_str else ""}</div>')
         w(f'  <div class="lb-arrow">&rsaquo;</div>')
@@ -1561,10 +1593,14 @@ def main() -> int:
             gt_total_traps += sum(1 for f in gt_data["findings"] if not f["is_vulnerable"])
             gt_total_repos += 1
 
+    # Load LOC data
+    repo_loc = load_repo_loc(gt_dir)
+    gt_total_loc = sum(repo_loc.values())
+
     # Score everything
     grid = score_all(repos, scanners, gt_dir, scan_dir, cwe_families)
     aggregates = compute_aggregates(grid, scanners, gt_dir)
-    scanner_costs = compute_scanner_costs(scan_dir, scanners)
+    scanner_costs = compute_scanner_costs(scan_dir, scanners, repo_loc)
 
     # Merge costs into aggregates
     for scanner in scanners:
@@ -1590,6 +1626,7 @@ def main() -> int:
         gt_total_vulns=gt_total_vulns,
         gt_total_traps=gt_total_traps,
         gt_total_repos=gt_total_repos,
+        gt_total_loc=gt_total_loc,
         cwe_families=cwe_families,
     )
     report = build_json_report(grid, scanners, aggregates)
