@@ -388,10 +388,17 @@ def main() -> int:
         action="store_true",
         help="Score each result file independently and report mean ± stddev",
     )
+    parser.add_argument(
+        "--gt-dir",
+        type=str,
+        default=None,
+        help="Override ground truth directory (default: ground-truth/)",
+    )
     args = parser.parse_args()
 
     # Load ground truth
-    gt_path = SCRIPT_DIR / "ground-truth" / args.repo / "ground-truth.json"
+    gt_base = Path(args.gt_dir) if args.gt_dir else SCRIPT_DIR / "ground-truth"
+    gt_path = gt_base / args.repo / "ground-truth.json"
     if not gt_path.exists():
         print(f"Error: Ground truth not found: {gt_path}", file=sys.stderr)
         return 1

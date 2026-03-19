@@ -323,6 +323,10 @@ def main() -> int:
                 os.environ[key] = val
         logger.info("Loaded env from %s", env_path)
 
+    # Map GEMINI_API_KEY to what OpenCode's google provider expects
+    if os.environ.get("GEMINI_API_KEY") and not os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY"):
+        os.environ["GOOGLE_GENERATIVE_AI_API_KEY"] = os.environ["GEMINI_API_KEY"]
+
     # Build system prompt
     cwe_families = load_cwe_families()
     system_prompt = build_prompt(cwe_families)
