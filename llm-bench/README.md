@@ -91,7 +91,7 @@ All runners produce the same output format: `scan-results/{repo}/{scanner-slug}/
 ### Common flags
 
 ```bash
---repos all               # Run on all 27+ repos
+--repos all               # Run on all 26 repos
 --runs 3                  # Multiple runs for reliability analysis
 --dry-run                 # Show cost estimate without running
 --max-concurrent 4        # Parallel runs
@@ -112,7 +112,7 @@ Use `--dry-run` before any real run to see cost estimates.
 | Claude Opus 4 | ~$2.50 | ~$10.00 |
 | Gemini 2.5 Pro | ~$0.30 | ~$1.50 |
 
-**Full benchmark cost:** Running all models across all 27 repos with 3 runs each can cost **$200-$500+**. Always use `--dry-run` first and consider `--max-total-cost` as a safety net.
+**Full benchmark cost:** Running all models across all 26 repos with 3 runs each can cost **$200-$500+**. Always use `--dry-run` first and consider `--max-total-cost` as a safety net.
 
 ## Adding Your Own
 
