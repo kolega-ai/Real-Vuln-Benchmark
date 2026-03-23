@@ -2,6 +2,32 @@
 
 Deferred improvements for the RealVuln Benchmark.
 
+## Open-Source Readiness — LLM Bench (Priority: P0)
+
+- [x] `llm-bench/README.md` — Quickstart, what it measures, 3 runner modes, how to read results
+- [x] "Add Your Own" guides: new model, custom prompt, custom agent/runner, new repo
+- [x] `.env.example` with all API keys documented (which keys for which models)
+- [x] LICENSE file (already existed at repo root — Apache 2.0)
+- [x] Dependency install instructions (standalone from parent `pyproject.toml`)
+- [x] Cost warnings prominently in docs (`--models all --repos all --runs 3` can cost $500+)
+
+## Open-Source Readiness — LLM Bench (Priority: P1)
+
+- [ ] Repo clone script or manifest to populate `repos/` directory (27 repos + pinned commit SHAs)
+- [ ] Ship reference results for 2-3 models so users can validate their setup
+- [ ] Smoke test mode: run 1 model on 1 repo, compare against expected output
+- [ ] Remove hardcoded `LITELLM_URL=http://omen:4100` — make configurable or document as optional
+- [ ] Provide Dockerfile for `realvuln-sandbox:latest` (needed by `run_eval.py`)
+- [ ] Document `opencode` CLI install for agentic runner
+
+## Open-Source Readiness — LLM Bench (Priority: P2)
+
+- [ ] Reproducibility manifest: lock GT version + repo commits + prompt version + model config
+- [ ] `CONTRIBUTING.md` for community contributions
+- [ ] Pin ground-truth versions (tag GT snapshots so old scores stay comparable)
+- [ ] Document mono-repo structure (llm-bench depends on parent `scorer/`, `parsers/`, `config/`)
+- [ ] Attribution for third-party vulnerable repos used in ground truth
+
 ## CI/CD (Priority: High)
 
 - [ ] Add GitHub Actions workflow: validate ground truth, run pytest, lint with ruff
