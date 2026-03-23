@@ -40,7 +40,7 @@ import yaml
 from harness.cost_calculator import calculate_cost, estimate_total_cost
 from harness.metrics_collector import RunMetrics, save_metrics
 from harness.output_validator import validate_output, save_validated_output
-from harness.prompt_builder import build_prompt, load_cwe_families
+from harness.prompt_builder import PromptInfo, build_prompt, load_cwe_families
 
 logging.basicConfig(
     level=logging.INFO,
@@ -113,6 +113,8 @@ def run_one_agentic(
     system_prompt: str,
     repo_path: Path,
     timeout: int,
+    prompt_version: str = "",
+    prompt_label: str = "",
 ) -> dict:
     """Run one agentic evaluation using OpenCode CLI."""
     model_id = model_config["model_id"]
@@ -163,6 +165,7 @@ def run_one_agentic(
             model=model_id, repo=repo_slug, run_id=run_id,
             wall_clock_seconds=elapsed, exit_status="timeout",
             error_message=f"Timed out after {timeout}s",
+            prompt_version=prompt_version, prompt_label=prompt_label,
         )
         save_metrics(metrics, str(metrics_path))
         return {"success": False, "error": "timeout", "elapsed": elapsed, "cost": 0}
@@ -173,6 +176,7 @@ def run_one_agentic(
             model=model_id, repo=repo_slug, run_id=run_id,
             wall_clock_seconds=elapsed, exit_status="error",
             error_message=str(e),
+            prompt_version=prompt_version, prompt_label=prompt_label,
         )
         save_metrics(metrics, str(metrics_path))
         return {"success": False, "error": str(e), "elapsed": elapsed, "cost": 0}
@@ -238,6 +242,7 @@ def run_one_agentic(
             cost_usd=total_cost,
             wall_clock_seconds=elapsed, exit_status="validation_failed",
             error_message=str(validation.errors[:3]),
+            prompt_version=prompt_version, prompt_label=prompt_label,
         )
         save_metrics(metrics, str(metrics_path))
         return {
@@ -256,6 +261,7 @@ def run_one_agentic(
         wall_clock_seconds=elapsed,
         exit_status="success",
         llm_json_repair=validation.llm_json_repair,
+        prompt_version=prompt_version, prompt_label=prompt_label,
     )
     save_metrics(metrics, str(metrics_path))
 
@@ -278,6 +284,8 @@ def main() -> int:
     parser.add_argument("--max-concurrent", type=int, default=1, help="Max parallel runs")
     parser.add_argument("--timeout", type=int, default=600, help="Timeout per run in seconds")
     parser.add_argument("--dry-run", action="store_true", help="Show cost estimate only")
+    parser.add_argument("--prompt-template", type=Path, default=None, help="Path to prompt template")
+    parser.add_argument("--prompt-label", type=str, default="", help="Human-readable prompt label")
     args = parser.parse_args()
 
     # Verify opencode is installed
@@ -296,6 +304,10 @@ def main() -> int:
     else:
         repos = args.repos
 
+    # Build system prompt
+    cwe_families = load_cwe_families()
+    prompt_info = build_prompt(cwe_families, template_path=args.prompt_template, label=args.prompt_label)
+
     if args.dry_run:
         per_run, total = estimate_total_cost(
             pricing["input_per_1m"], pricing["output_per_1m"],
@@ -304,6 +316,7 @@ def main() -> int:
         )
         print(f"\n=== Dry Run (Agentic via OpenCode): {args.model} ===")
         print(f"Model: {model_config['model_id']}")
+        print(f"Prompt: {prompt_info.version_hash}" + (f" ({prompt_info.label})" if prompt_info.label else ""))
         print(f"Repos: {len(repos)}, Runs: {args.runs}")
         print(f"Est. cost per run: ${per_run.total_cost_usd:.2f}")
         print(f"Est. total ({len(repos) * args.runs} runs): ${total:.2f}")
@@ -326,10 +339,6 @@ def main() -> int:
     # Map GEMINI_API_KEY to what OpenCode's google provider expects
     if os.environ.get("GEMINI_API_KEY") and not os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY"):
         os.environ["GOOGLE_GENERATIVE_AI_API_KEY"] = os.environ["GEMINI_API_KEY"]
-
-    # Build system prompt
-    cwe_families = load_cwe_families()
-    system_prompt = build_prompt(cwe_families)
 
     # Pre-clone all repos
     repo_paths: dict[str, Path] = {}
@@ -360,8 +369,10 @@ def main() -> int:
     def execute_job(job: tuple[str, int]) -> tuple[str, int, dict]:
         repo_slug, run_id = job
         result = run_one_agentic(
-            model_config, repo_slug, run_id, system_prompt,
+            model_config, repo_slug, run_id, prompt_info.rendered,
             repo_paths[repo_slug], timeout=args.timeout,
+            prompt_version=prompt_info.version_hash,
+            prompt_label=prompt_info.label,
         )
         return repo_slug, run_id, result
 

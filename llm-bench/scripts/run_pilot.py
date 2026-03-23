@@ -30,7 +30,7 @@ import yaml
 from harness.cost_calculator import calculate_cost, estimate_total_cost
 from harness.metrics_collector import RunMetrics, save_metrics
 from harness.output_validator import validate_output, save_validated_output
-from harness.prompt_builder import build_prompt, load_cwe_families
+from harness.prompt_builder import PromptInfo, build_prompt, load_cwe_families
 
 
 def discover_repos(gt_dir: Path) -> list[str]:
@@ -188,6 +188,8 @@ def run_one(
     run_id: int,
     system_prompt: str,
     repo_context: str,
+    prompt_version: str = "",
+    prompt_label: str = "",
 ) -> dict:
     """Run one (model, repo, run) evaluation. Returns result dict."""
     model_id = model_config["model_id"]
@@ -222,6 +224,7 @@ def run_one(
             model=model_id, repo=repo_slug, run_id=run_id,
             wall_clock_seconds=elapsed, exit_status="error",
             error_message=str(e),
+            prompt_version=prompt_version, prompt_label=prompt_label,
         )
         save_metrics(metrics, str(metrics_path))
         return {"success": False, "error": str(e), "elapsed": elapsed}
@@ -240,6 +243,7 @@ def run_one(
             input_tokens=input_tokens, output_tokens=output_tokens,
             wall_clock_seconds=elapsed, exit_status="validation_failed",
             error_message=str(validation.errors[:3]),
+            prompt_version=prompt_version, prompt_label=prompt_label,
         )
         cost = calculate_cost(input_tokens, output_tokens, pricing["input_per_1m"], pricing["output_per_1m"])
         metrics.cost_usd = cost.total_cost_usd
@@ -264,6 +268,7 @@ def run_one(
         cost_usd=cost.total_cost_usd,
         wall_clock_seconds=elapsed,
         exit_status="success",
+        prompt_version=prompt_version, prompt_label=prompt_label,
     )
     save_metrics(metrics, str(metrics_path))
 
@@ -286,6 +291,8 @@ def main() -> int:
     parser.add_argument("--runs", type=int, default=1, help="Runs per repo")
     parser.add_argument("--max-concurrent", type=int, default=1, help="Max parallel API calls (default: 1)")
     parser.add_argument("--dry-run", action="store_true", help="Show cost estimate only")
+    parser.add_argument("--prompt-template", type=Path, default=None, help="Path to prompt template")
+    parser.add_argument("--prompt-label", type=str, default="", help="Human-readable prompt label")
     args = parser.parse_args()
 
     # Load config
@@ -331,7 +338,7 @@ def main() -> int:
 
     # Build system prompt
     cwe_families = load_cwe_families()
-    system_prompt = build_prompt(cwe_families)
+    prompt_info = build_prompt(cwe_families, template_path=args.prompt_template, label=args.prompt_label)
 
     cumulative_cost = 0.0
     completed = 0
@@ -362,7 +369,10 @@ def main() -> int:
 
     def execute_job(job: tuple[str, int]) -> tuple[str, int, dict]:
         repo_slug, run_id = job
-        result = run_one(model_config, repo_slug, run_id, system_prompt, repo_contexts[repo_slug])
+        result = run_one(
+            model_config, repo_slug, run_id, prompt_info.rendered, repo_contexts[repo_slug],
+            prompt_version=prompt_info.version_hash, prompt_label=prompt_info.label,
+        )
         return repo_slug, run_id, result
 
     def log_result(repo_slug: str, run_id: int, result: dict) -> None:

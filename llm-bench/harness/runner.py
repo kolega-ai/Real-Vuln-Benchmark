@@ -17,7 +17,7 @@ from pathlib import Path
 from .cost_calculator import calculate_cost
 from .metrics_collector import RunMetrics, parse_trajectory, save_metrics
 from .output_validator import ValidationResult, save_validated_output, validate_output
-from .prompt_builder import build_prompt, load_cwe_families
+from .prompt_builder import PromptInfo, build_prompt, load_cwe_families
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,8 @@ class RunConfig:
     timeout_seconds: int = 600
     max_iterations: int = 50
     max_output_tokens: int = 20_000
+    prompt_template: Path | None = None
+    prompt_label: str = ""
 
 
 @dataclass
@@ -122,7 +124,11 @@ def run_single(run_config: RunConfig) -> RunResult:
     # Build prompt
     try:
         cwe_families = load_cwe_families()
-        prompt = build_prompt(cwe_families)
+        prompt_info = build_prompt(
+            cwe_families,
+            template_path=run_config.prompt_template,
+            label=run_config.prompt_label,
+        )
     except Exception as e:
         return RunResult(
             success=False,
@@ -132,7 +138,7 @@ def run_single(run_config: RunConfig) -> RunResult:
 
     # Run OpenHands
     try:
-        trajectory_path, raw_output = _run_openhands(run_config, prompt)
+        trajectory_path, raw_output = _run_openhands(run_config, prompt_info.rendered)
     except ImportError:
         return RunResult(
             success=False,
@@ -175,6 +181,9 @@ def run_single(run_config: RunConfig) -> RunResult:
         metrics = parse_trajectory(trajectory_path, model.name, repo, run_id)
     else:
         metrics = RunMetrics(model=model.name, repo=repo, run_id=run_id)
+
+    metrics.prompt_version = prompt_info.version_hash
+    metrics.prompt_label = prompt_info.label
 
     # Calculate cost
     cost = calculate_cost(
