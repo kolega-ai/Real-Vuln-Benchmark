@@ -280,8 +280,8 @@ def main() -> int:
         help="Max output tokens per run (default: 20000)",
     )
     parser.add_argument(
-        "--max-total-cost", type=float, default=None,
-        help="Hard stop if cumulative cost exceeds this USD amount",
+        "--max-total-cost", type=float, default=50.0,
+        help="Hard stop if cumulative cost exceeds this USD amount (default: $50)",
     )
     parser.add_argument(
         "--max-concurrent", type=int, default=1,

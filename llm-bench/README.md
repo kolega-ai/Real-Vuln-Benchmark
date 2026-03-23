@@ -95,7 +95,7 @@ All runners produce the same output format: `scan-results/{repo}/{scanner-slug}/
 --runs 3                  # Multiple runs for reliability analysis
 --dry-run                 # Show cost estimate without running
 --max-concurrent 4        # Parallel runs
---max-total-cost 50       # Hard stop at $50 USD
+--max-total-cost 50       # Hard stop at $50 USD (this is the default)
 --prompt-template path.md # Use a custom prompt
 --prompt-label "v2-exp"   # Tag runs with a human-readable label
 ```

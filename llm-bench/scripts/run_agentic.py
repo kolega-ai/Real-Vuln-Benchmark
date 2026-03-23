@@ -284,6 +284,8 @@ def main() -> int:
     parser.add_argument("--max-concurrent", type=int, default=1, help="Max parallel runs")
     parser.add_argument("--timeout", type=int, default=600, help="Timeout per run in seconds")
     parser.add_argument("--dry-run", action="store_true", help="Show cost estimate only")
+    parser.add_argument("--max-total-cost", type=float, default=50.0,
+                        help="Hard stop if cumulative cost exceeds this USD amount (default: $50)")
     parser.add_argument("--prompt-template", type=Path, default=None, help="Path to prompt template")
     parser.add_argument("--prompt-label", type=str, default="", help="Human-readable prompt label")
     args = parser.parse_args()
@@ -400,6 +402,12 @@ def main() -> int:
 
     if args.max_concurrent <= 1:
         for job in jobs:
+            if cumulative_cost >= args.max_total_cost:
+                logger.warning(
+                    "Cost limit reached ($%.2f >= $%.2f). Stopping.",
+                    cumulative_cost, args.max_total_cost,
+                )
+                break
             repo_slug, run_id, result = execute_job(job)
             log_result(repo_slug, run_id, result)
     else:
@@ -409,6 +417,10 @@ def main() -> int:
             for future in as_completed(futures):
                 repo_slug, run_id, result = future.result()
                 log_result(repo_slug, run_id, result)
+                if cumulative_cost >= args.max_total_cost:
+                    logger.warning("Cost limit reached. Cancelling remaining runs.")
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    break
 
     logger.info("Done — %d/%d runs, total cost: $%.4f", completed, total_runs, cumulative_cost)
 
