@@ -28,14 +28,28 @@ Ground truth  ──────────────────────
 pip install -e ".[llm-bench]"
 ```
 
-### 2. Configure API keys
+### 2. Clone benchmark repos
+
+```bash
+python3 clone_repos.py              # Clone all 26 repos at pinned commits
+python3 clone_repos.py --status     # Check which repos are cloned
+python3 clone_repos.py --repo realvuln-pygoat  # Clone just one
+```
+
+### 3. Verify your setup
+
+```bash
+python3 smoke_test.py   # Scores semgrep on realvuln-pygoat, checks against known values
+```
+
+### 4. Configure API keys
 
 ```bash
 cp .env.example .env
 # Edit .env and add keys for the providers you want to use
 ```
 
-### 3. Run a single evaluation
+### 5. Run a single evaluation
 
 ```bash
 # Single-turn (sends all code in one prompt, cheapest)
@@ -51,7 +65,7 @@ python3 llm-bench/scripts/run_agentic.py \
   --runs 1
 ```
 
-### 4. View results
+### 6. View results
 
 ```bash
 # Score a specific model/repo

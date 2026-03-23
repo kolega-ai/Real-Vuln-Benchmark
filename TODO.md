@@ -20,12 +20,12 @@ Deferred improvements for the RealVuln Benchmark.
 
 ## Open-Source Readiness — LLM Bench (Priority: P1)
 
-- [ ] Repo clone script or manifest to populate `repos/` directory (27 repos + pinned commit SHAs)
-- [ ] Ship reference results for 2-3 models so users can validate their setup
-- [ ] Smoke test mode: run 1 model on 1 repo, compare against expected output
-- [ ] Remove hardcoded `LITELLM_URL=http://omen:4100` — make configurable or document as optional
+- [x] Repo clone script: `clone_repos.py` (reads repo_url + commit_sha from ground truth, supports --status, --repo)
+- [x] Smoke test: `smoke_test.py` (scores semgrep on realvuln-pygoat, checks TP/FP/FN/TN/F2 against known values)
+- [x] Reference results: semgrep on realvuln-pygoat used as deterministic baseline in smoke test
+- [x] Remove hardcoded `LITELLM_URL=http://omen:4100` — already configurable via env var, .env.example has localhost default
+- [x] Document `opencode` CLI install for agentic runner — already in README runner-specific requirements table
 - [ ] Provide Dockerfile for `realvuln-sandbox:latest` (needed by `run_eval.py`)
-- [ ] Document `opencode` CLI install for agentic runner
 
 ## Open-Source Readiness — LLM Bench (Priority: P2)
 
