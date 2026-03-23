@@ -231,6 +231,22 @@ Install the full project with `pip install -e ".[llm-bench]"` from the repo root
 | `run_agentic.py` | [OpenCode CLI](https://github.com/opencode-ai/opencode) installed (`brew install opencode` or see their docs) |
 | `run_eval.py` | Docker daemon running, `openhands-ai` package installed |
 
+## Breaking changes (if upgrading)
+
+**`build_prompt()` returns `PromptInfo` instead of `str`.** If you have code calling `build_prompt()` directly, update it:
+
+```python
+# Before
+system_prompt = build_prompt(cwe_families)
+
+# After
+prompt_info = build_prompt(cwe_families)
+system_prompt = prompt_info.rendered    # the prompt text
+version_hash = prompt_info.version_hash # "sha256:..." content hash
+```
+
+The built-in runner scripts are already updated. The `.metrics.json` schema also has two new optional fields (`prompt_version`, `prompt_label`) — both default to empty strings, so existing files load fine.
+
 ## License
 
 Apache 2.0 — see [LICENSE](../LICENSE).
