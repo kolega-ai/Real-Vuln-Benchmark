@@ -47,6 +47,10 @@ class RunMetrics:
     # JSON repair tracking
     llm_json_repair: bool = False
 
+    # Prompt versioning
+    prompt_version: str = ""
+    prompt_label: str = ""
+
     def to_dict(self) -> dict:
         """JSON-serializable dict."""
         return asdict(self)

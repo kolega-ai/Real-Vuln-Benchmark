@@ -4,12 +4,24 @@ Renders the prompt template with CWE families context and output schema example.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 LLM_BENCH_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = LLM_BENCH_DIR.parent
 PROMPT_TEMPLATE_PATH = LLM_BENCH_DIR / "prompts" / "system-prompt.md"
+
+
+@dataclass(frozen=True)
+class PromptInfo:
+    """Immutable record of a rendered prompt with its content-hash version."""
+
+    rendered: str
+    version_hash: str  # "sha256:XXXXXXXXXXXX"
+    template_path: str  # relative path to template used
+    label: str  # human label, "" if unset
 OUTPUT_SCHEMA_PATH = LLM_BENCH_DIR / "prompts" / "output-schema.json"
 CWE_FAMILIES_PATH = PROJECT_ROOT / "config" / "cwe-families.json"
 
@@ -61,15 +73,17 @@ def build_output_schema_example() -> str:
 def build_prompt(
     cwe_families: dict | None = None,
     template_path: Path | None = None,
-) -> str:
+    label: str = "",
+) -> PromptInfo:
     """Build the complete system prompt for an LLM security auditor run.
 
     Args:
         cwe_families: CWE families dict. Loaded from default path if None.
         template_path: Path to prompt template. Uses default if None.
+        label: Optional human-readable label for this prompt version.
 
     Returns:
-        Rendered prompt string ready to use as system message.
+        PromptInfo with rendered prompt, content hash, and metadata.
     """
     if cwe_families is None:
         cwe_families = load_cwe_families()
@@ -80,4 +94,10 @@ def build_prompt(
     rendered = template.replace("{cwe_families}", format_cwe_families(cwe_families))
     rendered = rendered.replace("{output_schema_example}", build_output_schema_example())
 
-    return rendered
+    hex_digest = hashlib.sha256(rendered.encode("utf-8")).hexdigest()[:12]
+    return PromptInfo(
+        rendered=rendered,
+        version_hash=f"sha256:{hex_digest}",
+        template_path=str(tmpl_path.relative_to(PROJECT_ROOT)),
+        label=label,
+    )

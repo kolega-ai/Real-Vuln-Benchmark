@@ -142,7 +142,7 @@ class TestFullPipeline:
 
     def test_prompt_builds(self):
         """Verify prompt renders without errors."""
-        prompt = build_prompt()
+        prompt = build_prompt().rendered
         assert len(prompt) > 500
         assert "SQL Injection" in prompt
 

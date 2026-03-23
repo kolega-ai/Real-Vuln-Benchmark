@@ -133,6 +133,8 @@ def run_eval(
     max_concurrent: int,
     repos_dir: Path,
     scan_results_dir: Path,
+    prompt_template: Path | None = None,
+    prompt_label: str = "",
 ) -> dict[str, list[RunResult]]:
     """Execute all evaluation runs.
 
@@ -161,6 +163,8 @@ def run_eval(
                         timeout_seconds=timeout,
                         max_iterations=max_iterations,
                         max_output_tokens=max_output_tokens,
+                        prompt_template=prompt_template,
+                        prompt_label=prompt_label,
                     )
                 )
 
@@ -287,6 +291,14 @@ def main() -> int:
         "--models-config", type=Path, default=None,
         help="Path to models.yaml (default: llm-bench/config/models.yaml)",
     )
+    parser.add_argument(
+        "--prompt-template", type=Path, default=None,
+        help="Path to prompt template",
+    )
+    parser.add_argument(
+        "--prompt-label", type=str, default="",
+        help="Human-readable prompt label",
+    )
     args = parser.parse_args()
 
     # Load model configs
@@ -313,6 +325,8 @@ def main() -> int:
         max_concurrent=args.max_concurrent,
         repos_dir=PROJECT_ROOT / "repos",
         scan_results_dir=PROJECT_ROOT / "scan-results",
+        prompt_template=args.prompt_template,
+        prompt_label=args.prompt_label,
     )
 
     return 0
