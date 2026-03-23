@@ -312,3 +312,35 @@ This would be a publishable contribution independent of who wins the benchmark. 
 - CI/CD pipeline (GitHub Actions for validation, testing, linting)
 - CLI packaging (`pip install realvuln`)
 - Real scanner integrations (Semgrep, Bandit, SonarQube, AI-native scanners)
+
+---
+
+## Attribution
+
+This benchmark uses intentionally-vulnerable applications created by the open-source security community. We are grateful to the original authors:
+
+| Repository | Original Source |
+|------------|----------------|
+| Damn Vulnerable Flask Application | [akamai-threat-research](https://github.com/akamai-threat-research/Damn-Vulnerable-Flask-Application) |
+| Damn Vulnerable GraphQL Application | [dolevf](https://github.com/dolevf/Damn-Vulnerable-GraphQL-Application) |
+| DjanGoat | [Contrast-Security-OSS](https://github.com/Contrast-Security-OSS/DjanGoat) |
+| DSVPWA | [sgabe](https://github.com/sgabe/DSVPWA) |
+| DSVW | [stamparm](https://github.com/stamparm/DSVW) |
+| DVBLab | [mamgad](https://github.com/mamgad/DVBLab) |
+| dvpwa | [anxolerd](https://github.com/anxolerd/dvpwa) |
+| Extremely Vulnerable Flask App | [manuelz120](https://github.com/manuelz120/extremely-vulnerable-flask-app) |
+| Flask_XSS | [terrabitz](https://github.com/terrabitz/Flask_XSS) |
+| insecure-web | [brenesrm](https://github.com/brenesrm/insecure-web) |
+| lets-be-bad-guys | [mpirnat](https://github.com/mpirnat/lets-be-bad-guys) |
+| OWASP Web Playground | Community |
+| pygoat | [adeyosemanputra](https://github.com/adeyosemanputra/pygoat) |
+| owasp-bay-area | [RiieCco](https://github.com/RiieCco/owasp-bay-area) |
+| PythonSSTI | [TheWation](https://github.com/TheWation/PythonSSTI) |
+| ThreatByte | [anotherik](https://github.com/anotherik/ThreatByte) |
+| VAmPI | [erev0s](https://github.com/erev0s/VAmPI) |
+| vfapi | [naryal2580](https://github.com/naryal2580/vfapi) |
+| Vulnerable-Flask-App | [we45](https://github.com/we45/Vulnerable-Flask-App) |
+| vulnpy | [Contrast-Security-OSS](https://github.com/Contrast-Security-OSS/vulnpy) |
+| vulpy | [fportantier](https://github.com/fportantier/vulpy) |
+
+Some repositories are forked under the [kolega-ai](https://github.com/kolega-ai) org to ensure pinned commits remain available. All original licenses are preserved.
