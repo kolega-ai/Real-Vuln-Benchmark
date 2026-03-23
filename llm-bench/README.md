@@ -227,15 +227,28 @@ llm-bench/
     └── test_reliability.py
 ```
 
-## Dependencies on parent project
+## Mono-repo structure
 
-The llm-bench harness imports from the parent RealVuln Benchmark:
-- `scorer/` — F2 scoring and ground-truth matching
-- `parsers/` — Scanner output normalization
-- `config/cwe-families.json` — CWE groupings
-- `ground-truth/` — Hand-labeled vulnerability data
+`llm-bench/` lives inside the RealVuln Benchmark mono-repo and imports from sibling directories:
 
-Install the full project with `pip install -e ".[llm-bench]"` from the repo root.
+```
+RealVulnBenchmark/              # Repo root
+├── scorer/                     # F2 scoring & ground-truth matching (used by llm-bench)
+│   ├── matcher.py              #   3-field matching: file + CWE + line ±10
+│   └── metrics.py              #   ScoreCard, compute_scorecard()
+├── parsers/                    # Scanner output normalization (used by llm-bench)
+│   ├── __init__.py             #   get_parser(), PARSER_REGISTRY
+│   └── semgrep.py              #   Default parser (LLM output is Semgrep-compatible)
+├── config/cwe-families.json    # CWE groupings (used by prompt builder & scorer)
+├── ground-truth/               # Hand-labeled vulnerability data (26 repos)
+├── scan-results/               # All scanner + LLM results live here
+├── score.py                    # CLI scorer (works with both scanner & LLM results)
+├── clone_repos.py              # Clone all benchmark repos at pinned commits
+├── smoke_test.py               # Verify scoring pipeline with known baseline
+└── llm-bench/                  # This directory
+```
+
+The `llm-bench/` harness cannot run standalone — it requires the parent project. Install with `pip install -e ".[llm-bench]"` from the repo root.
 
 ## Runner-specific requirements
 

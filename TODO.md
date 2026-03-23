@@ -29,11 +29,11 @@ Deferred improvements for the RealVuln Benchmark.
 
 ## Open-Source Readiness — LLM Bench (Priority: P2)
 
-- [ ] Reproducibility manifest: lock GT version + repo commits + prompt version + model config
-- [ ] `CONTRIBUTING.md` for community contributions
-- [ ] Pin ground-truth versions (tag GT snapshots so old scores stay comparable)
-- [ ] Document mono-repo structure (llm-bench depends on parent `scorer/`, `parsers/`, `config/`)
-- [ ] Attribution for third-party vulnerable repos used in ground truth
+- [x] Reproducibility manifest: `benchmark-manifest.json` (GT content hash, prompt version, all repo URLs + commit SHAs)
+- [x] `CONTRIBUTING.md` — already existed with comprehensive guide
+- [x] Pin ground-truth versions — manifest includes GT content hash; commit SHAs already in each GT file
+- [x] Document mono-repo structure — added to llm-bench README with directory tree
+- [x] Attribution for third-party vulnerable repos — added table to root README
 
 ## CI/CD (Priority: High)
 
