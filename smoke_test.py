@@ -88,5 +88,9 @@ def run_smoke_test() -> bool:
     return passed
 
 
+def main() -> int:
+    return 0 if run_smoke_test() else 1
+
+
 if __name__ == "__main__":
-    sys.exit(0 if run_smoke_test() else 1)
+    sys.exit(main())
