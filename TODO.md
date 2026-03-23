@@ -11,6 +11,13 @@ Deferred improvements for the RealVuln Benchmark.
 - [x] Dependency install instructions (standalone from parent `pyproject.toml`)
 - [x] Cost warnings prominently in docs (`--models all --repos all --runs 3` can cost $500+)
 
+## Pre-Release Checklist — Prompt Versioning Migration (Priority: P0)
+
+- [x] Run backfill: `python3 llm-bench/scripts/backfill_prompt_version.py --label default-v1` (stamped 789 .metrics.json files)
+- [x] Regenerate dashboard after backfill so scanner detail pages show prompt versions
+- [x] Commit regenerated `reports/` files and updated `.metrics.json` files
+- [x] Document breaking change: `build_prompt()` now returns `PromptInfo` instead of `str` — callers must use `.rendered`
+
 ## Open-Source Readiness — LLM Bench (Priority: P1)
 
 - [ ] Repo clone script or manifest to populate `repos/` directory (27 repos + pinned commit SHAs)
