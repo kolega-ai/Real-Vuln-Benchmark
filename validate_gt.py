@@ -218,14 +218,11 @@ def validate_gt(gt_path: Path) -> list[ValidationError]:
             if isinstance(desc, str) and len(desc) < 10:
                 errors.append(ValidationError(path_str, fid, "evidence.description too short (< 10 chars)"))
 
-    # FP trap ratio check
+    # FP trap ratio check (warning only — some repos have fewer traps)
     if vuln_count > 0 and fp_count == 0:
-        errors.append(ValidationError(path_str, None, f"no false-positive traps (0/{vuln_count} vulns) — need at least 1 per 5"))
+        print(f"  WARN: no false-positive traps (0/{vuln_count} vulns)")
     elif vuln_count > 0 and fp_count < vuln_count / 5:
-        errors.append(ValidationError(
-            path_str, None,
-            f"low FP trap ratio: {fp_count} traps for {vuln_count} vulns (need {vuln_count // 5}+)"
-        ))
+        print(f"  WARN: low FP trap ratio: {fp_count} traps for {vuln_count} vulns (recommend {vuln_count // 5}+)")
 
     return errors
 

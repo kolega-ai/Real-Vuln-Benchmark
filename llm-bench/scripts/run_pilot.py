@@ -419,8 +419,14 @@ def main() -> int:
             while active:
                 done, _ = wait(active, return_when=FIRST_COMPLETED)
                 for future in done:
-                    active.pop(future)
-                    repo_slug, run_id, result = future.result()
+                    job = active.pop(future)
+                    try:
+                        repo_slug, run_id, result = future.result()
+                    except Exception as exc:
+                        repo_slug, run_id = job
+                        print(f"  [{repo_slug}] Run {run_id}: EXCEPTION — {exc}")
+                        completed += 1
+                        continue
                     log_result(repo_slug, run_id, result)
 
                 # Submit next job only if under cost limit

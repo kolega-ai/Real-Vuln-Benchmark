@@ -225,7 +225,15 @@ def run_eval(
                 done, _ = wait(active, return_when=FIRST_COMPLETED)
                 for future in done:
                     rc = active.pop(future)
-                    key, result = future.result()
+                    try:
+                        key, result = future.result()
+                    except Exception as exc:
+                        completed += 1
+                        logger.error(
+                            "[%d/%d] %s/%s/run-%d: EXCEPTION — %s",
+                            completed, total_runs, rc.model.name, rc.repo, rc.run_id, exc,
+                        )
+                        continue
                     completed += 1
                     results.setdefault(rc.model.name, []).append(result)
 
