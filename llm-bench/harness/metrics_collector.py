@@ -191,15 +191,17 @@ def _process_event(
         tool_counts["list_dir"] = tool_counts.get("list_dir", 0) + 1
 
     # Token usage from LLM responses
+    # Prefer llm_metrics (nested) when present; fall back to top-level extras.
+    # Never add both — OpenHands may store the same values in both locations.
     extras = event.get("extras", event.get("extra", {}))
     if isinstance(extras, dict):
-        metrics.input_tokens += extras.get("input_tokens", 0)
-        metrics.output_tokens += extras.get("output_tokens", 0)
-        # Also check nested llm_metrics
         llm = extras.get("llm_metrics", {})
-        if isinstance(llm, dict):
+        if isinstance(llm, dict) and (llm.get("input_tokens") or llm.get("output_tokens")):
             metrics.input_tokens += llm.get("input_tokens", 0)
             metrics.output_tokens += llm.get("output_tokens", 0)
+        else:
+            metrics.input_tokens += extras.get("input_tokens", 0)
+            metrics.output_tokens += extras.get("output_tokens", 0)
 
     # Check for exit/finish events
     if action in ("finish", "AgentFinishAction"):

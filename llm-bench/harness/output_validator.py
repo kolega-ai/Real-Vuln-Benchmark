@@ -186,21 +186,36 @@ def _validate_finding(finding: dict, index: int) -> tuple[dict | None, list[str]
 
 
 def _llm_repair_json(broken_json: str) -> str | None:
-    """Use GPT-5-4-mini to repair malformed JSON.
+    """Use GPT-4o-mini to repair malformed JSON.
 
-    Returns the repaired JSON string, or None if repair failed.
+    Set LLM_JSON_REPAIR=0 to disable. Requires OPENAI_API_KEY.
+    Returns the repaired JSON string, or None if repair failed/disabled.
     """
+    import logging
     import os
+
+    logger = logging.getLogger("output_validator")
+
+    if os.environ.get("LLM_JSON_REPAIR", "1") == "0":
+        return None
 
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return None
 
+    # Truncate to avoid sending excessive data
+    max_chars = 50_000
+    if len(broken_json) > max_chars:
+        broken_json = broken_json[:max_chars]
+        logger.warning("Truncated broken JSON to %d chars for LLM repair", max_chars)
+
+    logger.warning("Attempting LLM JSON repair via gpt-4o-mini (%d chars)", len(broken_json))
+
     try:
         import openai
         client = openai.OpenAI(api_key=api_key)
         response = client.chat.completions.create(
-            model="gpt-5.4-mini",
+            model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",
@@ -216,8 +231,10 @@ def _llm_repair_json(broken_json: str) -> str | None:
             max_completion_tokens=16_000,
             temperature=0,
         )
+        logger.info("LLM JSON repair succeeded")
         return response.choices[0].message.content.strip()
-    except Exception:
+    except Exception as e:
+        logger.warning("LLM JSON repair failed: %s", e)
         return None
 
 
@@ -328,7 +345,7 @@ def validate_output(raw_text: str) -> ValidationResult:
     data["results"] = validated_results
 
     if llm_repaired:
-        all_warnings.append("JSON was repaired by gpt-5.4-mini")
+        all_warnings.append("JSON was repaired by gpt-4o-mini")
 
     return ValidationResult(
         valid=len(validated_results) > 0 or len(results) == 0,

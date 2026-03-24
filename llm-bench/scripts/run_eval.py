@@ -19,7 +19,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
 # Add project root to path
@@ -146,6 +146,9 @@ def run_eval(
     for model in models:
         for repo in repos:
             repo_path = repos_dir / repo
+            if not repo_path.is_dir():
+                logger.warning("Repo not found: %s — skipping (run clone_repos.py first)", repo_path)
+                continue
             output_dir = scan_results_dir / repo / model.scanner_slug
             for run_id in range(1, runs + 1):
                 # Skip if result already exists
@@ -209,28 +212,43 @@ def run_eval(
                 cumulative_cost * total_runs / max(completed, 1),
             )
     else:
+        config_iter = iter(run_configs)
         with ThreadPoolExecutor(max_workers=max_concurrent) as executor:
-            future_to_rc = {executor.submit(execute_run, rc): rc for rc in run_configs}
-            for future in as_completed(future_to_rc):
-                rc = future_to_rc[future]
-                key, result = future.result()
-                completed += 1
-                results.setdefault(rc.model.name, []).append(result)
+            # Submit initial batch up to max_concurrent
+            active: dict = {}
+            for _ in range(min(max_concurrent, len(run_configs))):
+                rc = next(config_iter, None)
+                if rc is not None:
+                    active[executor.submit(execute_run, rc)] = rc
 
-                if result.metrics:
-                    cumulative_cost += result.metrics.cost_usd
+            while active:
+                done, _ = wait(active, return_when=FIRST_COMPLETED)
+                for future in done:
+                    rc = active.pop(future)
+                    key, result = future.result()
+                    completed += 1
+                    results.setdefault(rc.model.name, []).append(result)
 
-                status = "OK" if result.success else f"FAIL: {result.error}"
-                logger.info(
-                    "[%d/%d] %s — %s (%.1fs, $%.4f total)",
-                    completed, total_runs, key, status,
-                    result.wall_clock_seconds, cumulative_cost,
-                )
+                    if result.metrics:
+                        cumulative_cost += result.metrics.cost_usd
 
+                    status = "OK" if result.success else f"FAIL: {result.error}"
+                    logger.info(
+                        "[%d/%d] %s — %s (%.1fs, $%.4f total)",
+                        completed, total_runs, key, status,
+                        result.wall_clock_seconds, cumulative_cost,
+                    )
+
+                # Check cost limit before submitting more
                 if max_total_cost and cumulative_cost >= max_total_cost:
-                    logger.warning("Cost limit reached. Cancelling remaining runs.")
-                    executor.shutdown(wait=False, cancel_futures=True)
+                    logger.warning("Cost limit reached ($%.2f). Cancelling remaining.", cumulative_cost)
+                    for f in active:
+                        f.cancel()
+                    active.clear()
                     break
+                rc = next(config_iter, None)
+                if rc is not None:
+                    active[executor.submit(execute_run, rc)] = rc
 
     # Summary
     successes = sum(1 for v in results.values() for r in v if r.success)
