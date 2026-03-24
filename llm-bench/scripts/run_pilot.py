@@ -16,7 +16,7 @@ import os
 import subprocess
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -119,7 +119,7 @@ def gather_repo_context(repo_path: Path) -> str:
         rel = p.relative_to(repo_path)
 
         if budget_exceeded:
-            files.append((str(rel), ""))
+            files.append((str(rel), "(skipped — token budget reached)"))
             continue
 
         try:
@@ -132,7 +132,7 @@ def gather_repo_context(repo_path: Path) -> str:
 
         if total_chars + len(content) > max_total:
             budget_exceeded = True
-            files.append((str(rel), ""))
+            files.append((str(rel), "(skipped — token budget reached)"))
             continue
 
         files.append((str(rel), content))
@@ -148,8 +148,8 @@ def gather_repo_context(repo_path: Path) -> str:
     # File contents
     parts.append("\n## File Contents\n")
     for rel_path, content in files:
-        if content == "... (budget exceeded, file skipped)":
-            parts.append(f"\n### {rel_path}\n(skipped — token budget reached)\n")
+        if content == "(skipped — token budget reached)":
+            parts.append(f"\n### {rel_path}\n{content}\n")
         else:
             parts.append(f"\n### {rel_path}\n```\n{content}\n```\n")
 
@@ -396,24 +396,42 @@ def main() -> int:
             print(f"  [{repo_slug}] Run {run_id}: FAIL — {result.get('error', 'unknown')}, ${cost:.4f}")
         print(f"  [{completed}/{total_runs}] Cumulative: ${cumulative_cost:.4f}")
 
+    cost_limit = args.max_total_cost
+
     if max_concurrent <= 1:
         for job in jobs:
-            if cumulative_cost >= args.max_total_cost:
-                print(f"\n  Cost limit reached (${cumulative_cost:.2f} >= ${args.max_total_cost:.2f}). Stopping.")
+            if cumulative_cost >= cost_limit:
+                print(f"\n  Cost limit reached (${cumulative_cost:.2f} >= ${cost_limit:.2f}). Stopping.")
                 break
             repo_slug, run_id, result = execute_job(job)
             log_result(repo_slug, run_id, result)
     else:
         print(f"Running with {max_concurrent} concurrent workers\n")
+        job_iter = iter(jobs)
         with ThreadPoolExecutor(max_workers=max_concurrent) as executor:
-            futures = {executor.submit(execute_job, job): job for job in jobs}
-            for future in as_completed(futures):
-                repo_slug, run_id, result = future.result()
-                log_result(repo_slug, run_id, result)
-                if cumulative_cost >= args.max_total_cost:
-                    print(f"\n  Cost limit reached. Cancelling remaining runs.")
-                    executor.shutdown(wait=False, cancel_futures=True)
+            # Submit initial batch up to max_concurrent
+            active: dict = {}
+            for _ in range(min(max_concurrent, len(jobs))):
+                job = next(job_iter, None)
+                if job is not None:
+                    active[executor.submit(execute_job, job)] = job
+
+            while active:
+                done, _ = wait(active, return_when=FIRST_COMPLETED)
+                for future in done:
+                    active.pop(future)
+                    repo_slug, run_id, result = future.result()
+                    log_result(repo_slug, run_id, result)
+
+                # Submit next job only if under cost limit
+                if cumulative_cost >= cost_limit:
+                    print(f"\n  Cost limit reached (${cumulative_cost:.2f} >= ${cost_limit:.2f}). Cancelling remaining.")
+                    for f in active:
+                        f.cancel()
                     break
+                job = next(job_iter, None)
+                if job is not None:
+                    active[executor.submit(execute_job, job)] = job
 
     print(f"\n=== Done ===")
     print(f"Completed: {completed}/{total_runs} runs")

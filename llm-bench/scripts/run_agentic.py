@@ -26,7 +26,7 @@ import os
 import subprocess
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -400,27 +400,43 @@ def main() -> int:
                 result.get("error", "unknown"), result.get("elapsed", 0),
             )
 
+    cost_limit = args.max_total_cost
+
     if args.max_concurrent <= 1:
         for job in jobs:
-            if cumulative_cost >= args.max_total_cost:
+            if cumulative_cost >= cost_limit:
                 logger.warning(
                     "Cost limit reached ($%.2f >= $%.2f). Stopping.",
-                    cumulative_cost, args.max_total_cost,
+                    cumulative_cost, cost_limit,
                 )
                 break
             repo_slug, run_id, result = execute_job(job)
             log_result(repo_slug, run_id, result)
     else:
         logger.info("Running with %d concurrent workers", args.max_concurrent)
+        job_iter = iter(jobs)
         with ThreadPoolExecutor(max_workers=args.max_concurrent) as executor:
-            futures = {executor.submit(execute_job, job): job for job in jobs}
-            for future in as_completed(futures):
-                repo_slug, run_id, result = future.result()
-                log_result(repo_slug, run_id, result)
-                if cumulative_cost >= args.max_total_cost:
-                    logger.warning("Cost limit reached. Cancelling remaining runs.")
-                    executor.shutdown(wait=False, cancel_futures=True)
+            active: dict = {}
+            for _ in range(min(args.max_concurrent, len(jobs))):
+                job = next(job_iter, None)
+                if job is not None:
+                    active[executor.submit(execute_job, job)] = job
+
+            while active:
+                done, _ = wait(active, return_when=FIRST_COMPLETED)
+                for future in done:
+                    active.pop(future)
+                    repo_slug, run_id, result = future.result()
+                    log_result(repo_slug, run_id, result)
+
+                if cumulative_cost >= cost_limit:
+                    logger.warning("Cost limit reached ($%.2f). Cancelling remaining.", cumulative_cost)
+                    for f in active:
+                        f.cancel()
                     break
+                job = next(job_iter, None)
+                if job is not None:
+                    active[executor.submit(execute_job, job)] = job
 
     logger.info("Done — %d/%d runs, total cost: $%.4f", completed, total_runs, cumulative_cost)
 

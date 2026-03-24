@@ -31,9 +31,7 @@ Find **every** security vulnerability in this codebase. You must be thorough —
 
 When you have completed your analysis, output your findings as a JSON object in the following exact format. Output ONLY the JSON — no markdown fences, no explanation before or after.
 
-```json
 {output_schema_example}
-```
 
 ### Field Details
 

@@ -22,7 +22,8 @@ class PromptInfo:
     version_hash: str  # "sha256:XXXXXXXXXXXX"
     template_path: str  # relative path to template used
     label: str  # human label, "" if unset
-OUTPUT_SCHEMA_PATH = LLM_BENCH_DIR / "prompts" / "output-schema.json"
+
+
 CWE_FAMILIES_PATH = PROJECT_ROOT / "config" / "cwe-families.json"
 
 
