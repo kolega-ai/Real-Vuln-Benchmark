@@ -1,0 +1,171 @@
+\section{Experimental Setup}
+\label{sec:experimental-setup}
+
+We evaluate 15 scanner configurations spanning three categories:
+traditional SAST tools, LLM-based scanners, and one hybrid system.
+All scanners are run against identical pinned commits of the 26
+repositories in the RealVuln corpus. This section describes the scanner
+selection, LLM evaluation modes, and reproducibility measures.
+
+\subsection{Scanners Evaluated}
+\label{sec:scanners}
+
+\paragraph{Traditional SAST (3 tools).}
+We select three widely deployed static analyzers that represent the
+dominant analysis strategies in the Python ecosystem:
+
+\begin{itemize}
+  \item \textbf{Semgrep} (open-source, rule-based). We invoke
+    \texttt{semgrep -{}-config auto} with the default community rule set.
+    Semgrep performs intra-procedural pattern matching with limited
+    dataflow tracking and is the most commonly adopted open-source SAST
+    tool for Python~\cite{semgrep}.
+  \item \textbf{Snyk Code} (commercial, pattern + dataflow). We invoke
+    \texttt{snyk code test} using the free-tier CLI. Snyk combines
+    pattern matching with inter-procedural dataflow analysis and
+    machine-learned ranking~\cite{snyk}.
+  \item \textbf{SonarQube} (community edition, pattern-based). We use
+    the default Python quality profile. SonarQube applies
+    intra-procedural taint analysis with an extensive built-in rule
+    library~\cite{sonarqube}.
+\end{itemize}
+
+\paragraph{LLM-based scanners (11 configurations, 10 distinct models).}
+We evaluate ten large language models across eight provider families.
+All models receive the same shared prompt (Section~\ref{sec:llm-modes})
+and produce structured JSON output. The configurations are:
+
+\begin{itemize}
+  \item \textbf{Claude family} (Anthropic): Haiku~4.5
+    (single-turn + agentic), Sonnet~4.6 (agentic), Opus~4.6 (agentic).
+  \item \textbf{Gemini~3.1 Pro} (Google DeepMind): agentic mode.
+  \item \textbf{Grok~3} and \textbf{Grok~4.20 Reasoning} (xAI): both
+    agentic mode.
+  \item \textbf{Kimi~K2.5} (Moonshot AI): agentic mode.
+  \item \textbf{GLM-5} (Zhipu AI): agentic mode.
+  \item \textbf{Minimax~M2.7} (MiniMax): agentic mode.
+  \item \textbf{Qwen~3.5 397B} (Alibaba Cloud): agentic mode.
+\end{itemize}
+
+\paragraph{Hybrid scanner (1).}
+\textbf{Kolega v0.0.1} is an LLM-augmented hybrid scanner whose scan
+results are published in the repository. Its internals are proprietary;
+we include it as a reference point for systems that combine static
+analysis with LLM reasoning.
+
+\medskip
+\noindent
+Table~\ref{tab:scanners} summarizes all evaluated scanners.
+
+\begin{table}[t]
+  \caption{Scanner classification. ``Mode'' indicates the primary
+    analysis technique. All scanners are run on identical pinned commits.}
+  \label{tab:scanners}
+  \centering
+  \small
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    \textbf{Scanner} & \textbf{Category} & \textbf{Mode} & \textbf{Open Source} \\
+    \midrule
+    Semgrep          & Trad.\ SAST & Rule-based        & Yes \\
+    Snyk             & Trad.\ SAST & Pattern + dataflow & No (free tier) \\
+    SonarQube        & Trad.\ SAST & Pattern-based     & Yes (community) \\
+    \midrule
+    Claude Haiku 4.5       & LLM & Single-turn + Agentic & No \\
+    Claude Sonnet 4.6      & LLM & Agentic               & No \\
+    Claude Opus 4.6        & LLM & Agentic               & No \\
+    Gemini 3.1 Pro         & LLM & Agentic               & No \\
+    Grok 3                 & LLM & Agentic               & No \\
+    Grok 4.20 Reasoning    & LLM & Agentic               & No \\
+    Kimi K2.5              & LLM & Agentic               & No \\
+    GLM-5                  & LLM & Agentic               & No \\
+    Minimax M2.7           & LLM & Agentic               & No \\
+    Qwen 3.5 397B          & LLM & Agentic               & No \\
+    \midrule
+    Kolega v0.0.1    & Hybrid      & Proprietary       & No \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{LLM Evaluation Modes}
+\label{sec:llm-modes}
+
+We evaluate LLM-based scanners in two modes that represent different
+points on the cost--capability spectrum.
+
+\paragraph{Single-turn (pilot).}
+The entire repository context is concatenated into a single API call.
+The model receives the source files and the shared prompt, and must
+return all findings in one response. This is the cheapest mode---it
+requires exactly one model invocation per repository---but it is
+constrained by the model's context window and receives no feedback
+on its intermediate reasoning. We use this mode as a lower-bound
+baseline; only Claude Haiku~4.5 is evaluated in single-turn mode (in
+addition to its agentic evaluation).
+
+\paragraph{Agentic.}
+The model operates within a tool-use loop, with access to file reading,
+\texttt{grep}-style search, and shell execution tools. It can
+iteratively explore the codebase, form hypotheses about data flow, and
+refine its findings across multiple turns. This mode is more expensive
+(typically 10--50$\times$ more tokens than single-turn) but more
+closely mirrors how a human auditor would approach the task. All 10
+LLM models are evaluated in agentic mode.
+
+\paragraph{Shared prompt.}
+All LLM configurations receive the same prompt template, identified by
+its content hash (\texttt{sha256:828b00245b42}). The prompt instructs
+the model to act as a security auditor, specifies the expected JSON
+output schema (CWE identifier, file path, line number, severity), and
+provides minimal guidance on vulnerability categories. Per-model prompt
+tuning is intentionally avoided: while a shared prompt may
+advantage or disadvantage particular models, it ensures that differences
+in performance reflect model capability rather than prompt engineering
+effort. The full prompt is published in the benchmark repository.
+
+\paragraph{Output schema.}
+Each LLM must return a JSON array of findings, where each finding
+contains: a CWE identifier (\texttt{cwe}), the affected file path
+(\texttt{file}), a line number (\texttt{line}), and a severity label
+(\texttt{severity}). Findings that do not conform to this schema are
+discarded during parsing.
+
+\paragraph{Cost tracking.}
+We record input and output token counts for every LLM invocation and
+compute per-scan costs using provider pricing as of March~2026. This
+enables cost-efficiency analysis (e.g., F2 score per dollar) in
+Section~\ref{sec:results}, which is critical for practitioners
+evaluating deployment trade-offs.
+
+\subsection{Reproducibility}
+\label{sec:reproducibility}
+
+All artefacts needed to reproduce or extend the evaluation are committed
+to the public repository:
+
+\begin{itemize}
+  \item \textbf{Scan results.} Raw scanner output for every
+    (repository, scanner) pair is stored in
+    \texttt{scan-results/\{repo\}/\{scanner\}/results.json}.
+  \item \textbf{Version locking.} The file
+    \texttt{benchmark-manifest.json} records the content hash of each
+    ground-truth file, the pinned commit SHA for every target
+    repository, and the prompt version hash, ensuring that scores can be
+    tied to a specific snapshot of the benchmark.
+  \item \textbf{Re-scoring.} Any user can re-derive all metrics by
+    running:
+    \begin{verbatim}
+  python score.py --repo <repo> --all-scanners
+    \end{verbatim}
+  \item \textbf{Dashboard regeneration.} The interactive HTML dashboard
+    is regenerated via:
+    \begin{verbatim}
+  python dashboard.py --scanner-group all
+    \end{verbatim}
+\end{itemize}
+
+\noindent
+Together, these measures ensure that the evaluation is fully
+transparent: readers can verify every number in this paper, and future
+researchers can add new scanners or repositories without modifying the
+scoring pipeline.
