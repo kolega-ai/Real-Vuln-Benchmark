@@ -960,11 +960,11 @@ def build_html(
 
     # ── Hero Stats ──
     w('<div class="hero-stats">')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(239,68,68,0.1);color:#ef4444">&#9888;</div><div><div class="stat-value" style="color:#ef4444">{gt_total_vulns}</div><div class="stat-label">Vulnerabilities</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308">&#9678;</div><div><div class="stat-value" style="color:#eab308">{gt_total_traps}</div><div class="stat-label">FP Traps</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(168,85,247,0.1);color:#A076F9">&#9881;</div><div><div class="stat-value" style="color:#A076F9">{gt_total_repos}</div><div class="stat-label">Repositories</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6">&#9998;</div><div><div class="stat-value" style="color:#3b82f6">{gt_total_loc:,}</div><div class="stat-label">Python LOC</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(196,240,62,0.1);color:#C4F03E">&#9733;</div><div><div class="stat-value" style="color:#C4F03E">{total_scanners}</div><div class="stat-label">Scanners Tested</div></div></div>')
+    w(f'<div class="stat-card" title="Total confirmed vulnerabilities across all benchmark repositories — each one is a real, documented security issue."><div class="stat-icon" style="background:rgba(239,68,68,0.1);color:#ef4444">&#9888;</div><div><div class="stat-value" style="color:#ef4444">{gt_total_vulns}</div><div class="stat-label">Vulnerabilities</div></div></div>')
+    w(f'<div class="stat-card" title="Code that looks suspicious but is actually safe. Scanners that flag these get penalized — tests whether scanners can tell real vulns from false alarms."><div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308">&#9678;</div><div><div class="stat-value" style="color:#eab308">{gt_total_traps}</div><div class="stat-label">FP Traps</div></div></div>')
+    w(f'<div class="stat-card" title="Intentionally-vulnerable Python applications used as benchmark targets — each pinned to a specific commit."><div class="stat-icon" style="background:rgba(168,85,247,0.1);color:#A076F9">&#9881;</div><div><div class="stat-value" style="color:#A076F9">{gt_total_repos}</div><div class="stat-label">Repositories</div></div></div>')
+    w(f'<div class="stat-card" title="Total lines of Python code across all benchmark repositories."><div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6">&#9998;</div><div><div class="stat-value" style="color:#3b82f6">{gt_total_loc:,}</div><div class="stat-label">Python LOC</div></div></div>')
+    w(f'<div class="stat-card" title="Number of security scanners evaluated — includes traditional SAST tools and LLM-based scanners."><div class="stat-icon" style="background:rgba(196,240,62,0.1);color:#C4F03E">&#9733;</div><div><div class="stat-value" style="color:#C4F03E">{total_scanners}</div><div class="stat-label">Scanners Tested</div></div></div>')
     w('</div>')
 
     # ── Leaderboard ──
@@ -1016,13 +1016,13 @@ def build_html(
             w(f'  <div class="lb-score" style="color:{score_color}">{d["f2"]:.1f}</div>')
         cost_parts = []
         if d["cost_per_run"] > 0:
-            cost_parts.append(f'${d["cost_per_run"]:.2f}/repo')
+            cost_parts.append(f'<span title="Average API cost to scan one repository" style="cursor:help">${d["cost_per_run"]:.2f}/repo</span>')
         if d["cost_per_100_loc"] > 0:
             est_per_100k = round(d["cost_per_100_loc"] * 1000)
-            cost_parts.append(f'~${est_per_100k:,}/100k LOC')
+            cost_parts.append(f'<span title="Estimated cost to scan 100,000 lines of code" style="cursor:help">~${est_per_100k:,}/100k LOC</span>')
         cost_str = " &middot; ".join(cost_parts)
-        latency_str = f' &middot; {d["avg_latency"]:.0f}s avg' if d["avg_latency"] > 0 else ""
-        w(f'  <div class="lb-meta"><strong>{d["recall"]:.1f}%</strong> recall &middot; <strong>{d["precision"]:.1f}%</strong> prec'
+        latency_str = f' &middot; <span title="Average wall-clock time per repository scan" style="cursor:help">{d["avg_latency"]:.0f}s avg</span>' if d["avg_latency"] > 0 else ""
+        w(f'  <div class="lb-meta"><strong title="Percentage of real vulnerabilities found — higher is better" style="cursor:help">{d["recall"]:.1f}%</strong> recall &middot; <strong title="Of findings reported, percentage that were real — higher is better" style="cursor:help">{d["precision"]:.1f}%</strong> prec'
           f'{" &middot; " + cost_str if cost_str else ""}{latency_str}</div>')
         w(f'  <div class="lb-arrow">&rsaquo;</div>')
         w(f'</a>')
@@ -1400,19 +1400,19 @@ def build_scanner_detail_html(
     prec_val = round(micro.get("precision", 0) * 100, 1)
 
     w('<div class="hero-stats">')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(22,163,74,0.1);color:{f2_color(f2_val)}">F2</div><div><div class="stat-value" style="color:{f2_color(f2_val)}">{f2_val:.1f}</div><div class="stat-label">F2 Score</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(34,197,94,0.1);color:#22c55e">&#8593;</div><div><div class="stat-value" style="color:#22c55e">{rec_val:.1f}%</div><div class="stat-label">Recall</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(160,118,249,0.1);color:#A076F9">&#9670;</div><div><div class="stat-value" style="color:#A076F9">{prec_val:.1f}%</div><div class="stat-label">Precision</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(196,240,62,0.1);color:#C4F03E">&#9733;</div><div><div class="stat-value" style="color:#C4F03E">{repos_scored}</div><div class="stat-label">Repos Scored</div></div></div>')
+    w(f'<div class="stat-card" title="Combines recall and precision into one score (0–100). Weights recall 4x more than precision — missing a real vuln is worse than a false alarm."><div class="stat-icon" style="background:rgba(22,163,74,0.1);color:{f2_color(f2_val)}">F2</div><div><div class="stat-value" style="color:{f2_color(f2_val)}">{f2_val:.1f}</div><div class="stat-label">F2 Score</div></div></div>')
+    w(f'<div class="stat-card" title="What percentage of real vulnerabilities did this scanner find? 100% = found everything, 0% = missed everything."><div class="stat-icon" style="background:rgba(34,197,94,0.1);color:#22c55e">&#8593;</div><div><div class="stat-value" style="color:#22c55e">{rec_val:.1f}%</div><div class="stat-label">Recall</div></div></div>')
+    w(f'<div class="stat-card" title="Of everything this scanner flagged, what percentage were real vulnerabilities? 100% = no false alarms, lower = more noise."><div class="stat-icon" style="background:rgba(160,118,249,0.1);color:#A076F9">&#9670;</div><div><div class="stat-value" style="color:#A076F9">{prec_val:.1f}%</div><div class="stat-label">Precision</div></div></div>')
+    w(f'<div class="stat-card" title="Number of benchmark repositories this scanner successfully scanned out of {sa.get("repos_total", 26)} total."><div class="stat-icon" style="background:rgba(196,240,62,0.1);color:#C4F03E">&#9733;</div><div><div class="stat-value" style="color:#C4F03E">{repos_scored}</div><div class="stat-label">Repos Scored</div></div></div>')
     meta = scanner_metadata or {}
     if meta.get("has_metrics"):
         cost_info = sa.get("cost", {})
         total_cost = cost_info.get("total_cost", 0)
         avg_lat = meta.get("avg_wall_clock_seconds", 0)
         model_short = meta.get("model", "").split("/")[-1]  # strip provider prefix
-        w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6">&#9881;</div><div><div class="stat-value" style="color:#3b82f6;font-size:16px">{model_short}</div><div class="stat-label">Model</div></div></div>')
-        w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308">$</div><div><div class="stat-value" style="color:#eab308">${total_cost:.2f}</div><div class="stat-label">Total Cost</div></div></div>')
-        w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(249,115,22,0.1);color:#f97316">&#9202;</div><div><div class="stat-value" style="color:#f97316">{avg_lat:.0f}s</div><div class="stat-label">Avg Latency</div></div></div>')
+        w(f'<div class="stat-card" title="The LLM model used for this scanner — this is the model ID sent to the API."><div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6">&#9881;</div><div><div class="stat-value" style="color:#3b82f6;font-size:16px">{model_short}</div><div class="stat-label">Model</div></div></div>')
+        w(f'<div class="stat-card" title="Total API cost across all runs and all repositories for this scanner."><div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308">$</div><div><div class="stat-value" style="color:#eab308">${total_cost:.2f}</div><div class="stat-label">Total Cost</div></div></div>')
+        w(f'<div class="stat-card" title="Average wall-clock time to scan one repository, including API calls and agent reasoning."><div class="stat-icon" style="background:rgba(249,115,22,0.1);color:#f97316">&#9202;</div><div><div class="stat-value" style="color:#f97316">{avg_lat:.0f}s</div><div class="stat-label">Avg Latency</div></div></div>')
     w('</div>')
 
     w('<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>')
@@ -1480,7 +1480,7 @@ def build_scanner_detail_html(
                 sd = sev_agg[sev]
                 sev_recall = sd["tp"] / (sd["tp"] + sd["fn"]) if (sd["tp"] + sd["fn"]) > 0 else 0
                 sev_color = f2_color(sev_recall * 100)
-                w(f'<div class="severity-card"><div class="sev-label">{sev}</div><div class="sev-recall" style="color:{sev_color}">{sev_recall:.0%}</div><div class="sev-counts">TP {sd["tp"]} / FP {sd["fp"]} / FN {sd["fn"]}</div></div>')
+                w(f'<div class="severity-card" title="Recall for {sev}-severity vulnerabilities — {sd["tp"]} found out of {sd["tp"] + sd["fn"]} total"><div class="sev-label">{sev}</div><div class="sev-recall" style="color:{sev_color}">{sev_recall:.0%}</div><div class="sev-counts" title="TP = real vulns found, FP = false alarms, FN = real vulns missed">TP {sd["tp"]} / FP {sd["fp"]} / FN {sd["fn"]}</div></div>')
         w('</div>')
 
     # ── LLM Operational Metrics ──
@@ -1493,7 +1493,7 @@ def build_scanner_detail_html(
         label_style = 'font-family:Space Grotesk,sans-serif;font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)'
         row_style = 'display:flex;justify-content:space-between;padding:4px 0;font-size:13px'
         val_style = 'font-weight:600;color:var(--text-primary)'
-        lbl_style = 'color:var(--text-tertiary)'
+        lbl_style = 'color:var(--text-tertiary);cursor:help'
 
         w('<div class="section-title">LLM Operational Metrics</div>')
         w('<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:32px">')
@@ -1501,34 +1501,34 @@ def build_scanner_detail_html(
         # Card 1: Model & Prompt
         w(f'<div style="{card_style}">')
         w(f'<div style="{label_style}">Model &amp; Prompt</div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">Model</span><span style="{val_style}">{meta.get("model", "—")}</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">Prompt Version</span><span style="{val_style}"><code style="font-size:12px">{meta.get("prompt_version", "—")}</code></span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">Prompt Label</span><span style="{val_style}">{meta.get("prompt_label", "—")}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="The LLM model ID sent to the API for this scanner">Model</span><span style="{val_style}">{meta.get("model", "—")}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="SHA256 content hash of the rendered system prompt — changes if the prompt template, CWE families, or output schema change">Prompt Version</span><span style="{val_style}"><code style="font-size:12px">{meta.get("prompt_version", "—")}</code></span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Human-readable label for the prompt version">Prompt Label</span><span style="{val_style}">{meta.get("prompt_label", "—")}</span></div>')
         w('</div>')
 
         # Card 2: Token Usage
         w(f'<div style="{card_style}">')
         w(f'<div style="{label_style}">Token Usage <span style="font-weight:400;color:var(--text-tertiary);font-size:12px">avg per run</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">Input</span><span style="{val_style}">{meta.get("avg_input_tokens", 0):,.0f}</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">Output</span><span style="{val_style}">{meta.get("avg_output_tokens", 0):,.0f}</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">Total</span><span style="{val_style}">{meta.get("avg_total_tokens", 0):,.0f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average tokens sent to the model per repository scan (prompt + context)">Input</span><span style="{val_style}">{meta.get("avg_input_tokens", 0):,.0f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average tokens generated by the model per repository scan (response)">Output</span><span style="{val_style}">{meta.get("avg_output_tokens", 0):,.0f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Total tokens (input + output) consumed per scan — for agentic scanners this includes multi-turn context">Total</span><span style="{val_style}">{meta.get("avg_total_tokens", 0):,.0f}</span></div>')
         w('</div>')
 
         # Card 3: Cost
         w(f'<div style="{card_style}">')
         w(f'<div style="{label_style}">Cost</div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">Total</span><span style="{val_style}">${cost_info.get("total_cost", 0):.2f}</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">Per Repo</span><span style="{val_style}">${cost_info.get("cost_per_run", 0):.2f}</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">Per 100 LOC</span><span style="{val_style}">${cost_info.get("cost_per_100_loc", 0):.4f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Total API cost across all runs and all repositories">Total</span><span style="{val_style}">${cost_info.get("total_cost", 0):.2f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average API cost to scan one repository (total cost / number of successful runs)">Per Repo</span><span style="{val_style}">${cost_info.get("cost_per_run", 0):.2f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Cost normalized by codebase size — divide total cost by (total lines of code / 100)">Per 100 LOC</span><span style="{val_style}">${cost_info.get("cost_per_100_loc", 0):.4f}</span></div>')
         w('</div>')
 
         # Card 4: Reliability
         w(f'<div style="{card_style}">')
         w(f'<div style="{label_style}">Reliability</div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">Success Rate</span><span style="{val_style};color:{"#22c55e" if success_rate >= 90 else "#f97316"}">{success_rate:.0f}%</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">Timeouts</span><span style="{val_style}">{exit_counts.get("timeout", 0)}</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">JSON Repair Rate</span><span style="{val_style}">{meta.get("json_repair_rate", 0):.0%}</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}">Avg Latency</span><span style="{val_style}">{meta.get("avg_wall_clock_seconds", 0):.1f}s</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Percentage of runs that completed successfully without timeout or error">Success Rate</span><span style="{val_style};color:{"#22c55e" if success_rate >= 90 else "#f97316"}">{success_rate:.0f}%</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Number of runs that hit the time limit before finishing — these repos get no score">Timeouts</span><span style="{val_style}">{exit_counts.get("timeout", 0)}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Percentage of runs where the LLM output malformed JSON that needed automatic repair before scoring">JSON Repair Rate</span><span style="{val_style}">{meta.get("json_repair_rate", 0):.0%}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average wall-clock time per repository scan, including API calls and agent reasoning steps">Avg Latency</span><span style="{val_style}">{meta.get("avg_wall_clock_seconds", 0):.1f}s</span></div>')
         w('</div>')
 
         w('</div>')  # close grid
