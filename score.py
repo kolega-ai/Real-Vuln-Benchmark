@@ -27,10 +27,16 @@ def discover_scanners(scan_dir: Path) -> list[str]:
 
 
 def discover_result_files(scanner_dir: Path) -> list[Path]:
-    """Find all JSON result files for a scanner."""
+    """Find all JSON result files for a scanner.
+
+    Excludes .metrics.json files (operational metrics from LLM benchmark runs).
+    """
     if not scanner_dir.is_dir():
         return []
-    return sorted(scanner_dir.glob("*.json"))
+    return sorted(
+        f for f in scanner_dir.glob("*.json")
+        if not f.name.endswith(".metrics.json")
+    )
 
 
 def print_summary_table(
@@ -382,10 +388,17 @@ def main() -> int:
         action="store_true",
         help="Score each result file independently and report mean ± stddev",
     )
+    parser.add_argument(
+        "--gt-dir",
+        type=str,
+        default=None,
+        help="Override ground truth directory (default: ground-truth/)",
+    )
     args = parser.parse_args()
 
     # Load ground truth
-    gt_path = SCRIPT_DIR / "ground-truth" / args.repo / "ground-truth.json"
+    gt_base = Path(args.gt_dir) if args.gt_dir else SCRIPT_DIR / "ground-truth"
+    gt_path = gt_base / args.repo / "ground-truth.json"
     if not gt_path.exists():
         print(f"Error: Ground truth not found: {gt_path}", file=sys.stderr)
         return 1
