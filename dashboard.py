@@ -130,13 +130,16 @@ def score_all(
                         cell[key] = round(statistics.mean(
                             [rd[key] for rd in run_dicts]
                         ))
-                    for key in ("precision", "recall", "f1", "f2",
+                    for key in ("precision", "recall", "f1", "f2", "f3",
                                 "tpr", "fpr", "youden_j"):
                         cell[key] = round(statistics.mean(
                             [rd[key] for rd in run_dicts]
                         ), 4)
                     cell["f2_score"] = round(statistics.mean(
                         [rd["f2_score"] for rd in run_dicts]
+                    ), 1)
+                    cell["f3_score"] = round(statistics.mean(
+                        [rd["f3_score"] for rd in run_dicts]
                     ), 1)
                     # Keep per_family / per_severity from first run
                     cell["per_family"] = run_dicts[0].get("per_family", {})
@@ -347,11 +350,17 @@ def compute_aggregates(
         micro_f2 = _safe_div(
             5.0 * micro_prec * micro_rec, 4.0 * micro_prec + micro_rec
         )
+        micro_f3 = _safe_div(
+            10.0 * micro_prec * micro_rec, 9.0 * micro_prec + micro_rec
+        )
 
         strict_prec = _safe_div(strict_tp, strict_tp + strict_fp)
         strict_rec = _safe_div(strict_tp, strict_tp + strict_fn)
         strict_f2 = _safe_div(
             5.0 * strict_prec * strict_rec, 4.0 * strict_prec + strict_rec
+        )
+        strict_f3 = _safe_div(
+            10.0 * strict_prec * strict_rec, 9.0 * strict_prec + strict_rec
         )
 
         agg[scanner] = {
@@ -363,6 +372,7 @@ def compute_aggregates(
                 "precision": round(micro_prec, 4),
                 "recall": round(micro_rec, 4),
                 "f2_score": round(micro_f2 * 100, 1),
+                "f3_score": round(micro_f3 * 100, 1),
             },
             "strict_micro": {
                 "tp": strict_tp,
@@ -372,6 +382,7 @@ def compute_aggregates(
                 "precision": round(strict_prec, 4),
                 "recall": round(strict_rec, 4),
                 "f2_score": round(strict_f2 * 100, 1),
+                "f3_score": round(strict_f3 * 100, 1),
             },
             "macro": {
                 "f2_score": round(
@@ -868,6 +879,7 @@ def _build_tooltip_html(repo: str, scanner: str, cell: dict) -> str:
     lines = f'<div class="tt-title">{short_repo} / {scanner}</div>'
     lines += '<div class="tt-sep"></div>'
     lines += f'<div class="tt-row"><span class="tt-label">F2 Score</span><span class="tt-val">{cell["f2_score"]:.1f}</span></div>'
+    lines += f'<div class="tt-row"><span class="tt-label">F3 Score</span><span class="tt-val">{cell["f3_score"]:.1f}</span></div>'
     lines += f'<div class="tt-row"><span class="tt-label">Recall</span><span class="tt-val">{cell["recall"]:.1%}</span></div>'
     lines += f'<div class="tt-row"><span class="tt-label">Precision</span><span class="tt-val">{cell["precision"]:.1%}</span></div>'
     lines += '<div class="tt-sep"></div>'
@@ -893,7 +905,7 @@ def build_html(
     """Build standalone HTML index dashboard."""
     total_scanners = len(scanners)
 
-    # Build chart data sorted by F2
+    # Build chart data sorted by strict F3 (primary metric)
     chart_data = []
     for scanner in scanners:
         sa = aggregates.get(scanner, {})
@@ -904,15 +916,21 @@ def build_html(
         chart_data.append({
             "slug": scanner,
             "label": display_name(scanner),
-            "f2": micro.get("f2_score", 0),
-            "recall": round(micro.get("recall", 0) * 100, 1),
-            "precision": round(micro.get("precision", 0) * 100, 1),
-            "tp": micro.get("tp", 0),
-            "fp": micro.get("fp", 0),
-            "fn": micro.get("fn", 0),
+            # Primary display uses strict scores
+            "f2": strict.get("f2_score", 0),
+            "f3": strict.get("f3_score", 0),
+            "recall": round(strict.get("recall", 0) * 100, 1),
+            "precision": round(strict.get("precision", 0) * 100, 1),
+            "tp": strict.get("tp", 0),
+            "fp": strict.get("fp", 0),
+            "fn": strict.get("fn", 0),
             "repos": sa.get("repos_scored", 0),
             "repos_total": sa.get("repos_total", 0),
+            # Micro variants available for toggle
+            "micro_f2": micro.get("f2_score", 0),
+            "micro_f3": micro.get("f3_score", 0),
             "strict_f2": strict.get("f2_score", 0),
+            "strict_f3": strict.get("f3_score", 0),
             "strict_recall": round(strict.get("recall", 0) * 100, 1),
             "strict_precision": round(strict.get("precision", 0) * 100, 1),
             "cost_per_run": cost_per_run,
@@ -923,7 +941,7 @@ def build_html(
             "f2_stddev": sa.get("f2_stddev", 0),
             "num_runs": sa.get("num_runs", 1),
         })
-    chart_data.sort(key=lambda x: x["f2"], reverse=True)
+    chart_data.sort(key=lambda x: x["f3"], reverse=True)
 
     lines: list[str] = []
     w = lines.append
@@ -969,11 +987,12 @@ def build_html(
 
     # ── Leaderboard ──
     w('<div class="leaderboard">')
-    w('<div class="section-title">Scanner Leaderboard <span class="dim">ranked by F2 Score</span></div>')
+    w('<div class="section-title">Scanner Leaderboard <span class="dim">ranked by F3 Score (strict)</span></div>')
     w('<p style="color:var(--text-tertiary);font-size:13px;margin:-8px 0 16px;max-width:720px;line-height:1.5">'
-      'F2 Score (0–100) measures how well a scanner finds vulnerabilities. '
-      'It rewards <strong style="color:var(--text-secondary)">finding real issues (recall) 4&times; more than avoiding false alarms (precision)</strong> '
-      '— because in security, missing a real vulnerability is far worse than a false positive.</p>')
+      'F3 Score (0–100) measures how well a scanner finds vulnerabilities. '
+      'It rewards <strong style="color:var(--text-secondary)">finding real issues (recall) 9&times; more than avoiding false alarms (precision)</strong> '
+      '— because in high-risk industries, missing a real vulnerability is far worse than a false positive. '
+      'Strict mode penalizes scanners that fail or time out.</p>')
     w("""<details style="margin:-4px 0 18px;max-width:720px">
 <summary style="color:var(--accent-lime);font-size:13px;font-weight:500;cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px">
 <span style="transition:transform 0.2s;display:inline-block">&#9654;</span> How scores work
@@ -981,39 +1000,41 @@ def build_html(
 <div style="color:var(--text-tertiary);font-size:13px;line-height:1.7;margin-top:10px;padding:14px 16px;background:var(--bg-secondary);border:1px solid var(--border-secondary);border-radius:12px">
 <strong style="color:var(--text-secondary)">Recall</strong> — What percentage of real vulnerabilities did the scanner find? Higher is better. A scanner that misses nothing has 100% recall.<br><br>
 <strong style="color:var(--text-secondary)">Precision</strong> — Of everything the scanner flagged, what percentage were actual vulnerabilities? Higher is better. A scanner with no false alarms has 100% precision.<br><br>
-<strong style="color:var(--text-secondary)">F2 Score</strong> — Combines recall and precision into a single number (0–100), pooled across all repositories. Higher is better.<br><br>
+<strong style="color:var(--text-secondary)">F2 Score</strong> — Combines recall and precision with beta=2 (recall weighted 4x). Range 0–100.<br><br>
+<strong style="color:var(--text-secondary)">F3 Score</strong> — Combines recall and precision with beta=3 (recall weighted 9x). Our primary metric, designed for high-risk industries where missing a vulnerability is unacceptable. Range 0–100.<br><br>
 <strong style="color:var(--text-secondary)">Optimistic vs Strict</strong> — <em>Optimistic</em> only scores repos where the scanner produced results. <em>Strict</em> penalizes failed/timed-out repos by counting all their vulnerabilities as missed (FN). Toggle between them with the buttons below.
 </div>
 </details>
 <style>details[open] summary span{transform:rotate(90deg)}</style>""")
     # Scoring mode toggle
     w('<div style="display:flex;gap:8px;margin-bottom:16px">')
-    w('<button class="mode-btn active" onclick="setScoreMode(\'optimistic\')">Optimistic</button>')
-    w('<button class="mode-btn" onclick="setScoreMode(\'strict\')">Strict</button>')
+    w('<button class="mode-btn" onclick="setScoreMode(\'optimistic\')">Optimistic</button>')
+    w('<button class="mode-btn active" onclick="setScoreMode(\'strict\')">Strict</button>')
     w('</div>')
     w('<style>.mode-btn{background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border-secondary);padding:6px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-family:Inter,sans-serif;transition:all 0.2s}.mode-btn.active{background:var(--accent-lime);color:#000;border-color:var(--accent-lime)}.mode-btn:hover{border-color:var(--accent-lime)}</style>')
 
     for rank, d in enumerate(chart_data, 1):
         row_class = "lb-row first" if rank == 1 else "lb-row"
-        score_color = f2_color(d["f2"])
-        strict_color = f2_color(d["strict_f2"])
+        score_color = f2_color(d["f3"])
+        strict_color = f2_color(d["strict_f3"])
         bar_gradient = f"linear-gradient(90deg,{score_color},{score_color}88)"
         strict_bar_gradient = f"linear-gradient(90deg,{strict_color},{strict_color}88)"
         repos_label = f'{d["repos"]}/{d["repos_total"]}' if d["repos"] != d["repos_total"] else str(d["repos"])
         w(f'<a href="{detail_dir}/{d["slug"]}.html" class="{row_class}"'
           f' data-f2="{d["f2"]:.1f}" data-strict-f2="{d["strict_f2"]:.1f}"'
+          f' data-f3="{d["f3"]:.1f}" data-strict-f3="{d["strict_f3"]:.1f}"'
           f' data-recall="{d["recall"]:.1f}" data-strict-recall="{d["strict_recall"]:.1f}"'
           f' data-precision="{d["precision"]:.1f}" data-strict-precision="{d["strict_precision"]:.1f}"'
           f' data-color="{score_color}" data-strict-color="{strict_color}"'
           f' data-gradient="{bar_gradient}" data-strict-gradient="{strict_bar_gradient}">')
         w(f'  <div class="lb-rank">{rank}</div>')
         w(f'  <div class="lb-name">{d["label"]} <span style="color:var(--text-tertiary);font-size:11px">{repos_label} repos</span></div>')
-        w(f'  <div class="lb-bar-wrap"><div class="lb-bar-track"><div class="lb-bar-fill" style="width:{d["f2"]}%;background:{bar_gradient}"></div></div></div>')
-        stddev_html = f'<div class="lb-stddev" style="font-size:10px;color:var(--text-muted);text-align:right;cursor:help" title="F2 standard deviation across {d["repos"]} repositories — lower means more consistent performance">stdev {d["f2_stddev"]:.1f}</div>' if d["num_runs"] > 1 and d["f2_stddev"] > 0 else ""
+        w(f'  <div class="lb-bar-wrap"><div class="lb-bar-track"><div class="lb-bar-fill" style="width:{d["f3"]}%;background:{bar_gradient}"></div></div></div>')
+        stddev_html = f'<div class="lb-stddev" style="font-size:10px;color:var(--text-muted);text-align:right;cursor:help" title="F3 standard deviation across {d["repos"]} repositories — lower means more consistent performance">stdev {d["f2_stddev"]:.1f}</div>' if d["num_runs"] > 1 and d["f2_stddev"] > 0 else ""
         if stddev_html:
-            w(f'  <div style="width:80px;flex-shrink:0;text-align:right"><div class="lb-score" style="color:{score_color};width:auto">{d["f2"]:.1f}</div>{stddev_html}</div>')
+            w(f'  <div style="width:80px;flex-shrink:0;text-align:right"><div class="lb-score" style="color:{score_color};width:auto">{d["f3"]:.1f}</div>{stddev_html}</div>')
         else:
-            w(f'  <div class="lb-score" style="color:{score_color}">{d["f2"]:.1f}</div>')
+            w(f'  <div class="lb-score" style="color:{score_color}">{d["f3"]:.1f}</div>')
         cost_parts = []
         if d["cost_per_run"] > 0:
             cost_parts.append(f'<span title="Average API cost to scan one repository" style="cursor:help">${d["cost_per_run"]:.2f}/repo</span>')
@@ -1092,7 +1113,8 @@ def build_html(
     # ── Per-Repository Heatmap ──
     w('<div class="section-title">Per-Repository Heatmap <span class="dim">F2 Score &middot; click headers to sort</span></div>')
     w('<div class="metric-toggle">')
-    w('<button class="active" data-metric="f2">F2 Score</button>')
+    w('<button data-metric="f2">F2 Score</button>')
+    w('<button class="active" data-metric="f3">F3 Score</button>')
     w('<button data-metric="recall">Recall</button>')
     w('<button data-metric="precision">Precision</button>')
     w('</div>')
@@ -1116,39 +1138,43 @@ def build_html(
         for scanner in scanners:
             cell = grid.get(repo, {}).get(scanner)
             if cell is None:
-                w(f'<td class="cell" data-f2="" data-recall="" data-precision=""><span class="hm-cell hm-none">&mdash;</span></td>')
+                w(f'<td class="cell" data-f2="" data-f3="" data-recall="" data-precision=""><span class="hm-cell hm-none">&mdash;</span></td>')
             else:
                 f2_val = cell["f2_score"]
+                f3_val = cell.get("f3_score", 0)
                 rec_val = round(cell["recall"] * 100, 1)
                 prec_val = round(cell["precision"] * 100, 1)
-                hm_cls = _hm_class(f2_val)
+                hm_cls = _hm_class(f3_val)
                 tooltip = _build_tooltip_html(repo, scanner, cell)
-                w(f'<td class="cell" data-f2="{f2_val}" data-recall="{rec_val}" data-precision="{prec_val}"><span class="hm-cell {hm_cls}">{f2_val:.1f}</span>{tooltip}</td>')
+                w(f'<td class="cell" data-f2="{f2_val}" data-f3="{f3_val}" data-recall="{rec_val}" data-precision="{prec_val}"><span class="hm-cell {hm_cls}">{f3_val:.1f}</span>{tooltip}</td>')
         w("</tr>")
 
-    # Aggregate row (micro only)
+    # Aggregate row (strict)
     w('<tr class="agg-row">')
-    w('<td>AVERAGE</td>')
+    w('<td>AVERAGE (strict)</td>')
     for scanner in scanners:
         sa = aggregates.get(scanner, {})
+        strict = sa.get("strict_micro", {})
         micro = sa.get("micro", {})
-        score = micro.get("f2_score")
         repos_scored = sa.get("repos_scored", 0)
-        if score is None or repos_scored == 0:
-            w('<td class="cell" data-f2="" data-recall="" data-precision=""><span class="hm-cell hm-none">&mdash;</span></td>')
+        f2_agg = strict.get("f2_score", 0)
+        f3_agg = strict.get("f3_score", 0)
+        if repos_scored == 0:
+            w('<td class="cell" data-f2="" data-f3="" data-recall="" data-precision=""><span class="hm-cell hm-none">&mdash;</span></td>')
         else:
-            hm_cls = _hm_class(score)
-            rec_agg = round(micro.get("recall", 0) * 100, 1)
-            prec_agg = round(micro.get("precision", 0) * 100, 1)
-            tooltip_lines = f'<div class="tt-title">Average</div>'
-            tooltip_lines += f'<div class="tt-row"><span class="tt-label">Repos scored</span><span class="tt-val">{repos_scored}</span></div>'
+            hm_cls = _hm_class(f3_agg)
+            rec_agg = round(strict.get("recall", 0) * 100, 1)
+            prec_agg = round(strict.get("precision", 0) * 100, 1)
+            tooltip_lines = f'<div class="tt-title">Average (strict)</div>'
+            tooltip_lines += f'<div class="tt-row"><span class="tt-label">Repos scored</span><span class="tt-val">{repos_scored} / {sa.get("repos_total", 0)}</span></div>'
             tooltip_lines += f'<div class="tt-sep"></div>'
-            tooltip_lines += f'<div class="tt-row"><span class="tt-label">F2</span><span class="tt-val">{score:.1f}</span></div>'
-            tooltip_lines += f'<div class="tt-row"><span class="tt-label">Recall</span><span class="tt-val">{micro["recall"]:.1%}</span></div>'
-            tooltip_lines += f'<div class="tt-row"><span class="tt-label">Precision</span><span class="tt-val">{micro["precision"]:.1%}</span></div>'
+            tooltip_lines += f'<div class="tt-row"><span class="tt-label">F3 (strict)</span><span class="tt-val">{f3_agg:.1f}</span></div>'
+            tooltip_lines += f'<div class="tt-row"><span class="tt-label">F2 (strict)</span><span class="tt-val">{f2_agg:.1f}</span></div>'
+            tooltip_lines += f'<div class="tt-row"><span class="tt-label">Recall</span><span class="tt-val">{strict["recall"]:.1%}</span></div>'
+            tooltip_lines += f'<div class="tt-row"><span class="tt-label">Precision</span><span class="tt-val">{strict["precision"]:.1%}</span></div>'
             tooltip_lines += f'<div class="tt-sep"></div>'
-            tooltip_lines += f'<div class="tt-row"><span class="tt-label">TP / FP / FN</span><span class="tt-val">{micro["tp"]} / {micro["fp"]} / {micro["fn"]}</span></div>'
-            w(f'<td class="cell" data-f2="{score}" data-recall="{rec_agg}" data-precision="{prec_agg}"><span class="hm-cell {hm_cls}">{score:.1f}</span><div class="tooltip">{tooltip_lines}</div></td>')
+            tooltip_lines += f'<div class="tt-row"><span class="tt-label">TP / FP / FN</span><span class="tt-val">{strict["tp"]} / {strict["fp"]} / {strict["fn"]}</span></div>'
+            w(f'<td class="cell" data-f2="{f2_agg}" data-f3="{f3_agg}" data-recall="{rec_agg}" data-precision="{prec_agg}"><span class="hm-cell {hm_cls}">{f3_agg:.1f}</span><div class="tooltip">{tooltip_lines}</div></td>')
     w("</tr>")
 
     w("</tbody></table></div>")
@@ -1285,26 +1311,28 @@ function setScoreMode(mode) {
   document.querySelector(`.mode-btn[onclick*="${mode}"]`).classList.add('active');
   const rows = document.querySelectorAll('.lb-row');
   const sorted = [...rows].sort((a, b) => {
-    const aF2 = parseFloat(mode === 'strict' ? a.dataset.strictF2 : a.dataset.f2);
-    const bF2 = parseFloat(mode === 'strict' ? b.dataset.strictF2 : b.dataset.f2);
-    return bF2 - aF2;
+    const aF3 = parseFloat(mode === 'strict' ? a.dataset.strictF3 : a.dataset.f3);
+    const bF3 = parseFloat(mode === 'strict' ? b.dataset.strictF3 : b.dataset.f3);
+    return bF3 - aF3;
   });
   sorted.forEach((row, i) => {
-    const f2 = mode === 'strict' ? row.dataset.strictF2 : row.dataset.f2;
+    const f3 = mode === 'strict' ? row.dataset.strictF3 : row.dataset.f3;
     const recall = mode === 'strict' ? row.dataset.strictRecall : row.dataset.recall;
     const precision = mode === 'strict' ? row.dataset.strictPrecision : row.dataset.precision;
     const color = mode === 'strict' ? row.dataset.strictColor : row.dataset.color;
     const gradient = mode === 'strict' ? row.dataset.strictGradient : row.dataset.gradient;
     row.querySelector('.lb-rank').textContent = i + 1;
-    row.querySelector('.lb-score').textContent = parseFloat(f2).toFixed(1);
+    row.querySelector('.lb-score').textContent = parseFloat(f3).toFixed(1);
     row.querySelector('.lb-score').style.color = color;
-    row.querySelector('.lb-bar-fill').style.width = f2 + '%';
+    row.querySelector('.lb-bar-fill').style.width = f3 + '%';
     row.querySelector('.lb-bar-fill').style.background = gradient;
     row.querySelector('.lb-meta').innerHTML = `<strong>${parseFloat(recall).toFixed(1)}%</strong> recall &middot; <strong>${parseFloat(precision).toFixed(1)}%</strong> prec`;
     row.classList.toggle('first', i === 0);
     row.parentNode.appendChild(row);
   });
 }
+// Initialize with strict mode on page load
+document.addEventListener('DOMContentLoaded', () => setScoreMode('strict'));
 </script>""")
 
     # ── Footer ──
@@ -1394,15 +1422,18 @@ def build_scanner_detail_html(
     w(f'<div class="subtitle">Scanner detail &middot; {repos_scored} repositories scored &middot; generated {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}</div>')
     w('</div>')
 
-    # ── Summary cards ──
-    f2_val = micro.get("f2_score", 0)
-    rec_val = round(micro.get("recall", 0) * 100, 1)
-    prec_val = round(micro.get("precision", 0) * 100, 1)
+    # ── Summary cards (strict scores as default) ──
+    strict = sa.get("strict_micro", micro)
+    f3_val = strict.get("f3_score", 0)
+    f2_val = strict.get("f2_score", 0)
+    rec_val = round(strict.get("recall", 0) * 100, 1)
+    prec_val = round(strict.get("precision", 0) * 100, 1)
 
     w('<div class="hero-stats">')
-    w(f'<div class="stat-card" title="Combines recall and precision into one score (0–100). Weights recall 4x more than precision — missing a real vuln is worse than a false alarm."><div class="stat-icon" style="background:rgba(22,163,74,0.1);color:{f2_color(f2_val)}">F2</div><div><div class="stat-value" style="color:{f2_color(f2_val)}">{f2_val:.1f}</div><div class="stat-label">F2 Score</div></div></div>')
-    w(f'<div class="stat-card" title="What percentage of real vulnerabilities did this scanner find? 100% = found everything, 0% = missed everything."><div class="stat-icon" style="background:rgba(34,197,94,0.1);color:#22c55e">&#8593;</div><div><div class="stat-value" style="color:#22c55e">{rec_val:.1f}%</div><div class="stat-label">Recall</div></div></div>')
-    w(f'<div class="stat-card" title="Of everything this scanner flagged, what percentage were real vulnerabilities? 100% = no false alarms, lower = more noise."><div class="stat-icon" style="background:rgba(160,118,249,0.1);color:#A076F9">&#9670;</div><div><div class="stat-value" style="color:#A076F9">{prec_val:.1f}%</div><div class="stat-label">Precision</div></div></div>')
+    w(f'<div class="stat-card" title="F3 Score (beta=3, strict): weights recall 9x more than precision. Primary metric for high-risk industries. Strict mode penalizes timeouts/failures."><div class="stat-icon" style="background:rgba(22,163,74,0.1);color:{f2_color(f3_val)}">F3</div><div><div class="stat-value" style="color:{f2_color(f3_val)}">{f3_val:.1f}</div><div class="stat-label">F3 Score (strict)</div></div></div>')
+    w(f'<div class="stat-card" title="F2 Score (beta=2, strict): weights recall 4x more than precision."><div class="stat-icon" style="background:rgba(22,163,74,0.1);color:{f2_color(f2_val)}">F2</div><div><div class="stat-value" style="color:{f2_color(f2_val)}">{f2_val:.1f}</div><div class="stat-label">F2 Score (strict)</div></div></div>')
+    w(f'<div class="stat-card" title="What percentage of real vulnerabilities did this scanner find? Strict mode counts timed-out repos as missed."><div class="stat-icon" style="background:rgba(34,197,94,0.1);color:#22c55e">&#8593;</div><div><div class="stat-value" style="color:#22c55e">{rec_val:.1f}%</div><div class="stat-label">Recall (strict)</div></div></div>')
+    w(f'<div class="stat-card" title="Of everything this scanner flagged, what percentage were real vulnerabilities? 100% = no false alarms, lower = more noise."><div class="stat-icon" style="background:rgba(160,118,249,0.1);color:#A076F9">&#9670;</div><div><div class="stat-value" style="color:#A076F9">{prec_val:.1f}%</div><div class="stat-label">Precision (strict)</div></div></div>')
     w(f'<div class="stat-card" title="Number of benchmark repositories this scanner successfully scanned out of {sa.get("repos_total", 26)} total."><div class="stat-icon" style="background:rgba(196,240,62,0.1);color:#C4F03E">&#9733;</div><div><div class="stat-value" style="color:#C4F03E">{repos_scored}</div><div class="stat-label">Repos Scored</div></div></div>')
     meta = scanner_metadata or {}
     if meta.get("has_metrics"):
@@ -1426,7 +1457,8 @@ def build_scanner_detail_html(
     # ── Per-repo metric table ──
     w('<div class="section-title">Per-Repository Scores <span class="dim">click headers to sort</span></div>')
     w('<div class="metric-toggle">')
-    w('<button class="active" data-metric="f2">F2 Score</button>')
+    w('<button data-metric="f2">F2 Score</button>')
+    w('<button class="active" data-metric="f3">F3 Score</button>')
     w('<button data-metric="recall">Recall</button>')
     w('<button data-metric="precision">Precision</button>')
     w('</div>')
@@ -1446,14 +1478,15 @@ def build_scanner_detail_html(
     for repo, cell in repo_data:
         short_repo = repo.replace("realvuln-", "").replace("Reavuln-", "").replace("RealVuln-", "")
         f2 = cell["f2_score"]
+        f3 = cell.get("f3_score", 0)
         rec = round(cell["recall"] * 100, 1)
         prec = round(cell["precision"] * 100, 1)
         hm_cls = _hm_class(f2)
         w("<tr>")
         w(f'<td>{short_repo}</td>')
-        w(f'<td class="cell" data-f2="{f2}" data-recall="{rec}" data-precision="{prec}"><span class="hm-cell {hm_cls}">{f2:.1f}</span></td>')
-        w(f'<td class="cell" data-f2="{f2}" data-recall="{rec}" data-precision="{prec}"><span class="hm-cell" style="background:{f2_color(rec)};color:#fff">{rec:.1f}</span></td>')
-        w(f'<td class="cell" data-f2="{f2}" data-recall="{rec}" data-precision="{prec}"><span class="hm-cell" style="background:{f2_color(prec)};color:#fff">{prec:.1f}</span></td>')
+        w(f'<td class="cell" data-f2="{f2}" data-f3="{f3}" data-recall="{rec}" data-precision="{prec}"><span class="hm-cell {hm_cls}">{f2:.1f}</span></td>')
+        w(f'<td class="cell" data-f2="{f2}" data-f3="{f3}" data-recall="{rec}" data-precision="{prec}"><span class="hm-cell" style="background:{f2_color(rec)};color:#fff">{rec:.1f}</span></td>')
+        w(f'<td class="cell" data-f2="{f2}" data-f3="{f3}" data-recall="{rec}" data-precision="{prec}"><span class="hm-cell" style="background:{f2_color(prec)};color:#fff">{prec:.1f}</span></td>')
         w(f'<td style="color:#22c55e;font-weight:600">{cell["tp"]}</td>')
         w(f'<td style="color:#ef4444;font-weight:600">{cell["fp"]}</td>')
         w(f'<td style="color:#f97316;font-weight:600">{cell["fn"]}</td>')
