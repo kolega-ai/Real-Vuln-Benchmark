@@ -47,18 +47,18 @@ def print_summary_table(
     print(f"RealVuln Scorecard — {repo_id} @ {commit_sha[:12]}")
     print()
     header = (
-        f"{'Scanner':<20} {'F2 Score':>8}  "
+        f"{'Scanner':<20} {'F2 Score':>8} {'F3 Score':>8}  "
         f"{'TP':>4} {'FP':>4} {'FN':>4} {'TN':>4}  "
-        f"{'Prec':>6} {'Recall':>6} {'F1':>6} {'F2':>6}"
+        f"{'Prec':>6} {'Recall':>6} {'F1':>6} {'F2':>6} {'F3':>6}"
     )
     print(header)
     print("=" * len(header))
 
     for card in scorecards:
         print(
-            f"{card.scanner:<20} {card.f2_score:>7.1f}   "
+            f"{card.scanner:<20} {card.f2_score:>7.1f}  {card.f3_score:>7.1f}   "
             f"{card.tp:>4} {card.fp:>4} {card.fn:>4} {card.tn:>4}  "
-            f"{card.precision:>6.3f} {card.recall:>6.3f} {card.f1:>6.3f} {card.f2:>6.3f}"
+            f"{card.precision:>6.3f} {card.recall:>6.3f} {card.f1:>6.3f} {card.f2:>6.3f} {card.f3:>6.3f}"
         )
 
     print()
@@ -91,11 +91,17 @@ def print_multirun_summary(scanner: str, run_cards: list[ScoreCard]) -> None:
     f1s = [c.f1 for c in run_cards]
     f2s = [c.f2 for c in run_cards]
     f2_scores = [c.f2_score for c in run_cards]
+    f3s = [c.f3 for c in run_cards]
+    f3_scores = [c.f3_score for c in run_cards]
 
     print(f"Multi-run summary ({scanner}, {n} runs):")
     print(
         f"  F2 Score:   {statistics.mean(f2_scores):.1f} "
         f"± {statistics.stdev(f2_scores):.1f}"
+    )
+    print(
+        f"  F3 Score:   {statistics.mean(f3_scores):.1f} "
+        f"± {statistics.stdev(f3_scores):.1f}"
     )
     print(
         f"  Precision:  {statistics.mean(precisions):.3f} "
@@ -112,6 +118,10 @@ def print_multirun_summary(scanner: str, run_cards: list[ScoreCard]) -> None:
     print(
         f"  F2:         {statistics.mean(f2s):.3f} "
         f"± {statistics.stdev(f2s):.3f}"
+    )
+    print(
+        f"  F3:         {statistics.mean(f3s):.3f} "
+        f"± {statistics.stdev(f3s):.3f}"
     )
     print()
 
@@ -170,6 +180,7 @@ def build_markdown(
     w("| **Recall** | TP / (TP + FN) | Of all real vulnerabilities, what fraction did the scanner find? High recall = few missed vulns. |")
     w("| **F1** | 2 x (Prec x Recall) / (Prec + Recall) | Harmonic mean of precision and recall. Weights both equally. |")
     w("| **F2** | 5 x (Prec x Recall) / (4 x Prec + Recall) | F-beta with beta=2. Weights recall **4x more** than precision. Range 0\u20131. |")
+    w("| **F3** | 10 x (Prec x Recall) / (9 x Prec + Recall) | F-beta with beta=3. Weights recall **9x more** than precision. For high-risk industries. Range 0\u20131. |")
     w("")
     w("### Why F2 Score?")
     w("")
@@ -198,10 +209,12 @@ def build_markdown(
         w(f"| Metric | Value |")
         w(f"|--------|-------|")
         w(f"| **F2 Score** | **{card.f2_score:.1f} / 100** |")
+        w(f"| **F3 Score** | **{card.f3_score:.1f} / 100** |")
         w(f"| Precision | {card.precision:.1%} |")
         w(f"| Recall | {card.recall:.1%} |")
         w(f"| F1 | {card.f1:.3f} |")
         w(f"| F2 | {card.f2:.3f} |")
+        w(f"| F3 | {card.f3:.3f} |")
         w(f"| TP / FP / FN / TN | {card.tp} / {card.fp} / {card.fn} / {card.tn} |")
         w("")
 
@@ -214,10 +227,12 @@ def build_markdown(
             w(f"|--------|------|--------|")
             for metric_name, vals in [
                 ("F2 Score", [c.f2_score for c in rc]),
+                ("F3 Score", [c.f3_score for c in rc]),
                 ("Precision", [c.precision for c in rc]),
                 ("Recall", [c.recall for c in rc]),
                 ("F1", [c.f1 for c in rc]),
                 ("F2", [c.f2 for c in rc]),
+                ("F3", [c.f3 for c in rc]),
             ]:
                 w(f"| {metric_name} | {statistics.mean(vals):.3f} | {statistics.stdev(vals):.3f} |")
             w("")
@@ -228,13 +243,13 @@ def build_markdown(
         w("")
         w("## Scanner Comparison")
         w("")
-        w("| Scanner | F2 Score | TP | FP | FN | TN | Prec | Recall | F1 | F2 |")
-        w("|---------|--------:|---:|---:|---:|---:|-----:|-------:|---:|---:|")
+        w("| Scanner | F2 Score | F3 Score | TP | FP | FN | TN | Prec | Recall | F1 | F2 | F3 |")
+        w("|---------|--------:|--------:|---:|---:|---:|---:|-----:|-------:|---:|---:|---:|")
         for slug, card in scorecards.items():
             w(
-                f"| {slug} | **{card.f2_score:.1f}** | {card.tp} | {card.fp} | {card.fn} | {card.tn} "
+                f"| {slug} | **{card.f2_score:.1f}** | **{card.f3_score:.1f}** | {card.tp} | {card.fp} | {card.fn} | {card.tn} "
                 f"| {card.precision:.3f} | {card.recall:.3f} | {card.f1:.3f} "
-                f"| {card.f2:.3f} |"
+                f"| {card.f2:.3f} | {card.f3:.3f} |"
             )
         w("")
 
@@ -350,9 +365,13 @@ def build_report(
             f1s = [c.f1 for c in run_cards]
             f2s = [c.f2 for c in run_cards]
             f2_scores = [c.f2_score for c in run_cards]
+            f3s = [c.f3 for c in run_cards]
+            f3_scores = [c.f3_score for c in run_cards]
             scanner_data["runs"] = len(run_cards)
             scanner_data["mean_f2_score"] = round(statistics.mean(f2_scores), 1)
             scanner_data["stddev_f2_score"] = round(statistics.stdev(f2_scores), 1)
+            scanner_data["mean_f3_score"] = round(statistics.mean(f3_scores), 1)
+            scanner_data["stddev_f3_score"] = round(statistics.stdev(f3_scores), 1)
             scanner_data["mean_precision"] = round(statistics.mean(precisions), 4)
             scanner_data["stddev_precision"] = round(statistics.stdev(precisions), 4)
             scanner_data["mean_recall"] = round(statistics.mean(recalls), 4)
@@ -361,6 +380,8 @@ def build_report(
             scanner_data["stddev_f1"] = round(statistics.stdev(f1s), 4)
             scanner_data["mean_f2"] = round(statistics.mean(f2s), 4)
             scanner_data["stddev_f2"] = round(statistics.stdev(f2s), 4)
+            scanner_data["mean_f3"] = round(statistics.mean(f3s), 4)
+            scanner_data["stddev_f3"] = round(statistics.stdev(f3s), 4)
 
         report["scanners"][slug] = scanner_data
 
@@ -474,6 +495,8 @@ def main() -> int:
             avg_card.f1 = statistics.mean([c.f1 for c in run_cards])
             avg_card.f2 = statistics.mean([c.f2 for c in run_cards])
             avg_card.f2_score = round(statistics.mean([c.f2_score for c in run_cards]), 1)
+            avg_card.f3 = statistics.mean([c.f3 for c in run_cards])
+            avg_card.f3_score = round(statistics.mean([c.f3_score for c in run_cards]), 1)
             avg_card.tpr = statistics.mean([c.tpr for c in run_cards])
             avg_card.fpr = statistics.mean([c.fpr for c in run_cards])
             avg_card.youden_j = statistics.mean([c.youden_j for c in run_cards])

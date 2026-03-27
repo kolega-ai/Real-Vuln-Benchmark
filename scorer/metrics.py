@@ -51,6 +51,8 @@ class ScoreCard:
     f1: float = 0.0
     f2: float = 0.0  # F-beta with beta=2, recall-weighted
     f2_score: float = 0.0  # F2 × 100, 0-100 scale
+    f3: float = 0.0  # F-beta with beta=3, recall-weighted (9:1)
+    f3_score: float = 0.0  # F3 × 100, 0-100 scale
     tpr: float = 0.0  # TP / (TP + FN) — same as recall
     fpr: float = 0.0  # FP / (FP + TN)
     youden_j: float = 0.0  # TPR - FPR
@@ -72,6 +74,8 @@ class ScoreCard:
             "f1": round(self.f1, 4),
             "f2": round(self.f2, 4),
             "f2_score": self.f2_score,
+            "f3": round(self.f3, 4),
+            "f3_score": self.f3_score,
             "tpr": round(self.tpr, 4),
             "fpr": round(self.fpr, 4),
             "youden_j": round(self.youden_j, 4),
@@ -158,6 +162,10 @@ def compute_scorecard(
         5.0 * card.precision * card.recall, 4.0 * card.precision + card.recall
     )
     card.f2_score = round(card.f2 * 100, 1)
+    card.f3 = _safe_div(
+        10.0 * card.precision * card.recall, 9.0 * card.precision + card.recall
+    )
+    card.f3_score = round(card.f3 * 100, 1)
     card.tpr = card.recall  # Same metric, different name
     card.fpr = _safe_div(card.fp, card.fp + card.tn)
     card.youden_j = card.tpr - card.fpr
