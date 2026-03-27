@@ -1,6 +1,8 @@
 # RealVuln Benchmark
 
-An open benchmark for evaluating security scanners against ground-truth vulnerabilities in real-world code. Primary metric is **F2 Score** (0–100, recall-weighted).
+**[Live Dashboard →](https://realvuln.kolega.dev)**
+
+An open benchmark for evaluating security scanners against ground-truth vulnerabilities in real-world code. Primary metric is **F3 Score** (0–100, recall-weighted 9:1).
 
 ## Problem & Purpose
 
