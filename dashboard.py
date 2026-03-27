@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import statistics
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,10 +67,16 @@ def discover_all_scanners(scan_dir: Path, repos: list[str]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def _find_result_files(scanner_dir: Path) -> list[Path]:
-    """Find JSON result files for a scanner."""
+    """Find JSON result files for a scanner.
+
+    Excludes .metrics.json files (operational metrics from LLM benchmark runs).
+    """
     if not scanner_dir.is_dir():
         return []
-    return sorted(scanner_dir.glob("*.json"))
+    return sorted(
+        f for f in scanner_dir.glob("*.json")
+        if not f.name.endswith(".metrics.json")
+    )
 
 
 def score_all(
@@ -103,12 +110,41 @@ def score_all(
 
             parser = get_parser(scanner)
             try:
-                findings = parser.parse(str(result_files[0]))
-                results = match_findings(findings, ground_truth)
-                card = compute_scorecard(
-                    repo_id, scanner, timestamp, results, cwe_families
-                )
-                grid[repo][scanner] = card.to_dict()
+                run_dicts: list[dict] = []
+                for rf in result_files:
+                    findings = parser.parse(str(rf))
+                    results = match_findings(findings, ground_truth)
+                    card = compute_scorecard(
+                        repo_id, scanner, timestamp, results, cwe_families
+                    )
+                    run_dicts.append(card.to_dict())
+
+                if len(run_dicts) == 1:
+                    cell = run_dicts[0]
+                    cell["_run_f2_scores"] = [cell["f2_score"]]
+                    cell["_num_runs"] = 1
+                else:
+                    # Average core metrics across runs
+                    cell = dict(run_dicts[0])  # copy structure
+                    for key in ("tp", "fp", "fn", "tn"):
+                        cell[key] = round(statistics.mean(
+                            [rd[key] for rd in run_dicts]
+                        ))
+                    for key in ("precision", "recall", "f1", "f2",
+                                "tpr", "fpr", "youden_j"):
+                        cell[key] = round(statistics.mean(
+                            [rd[key] for rd in run_dicts]
+                        ), 4)
+                    cell["f2_score"] = round(statistics.mean(
+                        [rd["f2_score"] for rd in run_dicts]
+                    ), 1)
+                    # Keep per_family / per_severity from first run
+                    cell["per_family"] = run_dicts[0].get("per_family", {})
+                    cell["per_severity"] = run_dicts[0].get("per_severity", {})
+                    cell["_run_f2_scores"] = [rd["f2_score"] for rd in run_dicts]
+                    cell["_num_runs"] = len(run_dicts)
+
+                grid[repo][scanner] = cell
             except Exception as e:
                 print(f"Warning: Failed to score {repo}/{scanner}: {e}", file=sys.stderr)
                 grid[repo][scanner] = None
@@ -124,34 +160,198 @@ def _safe_div(n: float, d: float) -> float:
     return n / d if d > 0 else 0.0
 
 
+def load_repo_loc(gt_dir: Path) -> dict[str, int]:
+    """Load LOC counts from ground-truth files."""
+    loc_map: dict[str, int] = {}
+    for d in gt_dir.iterdir():
+        gt_path = d / "ground-truth.json"
+        if gt_path.exists():
+            with open(gt_path) as f:
+                gt = json.load(f)
+            if "loc" in gt:
+                loc_map[d.name] = gt["loc"]
+    return loc_map
+
+
+def compute_scanner_costs(
+    scan_dir: Path, scanners: list[str], repo_loc: dict[str, int],
+) -> dict[str, dict]:
+    """Collect cost data from .metrics.json files per scanner.
+
+    Returns {scanner: {"total_cost", "successful_runs", "cost_per_run",
+                        "total_loc_scanned", "cost_per_100_loc"}}.
+    """
+    from collections import defaultdict
+    costs: dict[str, dict] = defaultdict(
+        lambda: {"total_cost": 0.0, "successful_runs": 0, "repos_scanned": set()}
+    )
+
+    for repo_dir in scan_dir.iterdir():
+        if not repo_dir.is_dir():
+            continue
+        for scanner_dir in repo_dir.iterdir():
+            if not scanner_dir.is_dir() or scanner_dir.name not in scanners:
+                continue
+            for mf in scanner_dir.glob("run-*.metrics.json"):
+                try:
+                    with open(mf) as f:
+                        d = json.load(f)
+                    cost = d.get("cost_usd", 0)
+                    costs[scanner_dir.name]["total_cost"] += cost
+                    if d.get("exit_status") == "success":
+                        costs[scanner_dir.name]["successful_runs"] += 1
+                        costs[scanner_dir.name]["repos_scanned"].add(repo_dir.name)
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+    result = {}
+    for scanner in scanners:
+        c = costs.get(scanner, {"total_cost": 0.0, "successful_runs": 0, "repos_scanned": set()})
+        runs = c["successful_runs"]
+        total_loc = sum(repo_loc.get(r, 0) for r in c["repos_scanned"])
+        # Cost per 100 LOC: total cost / (total LOC / 100)
+        cost_per_100_loc = round(c["total_cost"] / (total_loc / 100), 4) if total_loc > 0 else 0
+        result[scanner] = {
+            "total_cost": round(c["total_cost"], 4),
+            "successful_runs": runs,
+            "cost_per_run": round(c["total_cost"] / runs, 4) if runs > 0 else 0,
+            "total_loc_scanned": total_loc,
+            "cost_per_100_loc": cost_per_100_loc,
+        }
+    return result
+
+
+def compute_scanner_metadata(
+    scan_dir: Path, scanners: list[str],
+) -> dict[str, dict]:
+    """Collect operational metadata from .metrics.json files per scanner.
+
+    Returns {scanner: {model, prompt_version, prompt_label, avg tokens,
+                        avg latency, exit_status_counts, json_repair_rate, ...}}.
+    """
+    from collections import defaultdict
+    raw: dict[str, dict] = defaultdict(lambda: {
+        "model": "", "prompt_version": "", "prompt_label": "",
+        "input_tokens": [], "output_tokens": [], "total_tokens": [],
+        "wall_clock_seconds": [], "json_repairs": 0, "total_runs": 0,
+        "exit_status_counts": defaultdict(int),
+    })
+
+    for repo_dir in scan_dir.iterdir():
+        if not repo_dir.is_dir():
+            continue
+        for scanner_dir in repo_dir.iterdir():
+            if not scanner_dir.is_dir() or scanner_dir.name not in scanners:
+                continue
+            for mf in scanner_dir.glob("run-*.metrics.json"):
+                try:
+                    with open(mf) as f:
+                        d = json.load(f)
+                    s = raw[scanner_dir.name]
+                    if not s["model"]:
+                        s["model"] = d.get("model", "")
+                        s["prompt_version"] = d.get("prompt_version", "")
+                        s["prompt_label"] = d.get("prompt_label", "")
+                    s["input_tokens"].append(d.get("input_tokens", 0))
+                    s["output_tokens"].append(d.get("output_tokens", 0))
+                    s["total_tokens"].append(d.get("total_tokens", 0))
+                    s["wall_clock_seconds"].append(d.get("wall_clock_seconds", 0))
+                    if d.get("llm_json_repair", False):
+                        s["json_repairs"] += 1
+                    s["total_runs"] += 1
+                    status = d.get("exit_status", "unknown")
+                    s["exit_status_counts"][status] += 1
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+    result = {}
+    for scanner in scanners:
+        s = raw.get(scanner)
+        if not s or s["total_runs"] == 0:
+            result[scanner] = {"has_metrics": False}
+            continue
+        n = s["total_runs"]
+        result[scanner] = {
+            "has_metrics": True,
+            "model": s["model"],
+            "prompt_version": s["prompt_version"],
+            "prompt_label": s["prompt_label"],
+            "avg_input_tokens": int(round(statistics.mean(s["input_tokens"]))),
+            "avg_output_tokens": int(round(statistics.mean(s["output_tokens"]))),
+            "avg_total_tokens": int(round(statistics.mean(s["total_tokens"]))),
+            "avg_wall_clock_seconds": round(statistics.mean(s["wall_clock_seconds"]), 1),
+            "json_repair_rate": round(s["json_repairs"] / n, 3),
+            "exit_status_counts": dict(s["exit_status_counts"]),
+            "total_runs": n,
+        }
+    return result
+
+
 def compute_aggregates(
     grid: dict[str, dict[str, dict | None]],
     scanners: list[str],
+    gt_dir: Path | None = None,
 ) -> dict[str, dict]:
-    """Compute micro-avg and macro-avg per scanner.
+    """Compute micro-avg and macro-avg per scanner in both optimistic and strict modes.
 
-    Returns {scanner: {"micro": {...}, "macro": {...}, "repos_scored": int}}.
+    Optimistic: only score repos where the scanner produced results.
+    Strict: failed repos count as 0 TP / all vulns FN (penalizes timeouts/failures).
+
+    Returns {scanner: {"micro": {...}, "macro": {...}, "repos_scored": int,
+                        "strict_micro": {...}, "strict_repos_total": int}}.
     """
+    # Pre-load vuln counts per repo for strict mode
+    repo_vuln_counts: dict[str, int] = {}
+    repo_trap_counts: dict[str, int] = {}
+    if gt_dir:
+        for repo in grid:
+            gt_path = gt_dir / repo / "ground-truth.json"
+            if gt_path.exists():
+                with open(gt_path) as f:
+                    gt = json.load(f)
+                findings = gt.get("findings", [])
+                repo_vuln_counts[repo] = sum(1 for f in findings if f.get("is_vulnerable", True))
+                repo_trap_counts[repo] = sum(1 for f in findings if not f.get("is_vulnerable", True))
+
     agg: dict[str, dict] = {}
 
     for scanner in scanners:
+        # Optimistic mode
         total_tp = total_fp = total_fn = total_tn = 0
         f2_scores: list[float] = []
+        max_num_runs = 1
+        # Strict mode
+        strict_tp = strict_fp = strict_fn = strict_tn = 0
 
         for repo in grid:
             cell = grid[repo].get(scanner)
-            if cell is None:
-                continue
-            total_tp += cell["tp"]
-            total_fp += cell["fp"]
-            total_fn += cell["fn"]
-            total_tn += cell["tn"]
-            f2_scores.append(cell["f2_score"])
+            if cell is not None:
+                # Scored successfully — both modes use real results
+                total_tp += cell["tp"]
+                total_fp += cell["fp"]
+                total_fn += cell["fn"]
+                total_tn += cell["tn"]
+                f2_scores.append(cell["f2_score"])
+                max_num_runs = max(max_num_runs, cell.get("_num_runs", 1))
+                strict_tp += cell["tp"]
+                strict_fp += cell["fp"]
+                strict_fn += cell["fn"]
+                strict_tn += cell["tn"]
+            else:
+                # Failed — strict mode counts all vulns as missed
+                strict_fn += repo_vuln_counts.get(repo, 0)
+                strict_tn += repo_trap_counts.get(repo, 0)
 
         micro_prec = _safe_div(total_tp, total_tp + total_fp)
         micro_rec = _safe_div(total_tp, total_tp + total_fn)
         micro_f2 = _safe_div(
             5.0 * micro_prec * micro_rec, 4.0 * micro_prec + micro_rec
+        )
+
+        strict_prec = _safe_div(strict_tp, strict_tp + strict_fp)
+        strict_rec = _safe_div(strict_tp, strict_tp + strict_fn)
+        strict_f2 = _safe_div(
+            5.0 * strict_prec * strict_rec, 4.0 * strict_prec + strict_rec
         )
 
         agg[scanner] = {
@@ -164,12 +364,24 @@ def compute_aggregates(
                 "recall": round(micro_rec, 4),
                 "f2_score": round(micro_f2 * 100, 1),
             },
+            "strict_micro": {
+                "tp": strict_tp,
+                "fp": strict_fp,
+                "fn": strict_fn,
+                "tn": strict_tn,
+                "precision": round(strict_prec, 4),
+                "recall": round(strict_rec, 4),
+                "f2_score": round(strict_f2 * 100, 1),
+            },
             "macro": {
                 "f2_score": round(
                     sum(f2_scores) / len(f2_scores), 1
                 ) if f2_scores else 0.0,
             },
             "repos_scored": len(f2_scores),
+            "repos_total": len(grid),
+            "f2_stddev": round(statistics.stdev(f2_scores), 1) if len(f2_scores) >= 2 else 0.0,
+            "num_runs": max_num_runs,
         }
 
     return agg
@@ -674,7 +886,9 @@ def build_html(
     gt_total_vulns: int = 0,
     gt_total_traps: int = 0,
     gt_total_repos: int = 0,
+    gt_total_loc: int = 0,
     cwe_families: dict | None = None,
+    manifest: dict | None = None,
 ) -> str:
     """Build standalone HTML index dashboard."""
     total_scanners = len(scanners)
@@ -684,6 +898,9 @@ def build_html(
     for scanner in scanners:
         sa = aggregates.get(scanner, {})
         micro = sa.get("micro", {})
+        strict = sa.get("strict_micro", {})
+        cost_info = sa.get("cost", {})
+        cost_per_run = cost_info.get("cost_per_run", 0)
         chart_data.append({
             "slug": scanner,
             "label": display_name(scanner),
@@ -694,6 +911,17 @@ def build_html(
             "fp": micro.get("fp", 0),
             "fn": micro.get("fn", 0),
             "repos": sa.get("repos_scored", 0),
+            "repos_total": sa.get("repos_total", 0),
+            "strict_f2": strict.get("f2_score", 0),
+            "strict_recall": round(strict.get("recall", 0) * 100, 1),
+            "strict_precision": round(strict.get("precision", 0) * 100, 1),
+            "cost_per_run": cost_per_run,
+            "cost_per_100_loc": cost_info.get("cost_per_100_loc", 0),
+            "total_cost": cost_info.get("total_cost", 0),
+            "avg_latency": sa.get("metadata", {}).get("avg_wall_clock_seconds", 0),
+            "model": sa.get("metadata", {}).get("model", ""),
+            "f2_stddev": sa.get("f2_stddev", 0),
+            "num_runs": sa.get("num_runs", 1),
         })
     chart_data.sort(key=lambda x: x["f2"], reverse=True)
 
@@ -732,10 +960,11 @@ def build_html(
 
     # ── Hero Stats ──
     w('<div class="hero-stats">')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(239,68,68,0.1);color:#ef4444">&#9888;</div><div><div class="stat-value" style="color:#ef4444">{gt_total_vulns}</div><div class="stat-label">Vulnerabilities</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308">&#9678;</div><div><div class="stat-value" style="color:#eab308">{gt_total_traps}</div><div class="stat-label">FP Traps</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(168,85,247,0.1);color:#A076F9">&#9881;</div><div><div class="stat-value" style="color:#A076F9">{gt_total_repos}</div><div class="stat-label">Repositories</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(196,240,62,0.1);color:#C4F03E">&#9733;</div><div><div class="stat-value" style="color:#C4F03E">{total_scanners}</div><div class="stat-label">Scanners Tested</div></div></div>')
+    w(f'<div class="stat-card" title="Total confirmed vulnerabilities across all benchmark repositories — each one is a real, documented security issue."><div class="stat-icon" style="background:rgba(239,68,68,0.1);color:#ef4444">&#9888;</div><div><div class="stat-value" style="color:#ef4444">{gt_total_vulns}</div><div class="stat-label">Vulnerabilities</div></div></div>')
+    w(f'<div class="stat-card" title="Code that looks suspicious but is actually safe. Scanners that flag these get penalized — tests whether scanners can tell real vulns from false alarms."><div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308">&#9678;</div><div><div class="stat-value" style="color:#eab308">{gt_total_traps}</div><div class="stat-label">FP Traps</div></div></div>')
+    w(f'<div class="stat-card" title="Intentionally-vulnerable Python applications used as benchmark targets — each pinned to a specific commit."><div class="stat-icon" style="background:rgba(168,85,247,0.1);color:#A076F9">&#9881;</div><div><div class="stat-value" style="color:#A076F9">{gt_total_repos}</div><div class="stat-label">Repositories</div></div></div>')
+    w(f'<div class="stat-card" title="Total lines of Python code across all benchmark repositories."><div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6">&#9998;</div><div><div class="stat-value" style="color:#3b82f6">{gt_total_loc:,}</div><div class="stat-label">Python LOC</div></div></div>')
+    w(f'<div class="stat-card" title="Number of security scanners evaluated — includes traditional SAST tools and LLM-based scanners."><div class="stat-icon" style="background:rgba(196,240,62,0.1);color:#C4F03E">&#9733;</div><div><div class="stat-value" style="color:#C4F03E">{total_scanners}</div><div class="stat-label">Scanners Tested</div></div></div>')
     w('</div>')
 
     # ── Leaderboard ──
@@ -752,20 +981,49 @@ def build_html(
 <div style="color:var(--text-tertiary);font-size:13px;line-height:1.7;margin-top:10px;padding:14px 16px;background:var(--bg-secondary);border:1px solid var(--border-secondary);border-radius:12px">
 <strong style="color:var(--text-secondary)">Recall</strong> — What percentage of real vulnerabilities did the scanner find? Higher is better. A scanner that misses nothing has 100% recall.<br><br>
 <strong style="color:var(--text-secondary)">Precision</strong> — Of everything the scanner flagged, what percentage were actual vulnerabilities? Higher is better. A scanner with no false alarms has 100% precision.<br><br>
-<strong style="color:var(--text-secondary)">F2 Score</strong> — Combines recall and precision into a single number (0–100), pooled across all repositories. Higher is better.
+<strong style="color:var(--text-secondary)">F2 Score</strong> — Combines recall and precision into a single number (0–100), pooled across all repositories. Higher is better.<br><br>
+<strong style="color:var(--text-secondary)">Optimistic vs Strict</strong> — <em>Optimistic</em> only scores repos where the scanner produced results. <em>Strict</em> penalizes failed/timed-out repos by counting all their vulnerabilities as missed (FN). Toggle between them with the buttons below.
 </div>
 </details>
 <style>details[open] summary span{transform:rotate(90deg)}</style>""")
+    # Scoring mode toggle
+    w('<div style="display:flex;gap:8px;margin-bottom:16px">')
+    w('<button class="mode-btn active" onclick="setScoreMode(\'optimistic\')">Optimistic</button>')
+    w('<button class="mode-btn" onclick="setScoreMode(\'strict\')">Strict</button>')
+    w('</div>')
+    w('<style>.mode-btn{background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border-secondary);padding:6px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-family:Inter,sans-serif;transition:all 0.2s}.mode-btn.active{background:var(--accent-lime);color:#000;border-color:var(--accent-lime)}.mode-btn:hover{border-color:var(--accent-lime)}</style>')
+
     for rank, d in enumerate(chart_data, 1):
         row_class = "lb-row first" if rank == 1 else "lb-row"
         score_color = f2_color(d["f2"])
+        strict_color = f2_color(d["strict_f2"])
         bar_gradient = f"linear-gradient(90deg,{score_color},{score_color}88)"
-        w(f'<a href="{detail_dir}/{d["slug"]}.html" class="{row_class}">')
+        strict_bar_gradient = f"linear-gradient(90deg,{strict_color},{strict_color}88)"
+        repos_label = f'{d["repos"]}/{d["repos_total"]}' if d["repos"] != d["repos_total"] else str(d["repos"])
+        w(f'<a href="{detail_dir}/{d["slug"]}.html" class="{row_class}"'
+          f' data-f2="{d["f2"]:.1f}" data-strict-f2="{d["strict_f2"]:.1f}"'
+          f' data-recall="{d["recall"]:.1f}" data-strict-recall="{d["strict_recall"]:.1f}"'
+          f' data-precision="{d["precision"]:.1f}" data-strict-precision="{d["strict_precision"]:.1f}"'
+          f' data-color="{score_color}" data-strict-color="{strict_color}"'
+          f' data-gradient="{bar_gradient}" data-strict-gradient="{strict_bar_gradient}">')
         w(f'  <div class="lb-rank">{rank}</div>')
-        w(f'  <div class="lb-name">{d["label"]}</div>')
+        w(f'  <div class="lb-name">{d["label"]} <span style="color:var(--text-tertiary);font-size:11px">{repos_label} repos</span></div>')
         w(f'  <div class="lb-bar-wrap"><div class="lb-bar-track"><div class="lb-bar-fill" style="width:{d["f2"]}%;background:{bar_gradient}"></div></div></div>')
-        w(f'  <div class="lb-score" style="color:{score_color}">{d["f2"]:.1f}</div>')
-        w(f'  <div class="lb-meta"><strong>{d["recall"]:.1f}%</strong> recall &middot; <strong>{d["precision"]:.1f}%</strong> prec</div>')
+        stddev_html = f'<div class="lb-stddev" style="font-size:10px;color:var(--text-muted);text-align:right;cursor:help" title="F2 standard deviation across {d["repos"]} repositories — lower means more consistent performance">stdev {d["f2_stddev"]:.1f}</div>' if d["num_runs"] > 1 and d["f2_stddev"] > 0 else ""
+        if stddev_html:
+            w(f'  <div style="width:80px;flex-shrink:0;text-align:right"><div class="lb-score" style="color:{score_color};width:auto">{d["f2"]:.1f}</div>{stddev_html}</div>')
+        else:
+            w(f'  <div class="lb-score" style="color:{score_color}">{d["f2"]:.1f}</div>')
+        cost_parts = []
+        if d["cost_per_run"] > 0:
+            cost_parts.append(f'<span title="Average API cost to scan one repository" style="cursor:help">${d["cost_per_run"]:.2f}/repo</span>')
+        if d["cost_per_100_loc"] > 0:
+            est_per_100k = round(d["cost_per_100_loc"] * 1000)
+            cost_parts.append(f'<span title="Estimated cost to scan 100,000 lines of code" style="cursor:help">~${est_per_100k:,}/100k LOC</span>')
+        cost_str = " &middot; ".join(cost_parts)
+        latency_str = f' &middot; <span title="Average wall-clock time per repository scan" style="cursor:help">{d["avg_latency"]:.0f}s avg</span>' if d["avg_latency"] > 0 else ""
+        w(f'  <div class="lb-meta"><strong title="Percentage of real vulnerabilities found — higher is better" style="cursor:help">{d["recall"]:.1f}%</strong> recall &middot; <strong title="Of findings reported, percentage that were real — higher is better" style="cursor:help">{d["precision"]:.1f}%</strong> prec'
+          f'{" &middot; " + cost_str if cost_str else ""}{latency_str}</div>')
         w(f'  <div class="lb-arrow">&rsaquo;</div>')
         w(f'</a>')
     w('</div>')
@@ -974,9 +1232,96 @@ def build_html(
     w("})();")
     w("</script>")
 
+    # ── Cost Efficiency scatter (LLM scanners only) ──
+    llm_data = [d for d in chart_data if d["cost_per_run"] > 0]
+    if llm_data:
+        w('<div class="section-title">Cost Efficiency <span class="dim">F2 Score vs Cost per Repo &middot; LLM scanners only</span></div>')
+        w('<div class="chart-card">')
+        w('<div id="cost-scatter" style="width:100%;height:420px"></div>')
+        w('</div>')
+        cost_json = json.dumps(llm_data)
+        w(f"""<script>
+(function() {{
+  {_plotly_theme_js()}
+  const cd = {cost_json};
+  const links = {json.dumps({d["label"]: f"{detail_dir}/{d['slug']}.html" for d in llm_data})};
+  const traces = [];
+  cd.forEach((d, i) => {{
+    traces.push({{
+      x: [d.cost_per_run], y: [d.f2], mode: 'markers+text',
+      marker: {{size: Math.max(12, Math.min(30, d.avg_latency / 3)), color: colors[i % colors.length],
+        line: {{color: darkBg, width: 2}}}},
+      text: [d.label], textposition: 'top center',
+      textfont: {{color: colors[i % colors.length], size: 11, family: 'Inter'}},
+      name: d.label,
+      customdata: [[d.model, d.avg_latency, d.total_cost]],
+      hovertemplate: '<b>%{{text}}</b><br>F2: %{{y:.1f}}<br>Cost/repo: $%{{x:.2f}}<br>Model: %{{customdata[0]}}<br>Avg latency: %{{customdata[1]:.0f}}s<br>Total cost: $%{{customdata[2]:.2f}}<extra></extra>'
+    }});
+  }});
+  const el = document.getElementById('cost-scatter');
+  Plotly.newPlot(el, traces, {{
+    paper_bgcolor: panelBg, plot_bgcolor: panelBg,
+    xaxis: {{title: {{text: 'Cost per Repo (USD)', font: {{color: textColor, size: 13, family: 'Inter'}}}},
+      type: 'log', gridcolor: gridColor, zerolinecolor: gridColor,
+      tickfont: {{color: mutedText, size: 11}}, tickprefix: '$'}},
+    yaxis: {{title: {{text: 'F2 Score', font: {{color: textColor, size: 13, family: 'Inter'}}}},
+      range: [0, null], gridcolor: gridColor, zerolinecolor: gridColor,
+      tickfont: {{color: mutedText, size: 11}}}},
+    legend: {{font: {{color: textColor, size: 11}}, bgcolor: 'rgba(0,0,0,0)', x: 0.01, y: 0.99}},
+    margin: {{l: 60, r: 30, t: 30, b: 50}},
+    hoverlabel: {{bgcolor: panelBg, bordercolor: gridColor, font: {{color: textColor, size: 12}}}}
+  }}, {{responsive: true, displayModeBar: false}});
+  el.on('plotly_click', function(data) {{
+    const label = data.points[0].data.name;
+    if (links[label]) window.location.href = links[label];
+  }});
+}})();
+</script>""")
+
+    # ── Score mode toggle JS ──
+    w("""<script>
+function setScoreMode(mode) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.mode-btn[onclick*="${mode}"]`).classList.add('active');
+  const rows = document.querySelectorAll('.lb-row');
+  const sorted = [...rows].sort((a, b) => {
+    const aF2 = parseFloat(mode === 'strict' ? a.dataset.strictF2 : a.dataset.f2);
+    const bF2 = parseFloat(mode === 'strict' ? b.dataset.strictF2 : b.dataset.f2);
+    return bF2 - aF2;
+  });
+  sorted.forEach((row, i) => {
+    const f2 = mode === 'strict' ? row.dataset.strictF2 : row.dataset.f2;
+    const recall = mode === 'strict' ? row.dataset.strictRecall : row.dataset.recall;
+    const precision = mode === 'strict' ? row.dataset.strictPrecision : row.dataset.precision;
+    const color = mode === 'strict' ? row.dataset.strictColor : row.dataset.color;
+    const gradient = mode === 'strict' ? row.dataset.strictGradient : row.dataset.gradient;
+    row.querySelector('.lb-rank').textContent = i + 1;
+    row.querySelector('.lb-score').textContent = parseFloat(f2).toFixed(1);
+    row.querySelector('.lb-score').style.color = color;
+    row.querySelector('.lb-bar-fill').style.width = f2 + '%';
+    row.querySelector('.lb-bar-fill').style.background = gradient;
+    row.querySelector('.lb-meta').innerHTML = `<strong>${parseFloat(recall).toFixed(1)}%</strong> recall &middot; <strong>${parseFloat(precision).toFixed(1)}%</strong> prec`;
+    row.classList.toggle('first', i === 0);
+    row.parentNode.appendChild(row);
+  });
+}
+</script>""")
+
     # ── Footer ──
+    manifest_info = ""
+    if manifest:
+        bv = manifest.get("benchmark_version", "?")
+        gt_hash = manifest.get("ground_truth_content_hash", "?")[:16]
+        prompt_v = manifest.get("default_prompt_version", "?")[:16]
+        manifest_info = (
+            f' &middot; v{bv}'
+            f' &middot; GT <code style="font-size:11px">{gt_hash}</code>'
+            f' &middot; Prompt <code style="font-size:11px">{prompt_v}</code>'
+        )
     w('<div class="page-footer">')
-    w(f'RealVuln Benchmark &middot; Generated {datetime.now(timezone.utc).strftime("%Y-%m-%d")} &middot; <a href="https://github.com/kolega-ai/Real-Vuln-Benchmark">GitHub</a> &middot; <a href="https://kolega.dev">kolega.dev</a>')
+    w(f'RealVuln Benchmark &middot; Generated {datetime.now(timezone.utc).strftime("%Y-%m-%d")}{manifest_info}'
+      f' &middot; <a href="https://github.com/kolega-ai/Real-Vuln-Benchmark">GitHub</a>'
+      f' &middot; <a href="https://kolega.dev">kolega.dev</a>')
     w('</div>')
 
     w("</body></html>")
@@ -992,6 +1337,7 @@ def build_scanner_detail_html(
     grid: dict[str, dict[str, dict | None]],
     repos: list[str],
     aggregates: dict[str, dict],
+    scanner_metadata: dict | None = None,
 ) -> str:
     """Build a detail page for a single scanner."""
     sa = aggregates.get(scanner, {})
@@ -1054,10 +1400,19 @@ def build_scanner_detail_html(
     prec_val = round(micro.get("precision", 0) * 100, 1)
 
     w('<div class="hero-stats">')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(22,163,74,0.1);color:{f2_color(f2_val)}">F2</div><div><div class="stat-value" style="color:{f2_color(f2_val)}">{f2_val:.1f}</div><div class="stat-label">F2 Score</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(34,197,94,0.1);color:#22c55e">&#8593;</div><div><div class="stat-value" style="color:#22c55e">{rec_val:.1f}%</div><div class="stat-label">Recall</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(160,118,249,0.1);color:#A076F9">&#9670;</div><div><div class="stat-value" style="color:#A076F9">{prec_val:.1f}%</div><div class="stat-label">Precision</div></div></div>')
-    w(f'<div class="stat-card"><div class="stat-icon" style="background:rgba(196,240,62,0.1);color:#C4F03E">&#9733;</div><div><div class="stat-value" style="color:#C4F03E">{repos_scored}</div><div class="stat-label">Repos Scored</div></div></div>')
+    w(f'<div class="stat-card" title="Combines recall and precision into one score (0–100). Weights recall 4x more than precision — missing a real vuln is worse than a false alarm."><div class="stat-icon" style="background:rgba(22,163,74,0.1);color:{f2_color(f2_val)}">F2</div><div><div class="stat-value" style="color:{f2_color(f2_val)}">{f2_val:.1f}</div><div class="stat-label">F2 Score</div></div></div>')
+    w(f'<div class="stat-card" title="What percentage of real vulnerabilities did this scanner find? 100% = found everything, 0% = missed everything."><div class="stat-icon" style="background:rgba(34,197,94,0.1);color:#22c55e">&#8593;</div><div><div class="stat-value" style="color:#22c55e">{rec_val:.1f}%</div><div class="stat-label">Recall</div></div></div>')
+    w(f'<div class="stat-card" title="Of everything this scanner flagged, what percentage were real vulnerabilities? 100% = no false alarms, lower = more noise."><div class="stat-icon" style="background:rgba(160,118,249,0.1);color:#A076F9">&#9670;</div><div><div class="stat-value" style="color:#A076F9">{prec_val:.1f}%</div><div class="stat-label">Precision</div></div></div>')
+    w(f'<div class="stat-card" title="Number of benchmark repositories this scanner successfully scanned out of {sa.get("repos_total", 26)} total."><div class="stat-icon" style="background:rgba(196,240,62,0.1);color:#C4F03E">&#9733;</div><div><div class="stat-value" style="color:#C4F03E">{repos_scored}</div><div class="stat-label">Repos Scored</div></div></div>')
+    meta = scanner_metadata or {}
+    if meta.get("has_metrics"):
+        cost_info = sa.get("cost", {})
+        total_cost = cost_info.get("total_cost", 0)
+        avg_lat = meta.get("avg_wall_clock_seconds", 0)
+        model_short = meta.get("model", "").split("/")[-1]  # strip provider prefix
+        w(f'<div class="stat-card" title="The LLM model used for this scanner — this is the model ID sent to the API."><div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6">&#9881;</div><div><div class="stat-value" style="color:#3b82f6;font-size:16px">{model_short}</div><div class="stat-label">Model</div></div></div>')
+        w(f'<div class="stat-card" title="Total API cost across all runs and all repositories for this scanner."><div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308">$</div><div><div class="stat-value" style="color:#eab308">${total_cost:.2f}</div><div class="stat-label">Total Cost</div></div></div>')
+        w(f'<div class="stat-card" title="Average wall-clock time to scan one repository, including API calls and agent reasoning."><div class="stat-icon" style="background:rgba(249,115,22,0.1);color:#f97316">&#9202;</div><div><div class="stat-value" style="color:#f97316">{avg_lat:.0f}s</div><div class="stat-label">Avg Latency</div></div></div>')
     w('</div>')
 
     w('<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>')
@@ -1125,8 +1480,58 @@ def build_scanner_detail_html(
                 sd = sev_agg[sev]
                 sev_recall = sd["tp"] / (sd["tp"] + sd["fn"]) if (sd["tp"] + sd["fn"]) > 0 else 0
                 sev_color = f2_color(sev_recall * 100)
-                w(f'<div class="severity-card"><div class="sev-label">{sev}</div><div class="sev-recall" style="color:{sev_color}">{sev_recall:.0%}</div><div class="sev-counts">TP {sd["tp"]} / FP {sd["fp"]} / FN {sd["fn"]}</div></div>')
+                w(f'<div class="severity-card" title="Recall for {sev}-severity vulnerabilities — {sd["tp"]} found out of {sd["tp"] + sd["fn"]} total"><div class="sev-label">{sev}</div><div class="sev-recall" style="color:{sev_color}">{sev_recall:.0%}</div><div class="sev-counts" title="TP = real vulns found, FP = false alarms, FN = real vulns missed">TP {sd["tp"]} / FP {sd["fp"]} / FN {sd["fn"]}</div></div>')
         w('</div>')
+
+    # ── LLM Operational Metrics ──
+    if meta.get("has_metrics"):
+        cost_info = sa.get("cost", {})
+        exit_counts = meta.get("exit_status_counts", {})
+        total_runs = meta.get("total_runs", 0)
+        success_rate = exit_counts.get("success", 0) / total_runs * 100 if total_runs > 0 else 0
+        card_style = 'background:var(--bg-secondary);border:1px solid var(--border-secondary);border-radius:12px;padding:20px'
+        label_style = 'font-family:Space Grotesk,sans-serif;font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)'
+        row_style = 'display:flex;justify-content:space-between;padding:4px 0;font-size:13px'
+        val_style = 'font-weight:600;color:var(--text-primary)'
+        lbl_style = 'color:var(--text-tertiary);cursor:help'
+
+        w('<div class="section-title">LLM Operational Metrics</div>')
+        w('<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:32px">')
+
+        # Card 1: Model & Prompt
+        w(f'<div style="{card_style}">')
+        w(f'<div style="{label_style}">Model &amp; Prompt</div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="The LLM model ID sent to the API for this scanner">Model</span><span style="{val_style}">{meta.get("model", "—")}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="SHA256 content hash of the rendered system prompt — changes if the prompt template, CWE families, or output schema change">Prompt Version</span><span style="{val_style}"><code style="font-size:12px">{meta.get("prompt_version", "—")}</code></span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Human-readable label for the prompt version">Prompt Label</span><span style="{val_style}">{meta.get("prompt_label", "—")}</span></div>')
+        w('</div>')
+
+        # Card 2: Token Usage
+        w(f'<div style="{card_style}">')
+        w(f'<div style="{label_style}">Token Usage <span style="font-weight:400;color:var(--text-tertiary);font-size:12px">avg per run</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average tokens sent to the model per repository scan (prompt + context)">Input</span><span style="{val_style}">{meta.get("avg_input_tokens", 0):,.0f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average tokens generated by the model per repository scan (response)">Output</span><span style="{val_style}">{meta.get("avg_output_tokens", 0):,.0f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Total tokens (input + output) consumed per scan — for agentic scanners this includes multi-turn context">Total</span><span style="{val_style}">{meta.get("avg_total_tokens", 0):,.0f}</span></div>')
+        w('</div>')
+
+        # Card 3: Cost
+        w(f'<div style="{card_style}">')
+        w(f'<div style="{label_style}">Cost</div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Total API cost across all runs and all repositories">Total</span><span style="{val_style}">${cost_info.get("total_cost", 0):.2f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average API cost to scan one repository (total cost / number of successful runs)">Per Repo</span><span style="{val_style}">${cost_info.get("cost_per_run", 0):.2f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Cost normalized by codebase size — divide total cost by (total lines of code / 100)">Per 100 LOC</span><span style="{val_style}">${cost_info.get("cost_per_100_loc", 0):.4f}</span></div>')
+        w('</div>')
+
+        # Card 4: Reliability
+        w(f'<div style="{card_style}">')
+        w(f'<div style="{label_style}">Reliability</div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Percentage of runs that completed successfully without timeout or error">Success Rate</span><span style="{val_style};color:{"#22c55e" if success_rate >= 90 else "#f97316"}">{success_rate:.0f}%</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Number of runs that hit the time limit before finishing — these repos get no score">Timeouts</span><span style="{val_style}">{exit_counts.get("timeout", 0)}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Percentage of runs where the LLM output malformed JSON that needed automatic repair before scoring">JSON Repair Rate</span><span style="{val_style}">{meta.get("json_repair_rate", 0):.0%}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average wall-clock time per repository scan, including API calls and agent reasoning steps">Avg Latency</span><span style="{val_style}">{meta.get("avg_wall_clock_seconds", 0):.1f}s</span></div>')
+        w('</div>')
+
+        w('</div>')  # close grid
 
     # ── CWE Family Heatmap ──
     if family_slugs:
@@ -1294,21 +1699,33 @@ def build_json_report(
     grid: dict[str, dict[str, dict | None]],
     scanners: list[str],
     aggregates: dict[str, dict],
+    manifest: dict | None = None,
+    scanner_metadata: dict | None = None,
 ) -> dict:
     """Build machine-readable JSON report."""
-    return {
+    report: dict = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "scanners": scanners,
         "repos": list(grid.keys()),
         "grid": {
             repo: {
-                scanner: cell
+                scanner: (
+                    {k: v for k, v in cell.items() if not k.startswith("_")}
+                    if cell is not None else None
+                )
                 for scanner, cell in repo_data.items()
             }
             for repo, repo_data in grid.items()
         },
         "aggregates": aggregates,
     }
+    if manifest:
+        report["benchmark_version"] = manifest.get("benchmark_version")
+        report["ground_truth_content_hash"] = manifest.get("ground_truth_content_hash")
+        report["default_prompt_version"] = manifest.get("default_prompt_version")
+    if scanner_metadata:
+        report["scanner_metadata"] = scanner_metadata
+    return report
 
 
 # ---------------------------------------------------------------------------
@@ -1417,9 +1834,29 @@ def main() -> int:
             gt_total_traps += sum(1 for f in gt_data["findings"] if not f["is_vulnerable"])
             gt_total_repos += 1
 
+    # Load LOC data
+    repo_loc = load_repo_loc(gt_dir)
+    gt_total_loc = sum(repo_loc.values())
+
+    # Load benchmark manifest
+    manifest_path = SCRIPT_DIR / "benchmark-manifest.json"
+    manifest: dict = {}
+    if manifest_path.exists():
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+
     # Score everything
     grid = score_all(repos, scanners, gt_dir, scan_dir, cwe_families)
-    aggregates = compute_aggregates(grid, scanners)
+    aggregates = compute_aggregates(grid, scanners, gt_dir)
+    scanner_costs = compute_scanner_costs(scan_dir, scanners, repo_loc)
+    scanner_metadata = compute_scanner_metadata(scan_dir, scanners)
+
+    # Merge costs and metadata into aggregates
+    for scanner in scanners:
+        aggregates.setdefault(scanner, {})["cost"] = scanner_costs.get(scanner, {})
+        aggregates.setdefault(scanner, {})["metadata"] = scanner_metadata.get(
+            scanner, {"has_metrics": False}
+        )
 
     # Filter scanners by minimum repo count
     if args.min_repos > 0:
@@ -1441,9 +1878,14 @@ def main() -> int:
         gt_total_vulns=gt_total_vulns,
         gt_total_traps=gt_total_traps,
         gt_total_repos=gt_total_repos,
+        gt_total_loc=gt_total_loc,
         cwe_families=cwe_families,
+        manifest=manifest,
     )
-    report = build_json_report(grid, scanners, aggregates)
+    report = build_json_report(
+        grid, scanners, aggregates,
+        manifest=manifest, scanner_metadata=scanner_metadata,
+    )
 
     # Write main dashboard
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1454,7 +1896,10 @@ def main() -> int:
     scanner_detail_dir = output_path.parent / detail_dir_name
     scanner_detail_dir.mkdir(parents=True, exist_ok=True)
     for scanner in scanners:
-        detail_html = build_scanner_detail_html(scanner, grid, repos, aggregates)
+        detail_html = build_scanner_detail_html(
+            scanner, grid, repos, aggregates,
+            scanner_metadata=scanner_metadata.get(scanner, {"has_metrics": False}),
+        )
         detail_path = scanner_detail_dir / f"{scanner}.html"
         detail_path.write_text(detail_html)
     print(f"Scanner detail pages: {scanner_detail_dir}/ ({len(scanners)} pages)")

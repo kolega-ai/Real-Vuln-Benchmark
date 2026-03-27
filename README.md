@@ -21,7 +21,7 @@ Full story: [Why We Built Our Own Security Benchmark](https://kolega.dev/blog/wh
 
 ### Dataset
 
-**27 Python repos · 823 findings · 698 vulnerabilities · 125 FP traps**
+**26 Python repos · 796 findings · 676 vulnerabilities · 120 FP traps**
 
 All targets are **Type 1 (intentionally vulnerable apps)** with `human_authored` authorship.
 
@@ -31,7 +31,6 @@ All targets are **Type 1 (intentionally vulnerable apps)** with `human_authored`
 |------|----------|-----------|------:|--------:|
 | realvuln-damn-vulnerable-flask-application | python | flask | 15 | 4 |
 | realvuln-damn-vulnerable-graphql-application | python | flask | 35 | 4 |
-| realvuln-defdev-app | python | flask | 22 | 5 |
 | realvuln-djangoat | python | django | 50 | 6 |
 | realvuln-dsvpwa | python | — | 32 | 6 |
 | realvuln-dsvw | python | — | 27 | 4 |
@@ -59,23 +58,22 @@ All targets are **Type 1 (intentionally vulnerable apps)** with `human_authored`
 
 ### What Works Today
 
-- Ground truth schema with validation (`validate_gt.py`)
-- Scoring engine with F2, precision, recall, per-CWE-family and per-severity breakdowns
-- Finding matching: file path + CWE + line tolerance (±10 lines)
-- FP traps (`is_vulnerable: false` entries) for measuring false positive rates
-- Semgrep-format parser with automatic fallback for unknown scanner slugs
-- Interactive HTML dashboard with Plotly heatmaps (`dashboard.py`)
-- Per-repo JSON + Markdown scorecards (`score.py`)
-- Multi-run mode (`--runs`) for mean ± stddev scoring of non-deterministic scanners
-- Pinned commit SHAs in every ground truth file
+- **Scoring engine** — F2, precision, recall, per-CWE-family and per-severity breakdowns
+- **Finding matching** — file path + CWE + line tolerance (±10 lines)
+- **FP traps** — `is_vulnerable: false` entries for measuring false positive rates
+- **Real scanner results** — Semgrep, Snyk, SonarQube, Kolega, and 13+ LLM-based scanners (Claude, GPT-4o, Gemini, Grok, Kimi, etc.)
+- **LLM benchmark harness** — 3 runner modes: single-turn API, agentic (tools), and Docker sandbox
+- **Container isolation** — agentic evaluations run in sandboxed environments with network disabled and repos mounted read-only, preventing data leakage between runs
+- **Cost controls** — `--dry-run` for cost estimation, `--max-total-cost` hard limit, per-model pricing tracked in real-time
+- **Prompt versioning** — content-hashed prompts (`sha256:...`) stamped into every run's metrics for reproducibility
+- **Interactive dashboard** — multi-scanner HTML dashboard with Plotly heatmaps (`dashboard.py`)
+- **CLI tools** — `realvuln-score`, `realvuln-dashboard`, `realvuln-validate`, `realvuln-clone`, `realvuln-smoke-test`
+- **Multi-run mode** — mean ± stddev scoring for non-deterministic scanners
+- **Reproducibility manifest** — `benchmark-manifest.json` locks GT version, prompt version, and all repo commit SHAs
 
-### What Doesn't Exist Yet
+### Not Yet Implemented
 
-- Real scanner results (only `sample-scanner` placeholder data exists)
-- Scanner version strings or metadata manifests in result files
-- CI/CD pipeline (no GitHub Actions, no pre-commit hooks)
-- CLI packaging (`pip install realvuln`)
-- Multi-language support (Python only)
+- Multi-language support (Python only — JavaScript/TypeScript, Go, and Java are planned)
 - Target types beyond Type 1 (no CVE-based, library, or benchmark roll-up targets)
 
 ---
@@ -83,15 +81,26 @@ All targets are **Type 1 (intentionally vulnerable apps)** with `human_authored`
 ## Quick Start
 
 ```bash
+# Install
+pip install -e ".[dev]"
+
+# Clone all 26 benchmark repos at pinned commits
+python3 clone_repos.py
+
+# Verify your setup
+python3 smoke_test.py
+
 # Validate ground truth schemas
-python validate_gt.py
+python3 validate_gt.py
 
 # Score a single repo against all scanners
-python score.py --repo realvuln-pygoat --all-scanners
+python3 score.py --repo realvuln-pygoat --all-scanners
 
 # Generate multi-scanner dashboard
-python dashboard.py --scanner-group all
+python3 dashboard.py --scanner-group all
 ```
+
+Run `make help` to see all available commands.
 
 ---
 
@@ -106,12 +115,22 @@ python dashboard.py --scanner-group all
 ├── scorer/
 │   ├── matcher.py                               # Finding matching (file + CWE + line tolerance)
 │   └── metrics.py                               # ScoreCard with F2, precision, recall, breakdowns
+├── llm-bench/                                   # LLM security scanner benchmark harness
+│   ├── config/                                  #   Model configs, eval defaults
+│   ├── harness/                                 #   Runner, prompt builder, validator, metrics
+│   ├── prompts/                                 #   System prompt template + output schema
+│   ├── scripts/                                 #   run_pilot.py, run_agentic.py, run_eval.py
+│   └── docker/                                  #   Sandbox Dockerfile + docker-compose
 ├── score.py                                     # Score one repo (CLI + JSON + Markdown output)
 ├── dashboard.py                                 # Multi-scanner multi-repo HTML dashboard (Plotly)
 ├── validate_gt.py                               # Ground truth schema validator
-└── reports/                                     # Generated outputs (per-repo scorecards gitignored)
-    ├── dashboard.html                           # Interactive cross-scanner comparison (committed)
-    └── dashboard.json                           # Machine-readable scores (committed)
+├── clone_repos.py                               # Clone all benchmark repos at pinned commits
+├── smoke_test.py                                # Verify scoring pipeline with known baseline
+├── benchmark-manifest.json                      # Reproducibility manifest (GT hash, repo SHAs)
+├── Makefile                                     # Common commands (make test, lint, dashboard, etc.)
+└── reports/                                     # Generated outputs
+    ├── dashboard.html                           # Interactive cross-scanner comparison
+    └── dashboard.json                           # Machine-readable scores
 ```
 
 ### Entry Points
@@ -121,6 +140,10 @@ python dashboard.py --scanner-group all
 | `score.py` | Score one repo against one or all scanners. Outputs CLI table, per-repo JSON + Markdown scorecard. Supports `--runs` for multi-run mean ± stddev. |
 | `dashboard.py` | Score all repos × all scanners. Outputs interactive HTML dashboard with heatmaps and Plotly charts. |
 | `validate_gt.py` | Schema validation for ground-truth JSON files. |
+| `clone_repos.py` | Clone all 26 benchmark repos at their pinned commit SHAs. |
+| `smoke_test.py` | Verify the scoring pipeline against known reference values. |
+
+For the LLM benchmark harness, see [`llm-bench/README.md`](llm-bench/README.md).
 
 ---
 
@@ -296,18 +319,15 @@ These axes are orthogonal. LLM-generated does not mean synthetic.
 
 _"Run version X against commit Y and you should get statistically similar results."_
 
-Planned per-run metadata:
+**Implemented:**
+- `benchmark-manifest.json` locks ground-truth content hash, prompt version, and all repo commit SHAs
+- Content-hashed prompts (`sha256:...`) stamped into every `.metrics.json` file
+- Multi-run mode: run N times per target, report mean ± stddev for all metrics
+- All raw outputs from all runs are published in `scan-results/`
 
+**Planned:**
 - Scanner version strings (semver) stamped into every result file
-- Exact commands used to run each scanner
-- Scanner version, model backbone version (e.g. `claude-sonnet-4-20250514`), timestamp, target repo commit SHA, and config hash
-
-For non-deterministic scanners (AI agents), we plan to surface stability as a measurable property:
-
-- Run the agent **N times (5–10)** per benchmark target
-- Report **mean and variance** for each metric
-- Publish **all raw outputs** from all runs
-- Reproduction standard: another party runs N times and checks **distributional consistency**
+- Exact commands used to run each scanner logged alongside results
 
 ### Research Question: Scanner Performance vs Code Authorship
 
@@ -322,9 +342,39 @@ This would be a publishable contribution independent of who wins the benchmark. 
 ### Other Planned Work
 
 - Multi-language support (JavaScript/TypeScript, Go, Java)
-- CI/CD pipeline (GitHub Actions for validation, testing, linting)
-- CLI packaging (`pip install realvuln`)
-- Real scanner integrations (Semgrep, Bandit, SonarQube, AI-native scanners)
+- Additional scanner integrations (Bandit, CodeQL, AI-native scanners)
+
+---
+
+## Attribution
+
+This benchmark uses intentionally-vulnerable applications created by the open-source security community. We are grateful to the original authors:
+
+| Repository | Original Source |
+|------------|----------------|
+| Damn Vulnerable Flask Application | [akamai-threat-research](https://github.com/akamai-threat-research/Damn-Vulnerable-Flask-Application) |
+| Damn Vulnerable GraphQL Application | [dolevf](https://github.com/dolevf/Damn-Vulnerable-GraphQL-Application) |
+| DjanGoat | [Contrast-Security-OSS](https://github.com/Contrast-Security-OSS/DjanGoat) |
+| DSVPWA | [sgabe](https://github.com/sgabe/DSVPWA) |
+| DSVW | [stamparm](https://github.com/stamparm/DSVW) |
+| DVBLab | [mamgad](https://github.com/mamgad/DVBLab) |
+| dvpwa | [anxolerd](https://github.com/anxolerd/dvpwa) |
+| Extremely Vulnerable Flask App | [manuelz120](https://github.com/manuelz120/extremely-vulnerable-flask-app) |
+| Flask_XSS | [terrabitz](https://github.com/terrabitz/Flask_XSS) |
+| insecure-web | [brenesrm](https://github.com/brenesrm/insecure-web) |
+| lets-be-bad-guys | [mpirnat](https://github.com/mpirnat/lets-be-bad-guys) |
+| OWASP Web Playground | [kolega-ai-dev](https://github.com/kolega-ai-dev/realvuln-OWASP-Web-Playground) |
+| pygoat | [adeyosemanputra](https://github.com/adeyosemanputra/pygoat) |
+| owasp-bay-area | [RiieCco](https://github.com/RiieCco/owasp-bay-area) |
+| PythonSSTI | [TheWation](https://github.com/TheWation/PythonSSTI) |
+| ThreatByte | [anotherik](https://github.com/anotherik/ThreatByte) |
+| VAmPI | [erev0s](https://github.com/erev0s/VAmPI) |
+| vfapi | [naryal2580](https://github.com/naryal2580/vfapi) |
+| Vulnerable-Flask-App | [we45](https://github.com/we45/Vulnerable-Flask-App) |
+| vulnpy | [Contrast-Security-OSS](https://github.com/Contrast-Security-OSS/vulnpy) |
+| vulpy | [fportantier](https://github.com/fportantier/vulpy) |
+
+Some repositories are forked under the [kolega-ai](https://github.com/kolega-ai) org to ensure pinned commits remain available. All original licenses are preserved.
 
 ---
 
