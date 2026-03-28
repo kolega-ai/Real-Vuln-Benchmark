@@ -202,14 +202,14 @@ def fig_cwe_family_recall(data: dict) -> None:
     width = 0.35
 
     fig, ax = plt.subplots(figsize=(max(10, n * 0.8 + 2), 5))
-    ax.bar(x - width / 2, llm_vals, width, label="LLM avg recall", color="steelblue", alpha=0.85)
-    ax.bar(x + width / 2, sast_vals, width, label="SAST avg recall", color="coral", alpha=0.85)
+    ax.bar(x - width / 2, llm_vals, width, label="General-purpose LLM", color="steelblue", alpha=0.85)
+    ax.bar(x + width / 2, sast_vals, width, label="Rule-based SAST", color="coral", alpha=0.85)
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=40, ha="right", fontsize=7)
     ax.set_ylabel("Recall (%)", fontsize=10)
     ax.set_ylim(0, 110)
-    ax.set_title("CWE Family Recall: LLM vs. Traditional SAST", fontsize=11)
+    ax.set_title("CWE Family Recall: General-purpose LLM vs. Rule-based SAST", fontsize=11)
     ax.legend(fontsize=9)
     ax.grid(axis="y", linestyle=":", alpha=0.5)
 
@@ -233,7 +233,7 @@ def fig_fp_trap_rates(data: dict) -> None:
     # Sort by fall rate descending
     per_scanner.sort(key=lambda r: r.get("trap_trigger_rate", 0), reverse=True)
 
-    category_colors = {"Traditional SAST": "steelblue", "LLM": "orange", "Hybrid": "green"}
+    category_colors = {"Rule-based SAST": "steelblue", "General-purpose LLM": "orange", "Security-specialized": "#22c55e"}
 
     names = [shorten_scanner(r["scanner"]) for r in per_scanner]
     rates = [r.get("trap_trigger_rate", 0) * 100 for r in per_scanner]

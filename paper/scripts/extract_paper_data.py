@@ -14,7 +14,7 @@ GT_DIR = ROOT / "ground-truth"
 CWE_FAMILIES = ROOT / "config" / "cwe-families.json"
 OUTPUT = Path(__file__).resolve().parent.parent / "tables" / "data.json"
 
-LLM_SCANNERS = [
+GENERAL_PURPOSE_GENERAL_PURPOSE_LLM_SCANNERS = [
     "claude-haiku-4-5-agentic-v1",
     "claude-haiku-4-5-v1",
     "claude-opus-4-6-agentic-v1",
@@ -28,8 +28,8 @@ LLM_SCANNERS = [
     "qwen-3.5-397b-agentic-v1",
 ]
 
-SAST_SCANNERS = ["semgrep", "snyk", "sonarqube"]
-HYBRID_SCANNERS = ["kolega-v0.0.1"]
+RULE_BASED_RULE_BASED_SAST_SCANNERS = ["semgrep", "snyk", "sonarqube"]
+SECURITY_SPECIALIZED_SCANNERS = ["kolega-v0.0.1"]
 
 
 def safe_div(a, b, default=0.0):
@@ -196,8 +196,8 @@ def extract_per_cwe_family_recall(dashboard):
             }
         return result
 
-    llm_data = accumulate_family_data(LLM_SCANNERS)
-    sast_data = accumulate_family_data(SAST_SCANNERS)
+    llm_data = accumulate_family_data(GENERAL_PURPOSE_LLM_SCANNERS)
+    sast_data = accumulate_family_data(RULE_BASED_SAST_SCANNERS)
 
     # Collect all families
     all_families = sorted(set(list(llm_data.keys()) + list(sast_data.keys())))
@@ -223,7 +223,7 @@ def extract_cost_efficiency(dashboard):
     aggregates = dashboard["aggregates"]
     rows = []
 
-    for scanner in LLM_SCANNERS:
+    for scanner in GENERAL_PURPOSE_LLM_SCANNERS:
         agg = aggregates.get(scanner)
         if agg is None:
             continue
