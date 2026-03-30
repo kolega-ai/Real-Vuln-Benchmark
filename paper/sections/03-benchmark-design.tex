@@ -8,23 +8,15 @@ This section describes the design of \textsc{RealVuln}~v1.0: the taxonomy of tar
 \label{sec:target-types}
 
 We define five \emph{target types} to classify the code under test.
-Version~1.0 of \textsc{RealVuln} covers only Type~1; the remaining types are defined here so that the roadmap in Section~7 can reference them precisely.
+Version~1.0 of \textsc{RealVuln} covers only Type~1.
 
 \begin{description}
   \item[Type 1 --- Intentionally vulnerable applications.]
     Open-source projects built \emph{on purpose} with security flaws for educational or CTF use (e.g., PyGoat, DVPWA, VAmPI).
     These projects offer high vulnerability density and diverse CWE coverage, making them ideal for initial calibration.
-  \item[Type 2 --- Previously-vulnerable production applications.]
-    Real-world applications with known CVEs, pinned to the commit immediately \emph{before} the fix.
-    Provides ecologically valid targets but requires per-CVE isolation.
-  \item[Type 3 --- Previously-vulnerable libraries.]
-    Library code (as opposed to applications) with CVE-linked vulnerabilities.
-    Tests whether scanners can reason about library internals rather than application-level data flow.
-  \item[Type 4 --- Benchmark roll-ups.]
-    Existing benchmark suites (e.g., OWASP Benchmark, Juliet Test Suite) re-scored under the \textsc{RealVuln} framework to enable cross-benchmark comparison.
-  \item[Type 5 --- Academic reproduction studies.]
-    Datasets from published security research, re-annotated with the \textsc{RealVuln} ground truth schema for reproducibility.
 \end{description}
+
+\noindent Types 2--5 (production CVEs, vulnerable libraries, benchmark roll-ups, and academic reproductions) are planned for future versions and defined precisely in the roadmap (Section~\ref{sec:living-benchmark}).
 
 %% ----------------------------------------------------------------
 \subsection{Dataset Construction}
@@ -71,35 +63,7 @@ Each labeled entry records the following fields:
 \end{itemize}
 
 \noindent
-Figure~\ref{fig:gt-entry} shows an abbreviated ground truth entry.
-
-\begin{figure}[t]
-{\footnotesize
-\begin{verbatim}
-{
- "id": "pygoat-001",
- "is_vulnerable": true,
- "primary_cwe": "CWE-89",
- "acceptable_cwes":
-   ["CWE-89","CWE-564","CWE-943"],
- "file": "introduction/views.py",
- "location": {
-   "start_line": 158,
-   "end_line": 162,
-   "function": "sql_lab"
- },
- "severity": "high",
- "evidence": {
-   "source": "manual_review",
-   "description": "SQL injection via
-     string concat in raw query"
- }
-}
-\end{verbatim}
-}
-\caption{A ground truth entry for a SQL injection in PyGoat. The \texttt{acceptable\_cwes} list permits three CWE identifiers, tolerating CWE ambiguity across scanners.}
-\label{fig:gt-entry}
-\end{figure}
+The full ground-truth schema and example entries are available in the repository.\footnote{\url{https://github.com/kolega-ai/Real-Vuln-Benchmark/blob/main/ground-truth/realvuln-djangoat/ground-truth.json}}
 
 \subsubsection{Authorship Metadata.}
 All 26~repositories are tagged \texttt{human\_authored} with high confidence.
@@ -128,60 +92,10 @@ A finding $f$ is a \emph{candidate match} for ground truth entry $g$ when all th
 \end{enumerate}
 
 \noindent
-This relaxation could advantage scanners that omit line numbers, as they effectively face a two-field match. In practice, all rule-based SAST tools provide line numbers for every finding. Among LLM scanners, 100\% of findings include line numbers --- no evaluated scanner omits location data. Kolega likewise provides line numbers for all findings. We report the fraction of line-less findings per scanner in the supplementary material.
+In practice, all evaluated scanners provide line numbers for every finding, so no scanner benefits from this relaxation.\footnote{We report the fraction of line-less findings per scanner in the supplementary material.}
 
-\paragraph{Preference and consumption rules.}
-When a finding matches multiple ground truth entries, the algorithm prefers entries with $\mathit{vuln}_g = \mathit{true}$, giving the scanner the benefit of the doubt (credit for detecting a real vulnerability rather than penalty for triggering a co-located trap).
-Each ground truth entry is consumed at most once (greedy, first-match assignment).
-Findings are processed in file-path then line-number order. While optimal (bipartite) matching would be more theoretically sound, in practice the one-to-one constraint rarely activates --- fewer than 2\% of ground-truth entries have overlapping match candidates --- making the greedy and optimal results equivalent on this dataset.
-
-\paragraph{Classification.}
-After matching, each item is classified as follows:
-\begin{itemize}
-  \item \textbf{TP} (true positive): finding matched a GT entry with $\mathit{vuln}_g = \mathit{true}$.
-  \item \textbf{FP} (false positive): finding matched a GT entry with $\mathit{vuln}_g = \mathit{false}$, \emph{or} the finding matched no GT entry at all.
-  \item \textbf{FN} (false negative): GT entry with $\mathit{vuln}_g = \mathit{true}$ that was not matched by any finding.
-  \item \textbf{TN} (true negative): GT entry with $\mathit{vuln}_g = \mathit{false}$ that was not matched by any finding (scanner correctly ignored the trap).
-\end{itemize}
-
-\noindent
-Algorithm~\ref{alg:matching} gives the complete procedure in pseudocode.
-
-\begin{figure}[t]
-{\footnotesize
-\begin{verbatim}
-MATCH(findings F, ground_truth G):
-  matched_ids <- {}
-  results <- []
-  for each f in F:
-    candidates <- []
-    for each g in G:
-      if g.id in matched_ids: continue
-      if FILE_EQ(f, g) and CWE_IN(f, g)
-         and LINE_OK(f, g):
-        candidates.append(g)
-    if candidates not empty:
-      sort candidates: vuln=true first
-      best <- candidates[0]
-      matched_ids.add(best.id)
-      if best.is_vulnerable:
-        results.append(TP, best.id, f)
-      else:
-        results.append(FP, best.id, f)
-    else:
-      results.append(FP, null, f)
-  for each g in G:
-    if g.id not in matched_ids:
-      if g.is_vulnerable:
-        results.append(FN, g.id, null)
-      else:
-        results.append(TN, g.id, null)
-  return results
-\end{verbatim}
-}
-\caption{Pseudocode for the three-field matching algorithm. \texttt{FILE\_EQ} checks normalized path equality, \texttt{CWE\_IN} checks $\mathit{cwe}_f \in \mathit{cwes}_g$, and \texttt{LINE\_OK} checks line tolerance $\delta=10$.}
-\label{alg:matching}
-\end{figure}
+\paragraph{Preference, consumption, and classification.}
+When a finding matches multiple ground truth entries, the algorithm prefers entries with $\mathit{vuln}_g = \mathit{true}$, giving the scanner the benefit of the doubt. Each ground truth entry is consumed at most once (greedy, first-match assignment); fewer than 2\% of entries have overlapping candidates, so greedy and optimal matching produce equivalent results on this dataset. After matching, findings are classified as TP (matched a true vulnerability), FP (matched a false-positive trap or no GT entry), FN (unmatched true vulnerability), or TN (correctly ignored trap). Full pseudocode is given in Appendix~\ref{sec:matching-pseudocode}.
 
 %% ----------------------------------------------------------------
 \subsection{Scoring}
@@ -196,9 +110,7 @@ The primary metric is the $F_3$ score, scaled to $[0, 100]$:
 where $P = \frac{\mathit{TP}}{\mathit{TP} + \mathit{FP}}$ is precision and $R = \frac{\mathit{TP}}{\mathit{TP} + \mathit{FN}}$ is recall.
 The $F_\beta$ family generalizes the harmonic mean with parameter $\beta$; setting $\beta = 3$ weights recall nine times more heavily than precision.
 
-Attackers only need to exploit a single vulnerability to compromise a system. A missed SQL injection or authentication bypass can lead to complete data exfiltration, regardless of how many other issues the scanner correctly identified. This asymmetry---where a single false negative can be catastrophic while false positives merely cost analyst time---motivates an even stronger recall bias than $F_2$ provides. $F_3$ ($\beta{=}3$) weights recall $9\times$ over precision, making it the appropriate metric for production-grade security assessment. We also report $F_2$ ($\beta{=}2$, recall weighted $4\times$) for environments where noise reduction is a higher priority, such as development-time scanning or lower-risk internal tools.
-
-We acknowledge that the choice of $\beta = 3$ favors high-recall, low-precision scanners. Under $F_1$ (equal weighting), the ranking changes substantially: scanners with higher precision would score relatively better. We report $F_2$ ($\beta = 2$) as a secondary metric throughout, and the full leaderboard data (available in the repository) allows practitioners to re-rank scanners under any $F_\beta$ of their choosing. We selected $\beta = 3$ before evaluating any scanner, based on the security domain rationale that false negatives carry asymmetrically higher cost than false positives in production environments.
+In security, a single missed vulnerability can lead to a breach, while false positives merely cost analyst time. This asymmetry motivates $\beta{=}3$, weighting recall $9\times$ over precision. We also report $F_2$ ($\beta{=}2$, recall weighted $4\times$) for lower-risk contexts. The choice of $\beta{=}3$ was made before evaluating any scanner; the full leaderboard data in the repository allows re-ranking under any $F_\beta$.
 
 \subsubsection{Secondary Metric: $F_2$ Score.}
 We additionally report the $F_2$ score:

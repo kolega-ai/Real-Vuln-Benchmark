@@ -1,10 +1,13 @@
 \section{Results}
 \label{sec:results}
 
-We now present the comparative evaluation of all 15 scanners across the three categories defined in Section~\ref{sec:related-work}---rule-based SAST, general-purpose LLM, and security-specialized---evaluated on 26 intentionally-vulnerable Python repositories containing 796 ground-truth entries (676 true vulnerabilities and 120 false-positive traps).
-All scores use the \textbf{F3 metric} (recall-weighted, $\beta{=}3$, recall weighted $9\times$ over precision) as the primary metric, which prioritizes detection coverage---the primary concern in security auditing.
-We also report F2 ($\beta{=}2$) as a secondary metric for lower-risk contexts.
-Both metrics are presented in two variants: \emph{strict}, which penalizes scanners that time out or crash by treating unattempted repos as all-FN, and \emph{micro}, which aggregates only over repos the scanner completed.
+We now present the comparative evaluation of all 15 scanners, evaluated on 26 intentionally-vulnerable Python repositories containing 796 ground-truth entries (676 true vulnerabilities and 120 false-positive traps). All results are also available as an interactive dashboard at \url{https://realvuln.kolega.dev/}.
+
+Our evaluation reveals a clear three-tier performance hierarchy: the security-specialized scanner (Kolega, F3\,=\,73.0 strict) substantially outperforms the best general-purpose LLM (Claude Sonnet~4.6, F3\,=\,51.7), which in turn outperforms the best rule-based SAST tool (Semgrep, F3\,=\,17.7) by nearly 3$\times$.
+
+All scores use the \textbf{F3 metric} ($\beta{=}3$, recall weighted $9\times$ over precision) as the primary metric.
+We also report F2 ($\beta{=}2$) as a secondary metric.
+Both metrics are presented in \emph{strict} (unattempted repos treated as all-FN) and \emph{micro} (aggregated only over completed repos) variants.
 
 %% ─────────────────────────────────────────────
 \subsection{Aggregate Rankings}
@@ -98,23 +101,9 @@ Gray cells (incomplete runs) cluster around the larger repos, confirming that \t
 
 Figure~\ref{fig:cwe-family} breaks down recall by CWE family, revealing where LLM and SAST approaches diverge most sharply.
 
-\textbf{LLM scanners dramatically outperform SAST} on vulnerability classes that require understanding program semantics rather than matching syntactic patterns.
-The largest gaps appear in:
-\begin{itemize}
-    \item \textbf{SQL Injection}: LLM recall 91\% vs.\ SAST 32\%. LLMs detect injections through ORM layers and parameterized-query misuse that lack the \texttt{cursor.execute(f"...")} pattern SAST rules target.
-    \item \textbf{Insecure Deserialization}: 86\% vs.\ 49\%. LLMs recognize dangerous \texttt{pickle.loads} and \texttt{yaml.load} calls even when wrapped in application-specific abstractions.
-    \item \textbf{XPath Injection}: 84\% vs.\ 0\%. SAST tools in our evaluation lacked XPath-specific rules entirely; LLMs inferred the risk from string interpolation into XML queries.
-    \item \textbf{Command Injection}: 78\% vs.\ 24\%. LLMs trace user input through multiple function calls to \texttt{subprocess} and \texttt{os.system} invocations that cross file boundaries.
-\end{itemize}
+\textbf{LLM scanners dramatically outperform SAST} on vulnerability classes requiring semantic understanding. The largest gaps are in \textbf{SQL Injection} (LLM recall 91\% vs.\ SAST 32\%---LLMs detect ORM-layer injections that lack syntactic patterns) and \textbf{Command Injection} (78\% vs.\ 24\%---LLMs trace user input across file boundaries to \texttt{subprocess} calls). Conversely, \textbf{both approaches struggle} with whole-application reasoning: Sensitive Data Exposure (LLM 16\%, SAST 0\%) and Missing Authorization (LLM 30\%, SAST 0\%) require understanding application-level semantics that neither approach fully captures.
 
-Conversely, \textbf{both approaches struggle with vulnerability classes requiring whole-application reasoning}.
-Sensitive Data Exposure achieves only 16\% recall for LLMs and 0\% for SAST, as detecting unencrypted PII storage or excessive logging requires understanding what constitutes sensitive data in context.
-Missing Authorization (LLM 30\%, SAST 0\%) demands reasoning about intended access-control policies that are rarely explicit in code.
-
-SAST tools find \textbf{near-zero vulnerabilities} in Missing Authorization, Broken Access Control, Denial of Service, and Sensitive Data Exposure.
-These categories inherently require semantic understanding of application logic---precisely the capability gap that LLM scanners begin to close.
-
-The security-specialized scanner (Kolega) outperforms both general-purpose LLMs and rule-based SAST across nearly every CWE family, with particularly strong advantages in categories requiring whole-application reasoning. On Missing Authorization, Kolega achieves 66.3\% recall compared to 30\% for the best general-purpose LLM and 0\% for rule-based SAST. On Broken Access Control, Kolega reaches 75.0\% recall; on SSRF, 80.8\%; and on Sensitive Data Exposure---where LLMs achieve only 16\% and SAST 0\%---Kolega achieves 77.3\%. Kolega also leads on traditionally LLM-strong categories: 90.9\% on Command Injection (vs.\ 78\% for the best GP-LLM), 80.7\% on SQL Injection (vs.\ 91\% for the best GP-LLM on completed repos, though GP-LLMs suffer from incomplete coverage due to timeouts), and 86.8\% on XSS. These results suggest that security-specialized systems benefit from domain-specific design choices that general-purpose approaches cannot replicate through prompting alone.
+The security-specialized scanner (Kolega) outperforms both categories across nearly every CWE family, with the largest advantages in categories requiring whole-application reasoning: Missing Authorization (66.3\% vs.\ 30\% GP-LLM, 0\% SAST), Sensitive Data Exposure (77.3\% vs.\ 16\%, 0\%), and SSRF (80.8\%). These results suggest that security-specialized systems benefit from domain-specific design choices that general-purpose prompting alone cannot replicate.
 
 %% ─────────────────────────────────────────────
 \subsection{Cost-Efficiency Analysis}
@@ -127,20 +116,11 @@ The security-specialized scanner (Kolega) outperforms both general-purpose LLMs 
 \label{fig:cost-efficiency}
 \end{figure*}
 
-Figure~\ref{fig:cost-efficiency} plots the cost--effectiveness frontier for all scanners.
-API costs vary by over an order of magnitude among LLM scanners, yet cost does not reliably predict performance.
+Figure~\ref{fig:cost-efficiency} plots the cost--effectiveness frontier. API costs vary by over an order of magnitude, yet cost does not reliably predict performance.
 
-\textbf{Kimi K2.5 offers the best value proposition}: at just \$2.17 total across all repos, it achieves F3\,=\,46.5 (strict)---within 10\% of the best general-purpose LLM score (F3\,=\,51.7) at \textbf{87\% lower cost}.
-Minimax M2.7 is the cheapest LLM scanner at \$1.11 but trades 8~F3 points for the savings (F3\,=\,38.5).
+\textbf{Kimi K2.5 offers the best value}: at \$2.17 total, it achieves F3\,=\,46.5---within 10\% of the best GP-LLM (F3\,=\,51.7) at 87\% lower cost. At the premium end, Gemini~3.1~Pro (\$27.24) achieves only F3\,=\,51.0, while Claude Sonnet~4.6 delivers higher F3 (51.7) at 39\% lower cost (\$16.60).
 
-At the premium end, \textbf{Gemini~3.1~Pro costs \$27.24}---the most expensive scanner evaluated---yet achieves only F3\,=\,51.0, marginally below Claude Sonnet~4.6 (\$16.60, F3\,=\,51.7).
-Sonnet delivers \textbf{higher F3 at 39\% lower cost}, dominating Gemini on the cost--effectiveness frontier.
-
-The comparison between single-turn and agentic modes is particularly instructive.
-Claude Haiku~4.5 in single-turn mode scores F3\,=\,25.2 at \$4.94; the agentic variant reaches \textbf{F3\,=\,37.1 at \$5.24}---a \textbf{47\% improvement in F3 for only 6\% additional cost}.
-This result strongly supports the value of agentic scaffolding (tool use, iterative exploration) over single-pass analysis for vulnerability detection.
-
-Grok~4.20~Reasoning at \$16.82 achieves only F3\,=\,27.5, making it \textbf{the least cost-efficient LLM scanner} in our evaluation---its conservative, high-precision strategy does not compensate for the low recall under the F3 metric.
+The single-turn vs.\ agentic comparison is instructive: Claude Haiku~4.5 improves from F3\,=\,25.2 (single-turn, \$4.94) to F3\,=\,37.1 (agentic, \$5.24)---a \textbf{47\% F3 improvement for only 6\% additional cost}, strongly supporting agentic scaffolding for vulnerability detection.
 
 %% ─────────────────────────────────────────────
 \subsection{False-Positive Trap Effectiveness}
