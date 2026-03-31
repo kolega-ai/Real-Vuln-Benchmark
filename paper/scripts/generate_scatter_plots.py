@@ -14,15 +14,15 @@ DASHBOARD = ROOT / "reports" / "dashboard.json"
 FIGURES = Path(__file__).resolve().parent.parent / "figures"
 
 CATEGORY_COLORS = {
-    "Security-specialized": "#22c55e",
+    "Security-Specialized": "#22c55e",
     "General-purpose LLM": "#f97316",
-    "Rule-based SAST": "#3b82f6",
+    "Rule-Based SAST": "#3b82f6",
 }
 
 CATEGORY_MARKERS = {
-    "Security-specialized": "*",
+    "Security-Specialized": "*",
     "General-purpose LLM": "o",
-    "Rule-based SAST": "s",
+    "Rule-Based SAST": "s",
 }
 
 SAST = {"semgrep", "snyk", "sonarqube"}
@@ -37,9 +37,9 @@ KNOWN_COSTS = {
 
 def categorize(scanner):
     if scanner in SAST:
-        return "Rule-based SAST"
+        return "Rule-Based SAST"
     if scanner in SPECIALIZED:
-        return "Security-specialized"
+        return "Security-Specialized"
     return "General-purpose LLM"
 
 
@@ -81,7 +81,7 @@ def fig_precision_recall(data):
         cat = categorize(scanner)
         color = CATEGORY_COLORS[cat]
         marker = CATEGORY_MARKERS[cat]
-        size = 200 if cat == "Security-specialized" else 80
+        size = 200 if cat == "Security-Specialized" else 80
 
         ax.scatter(rec, prec, c=color, marker=marker, s=size, zorder=5, edgecolors="white", linewidth=0.5)
 
@@ -92,17 +92,17 @@ def fig_precision_recall(data):
         if "SecLab" in label:
             offset = (10, 5)
         ax.annotate(label, (rec, prec), textcoords="offset points",
-                    xytext=offset, fontsize=7, color=color, fontweight="bold" if cat == "Security-specialized" else "normal")
+                    xytext=offset, fontsize=7, color=color, fontweight="bold" if cat == "Security-Specialized" else "normal")
 
     # Legend
     from matplotlib.lines import Line2D
     legend = [
-        Line2D([0], [0], marker="*", color="w", markerfacecolor=CATEGORY_COLORS["Security-specialized"],
-               markersize=14, label="Security-specialized"),
+        Line2D([0], [0], marker="*", color="w", markerfacecolor=CATEGORY_COLORS["Security-Specialized"],
+               markersize=14, label="Security-Specialized"),
         Line2D([0], [0], marker="o", color="w", markerfacecolor=CATEGORY_COLORS["General-purpose LLM"],
                markersize=8, label="General-purpose LLM"),
-        Line2D([0], [0], marker="s", color="w", markerfacecolor=CATEGORY_COLORS["Rule-based SAST"],
-               markersize=8, label="Rule-based SAST"),
+        Line2D([0], [0], marker="s", color="w", markerfacecolor=CATEGORY_COLORS["Rule-Based SAST"],
+               markersize=8, label="Rule-Based SAST"),
     ]
     ax.legend(handles=legend, fontsize=8, loc="upper left")
 
@@ -149,7 +149,7 @@ def fig_f3_vs_cost(data):
     for scanner, f3, cost, cat in points:
         color = CATEGORY_COLORS[cat]
         marker = CATEGORY_MARKERS[cat]
-        size = 200 if cat == "Security-specialized" else 80
+        size = 200 if cat == "Security-Specialized" else 80
 
         ax.scatter(cost, f3, c=color, marker=marker, s=size, zorder=5, edgecolors="white", linewidth=0.5)
 
@@ -162,17 +162,17 @@ def fig_f3_vs_cost(data):
         if cost == 0:
             offset = (8, 3)
         ax.annotate(label, (cost, f3), textcoords="offset points",
-                    xytext=offset, fontsize=7, color=color, fontweight="bold" if cat == "Security-specialized" else "normal")
+                    xytext=offset, fontsize=7, color=color, fontweight="bold" if cat == "Security-Specialized" else "normal")
 
     # Legend
     from matplotlib.lines import Line2D
     legend = [
-        Line2D([0], [0], marker="*", color="w", markerfacecolor=CATEGORY_COLORS["Security-specialized"],
-               markersize=14, label="Security-specialized"),
+        Line2D([0], [0], marker="*", color="w", markerfacecolor=CATEGORY_COLORS["Security-Specialized"],
+               markersize=14, label="Security-Specialized"),
         Line2D([0], [0], marker="o", color="w", markerfacecolor=CATEGORY_COLORS["General-purpose LLM"],
                markersize=8, label="General-purpose LLM"),
-        Line2D([0], [0], marker="s", color="w", markerfacecolor=CATEGORY_COLORS["Rule-based SAST"],
-               markersize=8, label="Rule-based SAST"),
+        Line2D([0], [0], marker="s", color="w", markerfacecolor=CATEGORY_COLORS["Rule-Based SAST"],
+               markersize=8, label="Rule-Based SAST"),
     ]
     ax.legend(handles=legend, fontsize=8, loc="center right")
 
