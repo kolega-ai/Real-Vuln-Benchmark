@@ -85,33 +85,58 @@ def match_findings(
     matched_gt_ids: set[str] = set()
 
     for finding in findings:
-        # Collect all candidate GT matches
+        # Collect all candidate GT matches — try primary location first,
+        # then alternative locations (for scanners that report attack chains)
+        locations_to_try = [(finding.file, finding.line)]
+        if finding.alternative_locations:
+            locations_to_try.extend(finding.alternative_locations)
+
         candidates: list[dict] = []
-        for gt_entry in gt_entries:
-            if gt_entry["id"] in matched_gt_ids:
-                continue
-            gt_start, gt_end = _gt_line_range(gt_entry)
-            if (
-                finding.file == gt_entry["file"]
-                and finding.cwe in gt_entry["acceptable_cwes"]
-                and _line_within_tolerance(finding.line, gt_start, gt_end)
-            ):
-                candidates.append(gt_entry)
+        for try_file, try_line in locations_to_try:
+            for gt_entry in gt_entries:
+                if gt_entry["id"] in matched_gt_ids:
+                    continue
+                gt_start, gt_end = _gt_line_range(gt_entry)
+                if (
+                    try_file == gt_entry["file"]
+                    and finding.cwe in gt_entry["acceptable_cwes"]
+                    and _line_within_tolerance(try_line, gt_start, gt_end)
+                ):
+                    candidates.append(gt_entry)
 
         if candidates:
             # Prefer is_vulnerable=true so scanner gets credit for real vuln
             candidates.sort(key=lambda g: (not g["is_vulnerable"],))
-            best = candidates[0]
-            classification = "TP" if best["is_vulnerable"] else "FP"
-            results.append(
-                MatchResult(
-                    classification=classification,
-                    ground_truth_id=best["id"],
-                    scanner_finding=finding,
-                    ground_truth_entry=best,
+
+            if finding.alternative_locations:
+                # For findings with alternative locations (attack-chain scanners),
+                # one audit report may describe multiple distinct vulnerabilities.
+                # Match ALL candidates so each real vuln found counts as a TP.
+                # Count 0 FPs since the finding matched at least one GT entry.
+                for candidate in candidates:
+                    classification = "TP" if candidate["is_vulnerable"] else "FP"
+                    results.append(
+                        MatchResult(
+                            classification=classification,
+                            ground_truth_id=candidate["id"],
+                            scanner_finding=finding,
+                            ground_truth_entry=candidate,
+                        )
+                    )
+                    matched_gt_ids.add(candidate["id"])
+            else:
+                # Standard single-location finding: match one GT entry
+                best = candidates[0]
+                classification = "TP" if best["is_vulnerable"] else "FP"
+                results.append(
+                    MatchResult(
+                        classification=classification,
+                        ground_truth_id=best["id"],
+                        scanner_finding=finding,
+                        ground_truth_entry=best,
+                    )
                 )
-            )
-            matched_gt_ids.add(best["id"])
+                matched_gt_ids.add(best["id"])
         else:
             results.append(
                 MatchResult(

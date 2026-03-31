@@ -733,6 +733,22 @@ a:hover { text-decoration: underline; }
 .tooltip .tt-val { font-weight: 600; }
 .tooltip .tt-sep { border-top: 1px solid var(--border-secondary); margin: 4px 0; }
 
+/* Instant inline tooltips (no native title delay) */
+.itip {
+  position: relative; cursor: help;
+}
+.itip::after {
+  content: attr(data-tip);
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  background: var(--bg-secondary); border: 1px solid var(--border-primary);
+  border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 400;
+  color: var(--text-secondary); white-space: nowrap; pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  opacity: 0; visibility: hidden; transition: opacity 0.1s;
+  z-index: 200;
+}
+.itip:hover::after { opacity: 1; visibility: visible; }
+
 /* Scanner detail page extras */
 .severity-card {
   background: var(--bg-secondary); border-radius: 12px; padding: 16px;
@@ -926,9 +942,12 @@ def build_html(
             "fn": strict.get("fn", 0),
             "repos": sa.get("repos_scored", 0),
             "repos_total": sa.get("repos_total", 0),
-            # Micro variants available for toggle
-            "micro_f2": micro.get("f2_score", 0),
-            "micro_f3": micro.get("f3_score", 0),
+            # Optimistic (micro) variants for toggle
+            "optimistic_f2": micro.get("f2_score", 0),
+            "optimistic_f3": micro.get("f3_score", 0),
+            "optimistic_recall": round(micro.get("recall", 0) * 100, 1),
+            "optimistic_precision": round(micro.get("precision", 0) * 100, 1),
+            # Strict variants for toggle
             "strict_f2": strict.get("f2_score", 0),
             "strict_f3": strict.get("f3_score", 0),
             "strict_recall": round(strict.get("recall", 0) * 100, 1),
@@ -1008,8 +1027,8 @@ def build_html(
 <style>details[open] summary span{transform:rotate(90deg)}</style>""")
     # Scoring mode toggle
     w('<div style="display:flex;gap:8px;margin-bottom:16px">')
-    w('<button class="mode-btn" onclick="setScoreMode(\'optimistic\')">Optimistic</button>')
     w('<button class="mode-btn active" onclick="setScoreMode(\'strict\')">Strict</button>')
+    w('<button class="mode-btn" onclick="setScoreMode(\'optimistic\')">Optimistic</button>')
     w('</div>')
     w('<style>.mode-btn{background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border-secondary);padding:6px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-family:Inter,sans-serif;transition:all 0.2s}.mode-btn.active{background:var(--accent-lime);color:#000;border-color:var(--accent-lime)}.mode-btn:hover{border-color:var(--accent-lime)}</style>')
 
@@ -1017,16 +1036,18 @@ def build_html(
         row_class = "lb-row first" if rank == 1 else "lb-row"
         score_color = f2_color(d["f3"])
         strict_color = f2_color(d["strict_f3"])
+        optimistic_color = f2_color(d["optimistic_f3"])
         bar_gradient = f"linear-gradient(90deg,{score_color},{score_color}88)"
         strict_bar_gradient = f"linear-gradient(90deg,{strict_color},{strict_color}88)"
+        optimistic_bar_gradient = f"linear-gradient(90deg,{optimistic_color},{optimistic_color}88)"
         repos_label = f'{d["repos"]}/{d["repos_total"]}' if d["repos"] != d["repos_total"] else str(d["repos"])
         w(f'<a href="{detail_dir}/{d["slug"]}.html" class="{row_class}"'
-          f' data-f2="{d["f2"]:.1f}" data-strict-f2="{d["strict_f2"]:.1f}"'
-          f' data-f3="{d["f3"]:.1f}" data-strict-f3="{d["strict_f3"]:.1f}"'
-          f' data-recall="{d["recall"]:.1f}" data-strict-recall="{d["strict_recall"]:.1f}"'
-          f' data-precision="{d["precision"]:.1f}" data-strict-precision="{d["strict_precision"]:.1f}"'
-          f' data-color="{score_color}" data-strict-color="{strict_color}"'
-          f' data-gradient="{bar_gradient}" data-strict-gradient="{strict_bar_gradient}">')
+          f' data-f2="{d["optimistic_f2"]:.1f}" data-strict-f2="{d["strict_f2"]:.1f}"'
+          f' data-f3="{d["optimistic_f3"]:.1f}" data-strict-f3="{d["strict_f3"]:.1f}"'
+          f' data-recall="{d["optimistic_recall"]:.1f}" data-strict-recall="{d["strict_recall"]:.1f}"'
+          f' data-precision="{d["optimistic_precision"]:.1f}" data-strict-precision="{d["strict_precision"]:.1f}"'
+          f' data-color="{optimistic_color}" data-strict-color="{strict_color}"'
+          f' data-gradient="{optimistic_bar_gradient}" data-strict-gradient="{strict_bar_gradient}">')
         w(f'  <div class="lb-rank">{rank}</div>')
         w(f'  <div class="lb-name">{d["label"]} <span style="color:var(--text-tertiary);font-size:11px">{repos_label} repos</span></div>')
         w(f'  <div class="lb-bar-wrap"><div class="lb-bar-track"><div class="lb-bar-fill" style="width:{d["f3"]}%;background:{bar_gradient}"></div></div></div>')
@@ -1037,14 +1058,15 @@ def build_html(
             w(f'  <div class="lb-score" style="color:{score_color}">{d["f3"]:.1f}</div>')
         cost_parts = []
         if d["cost_per_run"] > 0:
-            cost_parts.append(f'<span title="Average API cost to scan one repository" style="cursor:help">${d["cost_per_run"]:.2f}/repo</span>')
+            cost_parts.append(f'<span class="itip" data-tip="Average API cost to scan one repository">${d["cost_per_run"]:.2f}/repo</span>')
         if d["cost_per_100_loc"] > 0:
             est_per_100k = round(d["cost_per_100_loc"] * 1000)
-            cost_parts.append(f'<span title="Estimated cost to scan 100,000 lines of code" style="cursor:help">~${est_per_100k:,}/100k LOC</span>')
+            cost_parts.append(f'<span class="itip" data-tip="Estimated cost to scan 100,000 lines of code">~${est_per_100k:,}/100k LOC</span>')
         cost_str = " &middot; ".join(cost_parts)
-        latency_str = f' &middot; <span title="Average wall-clock time per repository scan" style="cursor:help">{d["avg_latency"]:.0f}s avg</span>' if d["avg_latency"] > 0 else ""
-        w(f'  <div class="lb-meta"><strong title="Percentage of real vulnerabilities found — higher is better" style="cursor:help">{d["recall"]:.1f}%</strong> recall &middot; <strong title="Of findings reported, percentage that were real — higher is better" style="cursor:help">{d["precision"]:.1f}%</strong> prec'
-          f'{" &middot; " + cost_str if cost_str else ""}{latency_str}</div>')
+        latency_str = f' &middot; <span class="itip" data-tip="Average scan time per repository">{d["avg_latency"]:.0f}s avg</span>' if d["avg_latency"] > 0 else ""
+        extra_meta = f'{" &middot; " + cost_str if cost_str else ""}{latency_str}'
+        w(f'  <div class="lb-meta"><span class="lb-meta-scores"><strong class="itip" data-tip="Percentage of real vulnerabilities found">{d["strict_recall"]:.1f}%</strong> recall &middot; <strong class="itip" data-tip="Of findings reported, percentage that were real">{d["strict_precision"]:.1f}%</strong> prec</span>'
+          f'<span class="lb-meta-extra">{extra_meta}</span></div>')
         w(f'  <div class="lb-arrow">&rsaquo;</div>')
         w(f'</a>')
     w('</div>')
@@ -1326,7 +1348,8 @@ function setScoreMode(mode) {
     row.querySelector('.lb-score').style.color = color;
     row.querySelector('.lb-bar-fill').style.width = f3 + '%';
     row.querySelector('.lb-bar-fill').style.background = gradient;
-    row.querySelector('.lb-meta').innerHTML = `<strong>${parseFloat(recall).toFixed(1)}%</strong> recall &middot; <strong>${parseFloat(precision).toFixed(1)}%</strong> prec`;
+    const scoresSpan = row.querySelector('.lb-meta-scores');
+    if (scoresSpan) scoresSpan.innerHTML = `<strong>${parseFloat(recall).toFixed(1)}%</strong> recall &middot; <strong>${parseFloat(precision).toFixed(1)}%</strong> prec`;
     row.classList.toggle('first', i === 0);
     row.parentNode.appendChild(row);
   });
@@ -1443,7 +1466,7 @@ def build_scanner_detail_html(
         model_short = meta.get("model", "").split("/")[-1]  # strip provider prefix
         w(f'<div class="stat-card" title="The LLM model used for this scanner — this is the model ID sent to the API."><div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6">&#9881;</div><div><div class="stat-value" style="color:#3b82f6;font-size:16px">{model_short}</div><div class="stat-label">Model</div></div></div>')
         w(f'<div class="stat-card" title="Total API cost across all runs and all repositories for this scanner."><div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308">$</div><div><div class="stat-value" style="color:#eab308">${total_cost:.2f}</div><div class="stat-label">Total Cost</div></div></div>')
-        w(f'<div class="stat-card" title="Average wall-clock time to scan one repository, including API calls and agent reasoning."><div class="stat-icon" style="background:rgba(249,115,22,0.1);color:#f97316">&#9202;</div><div><div class="stat-value" style="color:#f97316">{avg_lat:.0f}s</div><div class="stat-label">Avg Latency</div></div></div>')
+        w(f'<div class="stat-card" title="Average scan time per repository, including API calls and agent reasoning."><div class="stat-icon" style="background:rgba(249,115,22,0.1);color:#f97316">&#9202;</div><div><div class="stat-value" style="color:#f97316">{avg_lat:.0f}s</div><div class="stat-label">Avg Latency</div></div></div>')
     w('</div>')
 
     w('<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>')
@@ -1561,7 +1584,7 @@ def build_scanner_detail_html(
         w(f'<div style="{row_style}"><span style="{lbl_style}" title="Percentage of runs that completed successfully without timeout or error">Success Rate</span><span style="{val_style};color:{"#22c55e" if success_rate >= 90 else "#f97316"}">{success_rate:.0f}%</span></div>')
         w(f'<div style="{row_style}"><span style="{lbl_style}" title="Number of runs that hit the time limit before finishing — these repos get no score">Timeouts</span><span style="{val_style}">{exit_counts.get("timeout", 0)}</span></div>')
         w(f'<div style="{row_style}"><span style="{lbl_style}" title="Percentage of runs where the LLM output malformed JSON that needed automatic repair before scoring">JSON Repair Rate</span><span style="{val_style}">{meta.get("json_repair_rate", 0):.0%}</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average wall-clock time per repository scan, including API calls and agent reasoning steps">Avg Latency</span><span style="{val_style}">{meta.get("avg_wall_clock_seconds", 0):.1f}s</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average scan time per repository, including API calls and agent reasoning steps">Avg Latency</span><span style="{val_style}">{meta.get("avg_wall_clock_seconds", 0):.1f}s</span></div>')
         w('</div>')
 
         w('</div>')  # close grid

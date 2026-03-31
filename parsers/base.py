@@ -19,6 +19,10 @@ class NormalisedFinding:
     message: Optional[str]  # Scanner's description
     scanner: str  # Scanner slug, e.g. "semgrep"
     finding_id: Optional[str] = None  # Platform finding ID for linking
+    # Alternative locations for scanners that report attack chains.
+    # Each entry is (file, line). The matcher tries the primary (file, line)
+    # first, then falls back to alternatives. Only one match counts.
+    alternative_locations: Optional[list[tuple[str, int]]] = None
 
 
 def normalise_path(path: str) -> str:

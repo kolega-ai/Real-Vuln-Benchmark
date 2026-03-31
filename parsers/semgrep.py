@@ -41,6 +41,14 @@ class SemgrepParser(BaseParser):
 
             finding_id = metadata.get("finding_id")
 
+            # Alternative locations for attack-chain scanners
+            raw_alts = metadata.get("alternative_locations", [])
+            alt_locs = [
+                (normalise_path(a["file"]), a["line"])
+                for a in raw_alts
+                if isinstance(a, dict) and "file" in a and "line" in a
+            ] or None
+
             for raw_cwe in raw_cwes:
                 cwe = _normalise_cwe(raw_cwe)
                 if not cwe:
@@ -56,6 +64,7 @@ class SemgrepParser(BaseParser):
                         message=extra.get("message"),
                         scanner=self.scanner_name,
                         finding_id=finding_id,
+                        alternative_locations=alt_locs,
                     )
                 )
 

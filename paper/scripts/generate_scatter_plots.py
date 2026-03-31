@@ -56,6 +56,7 @@ def short_name(scanner):
         .replace("minimax-", "Minimax ")
         .replace("qwen-", "Qwen ")
         .replace("kolega", "Kolega")
+        .replace("seclab-taskflow-agent-v1", "SecLab Agent")
     )
 
 
@@ -71,7 +72,7 @@ def fig_precision_recall(data):
 
     for scanner, v in agg.items():
         # Skip single-turn haiku if present
-        if "v1" in scanner and "agentic" not in scanner and scanner != "kolega-v0.0.1" and scanner not in SAST:
+        if "v1" in scanner and "agentic" not in scanner and scanner not in SPECIALIZED and scanner not in SAST:
             continue
 
         sm = v.get("strict_micro", {})
@@ -88,6 +89,8 @@ def fig_precision_recall(data):
         offset = (8, 5)
         if "Kolega" in label:
             offset = (10, -5)
+        if "SecLab" in label:
+            offset = (10, 5)
         ax.annotate(label, (rec, prec), textcoords="offset points",
                     xytext=offset, fontsize=7, color=color, fontweight="bold" if cat == "Security-specialized" else "normal")
 
@@ -125,7 +128,7 @@ def fig_f3_vs_cost(data):
     points = []
     for scanner, v in agg.items():
         # Skip single-turn haiku if present
-        if "v1" in scanner and "agentic" not in scanner and scanner != "kolega-v0.0.1" and scanner not in SAST:
+        if "v1" in scanner and "agentic" not in scanner and scanner not in SPECIALIZED and scanner not in SAST:
             continue
 
         sm = v.get("strict_micro", {})
@@ -154,6 +157,8 @@ def fig_f3_vs_cost(data):
         offset = (8, 3)
         if "Kolega" in label:
             offset = (10, -8)
+        if "SecLab" in label:
+            offset = (10, 5)
         if cost == 0:
             offset = (8, 3)
         ax.annotate(label, (cost, f3), textcoords="offset points",

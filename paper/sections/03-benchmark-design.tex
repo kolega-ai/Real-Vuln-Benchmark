@@ -80,7 +80,12 @@ FP~traps serve two purposes: (1)~they test a scanner's ability to distinguish tr
 \subsection{Matching Algorithm}
 \label{sec:matching}
 
-Each scanner finding is matched against the ground truth on three fields: (1)~\textbf{file path} (exact match after normalization), (2)~\textbf{CWE} (the scanner's CWE must appear in the ground truth entry's \texttt{acceptable\_cwes} list), and (3)~\textbf{line number} (within $\pm$10 lines of the ground truth range). When a finding matches multiple entries, we prefer real vulnerabilities over FP traps, giving the scanner the benefit of the doubt. Each ground truth entry is consumed at most once. Unmatched findings are false positives; unmatched vulnerable entries are false negatives; unmatched traps are true negatives. The full matching implementation is available in the repository.\footnote{\url{https://github.com/kolega-ai/RealVulnBenchmark/blob/main/scorer/matcher.py}}
+Each scanner finding is matched against the ground truth on three fields: (1)~\textbf{file path} (exact match after normalization), (2)~\textbf{CWE} (the scanner's CWE must appear in the ground truth entry's \texttt{acceptable\_cwes} list), and (3)~\textbf{line number} (within $\pm$10 lines of the ground truth range). When a finding matches multiple entries, we prefer real vulnerabilities over FP traps, giving the scanner the benefit of the doubt. Each ground truth entry is consumed at most once. Unmatched findings are false positives; unmatched vulnerable entries are false negatives; unmatched traps are true negatives.
+
+\paragraph{Alternative locations.}
+Some scanners report attack chains rather than single-point locations: a single audit result may reference multiple files (the vulnerable handler, its route definition, model layers, etc.) while describing one or more vulnerabilities. To handle this fairly, a finding may declare \emph{alternative locations}---additional (file,~line) pairs that the matcher tries if the primary location does not match. If any location matches, the finding is not a false positive. When a single finding's alternatives match multiple distinct ground truth entries, each match is credited as a separate true positive, since the scanner genuinely identified multiple vulnerabilities in one report. This prevents penalizing chain-of-evidence reporting styles while still counting one false positive per unmatched finding.
+
+The full matching implementation is available in the repository.\footnote{\url{https://github.com/kolega-ai/RealVulnBenchmark/blob/main/scorer/matcher.py}}
 
 %% ----------------------------------------------------------------
 \subsection{Scoring}
@@ -92,10 +97,10 @@ The primary metric is the $F_3$ score, scaled to $[0, 100]$:
   F_3 = \frac{10 \cdot P \cdot R}{9P + R} \times 100
   \label{eq:f3}
 \end{equation}
-where $P = \frac{\mathit{TP}}{\mathit{TP} + \mathit{FP}}$ is precision and $R = \frac{\mathit{TP}}{\mathit{TP} + \mathit{FN}}$ is recall.
+where $P = \frac{\mathit{TP}}{\mathit{TP} + \mathit{FP}}$ is \emph{precision}---the fraction of scanner findings that are real vulnerabilities (higher precision means less noise for analysts to triage)---and $R = \frac{\mathit{TP}}{\mathit{TP} + \mathit{FN}}$ is \emph{recall}---the fraction of real vulnerabilities the scanner finds (higher recall means fewer missed vulnerabilities).
 The $F_\beta$ family generalizes the harmonic mean with parameter $\beta$; setting $\beta = 3$ weights recall nine times more heavily than precision.
 
-In security, a single missed vulnerability can lead to a breach, while false positives merely cost analyst time. This asymmetry motivates $\beta{=}3$, weighting recall $9\times$ over precision. We also report $F_2$ ($\beta{=}2$, recall weighted $4\times$) for lower-risk contexts. The choice of $\beta{=}3$ was made before evaluating any scanner; the full leaderboard data in the repository allows re-ranking under any $F_\beta$.
+In security, a single missed vulnerability can lead to a breach, while false positives cost analyst time but do not directly create risk. This asymmetry motivates $\beta{=}3$, weighting recall $9\times$ over precision. We also report $F_2$ ($\beta{=}2$, recall weighted $4\times$) for lower-risk contexts. The full leaderboard data in the repository allows re-ranking under any $F_\beta$.
 
 \subsubsection{Secondary Metric: $F_2$ Score.}
 We additionally report the $F_2$ score:

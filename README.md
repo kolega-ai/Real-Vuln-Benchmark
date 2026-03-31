@@ -1,8 +1,10 @@
 # RealVuln Benchmark
 
-**[Live Dashboard →](https://realvuln.kolega.dev)**
+**[Live Dashboard →](https://realvuln.kolega.dev)** · **[Paper (arXiv) →](paper/)**
 
 An open benchmark for evaluating security scanners against ground-truth vulnerabilities in real-world code. Primary metric is **F3 Score** (0–100, recall-weighted 9:1).
+
+> **Paper:** *RealVuln: Benchmarking Rule-Based, LLM, and Security-Specialized Scanners on Real-World Code* — a systematic comparison of 15 scanners (3 rule-based SAST, 10 general-purpose LLM, 2 security-specialized) on 26 intentionally vulnerable Python repos with 796 ground-truth findings. See [`paper/`](paper/) for the full LaTeX source.
 
 ## Problem & Purpose
 
@@ -60,7 +62,7 @@ All targets are **Type 1 (intentionally vulnerable apps)** with `human_authored`
 
 ### What Works Today
 
-- **Scoring engine** — F2, precision, recall, per-CWE-family and per-severity breakdowns
+- **Scoring engine** — F3, F2, precision, recall, per-CWE-family and per-severity breakdowns
 - **Finding matching** — file path + CWE + line tolerance (±10 lines)
 - **FP traps** — `is_vulnerable: false` entries for measuring false positive rates
 - **Real scanner results** — Semgrep, Snyk, SonarQube, Kolega, and 13+ LLM-based scanners (Claude, GPT-4o, Gemini, Grok, Kimi, etc.)
@@ -240,7 +242,7 @@ Unmatched scanner findings (no ground truth entry) are scored as false positives
 
 ### Metrics
 
-**Primary metric: F2 Score** (0–100 scale). F-beta with beta=2 weights recall 4x more than precision — missing a real vulnerability is far worse than a false alarm.
+**Primary metric: F3 Score** (0–100 scale). F-beta with beta=3 weights recall 9x more than precision — missing a real vulnerability is far worse than a false alarm. F2 Score (beta=2, recall 4x) is reported as a secondary metric.
 
 Full metrics computed per scorer run:
 
@@ -250,7 +252,8 @@ Full metrics computed per scorer run:
 | Recall (= TPR) | TP / (TP + FN) |
 | F1 | 2 × (Prec × Recall) / (Prec + Recall) |
 | F2 | 5 × (Prec × Recall) / (4 × Prec + Recall) |
-| F2 Score | F2 × 100 |
+| F3 | 10 × (Prec × Recall) / (9 × Prec + Recall) |
+| F3 Score | F3 × 100 |
 | FPR | FP / (FP + TN) |
 
 Breakdowns: **per-CWE-family** (TP/FP/FN/precision/recall) and **per-severity** (TP/FP/FN/recall), both derived from ground truth entry metadata.
