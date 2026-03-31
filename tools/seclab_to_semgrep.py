@@ -64,8 +64,9 @@ ISSUE_TYPE_TO_CWE = {
 
 def classify_cwe(issue_type: str, notes: str = "") -> str:
     """Map an issue_type string (and optionally notes) to a CWE identifier."""
-    # Check issue_type first
-    lower = issue_type.lower()
+    # Check issue_type first — normalize underscores to spaces so
+    # DB values like "sensitive_data_exposure" match patterns like "sensitive data"
+    lower = issue_type.lower().replace("_", " ")
     for pattern, cwe in ISSUE_TYPE_TO_CWE.items():
         if pattern in lower:
             return cwe
