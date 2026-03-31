@@ -11,11 +11,13 @@ set -euo pipefail
 # =============================================================================
 
 BENCHMARK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SECLAB_DIR="/Users/faizanraza/Documents/kolega/seclab-taskflows"
+SECLAB_DIR="${SECLAB_DIR:-$(cd "$BENCHMARK_DIR/.." && pwd)/seclab-taskflows}"
 SCANNER_NAME="seclab-taskflow-agent-v1"
 KEYS_FILE="$BENCHMARK_DIR/tools/seclab_litellm_keys.json"
-LITELLM_ENDPOINT="http://omen:4100/v1"
-GH_TOKEN="REDACTED_GITHUB_PAT"
+LITELLM_ENDPOINT="${AI_API_ENDPOINT:-http://localhost:4100/v1}"
+
+# Required env vars
+: "${GH_TOKEN:?Set GH_TOKEN to a GitHub PAT with repo and read:org scopes}"
 
 # Repo name -> GitHub org/repo mapping (from ground-truth.json repo_url)
 declare -A REPO_MAP
@@ -88,7 +90,7 @@ run_repo() {
   export DATA_DIR="$db_dir"
   export LOG_DIR="$db_dir/logs"
   export CODEQL_DBS_BASE_PATH="$db_dir"
-  export PATH="/Users/faizanraza/Documents/kolega/seclab-taskflows/.venv/bin:$PATH"
+  export PATH="$SECLAB_DIR/.venv/bin:$PATH"
 
   mkdir -p "$LOG_DIR"
 
@@ -146,13 +148,16 @@ else
   echo "🏁 ALL REPOS COMPLETE"
   echo "═══════════════════════════════════════════════════════"
 
-  # Print cost summary
-  echo ""
-  echo "💰 Cost per repo:"
-  for repo in $(python3 -c "import json; [print(k) for k in sorted(json.load(open('$KEYS_FILE')).keys())]"); do
-    key=$(get_key "$repo")
-    spend=$(curl -s -X GET "http://omen:4100/key/info?key=$key" \
-      -H "Authorization: Bearer &^&M#*xgU5CRM5c^QkF3v2k#J^J^daxY" | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['spend'])" 2>/dev/null || echo "?")
-    echo "  $repo: \$$spend"
-  done
+  # Print cost summary (requires LITELLM_MASTER_KEY env var)
+  if [ -n "${LITELLM_MASTER_KEY:-}" ]; then
+    LITELLM_BASE="${LITELLM_ENDPOINT%/v1}"
+    echo ""
+    echo "💰 Cost per repo:"
+    for repo in $(python3 -c "import json; [print(k) for k in sorted(json.load(open('$KEYS_FILE')).keys())]"); do
+      key=$(get_key "$repo")
+      spend=$(curl -s -X GET "$LITELLM_BASE/key/info?key=$key" \
+        -H "Authorization: Bearer $LITELLM_MASTER_KEY" | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['spend'])" 2>/dev/null || echo "?")
+      echo "  $repo: \$$spend"
+    done
+  fi
 fi

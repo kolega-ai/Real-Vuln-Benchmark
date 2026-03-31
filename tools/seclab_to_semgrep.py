@@ -123,8 +123,11 @@ def convert(db_path: str, github_repo: str, output_dir: str):
         notes = row["notes"]
         cwe = classify_cwe(issue_type, notes)
 
-        # Extract file:line locations from the notes
-        # Keep first line per unique file to avoid over-counting
+        # Extract file:line locations from the notes.
+        # Each audit result is ONE finding — the agent reported one vulnerability
+        # category with an attack chain referencing multiple files. We use the
+        # first location as primary and the rest as alternatives so the matcher
+        # can try all of them but only count one TP or one FP per audit.
         locations = extract_file_lines(notes)
         seen_files: set[str] = set()
         deduped: list[tuple[str, int]] = []
@@ -136,21 +139,26 @@ def convert(db_path: str, github_repo: str, output_dir: str):
         if not deduped:
             deduped = [("unknown", 1)]
 
-        for filepath, line in deduped:
-            results.append({
-                "check_id": f"seclab.{issue_type.lower().replace(' ', '-').replace('/', '-')}",
-                "path": filepath,
-                "start": {"line": line, "col": 1, "offset": 0},
-                "end": {"line": line, "col": 1, "offset": 0},
-                "extra": {
-                    "message": notes[:500],
-                    "metadata": {
-                        "cwe": [f"{cwe}: {issue_type}"],
-                        "source": "seclab-taskflow-agent",
-                    },
-                    "severity": "WARNING",
+        primary_file, primary_line = deduped[0]
+        alternatives = [
+            {"file": f, "line": l} for f, l in deduped[1:]
+        ]
+
+        results.append({
+            "check_id": f"seclab.{issue_type.lower().replace(' ', '-').replace('/', '-')}",
+            "path": primary_file,
+            "start": {"line": primary_line, "col": 1, "offset": 0},
+            "end": {"line": primary_line, "col": 1, "offset": 0},
+            "extra": {
+                "message": notes[:500],
+                "metadata": {
+                    "cwe": [f"{cwe}: {issue_type}"],
+                    "source": "seclab-taskflow-agent",
+                    "alternative_locations": alternatives,
                 },
-            })
+                "severity": "WARNING",
+            },
+        })
 
     output = {
         "version": "1.0.0",

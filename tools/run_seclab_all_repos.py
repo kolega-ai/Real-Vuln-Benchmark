@@ -14,13 +14,30 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Required env vars: GH_TOKEN, AI_API_ENDPOINT (LiteLLM proxy URL)
+# Optional: SECLAB_DIR (defaults to ../seclab-taskflows relative to benchmark)
+# Also requires: tools/seclab_litellm_keys.json with per-repo LiteLLM API keys
+
 BENCHMARK_DIR = Path(__file__).resolve().parent.parent
-SECLAB_DIR = Path("/Users/faizanraza/Documents/kolega/seclab-taskflows")
+SECLAB_DIR = Path(os.environ.get("SECLAB_DIR", str(BENCHMARK_DIR.parent / "seclab-taskflows")))
 SCANNER_NAME = "seclab-taskflow-agent-v1"
 KEYS_FILE = BENCHMARK_DIR / "tools" / "seclab_litellm_keys.json"
-LITELLM_ENDPOINT = "http://omen:4100/v1"
-GH_TOKEN = "REDACTED_GITHUB_PAT"
+LITELLM_ENDPOINT = os.environ.get("AI_API_ENDPOINT", "http://localhost:4100/v1")
+GH_TOKEN = os.environ.get("GH_TOKEN", "")
 PYTHON = str(SECLAB_DIR / ".venv" / "bin" / "python")
+
+
+def check_prerequisites():
+    """Validate required env vars and paths exist."""
+    if not GH_TOKEN:
+        sys.exit("ERROR: Set GH_TOKEN to a GitHub PAT with repo and read:org scopes")
+    if not SECLAB_DIR.exists():
+        sys.exit(f"ERROR: SecLab taskflows dir not found at {SECLAB_DIR}\n"
+                 f"  Clone it: git clone https://github.com/GitHubSecurityLab/seclab-taskflows.git {SECLAB_DIR}\n"
+                 f"  Or set SECLAB_DIR env var to point to your clone")
+    if not KEYS_FILE.exists():
+        sys.exit(f"ERROR: LiteLLM keys file not found at {KEYS_FILE}\n"
+                 f"  Create it with per-repo API keys: {{\"realvuln-vulpy\": \"sk-...\", ...}}")
 
 
 def load_repo_map():
@@ -175,6 +192,7 @@ def run_repo(repo_name, repo_map, keys):
 
 
 def main():
+    check_prerequisites()
     repo_map = load_repo_map()
     keys = load_keys()
 
@@ -200,23 +218,25 @@ def main():
         for repo, status in results.items():
             print(f"  {repo}: {status}")
 
-        # Cost summary
-        print()
-        print("💰 Cost per repo:")
-        import urllib.request
-        for repo in repos:
-            key = keys.get(repo, "")
-            try:
-                req = urllib.request.Request(
-                    f"http://omen:4100/key/info?key={key}",
-                    headers={"Authorization": "Bearer &^&M#*xgU5CRM5c^QkF3v2k#J^J^daxY"}
-                )
-                resp = urllib.request.urlopen(req)
-                data = json.loads(resp.read())
-                spend = data.get("info", {}).get("spend", 0)
-                print(f"  {repo}: ${spend:.4f}")
-            except Exception:
-                print(f"  {repo}: ? (couldn't fetch)")
+        # Cost summary (requires LITELLM_MASTER_KEY env var)
+        master_key = os.environ.get("LITELLM_MASTER_KEY")
+        if master_key:
+            print()
+            print("💰 Cost per repo:")
+            import urllib.request
+            for repo in repos:
+                key = keys.get(repo, "")
+                try:
+                    req = urllib.request.Request(
+                        f"{LITELLM_ENDPOINT.rstrip('/v1')}/key/info?key={key}",
+                        headers={"Authorization": f"Bearer {master_key}"}
+                    )
+                    resp = urllib.request.urlopen(req)
+                    data = json.loads(resp.read())
+                    spend = data.get("info", {}).get("spend", 0)
+                    print(f"  {repo}: ${spend:.4f}")
+                except Exception:
+                    print(f"  {repo}: ? (couldn't fetch)")
 
 
 if __name__ == "__main__":
