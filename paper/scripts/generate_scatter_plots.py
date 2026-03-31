@@ -26,10 +26,13 @@ CATEGORY_MARKERS = {
 }
 
 SAST = {"semgrep", "snyk", "sonarqube"}
-SPECIALIZED = {"kolega-v0.0.1"}
+SPECIALIZED = {"kolega-v0.0.1", "seclab-taskflow-agent-v1"}
 
-# Kolega cost: $25 per 100k LOC (published pricing)
-KOLEGA_COST_PER_100K = 25
+# Known costs per 100k LOC
+KNOWN_COSTS = {
+    "kolega-v0.0.1": 25,
+    "seclab-taskflow-agent-v1": 125,
+}
 
 
 def categorize(scanner):
@@ -131,8 +134,8 @@ def fig_f3_vs_cost(data):
 
         # Get cost per 100k LOC
         cost_info = v.get("cost", {})
-        if scanner in SPECIALIZED:
-            cost = KOLEGA_COST_PER_100K
+        if scanner in KNOWN_COSTS:
+            cost = KNOWN_COSTS[scanner]
         elif scanner in SAST:
             cost = 0
         else:
