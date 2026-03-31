@@ -55,7 +55,7 @@ def short_name(scanner):
         .replace("glm-", "GLM-")
         .replace("minimax-", "Minimax ")
         .replace("qwen-", "Qwen ")
-        .replace("kolega", "Kolega")
+        .replace("kolega", "Kolega.Dev")
         .replace("seclab-taskflow-agent-v1", "SecLab Agent")
     )
 
