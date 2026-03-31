@@ -100,10 +100,17 @@ def convert(db_path: str, github_repo: str, output_dir: str):
     db = sqlite3.connect(db_path)
     db.row_factory = sqlite3.Row
 
+    # Case-insensitive match — the agent lowercases repo names
     rows = db.execute(
-        "SELECT * FROM audit_result WHERE repo = ? AND has_vulnerability = 1",
+        "SELECT * FROM audit_result WHERE LOWER(repo) = LOWER(?) AND has_vulnerability = 1",
         (github_repo,)
     ).fetchall()
+
+    if not rows:
+        # Also try matching any repo in the DB (single-repo DBs)
+        rows = db.execute(
+            "SELECT * FROM audit_result WHERE has_vulnerability = 1"
+        ).fetchall()
 
     if not rows:
         print(f"No vulnerabilities found for {github_repo}")
