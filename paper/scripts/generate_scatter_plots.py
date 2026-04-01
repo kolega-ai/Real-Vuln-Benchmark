@@ -15,13 +15,13 @@ FIGURES = Path(__file__).resolve().parent.parent / "figures"
 
 CATEGORY_COLORS = {
     "Security-Specialized": "#22c55e",
-    "General-purpose LLM": "#f97316",
+    "General-Purpose LLM": "#f97316",
     "Rule-Based SAST": "#3b82f6",
 }
 
 CATEGORY_MARKERS = {
     "Security-Specialized": "*",
-    "General-purpose LLM": "o",
+    "General-Purpose LLM": "o",
     "Rule-Based SAST": "s",
 }
 
@@ -40,7 +40,7 @@ def categorize(scanner):
         return "Rule-Based SAST"
     if scanner in SPECIALIZED:
         return "Security-Specialized"
-    return "General-purpose LLM"
+    return "General-Purpose LLM"
 
 
 def short_name(scanner):
@@ -99,8 +99,8 @@ def fig_precision_recall(data):
     legend = [
         Line2D([0], [0], marker="*", color="w", markerfacecolor=CATEGORY_COLORS["Security-Specialized"],
                markersize=14, label="Security-Specialized"),
-        Line2D([0], [0], marker="o", color="w", markerfacecolor=CATEGORY_COLORS["General-purpose LLM"],
-               markersize=8, label="General-purpose LLM"),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor=CATEGORY_COLORS["General-Purpose LLM"],
+               markersize=8, label="General-Purpose LLM"),
         Line2D([0], [0], marker="s", color="w", markerfacecolor=CATEGORY_COLORS["Rule-Based SAST"],
                markersize=8, label="Rule-Based SAST"),
     ]
@@ -169,8 +169,8 @@ def fig_f3_vs_cost(data):
     legend = [
         Line2D([0], [0], marker="*", color="w", markerfacecolor=CATEGORY_COLORS["Security-Specialized"],
                markersize=14, label="Security-Specialized"),
-        Line2D([0], [0], marker="o", color="w", markerfacecolor=CATEGORY_COLORS["General-purpose LLM"],
-               markersize=8, label="General-purpose LLM"),
+        Line2D([0], [0], marker="o", color="w", markerfacecolor=CATEGORY_COLORS["General-Purpose LLM"],
+               markersize=8, label="General-Purpose LLM"),
         Line2D([0], [0], marker="s", color="w", markerfacecolor=CATEGORY_COLORS["Rule-Based SAST"],
                markersize=8, label="Rule-Based SAST"),
     ]
