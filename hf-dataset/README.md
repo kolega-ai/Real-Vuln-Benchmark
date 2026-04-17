@@ -31,7 +31,7 @@ configs:
 
 Ground-truth vulnerability labels for 26 intentionally-vulnerable Python repositories, plus scanner outputs from 16 security tools (rule-based SAST, general-purpose LLMs, and security-specialized agents).
 
-Companion dataset for the paper **"RealVuln: Benchmarking Rule-Based, General-Purpose LLM, and Security-Specialized Scanners on Real-World Code"** ([arXiv:XXXX.XXXXX](https://arxiv.org/abs/XXXX.XXXXX)).
+Companion dataset for the paper **"RealVuln: Benchmarking Rule-Based, General-Purpose LLM, and Security-Specialized Scanners on Real-World Code"** ([arXiv:2604.13764](https://arxiv.org/abs/2604.13764)).
 
 ## Dataset summary
 
@@ -133,9 +133,9 @@ Full scoring pipeline and dashboard in the [GitHub repository](https://github.co
 ```bibtex
 @article{realvuln2026,
   title  = {RealVuln: Benchmarking Rule-Based, General-Purpose LLM, and Security-Specialized Scanners on Real-World Code},
-  author = {Kolega.Dev},
+  author = {Pellew, John and Raza, Faizan},
   year   = {2026},
-  eprint = {XXXX.XXXXX},
+  eprint = {2604.13764},
   archivePrefix = {arXiv},
   primaryClass  = {cs.CR}
 }
@@ -144,7 +144,7 @@ Full scoring pipeline and dashboard in the [GitHub repository](https://github.co
 ## Links
 
 - GitHub: https://github.com/kolega-ai/Real-Vuln-Benchmark
-- Paper: https://arxiv.org/abs/XXXX.XXXXX
+- Paper: https://arxiv.org/abs/2604.13764
 - Live leaderboard: https://kolega-ai.github.io/Real-Vuln-Benchmark/
 
 ## License
