@@ -182,6 +182,39 @@ def call_anthropic(
     return text, response.usage.input_tokens, response.usage.output_tokens
 
 
+def call_ollama(
+    system_prompt: str,
+    user_message: str,
+    model_id: str,
+    base_url: str = "http://gaming-pc:11434/v1",
+    max_output_tokens: int = 16_000,
+    timeout: int = 7200,
+) -> tuple[str, int, int]:
+    """Call Ollama (OpenAI-compat) /v1/chat/completions, return (text, in_tok, out_tok)."""
+    import urllib.request
+    body = {
+        "model": model_id,
+        "stream": False,
+        "max_tokens": max_output_tokens,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ],
+    }
+    req = urllib.request.Request(
+        f"{base_url.rstrip('/')}/chat/completions",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json", "Authorization": "Bearer ollama"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        d = json.load(r)
+    msg = d["choices"][0]["message"]
+    # Ollama splits <think> blocks into 'reasoning'; ignore for single-turn — we only need final content
+    text = msg.get("content", "") or ""
+    usage = d.get("usage", {}) or {}
+    return text, usage.get("prompt_tokens", 0) or 0, usage.get("completion_tokens", 0) or 0
+
+
 def run_one(
     model_config: dict,
     repo_slug: str,
@@ -214,9 +247,16 @@ def run_one(
 
     start = time.time()
     try:
-        raw_output, input_tokens, output_tokens = call_anthropic(
-            system_prompt, user_msg, model_id,
-        )
+        provider = model_config.get("provider", "anthropic")
+        if provider == "ollama":
+            raw_output, input_tokens, output_tokens = call_ollama(
+                system_prompt, user_msg, model_id,
+                base_url=model_config.get("base_url", "http://gaming-pc:11434/v1"),
+            )
+        else:
+            raw_output, input_tokens, output_tokens = call_anthropic(
+                system_prompt, user_msg, model_id,
+            )
     except Exception as e:
         elapsed = time.time() - start
         print(f"  API error: {e}")
@@ -320,8 +360,10 @@ def main() -> int:
         print(f"Est. total ({len(repos) * args.runs} runs): ${total:.2f}\n")
         return 0
 
-    # Load API key from .env
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    # API key only needed for cloud providers
+    if model_config.get("provider", "anthropic") != "anthropic":
+        pass
+    elif not os.environ.get("ANTHROPIC_API_KEY"):
         for env_path in [
             PROJECT_ROOT / ".env",
         ]:
@@ -334,7 +376,7 @@ def main() -> int:
                 if os.environ.get("ANTHROPIC_API_KEY"):
                     break
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if model_config.get("provider", "anthropic") == "anthropic" and not os.environ.get("ANTHROPIC_API_KEY"):
         print("Error: ANTHROPIC_API_KEY not found. Set it or put it in .env", file=sys.stderr)
         return 1
 
