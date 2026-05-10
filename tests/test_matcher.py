@@ -1,8 +1,11 @@
 """Tests for the finding matcher."""
 from __future__ import annotations
 
+import json
+
 from parsers.base import NormalisedFinding
 from scorer.matcher import (
+    load_ground_truth,
     match_findings,
     _line_within_tolerance,
 )
@@ -148,6 +151,83 @@ class TestMatchFindings:
         """Finding with CWE not in acceptable_cwes -> FP."""
         findings = [_make_finding(file="app.py", cwe="CWE-79", line=42)]
         results = match_findings(findings, _make_gt())
+        fp = [r for r in results if r.classification == "FP"]
+        fn = [r for r in results if r.classification == "FN"]
+        assert len(fp) == 1
+        assert len(fn) == 1
+
+    def test_acceptable_location_true_positive(self):
+        """Finding matching an alternate public location should be TP."""
+        gt = _make_gt([
+            {
+                "id": "gt-alt-001",
+                "is_vulnerable": True,
+                "vulnerability_class": "xss",
+                "primary_cwe": "CWE-79",
+                "acceptable_cwes": ["CWE-79"],
+                "file": "views/main.html",
+                "location": {"start_line": 100, "end_line": 105},
+                "acceptable_locations": [
+                    {"file": "templates/x.html", "start_line": 20, "end_line": 22}
+                ],
+                "severity": "high",
+                "evidence": {"source": "manual_review", "description": "test"},
+            }
+        ])
+        findings = [_make_finding(file="templates/x.html", cwe="CWE-79", line=21)]
+        results = match_findings(findings, gt)
+        tp = [r for r in results if r.classification == "TP"]
+        assert len(tp) == 1
+        assert tp[0].ground_truth_id == "gt-alt-001"
+
+    def test_acceptable_location_paths_are_normalized(self, tmp_path):
+        """Alternate location paths are normalized by the GT loader."""
+        gt_path = tmp_path / "ground-truth.json"
+        gt_path.write_text(json.dumps(_make_gt([
+            {
+                "id": "gt-alt-002",
+                "is_vulnerable": True,
+                "vulnerability_class": "xss",
+                "primary_cwe": "CWE-79",
+                "acceptable_cwes": ["CWE-79"],
+                "file": "./views/main.html",
+                "location": {"start_line": 100, "end_line": 105},
+                "acceptable_locations": [
+                    {"file": "./templates/x.html", "start_line": 20, "end_line": 22}
+                ],
+                "severity": "high",
+                "evidence": {"source": "manual_review", "description": "test"},
+            }
+        ])))
+
+        gt = load_ground_truth(str(gt_path))
+        findings = [_make_finding(file="templates/x.html", cwe="CWE-79", line=21)]
+        results = match_findings(findings, gt)
+        tp = [r for r in results if r.classification == "TP"]
+        assert len(tp) == 1
+        assert gt["findings"][0]["file"] == "views/main.html"
+        assert gt["findings"][0]["acceptable_locations"][0]["file"] == "templates/x.html"
+
+    def test_acceptable_location_still_requires_cwe_match(self):
+        """Alternate location match should not bypass acceptable_cwes."""
+        gt = _make_gt([
+            {
+                "id": "gt-alt-003",
+                "is_vulnerable": True,
+                "vulnerability_class": "xss",
+                "primary_cwe": "CWE-79",
+                "acceptable_cwes": ["CWE-79"],
+                "file": "views/main.html",
+                "location": {"start_line": 100, "end_line": 105},
+                "acceptable_locations": [
+                    {"file": "templates/x.html", "start_line": 20, "end_line": 22}
+                ],
+                "severity": "high",
+                "evidence": {"source": "manual_review", "description": "test"},
+            }
+        ])
+        findings = [_make_finding(file="templates/x.html", cwe="CWE-89", line=21)]
+        results = match_findings(findings, gt)
         fp = [r for r in results if r.classification == "FP"]
         fn = [r for r in results if r.classification == "FN"]
         assert len(fp) == 1

@@ -33,6 +33,9 @@ def load_ground_truth(gt_path: str) -> dict:
 
     for entry in gt["findings"]:
         entry["file"] = normalise_path(entry["file"])
+        for loc in entry.get("acceptable_locations", []):
+            if "file" in loc:
+                loc["file"] = normalise_path(loc["file"])
 
     return gt
 
@@ -41,6 +44,11 @@ def _gt_line_range(gt_entry: dict) -> tuple[Optional[int], Optional[int]]:
     """Extract (start_line, end_line) from a GT entry's location."""
     loc = gt_entry.get("location", {})
     return loc.get("start_line"), loc.get("end_line")
+
+
+def _location_line_range(location: dict) -> tuple[Optional[int], Optional[int]]:
+    """Extract (start_line, end_line) from a GT location object."""
+    return location.get("start_line"), location.get("end_line")
 
 
 def _line_within_tolerance(
@@ -63,6 +71,29 @@ def _line_within_tolerance(
     return low <= finding_line <= high
 
 
+def _finding_matches_gt(finding: NormalisedFinding, gt_entry: dict) -> bool:
+    """Check public GT matching semantics for primary and acceptable locations."""
+    if finding.cwe not in gt_entry["acceptable_cwes"]:
+        return False
+
+    gt_start, gt_end = _gt_line_range(gt_entry)
+    if (
+        finding.file == gt_entry["file"]
+        and _line_within_tolerance(finding.line, gt_start, gt_end)
+    ):
+        return True
+
+    for loc in gt_entry.get("acceptable_locations", []):
+        loc_start, loc_end = _location_line_range(loc)
+        if (
+            finding.file == loc.get("file")
+            and _line_within_tolerance(finding.line, loc_start, loc_end)
+        ):
+            return True
+
+    return False
+
+
 def match_findings(
     findings: list[NormalisedFinding],
     ground_truth: dict,
@@ -74,6 +105,9 @@ def match_findings(
        - file matches
        - cwe in acceptable_cwes
        - line within [start_line-10, end_line+10] (or ±10 of start_line if no end_line)
+       If the primary location does not match, public acceptable_locations
+       are checked with the same file + line semantics; CWE still matches
+       against the parent GT entry's acceptable_cwes.
     2. When multiple GT entries match, prefer is_vulnerable=true
        (scanner gets credit for real vuln, not penalised by co-located trap).
     3. Classify: match + is_vulnerable=true -> TP;
@@ -90,12 +124,7 @@ def match_findings(
         for gt_entry in gt_entries:
             if gt_entry["id"] in matched_gt_ids:
                 continue
-            gt_start, gt_end = _gt_line_range(gt_entry)
-            if (
-                finding.file == gt_entry["file"]
-                and finding.cwe in gt_entry["acceptable_cwes"]
-                and _line_within_tolerance(finding.line, gt_start, gt_end)
-            ):
+            if _finding_matches_gt(finding, gt_entry):
                 candidates.append(gt_entry)
 
         if candidates:
