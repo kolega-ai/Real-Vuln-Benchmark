@@ -118,7 +118,8 @@
       "acceptable_cwes": [
         "CWE-78",
         "CWE-77",
-        "CWE-88"
+        "CWE-88",
+        "CWE-306"
       ],
       "file": "core/views.py",
       "location": {
@@ -133,7 +134,10 @@
         "description": "OS command injection via the 'arg' argument in the systemDebug GraphQL query. User-supplied arg is concatenated into a command string: helpers.run_cmd('ps {}'.format(arg)), which executes via os.popen. No authentication or input validation is performed. An attacker can inject arbitrary commands (e.g., arg='aux; id').",
         "manually_verified": true
       },
-      "expected_category": "injection"
+      "expected_category": "injection",
+      "additional_clusters": [
+        "missing_auth_decorator_on_sensitive_endpoint"
+      ]
     },
     {
       "id": "dvga-006",
@@ -399,7 +403,8 @@
         "CWE-200",
         "CWE-522",
         "CWE-256",
-        "CWE-312"
+        "CWE-312",
+        "CWE-306"
       ],
       "file": "core/views.py",
       "location": {
@@ -414,7 +419,10 @@
         "description": "User passwords are stored in plaintext and exposed through the GraphQL API. The resolve_password method returns the actual plaintext password when info.context.json.get('identity') == 'admin'. Since the 'identity' field is set from an unverified JWT token (verify_signature=False in get_identity), any attacker can forge a JWT with identity='admin' and query all user passwords in cleartext.",
         "manually_verified": true
       },
-      "expected_category": "data_exposure"
+      "expected_category": "data_exposure",
+      "additional_clusters": [
+        "missing_auth_decorator_on_sensitive_endpoint"
+      ]
     },
     {
       "id": "dvga-017",
@@ -425,7 +433,8 @@
         "CWE-400",
         "CWE-770",
         "CWE-789",
-        "CWE-834"
+        "CWE-834",
+        "CWE-306"
       ],
       "file": "core/views.py",
       "location": {
@@ -440,7 +449,10 @@
         "description": "Denial of service via the systemUpdate GraphQL query. The resolver calls security.simulate_load() which enters a tight loop with time.sleep(0.1) for 200-500 iterations (20-50 seconds of blocking). Combined with GraphQL batch query support (batch=True at line 513), an attacker can send multiple batched systemUpdate queries to exhaust server threads and cause denial of service.",
         "manually_verified": true
       },
-      "expected_category": "other"
+      "expected_category": "other",
+      "additional_clusters": [
+        "missing_auth_decorator_on_sensitive_endpoint"
+      ]
     },
     {
       "id": "dvga-018",
@@ -992,6 +1004,34 @@
         "description": "NOT VULNERABLE. The resolve_system_health method calls helpers.run_cmd() which uses os.popen(), but the command string is entirely hardcoded: helpers.run_cmd(\"uptime | awk -F': ' '{print $2}' | awk -F',' '{print $1}'\"). No user input reaches the command string. A scanner may flag the os.popen usage pattern, but without user-controllable input there is no command injection vector."
       },
       "expected_category": "injection"
+    },
+    {
+      "id": "dvga-036",
+      "is_vulnerable": true,
+      "vulnerability_class": "sensitive_data_exposure",
+      "primary_cwe": "CWE-200",
+      "acceptable_cwes": [
+        "CWE-200",
+        "CWE-862",
+        "CWE-306",
+        "CWE-522"
+      ],
+      "file": "core/views.py",
+      "location": {
+        "start_line": 298,
+        "end_line": 312,
+        "function": "resolve_search"
+      },
+      "severity": "high",
+      "expected_category": "data_exposure",
+      "evidence": {
+        "source": "our-scanner",
+        "cve_id": null,
+        "description": "The resolve_search GraphQL resolver returns raw User ORM objects (lines 305-306, 310-311) mixed into the SearchResult union without auth, ownership filtering, or field allowlisting. User objects expose all model columns including the password field via resolve_password, which only gates on a forgeable JWT identity claim per dvga-007. An unauthenticated attacker can dump all users by issuing search with an empty keyword (else branch returns User.query.all()). Distinct from dvga-021 (resolve_users) and dvga-016 (resolve_password field-level sink)."
+      },
+      "additional_clusters": [
+        "missing_auth_decorator_on_sensitive_endpoint"
+      ]
     }
   ],
   "loc": 2007
