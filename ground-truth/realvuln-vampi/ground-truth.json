@@ -147,7 +147,9 @@
       "primary_cwe": "CWE-204",
       "acceptable_cwes": [
         "CWE-204",
-        "CWE-203"
+        "CWE-203",
+        "CWE-209",
+        "CWE-200"
       ],
       "file": "api_views/users.py",
       "location": {
@@ -155,14 +157,25 @@
         "end_line": 106,
         "function": "login_user"
       },
+      "acceptable_locations": [
+        {
+          "file": "api_views/users.py",
+          "start_line": 111,
+          "end_line": 112,
+          "function": "login_user"
+        }
+      ],
       "severity": "low",
       "evidence": {
         "source": "manual_review",
         "cve_id": null,
-        "description": "User and password enumeration via differential error messages. When vuln=1, login_user returns 'Password is not correct for the given username.' for valid usernames with wrong passwords (line 103) and 'Username does not exist' for invalid usernames (line 106). This allows attackers to enumerate valid usernames.",
+        "description": "User and password enumeration via differential error messages. When vuln=1, login_user returns 'Password is not correct for the given username.' for valid usernames with wrong passwords (line 103) and 'Username does not exist' for invalid usernames (line 106). This allows attackers to enumerate valid usernames. Additionally, the except jsonschema.exceptions.ValidationError as exc: handler at line 112 returns exc.message directly in the 400 response body, leaking jsonschema-internal validator/path detail to the client.",
         "manually_verified": true
       },
-      "expected_category": "data_exposure"
+      "expected_category": "data_exposure",
+      "additional_clusters": [
+        "sensitive_data_in_http_response"
+      ]
     },
     {
       "id": "vampi-007",
@@ -444,6 +457,75 @@
         "description": "Safe email regex (non-vulnerable path). When vuln=0, update_email uses the simpler regex '^[a-z0-9]+[\\._]?[a-z0-9]+[@]\\w+[.]\\w{2,3}$' which does not contain nested quantifiers and is not vulnerable to catastrophic backtracking/ReDoS."
       },
       "expected_category": "other"
+    },
+    {
+      "id": "vampi-014",
+      "is_vulnerable": true,
+      "vulnerability_class": "sensitive_data_exposure",
+      "primary_cwe": "CWE-256",
+      "acceptable_cwes": [
+        "CWE-256",
+        "CWE-257",
+        "CWE-312",
+        "CWE-916"
+      ],
+      "file": "models/user_model.py",
+      "location": {
+        "start_line": 15,
+        "end_line": 15,
+        "function": null
+      },
+      "acceptable_locations": [
+        {
+          "file": "models/user_model.py",
+          "start_line": 24,
+          "end_line": 24,
+          "function": "__init__"
+        },
+        {
+          "file": "models/user_model.py",
+          "start_line": 59,
+          "end_line": 59,
+          "function": "json_debug"
+        },
+        {
+          "file": "models/user_model.py",
+          "start_line": 85,
+          "end_line": 85,
+          "function": "register_user"
+        }
+      ],
+      "severity": "high",
+      "expected_category": "data_exposure",
+      "evidence": {
+        "source": "our-scanner",
+        "cve_id": null,
+        "description": "Plaintext password storage. The User model declares `password = db.Column(db.String(128))` with no hashing applied at write time \u2014 `User.__init__` stores the raw value via `self.password = password`, `register_user` instantiates User(password=password, ...) directly from the request body, and `login_user` later compares request_data.get('password') == user.password confirming the column persists cleartext. The plaintext value reaches HTTP via json_debug() and the /users/v1/_debug endpoint (vampi-005). Distinct from vampi-005 (response-sink) and vampi-012 (hardcoded default credentials)."
+      }
+    },
+    {
+      "id": "vampi-015",
+      "is_vulnerable": true,
+      "vulnerability_class": "sensitive_data_exposure",
+      "primary_cwe": "CWE-209",
+      "acceptable_cwes": [
+        "CWE-209",
+        "CWE-200",
+        "CWE-754"
+      ],
+      "file": "api_views/users.py",
+      "location": {
+        "start_line": 80,
+        "end_line": 80,
+        "function": "register_user"
+      },
+      "severity": "low",
+      "expected_category": "data_exposure",
+      "evidence": {
+        "source": "our-scanner",
+        "cve_id": null,
+        "description": "Internal validation error detail exposed in HTTP response. On POST /users/v1/register, the `except jsonschema.exceptions.ValidationError as exc:` handler returns error_message_helper(exc.message) directly in the 400 response body. The jsonschema exc.message carries schema field names, expected types, and validator path information that reveal internal request-validation structure to unauthenticated callers. Not gated on DEBUG."
+      }
     }
   ],
   "loc": 452
