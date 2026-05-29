@@ -926,7 +926,11 @@ def build_html(
             "fn": strict.get("fn", 0),
             "repos": sa.get("repos_scored", 0),
             "repos_total": sa.get("repos_total", 0),
-            # Micro variants available for toggle
+            # Optimistic (micro) variants for the toggle
+            "opt_f2": micro.get("f2_score", 0),
+            "opt_f3": micro.get("f3_score", 0),
+            "opt_recall": round(micro.get("recall", 0) * 100, 1),
+            "opt_precision": round(micro.get("precision", 0) * 100, 1),
             "micro_f2": micro.get("f2_score", 0),
             "micro_f3": micro.get("f3_score", 0),
             "strict_f2": strict.get("f2_score", 0),
@@ -1017,16 +1021,18 @@ def build_html(
         row_class = "lb-row first" if rank == 1 else "lb-row"
         score_color = f2_color(d["f3"])
         strict_color = f2_color(d["strict_f3"])
+        opt_color = f2_color(d["opt_f3"])
         bar_gradient = f"linear-gradient(90deg,{score_color},{score_color}88)"
         strict_bar_gradient = f"linear-gradient(90deg,{strict_color},{strict_color}88)"
+        opt_bar_gradient = f"linear-gradient(90deg,{opt_color},{opt_color}88)"
         repos_label = f'{d["repos"]}/{d["repos_total"]}' if d["repos"] != d["repos_total"] else str(d["repos"])
         w(f'<a href="{detail_dir}/{d["slug"]}.html" class="{row_class}"'
-          f' data-f2="{d["f2"]:.1f}" data-strict-f2="{d["strict_f2"]:.1f}"'
-          f' data-f3="{d["f3"]:.1f}" data-strict-f3="{d["strict_f3"]:.1f}"'
-          f' data-recall="{d["recall"]:.1f}" data-strict-recall="{d["strict_recall"]:.1f}"'
-          f' data-precision="{d["precision"]:.1f}" data-strict-precision="{d["strict_precision"]:.1f}"'
-          f' data-color="{score_color}" data-strict-color="{strict_color}"'
-          f' data-gradient="{bar_gradient}" data-strict-gradient="{strict_bar_gradient}">')
+          f' data-f2="{d["opt_f2"]:.1f}" data-strict-f2="{d["strict_f2"]:.1f}"'
+          f' data-f3="{d["opt_f3"]:.1f}" data-strict-f3="{d["strict_f3"]:.1f}"'
+          f' data-recall="{d["opt_recall"]:.1f}" data-strict-recall="{d["strict_recall"]:.1f}"'
+          f' data-precision="{d["opt_precision"]:.1f}" data-strict-precision="{d["strict_precision"]:.1f}"'
+          f' data-color="{opt_color}" data-strict-color="{strict_color}"'
+          f' data-gradient="{opt_bar_gradient}" data-strict-gradient="{strict_bar_gradient}">')
         w(f'  <div class="lb-rank">{rank}</div>')
         w(f'  <div class="lb-name">{d["label"]} <span style="color:var(--text-tertiary);font-size:11px">{repos_label} repos</span></div>')
         w(f'  <div class="lb-bar-wrap"><div class="lb-bar-track"><div class="lb-bar-fill" style="width:{d["f3"]}%;background:{bar_gradient}"></div></div></div>')

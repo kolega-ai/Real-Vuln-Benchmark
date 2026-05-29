@@ -51,12 +51,27 @@ def extract_json_from_text(text: str) -> str | None:
         if match.startswith("{"):
             return match
 
-    # Try finding the outermost JSON object
-    brace_start = text.find("{")
-    if brace_start == -1:
-        return None
+    # Try finding a JSON object in the surrounding text. Prefer candidates
+    # anchored on the Semgrep `{"results": ...}` key, since prose can contain
+    # stray braces (e.g. SSTI payloads like `{{7*6}}`) that precede the real
+    # findings block and would otherwise be grabbed first.
+    anchored = [m.start() for m in re.finditer(r'\{\s*"results"', text)]
+    fallback = [i for i, c in enumerate(text) if c == "{"]
+    for brace_start in anchored + fallback:
+        candidate = _match_braces(text, brace_start)
+        if candidate is None:
+            continue
+        try:
+            json.loads(candidate)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        return candidate
 
-    # Find matching closing brace
+    return None
+
+
+def _match_braces(text: str, brace_start: int) -> str | None:
+    """Return the substring from brace_start to its matching closing brace."""
     depth = 0
     in_string = False
     escape_next = False
@@ -79,7 +94,6 @@ def extract_json_from_text(text: str) -> str | None:
             depth -= 1
             if depth == 0:
                 return text[brace_start : i + 1]
-
     return None
 
 
