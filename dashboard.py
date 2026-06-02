@@ -955,6 +955,7 @@ def build_html(
     w("<head>")
     w('<meta charset="UTF-8">')
     w('<meta name="viewport" content="width=device-width, initial-scale=1.0">')
+    w('<meta name="google-site-verification" content="ZaB-uJaZ69OeakwMghU5muBtu7-8WJfBMZwdfc-7i3M" />')
     w("<title>RealVuln Benchmark</title>")
     w('<!-- Google tag (gtag.js) -->')
     w('<script async src="https://www.googletagmanager.com/gtag/js?id=G-KJJ3ZH24H8"></script>')
