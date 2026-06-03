@@ -34,7 +34,8 @@ python score.py --repo realvuln-VAmPI --scanner semgrep
 | Script | Purpose |
 |--------|---------|
 | `score.py` | Score one repo against one or all scanners |
-| `dashboard.py` | Multi-scanner multi-repo HTML dashboard with Plotly |
+| `dashboard.py` | Computes scores → writes `reports/dashboard.json` (the data source of truth) + a legacy Plotly view at `reports/legacy-dashboard.html` |
+| `build_site.py` | Builds the public site into `reports/` from `dashboard.json`: generates `realvuln-data.js`, substitutes `{{...}}` dataset tokens in `site/*.html`, and copies `site/` over the deployed files |
 | `validate_gt.py` | Schema validation for ground-truth JSON |
 
 ### Data layout
@@ -42,7 +43,8 @@ python score.py --repo realvuln-VAmPI --scanner semgrep
 - `ground-truth/{repo}/ground-truth.json` — manually labeled vulnerabilities
 - `scan-results/{repo}/{scanner}/results.json` — Semgrep-format scanner output
 - `config/cwe-families.json` — CWE groupings for per-category metrics
-- `reports/` — generated HTML/JSON dashboards and scorecards (gitignored)
+- `site/` — source for the public website (HTML pages, `styles.css`, `dashboard.css`, `app.js`, `dashboard.js`); `{{TOKEN}}` placeholders are filled by `build_site.py`
+- `reports/` — deploy directory synced to S3/CloudFront. The built site (`index.html`, `dashboard.html`, assets, `realvuln-data.js`) lives at the top level (tracked); per-repo subdirs and large JSON are gitignored. Build with `make dashboard` (rescore + build) or `make site` (build only)
 
 ## Critical Domain Concepts
 

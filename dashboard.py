@@ -1778,8 +1778,10 @@ def main() -> int:
     )
     parser.add_argument(
         "-o", "--output",
-        default=str(SCRIPT_DIR / "reports" / "dashboard.html"),
-        help="HTML output path (default: reports/dashboard.html)",
+        # Legacy Plotly view. The public site (reports/dashboard.html) is built by
+        # build_site.py from the JSON below; keep this off that path so it can't clobber it.
+        default=str(SCRIPT_DIR / "reports" / "legacy-dashboard.html"),
+        help="Legacy HTML output path (default: reports/legacy-dashboard.html)",
     )
     parser.add_argument(
         "--json",

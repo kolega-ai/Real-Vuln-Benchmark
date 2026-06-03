@@ -1,4 +1,4 @@
-.PHONY: install install-dev test lint format typecheck validate smoke-test score dashboard clone help
+.PHONY: install install-dev test lint format typecheck validate smoke-test score dashboard site clone help
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -30,8 +30,12 @@ smoke-test: ## Run smoke test (scores semgrep on pygoat, checks known values)
 score: ## Score all scanners on all repos
 	python3 score.py --repo realvuln-pygoat --all-scanners
 
-dashboard: ## Generate interactive HTML dashboard
+dashboard: ## Regenerate data (dashboard.json) + legacy view, then build the public site
 	python3 dashboard.py --scanner-group all
+	python3 build_site.py
+
+site: ## Rebuild the public site from existing dashboard.json (no re-scoring)
+	python3 build_site.py
 
 clone: ## Clone all benchmark repos at pinned commits
 	python3 clone_repos.py
