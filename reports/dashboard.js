@@ -19,15 +19,6 @@
   function fmt(v) { return v.toFixed(1); }
   function leaderName() { return SC.reduce(function (m, s) { return activeF(s) > activeF(m) ? s : m; }, SC[0]).name; }
 
-  // Gold-by-score gradient: bright gold for the field leader, fading to faint brown.
-  function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
-  function goldFor(t, alpha) {
-    t = Math.max(0, Math.min(1, t));
-    var e = Math.pow(t, 0.72);
-    var r = lerp(110, 240, e), g = lerp(86, 201, e), b = lerp(40, 122, e);
-    return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha == null ? 1 : alpha) + ')';
-  }
-
   var NS = 'http://www.w3.org/2000/svg';
   function svgEl(t, a, x) { var e = document.createElementNS(NS, t); for (var k in a) e.setAttribute(k, a[k]); if (x != null) e.textContent = x; return e; }
 
@@ -49,8 +40,6 @@
     if (!tbody) return;
     var rows = SC.slice().sort(function (a, b) { return activeF(b) - activeF(a); });
     var maxA = Math.max.apply(null, SC.map(activeF));
-    var minA = Math.min.apply(null, SC.map(activeF));
-    var span = (maxA - minA) || 1;
     var lead = leaderName();
     tbody.innerHTML = '';
     rows.forEach(function (s, i) {
@@ -58,8 +47,6 @@
       d.className = 'lbr' + (s.name === lead ? ' leader' : '');
       d.style.opacity = on(s) ? '1' : '0.24';
       var pct = Math.round((activeF(s) / maxA) * 100);
-      var t = (activeF(s) - minA) / span;
-      var fill = goldFor(t), text = goldFor(Math.max(t, 0.42));
       var reposTxt = s.repos < 26
         ? '<span class="repos-bad">' + s.repos + '/26</span> repos'
         : s.repos + ' repos';
@@ -70,8 +57,8 @@
         '<span class="lbr-name"><span class="nm">' + s.name +
           (s.name === lead ? ' <span class="crown">▲</span>' : '') + '</span>' +
           '<span class="meta">' + CAT_SHORT[s.cat] + ' · ' + s.ver + ' · ' + reposTxt + cost + '</span></span>' +
-        '<span class="lbr-bar"><span class="lbr-fill" style="width:' + pct + '%;background:' + fill + '"></span></span>' +
-        '<span class="lbr-val"><span class="sc" style="color:' + text + '">' + fmt(activeF(s)) + '</span>' +
+        '<span class="lbr-bar"><span class="lbr-fill" style="width:' + pct + '%"></span></span>' +
+        '<span class="lbr-val"><span class="sc">' + fmt(activeF(s)) + '</span>' +
           '<span class="sub">' + (val(s, 'rec') * 100).toFixed(1) + '% recall · ' + (s.prec * 100).toFixed(1) + '% prec</span>' + sd +
         '</span>';
       tbody.appendChild(d);
