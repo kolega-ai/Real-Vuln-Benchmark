@@ -96,6 +96,8 @@ def build_scanners(data: dict) -> tuple[list[dict], int]:
             "prec": round3(micro["precision"]),
             # cost: null for free rule-based tools and the enterprise tier (no published price)
             "cost": None if (cat == "rule" or slug == "kolega-enterprise-v1" or cost <= 0) else round(cost, 2),
+            # run-to-run F2 stddev (shown under the score for multi-run scanners)
+            "sd": round1(a.get("f2_stddev", 0)) if a.get("num_runs", 1) > 1 else None,
         })
     # rank by strict F3 desc (primary metric on the live dashboard)
     out.sort(key=lambda s: s["f3s"], reverse=True)
@@ -202,7 +204,7 @@ def emit_data_js(scanners: list[dict], cwe: list[dict], dataset: dict) -> str:
     lines.append("   ============================================================ */")
     lines.append("(function () {")
     lines.append("  var S = [")
-    keys = ["name", "cat", "ver", "repos", "f2", "f2s", "f3", "f3s", "rec", "recs", "prec", "cost"]
+    keys = ["name", "cat", "ver", "repos", "f2", "f2s", "f3", "f3s", "rec", "recs", "prec", "cost", "sd"]
     for s in scanners:
         parts = ", ".join(f"{k}: {js_value(s[k])}" for k in keys)
         lines.append(f"    {{ {parts} }},")

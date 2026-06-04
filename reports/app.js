@@ -15,57 +15,51 @@
   function activeF(s) { return val(s, state.metric); }
   function fmt(v) { return v.toFixed(1); }
 
+  // Gold-by-score gradient: bright warm gold for the field leader, fading to a
+  // faint muted brown at the bottom. t in [0,1] (1 = highest active score).
+  function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
+  function goldFor(t, alpha) {
+    t = Math.max(0, Math.min(1, t));
+    var e = Math.pow(t, 0.72); // ease so mid-table still reads as gold, not mud
+    var r = lerp(110, 240, e), g = lerp(86, 201, e), b = lerp(40, 122, e);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha == null ? 1 : alpha) + ')';
+  }
+
   var tbody = document.getElementById('lb-body');
 
   function render() {
     if (!tbody) return;
-    var rows = SC.slice();
-    var k = state.sortKey, dir = state.sortDir;
-    rows.sort(function (a, b) {
-      if (k === 'name') return dir * a.name.localeCompare(b.name);
-      if (k === 'prec') return dir * (a.prec - b.prec);
-      if (k === 'repos') return dir * (a.repos - b.repos);
-      if (k === 'cost') { var ac = a.cost == null ? -1 : a.cost, bc = b.cost == null ? -1 : b.cost; return dir * (ac - bc); }
-      if (k === 'recall') return dir * (val(a, 'rec') - val(b, 'rec'));
-      return dir * (val(a, k) - val(b, k)); // f2 / f3
-    });
-
+    var rows = SC.slice().sort(function (a, b) { return activeF(b) - activeF(a); });
     var maxA = Math.max.apply(null, SC.map(activeF));
-    var leadName = SC.reduce(function (m, s) { return activeF(s) > activeF(m) ? s : m; }, SC[0]).name;
+    var minA = Math.min.apply(null, SC.map(activeF));
+    var span = (maxA - minA) || 1;
+    var leadName = rows[0].name, leadVer = rows[0].ver;
 
     tbody.innerHTML = '';
     rows.forEach(function (s, i) {
-      var tr = document.createElement('tr');
-      var isLead = s.name === leadName && s.ver === SC.filter(function(x){return x.name===leadName;})[0].ver;
-      if (isLead) tr.className = 'leader';
+      var d = document.createElement('a');
+      var isLead = s.name === leadName && s.ver === leadVer;
+      d.className = 'lbr' + (isLead ? ' leader' : '');
+      d.href = 'dashboard.html';
       var pct = Math.round((activeF(s) / maxA) * 100);
-      var reposCls = s.repos < 26 ? ' class="repos-bad"' : '';
+      var t = (activeF(s) - minA) / span;                 // color scale across the field
+      var fill = goldFor(t), text = goldFor(Math.max(t, 0.42));
+      var reposTxt = s.repos < 26
+        ? '<span class="repos-bad">' + s.repos + '/26</span> repos'
+        : s.repos + ' repos';
+      var sd = s.sd != null ? '<span class="lbr-sd">stdev ' + s.sd.toFixed(1) + '</span>' : '';
 
-      function metricCell(base) {
-        var v = fmt(val(s, base));
-        if (base === state.metric) {
-          return '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill ' + s.cat + '" style="width:' + pct + '%"></span></span><span>' + v + '</span></span></td>';
-        }
-        return '<td class="dim">' + v + '</td>';
-      }
-
-      tr.innerHTML =
-        '<td class="l"><span class="rank">' + String(i + 1).padStart(2, '0') + '</span></td>' +
-        '<td class="l"><span class="sc-name"><span class="tdot ' + s.cat + '"></span>' + s.name +
-          (isLead ? ' <span class="crown">▲ leads</span>' : '') + '</span>' +
-          '<div class="cat-tag">' + CAT_SHORT[s.cat] + ' · ' + s.ver + '</div></td>' +
-        metricCell('f2') + metricCell('f3') +
-        '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
-        '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
-        '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/26</span></td>' +
-        '<td class="dim">' + (s.cost == null ? '—' : '$' + s.cost.toFixed(0)) + '</td>';
-      tbody.appendChild(tr);
-    });
-
-    document.querySelectorAll('table.lb thead th[data-key]').forEach(function (th) {
-      var key = th.getAttribute('data-key');
-      th.classList.toggle('sorted', key === state.sortKey);
-      var ar = th.querySelector('.arrow'); if (ar) ar.textContent = state.sortDir === -1 ? '▼' : '▲';
+      d.innerHTML =
+        '<span class="lbr-rank">' + (i + 1) + '</span>' +
+        '<span class="lbr-name"><span class="nm">' + s.name +
+          (isLead ? ' <span class="crown">▲</span>' : '') + '</span>' +
+          '<span class="meta">' + CAT_SHORT[s.cat] + ' · ' + s.ver + ' · ' + reposTxt + '</span></span>' +
+        '<span class="lbr-bar"><span class="lbr-fill" style="width:' + pct + '%;background:' + fill + '"></span></span>' +
+        '<span class="lbr-val"><span class="sc" style="color:' + text + '">' + fmt(activeF(s)) + '</span>' +
+          '<span class="sub">' + (val(s, 'rec') * 100).toFixed(1) + '% recall · ' + (s.prec * 100).toFixed(1) + '% prec</span>' + sd +
+        '</span>' +
+        '<span class="lbr-chev">→</span>';
+      tbody.appendChild(d);
     });
   }
 
@@ -74,7 +68,6 @@
       document.querySelectorAll('.metric-toggle [data-metric]').forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
       state.metric = btn.getAttribute('data-metric');
-      state.sortKey = state.metric; state.sortDir = -1;
       render();
     });
   });
@@ -84,14 +77,6 @@
       btn.classList.add('active');
       state.mode = btn.getAttribute('data-mode');
       render(); renderScatter();
-    });
-  });
-  document.querySelectorAll('table.lb thead th[data-key]').forEach(function (th) {
-    th.addEventListener('click', function () {
-      var key = th.getAttribute('data-key'); if (!key) return;
-      if (state.sortKey === key) state.sortDir *= -1;
-      else { state.sortKey = key; state.sortDir = key === 'name' ? 1 : -1; }
-      render();
     });
   });
 
