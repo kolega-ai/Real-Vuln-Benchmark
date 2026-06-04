@@ -84,6 +84,7 @@ def build_scanners(data: dict) -> tuple[list[dict], int]:
         cost = a.get("cost", {}).get("total_cost", 0) or 0
         out.append({
             "name": name,
+            "slug": slug,
             "cat": cat,
             "ver": ver,
             "repos": a.get("repos_scored", repos_total),
@@ -204,7 +205,7 @@ def emit_data_js(scanners: list[dict], cwe: list[dict], dataset: dict) -> str:
     lines.append("   ============================================================ */")
     lines.append("(function () {")
     lines.append("  var S = [")
-    keys = ["name", "cat", "ver", "repos", "f2", "f2s", "f3", "f3s", "rec", "recs", "prec", "cost", "sd"]
+    keys = ["name", "slug", "cat", "ver", "repos", "f2", "f2s", "f3", "f3s", "rec", "recs", "prec", "cost", "sd"]
     for s in scanners:
         parts = ", ".join(f"{k}: {js_value(s[k])}" for k in keys)
         lines.append(f"    {{ {parts} }},")
