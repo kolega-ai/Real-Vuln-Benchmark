@@ -6,7 +6,7 @@
   'use strict';
   if (!window.RV) return;
   var SC = window.RV.SCANNERS, COL = window.RV.COL,
-      CAT_LABEL = window.RV.CAT_LABEL, CAT_SHORT = window.RV.CAT_SHORT,
+      CAT_LABEL = window.RV.CAT_LABEL,
       CWE = window.RV.CWE;
   var METRIC_LABEL = { f2: 'F2', f3: 'F3' };
 
@@ -38,30 +38,44 @@
   var tbody = document.getElementById('dlb-body');
   function renderLeaderboard() {
     if (!tbody) return;
-    var rows = SC.slice().sort(function (a, b) { return activeF(b) - activeF(a); });
+    var rows = SC.slice(), k = state.sortKey, dir = state.sortDir;
+    rows.sort(function (a, b) {
+      if (k === 'name') return dir * a.name.localeCompare(b.name);
+      if (k === 'prec') return dir * (a.prec - b.prec);
+      if (k === 'repos') return dir * (a.repos - b.repos);
+      if (k === 'cost') { var ac = a.cost == null ? -1 : a.cost, bc = b.cost == null ? -1 : b.cost; return dir * (ac - bc); }
+      if (k === 'recall') return dir * (val(a, 'rec') - val(b, 'rec'));
+      return dir * (val(a, k) - val(b, k));
+    });
     var maxA = Math.max.apply(null, SC.map(activeF));
     var lead = leaderName();
     tbody.innerHTML = '';
     rows.forEach(function (s, i) {
-      var d = document.createElement('div');
-      d.className = 'lbr' + (s.name === lead ? ' leader' : '');
-      d.style.opacity = on(s) ? '1' : '0.24';
+      var tr = document.createElement('tr');
+      if (s.name === lead) tr.className = 'leader';
+      tr.style.opacity = on(s) ? '1' : '0.24';
       var pct = Math.round((activeF(s) / maxA) * 100);
-      var reposTxt = s.repos < 26
-        ? '<span class="repos-bad">' + s.repos + '/26</span> repos'
-        : s.repos + ' repos';
-      var cost = s.cost == null ? '' : ' · $' + s.cost.toFixed(0);
-      var sd = s.sd != null ? '<span class="lbr-sd">stdev ' + s.sd.toFixed(1) + '</span>' : '';
-      d.innerHTML =
-        '<span class="lbr-rank">' + (i + 1) + '</span>' +
-        '<span class="lbr-name"><span class="nm">' + s.name +
-          (s.name === lead ? ' <span class="crown">▲</span>' : '') + '</span>' +
-          '<span class="meta">' + CAT_SHORT[s.cat] + ' · ' + s.ver + ' · ' + reposTxt + cost + '</span></span>' +
-        '<span class="lbr-bar"><span class="lbr-fill" style="width:' + pct + '%"></span></span>' +
-        '<span class="lbr-val"><span class="sc">' + fmt(activeF(s)) + '</span>' +
-          '<span class="sub">' + (val(s, 'rec') * 100).toFixed(1) + '% recall · ' + (s.prec * 100).toFixed(1) + '% prec</span>' + sd +
-        '</span>';
-      tbody.appendChild(d);
+      var reposCls = s.repos < 26 ? ' class="repos-bad"' : '';
+      function cell(base) {
+        var v = fmt(val(s, base));
+        if (base === state.metric) return '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + v + '</span></span></td>';
+        return '<td class="dim">' + v + '</td>';
+      }
+      tr.innerHTML =
+        '<td class="l"><span class="rank">' + String(i + 1).padStart(2, '0') + '</span></td>' +
+        '<td class="l"><span class="sc-name">' + s.name +
+          (s.name === lead ? ' <span class="crown">▲</span>' : '') + '</span><div class="cat-tag">' + s.ver + '</div></td>' +
+        cell('f2') + cell('f3') +
+        '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
+        '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
+        '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/26</span></td>' +
+        '<td class="dim">' + (s.cost == null ? '—' : '$' + s.cost.toFixed(0)) + '</td>';
+      tbody.appendChild(tr);
+    });
+    document.querySelectorAll('#dlb thead th[data-key]').forEach(function (th) {
+      var key = th.getAttribute('data-key');
+      th.classList.toggle('sorted', key === state.sortKey);
+      var ar = th.querySelector('.arrow'); if (ar) ar.textContent = state.sortDir === -1 ? '▼' : '▲';
     });
   }
 
@@ -190,6 +204,15 @@
       rerenderAll();
     });
   });
+  document.querySelectorAll('#dlb thead th[data-key]').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var key = th.getAttribute('data-key'); if (!key) return;
+      if (state.sortKey === key) state.sortDir *= -1;
+      else { state.sortKey = key; state.sortDir = key === 'name' ? 1 : -1; }
+      renderLeaderboard();
+    });
+  });
+
   // ---- mobile nav ----
   var toggle = document.querySelector('.nav-toggle'), menu = document.getElementById('mobile-menu');
   if (toggle && menu) {
