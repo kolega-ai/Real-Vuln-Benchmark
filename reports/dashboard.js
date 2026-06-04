@@ -56,22 +56,20 @@
       tr.style.opacity = on(s) ? '1' : '0.24';
       var pct = Math.round((activeF(s) / maxA) * 100);
       var reposCls = s.repos < 26 ? ' class="repos-bad"' : '';
-      function cell(base) {
-        var v = fmt(val(s, base));
-        if (base === state.metric) return '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + v + '</span></span></td>';
-        return '<td class="dim">' + v + '</td>';
-      }
       tr.innerHTML =
         '<td class="l"><span class="rank">' + String(i + 1).padStart(2, '0') + '</span></td>' +
         '<td class="l"><span class="sc-name">' + s.name +
           (s.name === lead ? ' <span class="crown">▲</span>' : '') + '</span><div class="cat-tag">' + s.ver + '</div></td>' +
-        cell('f2') + cell('f3') +
+        '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/26</span></td>' +
         '<td class="dim">' + (s.cost == null ? '—' : '$' + s.cost.toFixed(0)) + '</td>';
       tbody.appendChild(tr);
     });
+    var mth = document.querySelector('#dlb th.metric-th');
+    if (mth) { mth.setAttribute('data-key', state.metric); mth.firstChild.nodeValue = METRIC_LABEL[state.metric] + ' '; }
+
     document.querySelectorAll('#dlb thead th[data-key]').forEach(function (th) {
       var key = th.getAttribute('data-key');
       th.classList.toggle('sorted', key === state.sortKey);

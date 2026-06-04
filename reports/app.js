@@ -9,6 +9,7 @@
 
   var state = { metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1 };
 
+  var METRIC_LABEL = { f2: 'F2', f3: 'F3' };
   function mk(base) { return state.mode === 'strict' ? base + 's' : base; }   // metric/recall key for mode
   function val(s, base) { return s[mk(base)]; }
   function activeF(s) { return val(s, state.metric); }
@@ -40,26 +41,21 @@
       var pct = Math.round((activeF(s) / maxA) * 100);
       var reposCls = s.repos < 26 ? ' class="repos-bad"' : '';
 
-      function metricCell(base) {
-        var v = fmt(val(s, base));
-        if (base === state.metric) {
-          return '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + v + '</span></span></td>';
-        }
-        return '<td class="dim">' + v + '</td>';
-      }
-
       tr.innerHTML =
         '<td class="l"><span class="rank">' + String(i + 1).padStart(2, '0') + '</span></td>' +
         '<td class="l"><span class="sc-name">' + s.name +
           (isLead ? ' <span class="crown">▲ leads</span>' : '') + '</span>' +
           '<div class="cat-tag">' + s.ver + '</div></td>' +
-        metricCell('f2') + metricCell('f3') +
+        '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/26</span></td>' +
         '<td class="dim">' + (s.cost == null ? '—' : '$' + s.cost.toFixed(0)) + '</td>';
       tbody.appendChild(tr);
     });
+
+    var mth = document.querySelector('table.lb th.metric-th');
+    if (mth) { mth.setAttribute('data-key', state.metric); mth.firstChild.nodeValue = METRIC_LABEL[state.metric] + ' '; }
 
     document.querySelectorAll('table.lb thead th[data-key]').forEach(function (th) {
       var key = th.getAttribute('data-key');
