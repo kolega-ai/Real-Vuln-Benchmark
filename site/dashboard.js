@@ -203,34 +203,6 @@
       rerenderAll();
     });
   });
-  document.querySelectorAll('.mode-toggle [data-mode]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      document.querySelectorAll('.mode-toggle [data-mode]').forEach(function (b) { b.classList.remove('active'); });
-      btn.classList.add('active');
-      state.mode = btn.getAttribute('data-mode');
-      rerenderAll();
-    });
-  });
-  document.querySelectorAll('.chip[data-cat]').forEach(function (chip) {
-    chip.addEventListener('click', function () {
-      var cat = chip.getAttribute('data-cat');
-      if (cat === 'all') state.cats = { sec: true, llm: true, rule: true };
-      else {
-        var allOn = state.cats.sec && state.cats.llm && state.cats.rule;
-        if (allOn) { state.cats = { sec: false, llm: false, rule: false }; state.cats[cat] = true; }
-        else { state.cats[cat] = !state.cats[cat]; if (!state.cats.sec && !state.cats.llm && !state.cats.rule) state.cats = { sec: true, llm: true, rule: true }; }
-      }
-      syncChips(); renderLeaderboard(); renderPR(); renderCost(); renderRankings(); renderCategory();
-    });
-  });
-  function syncChips() {
-    var allOn = state.cats.sec && state.cats.llm && state.cats.rule;
-    document.querySelectorAll('.chip[data-cat]').forEach(function (chip) {
-      var cat = chip.getAttribute('data-cat');
-      if (cat === 'all') { chip.classList.toggle('active', allOn); chip.classList.remove('off'); }
-      else chip.classList.toggle('off', !state.cats[cat]);
-    });
-  }
   // ---- mobile nav ----
   var toggle = document.querySelector('.nav-toggle'), menu = document.getElementById('mobile-menu');
   if (toggle && menu) {
@@ -239,5 +211,5 @@
   }
 
   // ---- init ----
-  rerenderAll(); renderCWE(); syncChips();
+  rerenderAll(); renderCWE();
 })();

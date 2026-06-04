@@ -6,7 +6,7 @@
   'use strict';
   if (!window.RV) return;
   var SC = window.RV.SCANNERS, COL = window.RV.COL,
-      CAT_SHORT = window.RV.CAT_SHORT, CAT_LABEL = window.RV.CAT_LABEL;
+      CAT_SHORT = window.RV.CAT_SHORT;
 
   var state = { metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1 };
 
@@ -71,15 +71,6 @@
       render();
     });
   });
-  document.querySelectorAll('.mode-toggle [data-mode]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      document.querySelectorAll('.mode-toggle [data-mode]').forEach(function (b) { b.classList.remove('active'); });
-      btn.classList.add('active');
-      state.mode = btn.getAttribute('data-mode');
-      render(); renderScatter();
-    });
-  });
-
   render();
 
   // ---------------------------------------------------------
