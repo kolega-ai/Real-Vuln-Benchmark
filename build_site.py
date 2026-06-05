@@ -295,6 +295,13 @@ def main() -> None:
             shutil.copy2(src, dst)
         print(f"copied {src.name}")
 
+    # reskin-styled per-scanner deep-dive pages (reports/scanners/<slug>.html)
+    try:
+        import build_detail_pages
+        build_detail_pages.main()
+    except Exception as e:  # never block the main build on detail-page generation
+        print(f"  WARNING: detail-page generation skipped: {e}")
+
 
 if __name__ == "__main__":
     main()
