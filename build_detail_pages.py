@@ -146,7 +146,7 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
     out.append("</section>")
 
     # KPI strip (8)
-    out.append('<section class="wrap" style="padding-bottom:8px"><div class="hero-kpis">')
+    out.append('<section class="wrap" style="padding-bottom:8px"><div class="hero-kpis sd-kpis">')
     out.append(kpi(f'{strict.get("f3_score", 0):.1f}', "F3 (strict)"))
     out.append(kpi(f'{strict.get("f2_score", 0):.1f}', "F2 (strict)"))
     out.append(kpi(f'{strict.get("recall", 0) * 100:.1f}%', "Recall (strict)"))
