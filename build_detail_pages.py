@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Generate reskin-styled per-scanner deep-dive pages into reports/scanners/<slug>.html.
 
-Replaces the legacy Plotly-themed detail pages with pages that share the main
-site's shell (topbar, gold editorial theme, styles.css, footer). Data comes from
-reports/dashboard.json (per-scanner aggregates + per-repo grid).
+Shares the main site's shell (topbar, gold theme, styles.css, footer) and surfaces
+the full per-scanner detail: 8 headline KPIs, a visual per-repository TP/FP/FN
+stacked-bar chart + table, detection-by-severity, detection-by-CWE-family, and
+(for LLM scanners) operational + cost metric grids. Data: reports/dashboard.json.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from build_site import SCANNER_META  # slug -> (name, cat, ver)
 ROOT = Path(__file__).resolve().parent
 REPORTS = ROOT / "reports"
 CAT_LABEL = {"sec": "Security-Specialized", "llm": "General-Purpose LLM", "rule": "Rule-Based SAST"}
+SEV_ORDER = ["critical", "high", "medium", "low"]
 
 SHELL_HEAD = """<!DOCTYPE html>
 <html lang="en">
@@ -22,7 +24,7 @@ SHELL_HEAD = """<!DOCTYPE html>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>{title} — RealVuln</title>
-<meta name="description" content="RealVuln scanner deep-dive for {title}: F3/F2, recall, precision, cost, and per-repository detection breakdown." />
+<meta name="description" content="RealVuln scanner deep-dive for {title}: F3/F2, recall, precision, cost, per-repository detection, severity, CWE families, and operational metrics." />
 <link rel="stylesheet" href="../styles.css" />
 </head>
 <body>
@@ -80,78 +82,146 @@ def kpi(n, label):
     return f'<div class="hk"><div class="hk-n">{n}</div><div class="hk-l">{label}</div></div>'
 
 
-def fnum(v, suffix="", dash="—"):
-    return f"{v}{suffix}" if v is not None else dash
+def mg(v, label):
+    return f'<div class="mg"><div class="v">{v}</div><div class="l">{label}</div></div>'
 
 
-def build_page(slug: str, agg: dict, grid: dict) -> str:
+def subhead(title):
+    return ('<div class="subhead" style="margin-top:46px"><span class="sn">§</span>'
+            f'<h2 style="font-size:clamp(22px,3vw,30px);letter-spacing:-0.02em">{title}</h2></div>')
+
+
+def simple_table(headers, rows):
+    h = "".join(f'<th class="l">{headers[0]}</th>' if i == 0 else f"<th>{c}</th>" for i, c in enumerate(headers))
+    body = "".join(
+        "<tr>" + "".join(f'<td class="l">{c}</td>' if i == 0 else f"<td>{c}</td>" for i, c in enumerate(r)) + "</tr>"
+        for r in rows
+    )
+    return f'<div class="table-scroll" style="margin-top:20px"><table class="simple"><thead><tr>{h}</tr></thead><tbody>{body}</tbody></table></div>'
+
+
+def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
     name, cat, ver = SCANNER_META.get(slug, (slug, "llm", ""))
     strict = agg.get("strict_micro", agg.get("micro", {}))
     micro = agg.get("micro", {})
-    cost = (agg.get("cost") or {}).get("total_cost", 0) or 0
+    cost_d = agg.get("cost") or {}
+    cost = cost_d.get("total_cost", 0) or 0
     repos_scored = agg.get("repos_scored", 0)
     repos_total = agg.get("repos_total", 26)
+    has_metrics = bool(meta.get("has_metrics"))
     cost_str = "Free" if (cat == "rule" or cost <= 0) else f"${cost:,.0f}"
+    model = meta.get("model") or "—"
+    latency = f'{meta.get("avg_wall_clock_seconds", 0):.0f}s' if has_metrics else "—"
 
-    # per-repo rows from the grid
+    # ---- per-repo rows + severity/family accumulation ----
     rows = []
     fam_acc: dict[str, list] = {}
+    sev_acc: dict[str, list] = {s: [0, 0, 0] for s in SEV_ORDER}
     for repo, cells in grid.items():
         cell = cells.get(slug)
         if not cell:
             continue
-        rows.append({
-            "repo": repo.replace("realvuln-", ""),
-            "tp": cell.get("tp", 0), "fp": cell.get("fp", 0), "fn": cell.get("fn", 0),
-            "recall": cell.get("recall", 0) * 100, "f2": cell.get("f2_score", 0),
-        })
+        tp, fp, fn = cell.get("tp", 0), cell.get("fp", 0), cell.get("fn", 0)
+        rows.append({"repo": repo.replace("realvuln-", ""), "tp": tp, "fp": fp, "fn": fn,
+                     "recall": cell.get("recall", 0) * 100, "f2": cell.get("f2_score", 0)})
         for fam, info in (cell.get("per_family") or {}).items():
             a = fam_acc.setdefault(fam, [info.get("label", fam), 0, 0, 0])
             a[1] += info.get("tp", 0); a[2] += info.get("fp", 0); a[3] += info.get("fn", 0)
+        for sev, info in (cell.get("per_severity") or {}).items():
+            if sev in sev_acc:
+                sev_acc[sev][0] += info.get("tp", 0); sev_acc[sev][1] += info.get("fp", 0); sev_acc[sev][2] += info.get("fn", 0)
     rows.sort(key=lambda r: r["f2"], reverse=True)
+    max_total = max((r["tp"] + r["fp"] + r["fn"] for r in rows), default=1) or 1
 
     out = [SHELL_HEAD.format(title=name)]
+
     # hero
     out.append('<section class="wrap page-hero">')
     out.append('  <div class="breadcrumb"><a href="../index.html">RealVuln</a><span class="sep">/</span>'
                '<a href="../dashboard.html">Dashboard</a><span class="sep">/</span><span>' + name + '</span></div>')
-    out.append(f'  <div class="ph-num">Scanner deep-dive</div>')
+    out.append('  <div class="ph-num">Scanner deep-dive</div>')
     out.append(f'  <h1>{name}</h1>')
     out.append(f'  <p class="lede">{CAT_LABEL.get(cat, cat)} · <span class="mono">{ver}</span> · '
                f'scored on {repos_scored}/{repos_total} repositories. Strict scoring (unfinished repos counted as misses).</p>')
     out.append("</section>")
-    # KPI strip
+
+    # KPI strip (8)
     out.append('<section class="wrap" style="padding-bottom:8px"><div class="hero-kpis">')
     out.append(kpi(f'{strict.get("f3_score", 0):.1f}', "F3 (strict)"))
     out.append(kpi(f'{strict.get("f2_score", 0):.1f}', "F2 (strict)"))
-    out.append(kpi(f'{strict.get("recall", 0) * 100:.1f}%', "Recall"))
+    out.append(kpi(f'{strict.get("recall", 0) * 100:.1f}%', "Recall (strict)"))
     out.append(kpi(f'{micro.get("precision", 0) * 100:.1f}%', "Precision"))
-    out.append(kpi(cost_str, "Run cost"))
     out.append(kpi(f'{repos_scored}<span style="color:var(--fg-3)">/{repos_total}</span>', "Repos scored"))
+    out.append(kpi(f'<span style="font-size:.5em">{model}</span>', "Model"))
+    out.append(kpi(cost_str, "Total cost"))
+    out.append(kpi(latency, "Avg latency"))
     out.append("</div></section>")
-    # per-repo breakdown
+
     out.append('<section class="section"><div class="wrap">')
-    out.append('  <div class="subhead"><span class="sn">§</span><h2 style="font-size:clamp(22px,3vw,30px);letter-spacing:-0.02em">Per-repository detection</h2></div>')
-    out.append('  <p class="section-intro">True/false positives and misses on each repository this scanner completed, ranked by F2.</p>')
-    out.append('  <div class="table-scroll" style="margin-top:20px"><table class="simple"><thead><tr>'
-               '<th class="l">Repository</th><th>TP</th><th>FP</th><th>FN</th><th>Recall %</th><th>F2</th></tr></thead><tbody>')
+
+    # per-repo stacked bars (visual) + table
+    out.append('  <div class="subhead"><span class="sn">§</span>'
+               '<h2 style="font-size:clamp(22px,3vw,30px);letter-spacing:-0.02em">Per-repository breakdown</h2></div>')
+    out.append('  <p class="section-intro">Each bar shows true positives, false positives, and misses on one repository; bar length is proportional to that repo\'s labeled vulnerabilities. Ranked by F2.</p>')
+    out.append('  <div class="barlegend" style="margin-top:18px"><span><span class="sw tp"></span>True positive</span>'
+               '<span><span class="sw fp"></span>False positive</span><span><span class="sw fn"></span>Missed (FN)</span></div>')
+    out.append('  <div class="repobars">')
     for r in rows:
-        out.append(f'<tr><td class="l">{r["repo"]}</td><td>{r["tp"]}</td><td>{r["fp"]}</td>'
-                   f'<td>{r["fn"]}</td><td>{r["recall"]:.1f}</td><td>{r["f2"]:.1f}</td></tr>')
-    out.append("</tbody></table></div>")
-    # per-family
+        total = r["tp"] + r["fp"] + r["fn"]
+        scale = (total / max_total) * 100  # bar width vs widest repo
+        segs = ""
+        for kind in ("tp", "fp", "fn"):
+            if r[kind]:
+                w = (r[kind] / total) * scale if total else 0
+                segs += f'<span class="rb-seg {kind}" style="width:{w:.2f}%"></span>'
+        out.append(f'    <div class="rb"><span class="rb-name">{r["repo"]}</span>'
+                   f'<span class="rb-bar">{segs}</span>'
+                   f'<span class="rb-meta"><b>{r["f2"]:.0f}</b> F2 · {r["recall"]:.0f}%</span></div>')
+    out.append("  </div>")
+    out.append(simple_table(["Repository", "TP", "FP", "FN", "Recall %", "F2"],
+                            [[r["repo"], r["tp"], r["fp"], r["fn"], f'{r["recall"]:.1f}', f'{r["f2"]:.1f}'] for r in rows]))
+
+    # detection by severity
+    sev_rows = [[s.capitalize(), v[0], v[1], v[2], f'{(v[0] / (v[0] + v[2]) * 100 if (v[0] + v[2]) else 0):.1f}']
+                for s in SEV_ORDER for v in [sev_acc[s]] if (v[0] + v[1] + v[2]) > 0]
+    if sev_rows:
+        out.append(subhead("Detection by severity"))
+        out.append(simple_table(["Severity", "TP", "FP", "FN", "Recall %"], sev_rows))
+
+    # detection by CWE family
     fams = [v for v in fam_acc.values() if (v[1] + v[3]) > 0]
     fams.sort(key=lambda v: -(v[1] / (v[1] + v[3]) if (v[1] + v[3]) else 0))
     if fams:
-        out.append('  <div class="subhead" style="margin-top:46px"><span class="sn">§</span>'
-                   '<h2 style="font-size:clamp(22px,3vw,30px);letter-spacing:-0.02em">Detection by vulnerability class</h2></div>')
-        out.append('  <div class="table-scroll" style="margin-top:20px"><table class="simple"><thead><tr>'
-                   '<th class="l">CWE family</th><th>TP</th><th>FP</th><th>FN</th><th>Recall %</th></tr></thead><tbody>')
-        for label, tp, fp, fn in fams:
-            rec = tp / (tp + fn) * 100 if (tp + fn) else 0
-            out.append(f'<tr><td class="l">{label}</td><td>{tp}</td><td>{fp}</td><td>{fn}</td><td>{rec:.1f}</td></tr>')
-        out.append("</tbody></table></div>")
-    out.append('  <p class="figure-cap" style="margin-top:22px"><a href="../dashboard.html">← Back to the leaderboard</a></p>')
+        out.append(subhead("Detection by vulnerability class"))
+        out.append(simple_table(["CWE family", "TP", "FP", "FN", "Recall %"],
+                                [[lbl, tp, fp, fn, f'{(tp / (tp + fn) * 100 if (tp + fn) else 0):.1f}'] for lbl, tp, fp, fn in fams]))
+
+    # LLM operational metrics
+    if has_metrics:
+        out.append(subhead("LLM operational metrics"))
+        out.append('  <div class="mgrid" style="margin-top:20px">')
+        out.append(mg(f'{meta.get("avg_input_tokens", 0):,}', "Avg input tokens"))
+        out.append(mg(f'{meta.get("avg_output_tokens", 0):,}', "Avg output tokens"))
+        out.append(mg(f'{meta.get("avg_total_tokens", 0):,}', "Avg total tokens"))
+        out.append(mg(f'{meta.get("avg_wall_clock_seconds", 0):.0f}s', "Avg latency / repo"))
+        out.append(mg(f'{meta.get("json_repair_rate", 0) * 100:.1f}%', "JSON repair rate"))
+        out.append(mg(f'{meta.get("total_runs", 0)}', "Total runs"))
+        if agg.get("num_runs", 1) > 1:
+            out.append(mg(f'±{agg.get("f2_stddev", 0):.1f}', "F2 run-to-run σ"))
+        out.append("  </div>")
+
+    # cost breakdown
+    out.append(subhead("Cost"))
+    out.append('  <div class="mgrid" style="margin-top:20px">')
+    out.append(mg(cost_str, "Total cost"))
+    if cost > 0:
+        out.append(mg(f'${cost_d.get("cost_per_run", 0):.2f}', "Cost / run"))
+        out.append(mg(f'${cost_d.get("cost_per_100_loc", 0):.3f}', "Cost / 100 LOC"))
+    out.append(mg(f'{cost_d.get("total_loc_scanned", 0):,}', "Python LOC scanned"))
+    out.append(mg(f'{cost_d.get("successful_runs", 0)}', "Successful runs"))
+    out.append("  </div>")
+
+    out.append('  <p class="figure-cap" style="margin-top:30px"><a href="../dashboard.html">← Back to the leaderboard</a></p>')
     out.append("</div></section>")
     out.append(SHELL_FOOT)
     return "\n".join(out)
@@ -160,13 +230,14 @@ def build_page(slug: str, agg: dict, grid: dict) -> str:
 def main() -> None:
     data = json.loads((REPORTS / "dashboard.json").read_text())
     aggs, grid = data["aggregates"], data["grid"]
+    meta_all = data.get("scanner_metadata", {})
     outdir = REPORTS / "scanners"
     outdir.mkdir(exist_ok=True)
     n = 0
     for slug in SCANNER_META:
         if slug not in aggs:
             continue
-        (outdir / f"{slug}.html").write_text(build_page(slug, aggs[slug], grid))
+        (outdir / f"{slug}.html").write_text(build_page(slug, aggs[slug], grid, meta_all.get(slug, {})))
         n += 1
     print(f"wrote {n} reskin-styled scanner detail pages -> reports/scanners/")
 
