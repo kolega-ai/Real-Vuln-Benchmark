@@ -29,6 +29,8 @@ BASELINE_SCANNERS = {"semgrep", "snyk", "sonarqube"}
 # Display-friendly names for scanner slugs
 SCANNER_DISPLAY_NAMES: dict[str, str] = {
     "our-scanner-manual-opt-opus-4.6": "our-scanner manual opt opus 4.6",
+    # Fable 5 benchmarked through the Claude Code harness.
+    "claude-fable-5-cc-v1": "Claude Fable 5 (Claude Code)",
 }
 
 

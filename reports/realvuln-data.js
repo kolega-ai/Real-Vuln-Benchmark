@@ -15,6 +15,7 @@
     { name: "Claude Opus 4.8", slug: "claude-opus-4-8-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 26, f2: 55.7, f2s: 55.7, f3: 53.6, f3s: 53.6, rec: 0.517, recs: 0.517, prec: 0.807, cost: 35.65, sd: 13.7 },
     { name: "DeepSeek V4 Pro", slug: "deepseek-v4-pro-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 26, f2: 55.0, f2s: 55.0, f3: 52.9, f3s: 52.9, rec: 0.511, recs: 0.511, prec: 0.789, cost: 9.59, sd: 12.7 },
     { name: "Claude Sonnet 4.6", slug: "claude-sonnet-4-6-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 23, f2: 57.1, f2s: 53.0, f3: 55.2, f3s: 50.9, rec: 0.534, recs: 0.489, prec: 0.797, cost: 16.6, sd: 13.3 },
+    { name: "Claude Fable 5", slug: "claude-fable-5-cc-v1", cat: "llm", ver: "claude-code-v1", repos: 26, f2: 52.5, f2s: 52.5, f3: 50.5, f3s: 50.5, rec: 0.486, recs: 0.486, prec: 0.765, cost: null, sd: null },
     { name: "Gemini 3.1 Pro", slug: "gemini-3.1-pro-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 24, f2: 55.2, f2s: 51.8, f3: 53.3, f3s: 49.7, rec: 0.515, recs: 0.478, prec: 0.776, cost: 27.24, sd: 13.4 },
     { name: "Gemini 3.5 Flash", slug: "gemini-3.5-flash-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 26, f2: 50.0, f2s: 50.0, f3: 47.6, f3s: 47.6, rec: 0.454, recs: 0.454, prec: 0.84, cost: 27.99, sd: 16.7 },
     { name: "Claude Opus 4.7", slug: "claude-opus-4-7-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 25, f2: 54.7, f2s: 49.4, f3: 53.1, f3s: 47.5, rec: 0.516, recs: 0.458, prec: 0.715, cost: 32.4, sd: 17.2 },
@@ -46,6 +47,6 @@
     CAT_LABEL: { sec: 'Security-Specialized', llm: 'General-Purpose LLM', rule: 'Rule-Based SAST' },
     CAT_SHORT: { sec: 'Sec.-spec.', llm: 'GP-LLM', rule: 'Rule SAST' },
     COL: { sec: '#cfa45c', llm: '#7e9fc4', rule: '#8c8478' },
-    DATASET: { repos: 26, vulns: 697, traps: 120, loc: 20062, scanners: 24, families: 18 }
+    DATASET: { repos: 26, vulns: 697, traps: 120, loc: 20062, scanners: 25, families: 18 }
   };
 })();

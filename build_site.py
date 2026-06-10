@@ -33,6 +33,7 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
     "deepseek-v4-pro-agentic-v1":     ("DeepSeek V4 Pro",    "llm",  "agentic-v1"),
     "kimi-k2.6-agentic-v1":           ("Kimi K2.6",          "llm",  "agentic-v1"),
     "kimi-k2.5-agentic-v1":           ("Kimi K2.5",          "llm",  "agentic-v1"),
+    "claude-fable-5-cc-v1":           ("Claude Fable 5",     "llm",  "claude-code-v1"),
     "claude-opus-4-8-agentic-v1":     ("Claude Opus 4.8",    "llm",  "agentic-v1"),
     "claude-opus-4-7-agentic-v1":     ("Claude Opus 4.7",    "llm",  "agentic-v1"),
     "claude-opus-4-6-agentic-v1":     ("Claude Opus 4.6",    "llm",  "agentic-v1"),
