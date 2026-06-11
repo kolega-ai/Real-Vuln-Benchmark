@@ -21,6 +21,28 @@ ROOT = Path(__file__).resolve().parent
 SITE_SRC = ROOT / "site"
 REPORTS = ROOT / "reports"
 
+# Google Analytics 4 measurement ID for realvuln.com. Injected into every page's
+# <head> at build time (see inject_analytics) so the tag lives in one place
+# rather than being duplicated across source/generated pages.
+GA_MEASUREMENT_ID = "G-BD1PYVN294"
+GA_SNIPPET = (
+    "\n<!-- Google tag (gtag.js) -->\n"
+    f'<script async src="https://www.googletagmanager.com/gtag/js?id={GA_MEASUREMENT_ID}"></script>\n'
+    "<script>\n"
+    "  window.dataLayer = window.dataLayer || [];\n"
+    "  function gtag(){dataLayer.push(arguments);}\n"
+    "  gtag('js', new Date());\n"
+    f"  gtag('config', '{GA_MEASUREMENT_ID}');\n"
+    "</script>"
+)
+
+
+def inject_analytics(html: str) -> str:
+    """Insert the GA4 tag right after <head>. Idempotent."""
+    if GA_MEASUREMENT_ID in html or "<head>" not in html:
+        return html
+    return html.replace("<head>", "<head>" + GA_SNIPPET, 1)
+
 # --- scanner slug -> (display name, category, version label) -----------------
 # category: sec = Security-Specialized, llm = General-Purpose LLM, rule = Rule-Based SAST
 SCANNER_META: dict[str, tuple[str, str, str]] = {
@@ -327,6 +349,7 @@ def main() -> None:
             left = [t for t in tokens if t in text]
             if left:
                 print(f"  WARNING: unresolved tokens in {src.name}: {left}")
+            text = inject_analytics(text)
             dst.write_text(text)
         else:
             shutil.copy2(src, dst)
