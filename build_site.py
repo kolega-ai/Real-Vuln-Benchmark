@@ -51,6 +51,37 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
     "sonarqube":                      ("SonarQube",          "rule", "community"),
 }
 
+# Optional per-scanner methodology notes, rendered as a callout on the deep-dive
+# page. Use for scanners whose run conditions differ from the standard agentic
+# (OpenCode) harness, so the difference is transparent rather than implicit in
+# the version label. HTML allowed.
+SCANNER_NOTES: dict[str, str] = {
+    "claude-fable-5-cc-v1": (
+        "<strong>Different harness.</strong> Every other LLM scanner here runs "
+        "agentically through the <span class=\"mono\">OpenCode</span> CLI "
+        "(version label <span class=\"mono\">agentic-v1</span>). Fable 5 could "
+        "not be benchmarked that way: the OpenCode→Anthropic API path was "
+        "consistently blocked by provider content filtering on the "
+        "intentionally-vulnerable source, returning refusals instead of findings. "
+        "<br><br>"
+        "Instead, each of the 26 repositories was scanned by a dedicated "
+        "<span class=\"mono\">Claude Code</span> subagent (version label "
+        "<span class=\"mono\">claude-code-v1</span>) using the <em>identical</em> "
+        "system prompt as the agentic runner (prompt hash "
+        "<span class=\"mono\">sha256:14ccb06a286c</span>), so findings remain "
+        "comparable. The same prompt ran cleanly through Claude Code, which "
+        "confirms the block was specific to the OpenCode delivery path — not "
+        "the prompt or the model. "
+        "<br><br>"
+        "<strong>Caveats.</strong> These runs were interactive rather than "
+        "metered, so token, cost, and latency figures were not recorded. One "
+        "repository (<span class=\"mono\">python-app</span>) nests its source "
+        "under a <span class=\"mono\">target/</span> directory; the agent reported "
+        "paths without that prefix, which were normalized to align with ground "
+        "truth before scoring."
+    ),
+}
+
 # CWE families surfaced in the "detection by class" panel: (label, cwe display, family slug)
 CWE_FAMILIES: list[tuple[str, str, str]] = [
     ("SQL injection",            "CWE-89",      "sql_injection"),
