@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -361,6 +362,59 @@ def main() -> None:
         build_detail_pages.main()
     except Exception as e:  # never block the main build on detail-page generation
         print(f"  WARNING: detail-page generation skipped: {e}")
+
+    # sitemap.xml — generated from the pages that actually exist so it never
+    # drifts as scanner detail pages are added/removed.
+    write_sitemap()
+
+
+SITE_BASE_URL = "https://realvuln.com"
+
+
+def write_sitemap() -> None:
+    """Emit reports/sitemap.xml covering canonical, linked pages only.
+
+    Restricted to the public nav pages plus the scanner detail pages that are
+    actually published (SCANNER_META) — legacy/orphan HTML in reports/ is
+    excluded so Google doesn't index stale or unlinked pages.
+    """
+    today = date.today().isoformat()
+    urls: list[tuple[str, str, str]] = []  # (loc, changefreq, priority)
+
+    def add(path: str, changefreq: str, priority: str) -> None:
+        loc = SITE_BASE_URL if path == "index.html" else f"{SITE_BASE_URL}/{path}"
+        urls.append((loc, changefreq, priority))
+
+    # canonical nav pages, in priority order
+    nav_pages = [
+        ("index.html", "1.0"),
+        ("dashboard.html", "0.9"),
+        ("methodology.html", "0.7"),
+        ("dataset.html", "0.7"),
+        ("findings.html", "0.7"),
+        ("roadmap.html", "0.7"),
+    ]
+    for name, pr in nav_pages:
+        if (REPORTS / name).is_file():
+            add(name, "weekly", pr)
+
+    # per-scanner deep-dive pages — only those actually published on the site
+    for slug in SCANNER_META:
+        if (REPORTS / "scanners" / f"{slug}.html").is_file():
+            add(f"scanners/{slug}.html", "monthly", "0.5")
+
+    body = "\n".join(
+        f"  <url><loc>{loc}</loc><lastmod>{today}</lastmod>"
+        f"<changefreq>{cf}</changefreq><priority>{pr}</priority></url>"
+        for loc, cf, pr in urls
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{body}\n</urlset>\n"
+    )
+    (REPORTS / "sitemap.xml").write_text(xml)
+    print(f"wrote reports/sitemap.xml ({len(urls)} urls)")
 
 
 if __name__ == "__main__":
