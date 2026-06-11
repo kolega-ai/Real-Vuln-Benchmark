@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from build_site import SCANNER_META, SCANNER_NOTES  # slug -> (name, cat, ver); slug -> note html
+from build_site import SCANNER_META, SCANNER_NOTES, inject_analytics  # slug -> (name, cat, ver); slug -> note html
 
 ROOT = Path(__file__).resolve().parent
 REPORTS = ROOT / "reports"
@@ -139,7 +139,7 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
     rows.sort(key=lambda r: r["f2"], reverse=True)
     max_total = max((r["tp"] + r["fp"] + r["fn"] for r in rows), default=1) or 1
 
-    out = [SHELL_HEAD.format(title=name)]
+    out = [inject_analytics(SHELL_HEAD.format(title=name))]
 
     # hero
     out.append('<section class="wrap page-hero">')
