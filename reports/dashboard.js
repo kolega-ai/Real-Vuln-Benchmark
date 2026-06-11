@@ -64,7 +64,7 @@
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/26</span></td>' +
-        '<td class="dim">' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + s.cost.toFixed(0)) + '</td>';
+        '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + s.cost.toFixed(0)) + '</td>';
       tbody.appendChild(tr);
     });
     var mth = document.querySelector('#dlb th.metric-th');
@@ -124,7 +124,7 @@
       xMax: 70, yMax: 100, xTicks: [0, 20, 40, 60], yTicks: [0, 25, 50, 75, 100],
       xFmt: function (t) { return '$' + t; }, yFmt: function (t) { return String(t); },
       xLabel: 'Run cost (USD) →', yLabel: METRIC_LABEL[state.metric] + ' →',
-      tip: function (s) { return METRIC_LABEL[state.metric] + ' ' + fmt(activeF(s)) + ' · $' + s.cost.toFixed(2); }
+      tip: function (s) { return METRIC_LABEL[state.metric] + ' ' + fmt(activeF(s)) + ' · ' + (s.est ? '~$' : '$') + s.cost.toFixed(2) + (s.est ? ' (est.)' : ''); }
     });
     var tag = document.getElementById('cost-metric-tag'); if (tag) tag.textContent = METRIC_LABEL[state.metric] + ' vs cost';
   }
