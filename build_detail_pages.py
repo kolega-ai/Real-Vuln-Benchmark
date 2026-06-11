@@ -109,7 +109,13 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
     repos_scored = agg.get("repos_scored", 0)
     repos_total = agg.get("repos_total", 26)
     has_metrics = bool(meta.get("has_metrics"))
-    cost_str = "Free" if (cat == "rule" or cost <= 0) else f"${cost:,.0f}"
+    cost_est = bool(cost_d.get("estimated"))
+    if cat == "rule" or cost <= 0:
+        cost_str = "Free"
+    elif cost_est:
+        cost_str = f"~${cost:,.0f} <span style=\"font-size:.5em;color:var(--fg-3)\">est.</span>"
+    else:
+        cost_str = f"${cost:,.0f}"
     model = meta.get("model") or "—"
     latency = f'{meta.get("avg_wall_clock_seconds", 0):.0f}s' if has_metrics else "—"
 
