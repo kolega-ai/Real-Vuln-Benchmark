@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from build_site import SCANNER_META  # slug -> (name, cat, ver)
+from build_site import SCANNER_META, SCANNER_NOTES  # slug -> (name, cat, ver); slug -> note html
 
 ROOT = Path(__file__).resolve().parent
 REPORTS = ROOT / "reports"
@@ -144,6 +144,18 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
     out.append(f'  <p class="lede">{CAT_LABEL.get(cat, cat)} · <span class="mono">{ver}</span> · '
                f'scored on {repos_scored}/{repos_total} repositories. Strict scoring (unfinished repos counted as misses).</p>')
     out.append("</section>")
+
+    # optional methodology note (e.g. non-standard harness)
+    note = SCANNER_NOTES.get(slug)
+    if note:
+        out.append('<section class="wrap" style="padding-top:0">')
+        out.append('  <div style="border:1px solid var(--accent);border-left-width:3px;'
+                   'border-radius:8px;padding:18px 20px;background:rgba(212,160,23,0.06);'
+                   'font-size:15px;line-height:1.6;color:var(--fg-2)">'
+                   '<div class="mono" style="color:var(--accent);font-size:12px;'
+                   'letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">'
+                   'Methodology note</div>' + note + '</div>')
+        out.append("</section>")
 
     # KPI strip (8)
     out.append('<section class="wrap" style="padding-bottom:8px"><div class="hero-kpis sd-kpis">')
