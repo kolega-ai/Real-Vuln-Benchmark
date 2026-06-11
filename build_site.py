@@ -74,7 +74,10 @@ SCANNER_NOTES: dict[str, str] = {
         "the prompt or the model. "
         "<br><br>"
         "<strong>Caveats.</strong> These runs were interactive rather than "
-        "metered, so token, cost, and latency figures were not recorded. One "
+        "metered, so token and latency figures were not recorded. The cost shown "
+        "is an <em>estimate</em>: Fable 5's API price is exactly 2× Claude Opus "
+        "4.8 ($10/$50 vs $5/$25 per 1M input/output tokens), so we project its "
+        "cost as 2× Opus 4.8's measured cost on the same benchmark. One "
         "repository (<span class=\"mono\">python-app</span>) nests its source "
         "under a <span class=\"mono\">target/</span> directory; the agent reported "
         "paths without that prefix, which were normalized to align with ground "
@@ -129,6 +132,8 @@ def build_scanners(data: dict) -> tuple[list[dict], int]:
             "prec": round3(micro["precision"]),
             # cost: null for free rule-based tools and the enterprise tier (no published price)
             "cost": None if (cat == "rule" or slug == "kolega-enterprise-v1" or cost <= 0) else round(cost, 2),
+            # est: True when cost is a projection rather than metered (rendered as ~$X)
+            "est": bool((a.get("cost") or {}).get("estimated")),
             # run-to-run F2 stddev (shown under the score for multi-run scanners)
             "sd": round1(a.get("f2_stddev", 0)) if a.get("num_runs", 1) > 1 else None,
         })
@@ -237,7 +242,7 @@ def emit_data_js(scanners: list[dict], cwe: list[dict], dataset: dict) -> str:
     lines.append("   ============================================================ */")
     lines.append("(function () {")
     lines.append("  var S = [")
-    keys = ["name", "slug", "cat", "ver", "repos", "f2", "f2s", "f3", "f3s", "rec", "recs", "prec", "cost", "sd"]
+    keys = ["name", "slug", "cat", "ver", "repos", "f2", "f2s", "f3", "f3s", "rec", "recs", "prec", "cost", "est", "sd"]
     for s in scanners:
         parts = ", ".join(f"{k}: {js_value(s[k])}" for k in keys)
         lines.append(f"    {{ {parts} }},")

@@ -50,7 +50,7 @@
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/26</span></td>' +
-        '<td class="dim">' + (s.cost == null ? '—' : '$' + s.cost.toFixed(0)) + '</td>';
+        '<td class="dim">' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + s.cost.toFixed(0)) + '</td>';
       tbody.appendChild(tr);
     });
 

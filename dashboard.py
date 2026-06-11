@@ -1902,6 +1902,24 @@ def main() -> int:
             scanner, {"has_metrics": False}
         )
 
+    # Estimated cost for the Claude Code Fable 5 run (interactive, so unmetered).
+    # Fable 5's API price is exactly 2x Claude Opus 4.8 ($10/$50 vs $5/$25 per 1M
+    # in/out tokens), so we project its cost as 2x Opus 4.8's measured cost on the
+    # same benchmark. Flagged as estimated so the UI can mark it.
+    _est_target, _est_base = "claude-fable-5-cc-v1", "claude-opus-4-8-agentic-v1"
+    _base_cost = aggregates.get(_est_base, {}).get("cost") or {}
+    _tgt = aggregates.get(_est_target)
+    if _tgt is not None and _base_cost.get("total_cost", 0) > 0 and not (_tgt.get("cost") or {}).get("total_cost"):
+        _tgt["cost"] = {
+            "total_cost": round(_base_cost.get("total_cost", 0) * 2, 4),
+            "cost_per_run": round(_base_cost.get("cost_per_run", 0) * 2, 4),
+            "cost_per_100_loc": round(_base_cost.get("cost_per_100_loc", 0) * 2, 4),
+            "total_loc_scanned": _base_cost.get("total_loc_scanned", 0),
+            "successful_runs": _base_cost.get("successful_runs", 0),
+            "estimated": True,
+            "estimate_basis": "2x claude-opus-4-8-agentic-v1 (matching 2x API token price)",
+        }
+
     # Filter scanners by minimum repo count
     if args.min_repos > 0:
         before = len(scanners)
