@@ -75,19 +75,19 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
 }
 
 # Model / product page per scanner, rendered as an explicit external link on the
-# leaderboard tag line. Kolega entries point at the pricing landing page; LLM
-# entries point at the vendor's page for that specific model (HF model card
-# where the vendor has no dedicated page); rule-based tools at their product page.
+# leaderboard tag line. LLM entries point at the provider's own page for the
+# model (or the provider site where none exists); rule-based tools at their
+# product page.
 SCANNER_URLS: dict[str, str] = {
     "kolega-enterprise-v1":           "https://kolega.dev/",
     "kolega-v0.0.1":                  "https://kolega.dev/",
     "gpt-5.5-agentic-v1":             "https://openai.com/index/introducing-gpt-5-5/",
     "glm-5.1-agentic-v1":             "https://docs.z.ai/guides/llm/glm-5.1",
     "glm-5-agentic-v1":               "https://docs.z.ai/guides/llm/glm-5",
-    "deepseek-v4-flash-agentic-v1":   "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
-    "deepseek-v4-pro-agentic-v1":     "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
-    "kimi-k2.6-agentic-v1":           "https://huggingface.co/moonshotai/Kimi-K2.6",
-    "kimi-k2.5-agentic-v1":           "https://huggingface.co/moonshotai/Kimi-K2.5",
+    "deepseek-v4-flash-agentic-v1":   "https://www.deepseek.com",
+    "deepseek-v4-pro-agentic-v1":     "https://www.deepseek.com",
+    "kimi-k2.6-agentic-v1":           "https://www.moonshot.ai",
+    "kimi-k2.5-agentic-v1":           "https://www.moonshot.ai",
     "claude-fable-5-cc-v1":           "https://www.anthropic.com/news/claude-fable-5-mythos-5",
     "claude-opus-4-8-agentic-v1":     "https://www.anthropic.com/claude/opus",
     "claude-opus-4-7-agentic-v1":     "https://www.anthropic.com/claude/opus",
@@ -100,7 +100,7 @@ SCANNER_URLS: dict[str, str] = {
     "grok-4.20-reasoning-agentic-v1": "https://docs.x.ai/developers/models/grok-4.20",
     "grok-3-agentic-v1":              "https://x.ai/news/grok-3",
     "minimax-m2.7-agentic-v1":        "https://www.minimax.io/models/text/m27",
-    "qwen-3.5-397b-agentic-v1":       "https://huggingface.co/Qwen/Qwen3.5-397B-A17B",
+    "qwen-3.5-397b-agentic-v1":       "https://qwen.ai/blog?id=qwen3.5",
     "semgrep":                        "https://semgrep.dev/products/semgrep-code",
     "snyk":                           "https://snyk.io/product/snyk-code/",
     "sonarqube":                      "https://www.sonarsource.com/products/sonarqube/",
