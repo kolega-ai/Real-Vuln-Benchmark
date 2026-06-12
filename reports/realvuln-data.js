@@ -6,8 +6,8 @@
    ============================================================ */
 (function () {
   var S = [
-    { name: "Kolega Enterprise", slug: "kolega-enterprise-v1", cat: "sec", ver: "enterprise-v1", url: "https://kolega.dev/#pricing", repos: 26, f2: 89.7, f2s: 89.7, f3: 92.4, f3s: 92.4, rec: 0.953, recs: 0.953, prec: 0.727, cost: null, est: false, sd: null },
-    { name: "Kolega.Dev", slug: "kolega-v0.0.1", cat: "sec", ver: "v0.0.1", url: "https://kolega.dev/#pricing", repos: 26, f2: 66.8, f2s: 66.8, f3: 73.0, f3s: 73.0, rec: 0.805, recs: 0.805, prec: 0.398, cost: null, est: false, sd: null },
+    { name: "Kolega Enterprise", slug: "kolega-enterprise-v1", cat: "sec", ver: "enterprise-v1", url: "https://kolega.dev/", repos: 26, f2: 89.7, f2s: 89.7, f3: 92.4, f3s: 92.4, rec: 0.953, recs: 0.953, prec: 0.727, cost: null, est: false, sd: null },
+    { name: "Kolega.Dev", slug: "kolega-v0.0.1", cat: "sec", ver: "v0.0.1", url: "https://kolega.dev/", repos: 26, f2: 66.8, f2s: 66.8, f3: 73.0, f3s: 73.0, rec: 0.805, recs: 0.805, prec: 0.398, cost: null, est: false, sd: null },
     { name: "GPT-5.5", slug: "gpt-5.5-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://openai.com/index/introducing-gpt-5-5/", repos: 26, f2: 62.1, f2s: 62.1, f3: 60.2, f3s: 60.2, rec: 0.584, recs: 0.584, prec: 0.832, cost: 66.45, est: false, sd: 15.9 },
     { name: "GLM-5.1", slug: "glm-5.1-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://docs.z.ai/guides/llm/glm-5.1", repos: 25, f2: 59.7, f2s: 58.6, f3: 58.3, f3s: 57.1, rec: 0.57, recs: 0.557, prec: 0.741, cost: 10.34, est: false, sd: 15.6 },
     { name: "DeepSeek V4 Flash", slug: "deepseek-v4-flash-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash", repos: 26, f2: 58.1, f2s: 58.1, f3: 56.5, f3s: 56.5, rec: 0.55, recs: 0.55, prec: 0.753, cost: 0.96, est: false, sd: 16.6 },

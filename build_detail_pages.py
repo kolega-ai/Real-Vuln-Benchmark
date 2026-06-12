@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from build_site import SCANNER_META, SCANNER_NOTES, inject_analytics  # slug -> (name, cat, ver); slug -> note html
+from build_site import SCANNER_META, SCANNER_NOTES, SCANNER_PROVIDERS, SCANNER_URLS, inject_analytics  # slug -> (name, cat, ver); slug -> note html
 
 ROOT = Path(__file__).resolve().parent
 REPORTS = ROOT / "reports"
@@ -147,7 +147,15 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
                '<a href="../dashboard.html">Dashboard</a><span class="sep">/</span><span>' + name + '</span></div>')
     out.append('  <div class="ph-num">Scanner deep-dive</div>')
     out.append(f'  <h1>{name}</h1>')
-    out.append(f'  <p class="lede">{CAT_LABEL.get(cat, cat)} · <span class="mono">{ver}</span> · '
+    provider, url = SCANNER_PROVIDERS.get(slug), SCANNER_URLS.get(slug)
+    if provider and url:
+        provider_html = (f' · by <a href="{url}" target="_blank" rel="noopener" '
+                         f'style="color:var(--accent)">{provider} ↗</a>')
+    elif provider:
+        provider_html = f" · by {provider}"
+    else:
+        provider_html = ""
+    out.append(f'  <p class="lede">{CAT_LABEL.get(cat, cat)} · <span class="mono">{ver}</span>{provider_html} · '
                f'scored on {repos_scored}/{repos_total} repositories. Strict scoring (unfinished repos counted as misses).</p>')
     out.append("</section>")
 

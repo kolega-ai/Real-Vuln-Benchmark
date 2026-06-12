@@ -79,8 +79,8 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
 # entries point at the vendor's page for that specific model (HF model card
 # where the vendor has no dedicated page); rule-based tools at their product page.
 SCANNER_URLS: dict[str, str] = {
-    "kolega-enterprise-v1":           "https://kolega.dev/#pricing",
-    "kolega-v0.0.1":                  "https://kolega.dev/#pricing",
+    "kolega-enterprise-v1":           "https://kolega.dev/",
+    "kolega-v0.0.1":                  "https://kolega.dev/",
     "gpt-5.5-agentic-v1":             "https://openai.com/index/introducing-gpt-5-5/",
     "glm-5.1-agentic-v1":             "https://docs.z.ai/guides/llm/glm-5.1",
     "glm-5-agentic-v1":               "https://docs.z.ai/guides/llm/glm-5",
@@ -104,6 +104,36 @@ SCANNER_URLS: dict[str, str] = {
     "semgrep":                        "https://semgrep.dev/products/semgrep-code",
     "snyk":                           "https://snyk.io/product/snyk-code/",
     "sonarqube":                      "https://www.sonarsource.com/products/sonarqube/",
+}
+
+# Provider display name per scanner, shown with a link (SCANNER_URLS) on the
+# deep-dive pages.
+SCANNER_PROVIDERS: dict[str, str] = {
+    "kolega-enterprise-v1":           "Kolega",
+    "kolega-v0.0.1":                  "Kolega",
+    "gpt-5.5-agentic-v1":             "OpenAI",
+    "glm-5.1-agentic-v1":             "Z.ai",
+    "glm-5-agentic-v1":               "Z.ai",
+    "deepseek-v4-flash-agentic-v1":   "DeepSeek",
+    "deepseek-v4-pro-agentic-v1":     "DeepSeek",
+    "kimi-k2.6-agentic-v1":           "Moonshot AI",
+    "kimi-k2.5-agentic-v1":           "Moonshot AI",
+    "claude-fable-5-cc-v1":           "Anthropic",
+    "claude-opus-4-8-agentic-v1":     "Anthropic",
+    "claude-opus-4-7-agentic-v1":     "Anthropic",
+    "claude-opus-4-6-agentic-v1":     "Anthropic",
+    "claude-sonnet-4-6-agentic-v1":   "Anthropic",
+    "claude-haiku-4-5-agentic-v1":    "Anthropic",
+    "claude-haiku-4-5-v1":            "Anthropic",
+    "gemini-3.1-pro-agentic-v1":      "Google DeepMind",
+    "gemini-3.5-flash-agentic-v1":    "Google DeepMind",
+    "grok-4.20-reasoning-agentic-v1": "xAI",
+    "grok-3-agentic-v1":              "xAI",
+    "minimax-m2.7-agentic-v1":        "MiniMax",
+    "qwen-3.5-397b-agentic-v1":       "Alibaba Qwen",
+    "semgrep":                        "Semgrep",
+    "snyk":                           "Snyk",
+    "sonarqube":                      "SonarSource",
 }
 
 # Optional per-scanner methodology notes, rendered as a callout on the deep-dive
