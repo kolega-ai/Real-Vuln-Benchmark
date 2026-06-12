@@ -74,6 +74,36 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
     "sonarqube":                      ("SonarQube",          "rule", "community"),
 }
 
+# Vendor / company website per scanner, rendered as an external link (↗) next to
+# the leaderboard label. Kolega entries point at product landing pages.
+SCANNER_URLS: dict[str, str] = {
+    "kolega-enterprise-v1":           "https://kolega.ai/enterprise",
+    "kolega-v0.0.1":                  "https://kolega.dev",
+    "gpt-5.5-agentic-v1":             "https://openai.com",
+    "glm-5.1-agentic-v1":             "https://z.ai",
+    "glm-5-agentic-v1":               "https://z.ai",
+    "deepseek-v4-flash-agentic-v1":   "https://www.deepseek.com",
+    "deepseek-v4-pro-agentic-v1":     "https://www.deepseek.com",
+    "kimi-k2.6-agentic-v1":           "https://www.moonshot.ai",
+    "kimi-k2.5-agentic-v1":           "https://www.moonshot.ai",
+    "claude-fable-5-cc-v1":           "https://www.anthropic.com",
+    "claude-opus-4-8-agentic-v1":     "https://www.anthropic.com",
+    "claude-opus-4-7-agentic-v1":     "https://www.anthropic.com",
+    "claude-opus-4-6-agentic-v1":     "https://www.anthropic.com",
+    "claude-sonnet-4-6-agentic-v1":   "https://www.anthropic.com",
+    "claude-haiku-4-5-agentic-v1":    "https://www.anthropic.com",
+    "claude-haiku-4-5-v1":            "https://www.anthropic.com",
+    "gemini-3.1-pro-agentic-v1":      "https://deepmind.google",
+    "gemini-3.5-flash-agentic-v1":    "https://deepmind.google",
+    "grok-4.20-reasoning-agentic-v1": "https://x.ai",
+    "grok-3-agentic-v1":              "https://x.ai",
+    "minimax-m2.7-agentic-v1":        "https://www.minimax.io",
+    "qwen-3.5-397b-agentic-v1":       "https://qwen.ai",
+    "semgrep":                        "https://semgrep.dev",
+    "snyk":                           "https://snyk.io",
+    "sonarqube":                      "https://www.sonarsource.com",
+}
+
 # Optional per-scanner methodology notes, rendered as a callout on the deep-dive
 # page. Use for scanners whose run conditions differ from the standard agentic
 # (OpenCode) harness, so the difference is transparent rather than implicit in
@@ -145,6 +175,7 @@ def build_scanners(data: dict) -> tuple[list[dict], int]:
             "slug": slug,
             "cat": cat,
             "ver": ver,
+            "url": SCANNER_URLS.get(slug),
             "repos": a.get("repos_scored", repos_total),
             "f2": round1(micro["f2_score"]),
             "f2s": round1(strict["f2_score"]),
@@ -265,7 +296,7 @@ def emit_data_js(scanners: list[dict], cwe: list[dict], dataset: dict) -> str:
     lines.append("   ============================================================ */")
     lines.append("(function () {")
     lines.append("  var S = [")
-    keys = ["name", "slug", "cat", "ver", "repos", "f2", "f2s", "f3", "f3s", "rec", "recs", "prec", "cost", "est", "sd"]
+    keys = ["name", "slug", "cat", "ver", "url", "repos", "f2", "f2s", "f3", "f3s", "rec", "recs", "prec", "cost", "est", "sd"]
     for s in scanners:
         parts = ", ".join(f"{k}: {js_value(s[k])}" for k in keys)
         lines.append(f"    {{ {parts} }},")

@@ -59,6 +59,7 @@
       tr.innerHTML =
         '<td class="l"><span class="rank">' + String(i + 1).padStart(2, '0') + '</span></td>' +
         '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' +
+          (s.url ? ' <a class="sc-ext" href="' + s.url + '" target="_blank" rel="noopener" title="' + s.url.replace('https://', '') + '">↗</a>' : '') +
           (s.name === lead ? ' <span class="crown">▲</span>' : '') + '<div class="cat-tag">' + s.ver + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
