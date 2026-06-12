@@ -14,6 +14,12 @@
   function val(s, base) { return s[mk(base)]; }
   function activeF(s) { return val(s, state.metric); }
   function fmt(v) { return v.toFixed(1); }
+  // explicit vendor-site link on the tag line, labeled with the domain
+  function extLink(s) {
+    if (!s.url) return '';
+    var host = s.url.replace('https://', '').replace('www.', '').split('/')[0];
+    return ' <span class="dim">·</span> <a class="sc-ext" href="' + s.url + '" target="_blank" rel="noopener">' + host + ' ↗</a>';
+  }
 
   var tbody = document.getElementById('lb-body');
 
@@ -44,8 +50,7 @@
       tr.innerHTML =
         '<td class="l"><span class="rank">' + String(i + 1).padStart(2, '0') + '</span></td>' +
         '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' +
-          (isLead ? ' <span class="crown">▲ leads</span>' : '') +
-          '<div class="cat-tag">' + s.ver + '</div></td>' +
+          '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +

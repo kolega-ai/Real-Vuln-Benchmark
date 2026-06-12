@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from build_site import SCANNER_META, SCANNER_NOTES, inject_analytics  # slug -> (name, cat, ver); slug -> note html
+from build_site import SCANNER_META, SCANNER_NOTES, SCANNER_PROVIDERS, SCANNER_URLS, inject_analytics  # slug -> (name, cat, ver); slug -> note html
 
 ROOT = Path(__file__).resolve().parent
 REPORTS = ROOT / "reports"
@@ -146,7 +146,20 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
     out.append('  <div class="breadcrumb"><a href="../index.html">RealVuln</a><span class="sep">/</span>'
                '<a href="../dashboard.html">Dashboard</a><span class="sep">/</span><span>' + name + '</span></div>')
     out.append('  <div class="ph-num">Scanner deep-dive</div>')
-    out.append(f'  <h1>{name}</h1>')
+    provider, url = SCANNER_PROVIDERS.get(slug), SCANNER_URLS.get(slug)
+    if provider and url:
+        provider_html = (f' <a href="{url}" target="_blank" rel="noopener" '
+                         f'style="font-family:var(--mono);font-size:clamp(13px,1.4vw,15px);'
+                         f'font-weight:400;letter-spacing:0;color:var(--accent);'
+                         f'text-decoration:none;white-space:nowrap;vertical-align:middle">'
+                         f'by {provider} ↗</a>')
+    elif provider:
+        provider_html = (f' <span style="font-family:var(--mono);font-size:clamp(13px,1.4vw,15px);'
+                         f'font-weight:400;letter-spacing:0;color:var(--fg-2);'
+                         f'white-space:nowrap;vertical-align:middle">by {provider}</span>')
+    else:
+        provider_html = ""
+    out.append(f'  <h1>{name}{provider_html}</h1>')
     out.append(f'  <p class="lede">{CAT_LABEL.get(cat, cat)} · <span class="mono">{ver}</span> · '
                f'scored on {repos_scored}/{repos_total} repositories. Strict scoring (unfinished repos counted as misses).</p>')
     out.append("</section>")

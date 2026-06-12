@@ -74,6 +74,68 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
     "sonarqube":                      ("SonarQube",          "rule", "community"),
 }
 
+# Model / product page per scanner, rendered as an explicit external link on the
+# leaderboard tag line. LLM entries point at the provider's own page for the
+# model (or the provider site where none exists); rule-based tools at their
+# product page.
+SCANNER_URLS: dict[str, str] = {
+    "kolega-enterprise-v1":           "https://kolega.dev/",
+    "kolega-v0.0.1":                  "https://kolega.dev/",
+    "gpt-5.5-agentic-v1":             "https://openai.com/index/introducing-gpt-5-5/",
+    "glm-5.1-agentic-v1":             "https://docs.z.ai/guides/llm/glm-5.1",
+    "glm-5-agentic-v1":               "https://docs.z.ai/guides/llm/glm-5",
+    "deepseek-v4-flash-agentic-v1":   "https://www.deepseek.com",
+    "deepseek-v4-pro-agentic-v1":     "https://www.deepseek.com",
+    "kimi-k2.6-agentic-v1":           "https://www.moonshot.ai",
+    "kimi-k2.5-agentic-v1":           "https://www.moonshot.ai",
+    "claude-fable-5-cc-v1":           "https://www.anthropic.com/news/claude-fable-5-mythos-5",
+    "claude-opus-4-8-agentic-v1":     "https://www.anthropic.com/claude/opus",
+    "claude-opus-4-7-agentic-v1":     "https://www.anthropic.com/claude/opus",
+    "claude-opus-4-6-agentic-v1":     "https://www.anthropic.com/claude/opus",
+    "claude-sonnet-4-6-agentic-v1":   "https://www.anthropic.com/claude/sonnet",
+    "claude-haiku-4-5-agentic-v1":    "https://www.anthropic.com/claude/haiku",
+    "claude-haiku-4-5-v1":            "https://www.anthropic.com/claude/haiku",
+    "gemini-3.1-pro-agentic-v1":      "https://deepmind.google/models/gemini/pro/",
+    "gemini-3.5-flash-agentic-v1":    "https://deepmind.google/models/gemini/flash/",
+    "grok-4.20-reasoning-agentic-v1": "https://docs.x.ai/developers/models/grok-4.20",
+    "grok-3-agentic-v1":              "https://x.ai/news/grok-3",
+    "minimax-m2.7-agentic-v1":        "https://www.minimax.io/models/text/m27",
+    "qwen-3.5-397b-agentic-v1":       "https://qwen.ai/blog?id=qwen3.5",
+    "semgrep":                        "https://semgrep.dev/products/semgrep-code",
+    "snyk":                           "https://snyk.io/product/snyk-code/",
+    "sonarqube":                      "https://www.sonarsource.com/products/sonarqube/",
+}
+
+# Provider display name per scanner, shown with a link (SCANNER_URLS) on the
+# deep-dive pages.
+SCANNER_PROVIDERS: dict[str, str] = {
+    "kolega-enterprise-v1":           "Kolega",
+    "kolega-v0.0.1":                  "Kolega",
+    "gpt-5.5-agentic-v1":             "OpenAI",
+    "glm-5.1-agentic-v1":             "Z.ai",
+    "glm-5-agentic-v1":               "Z.ai",
+    "deepseek-v4-flash-agentic-v1":   "DeepSeek",
+    "deepseek-v4-pro-agentic-v1":     "DeepSeek",
+    "kimi-k2.6-agentic-v1":           "Moonshot AI",
+    "kimi-k2.5-agentic-v1":           "Moonshot AI",
+    "claude-fable-5-cc-v1":           "Anthropic",
+    "claude-opus-4-8-agentic-v1":     "Anthropic",
+    "claude-opus-4-7-agentic-v1":     "Anthropic",
+    "claude-opus-4-6-agentic-v1":     "Anthropic",
+    "claude-sonnet-4-6-agentic-v1":   "Anthropic",
+    "claude-haiku-4-5-agentic-v1":    "Anthropic",
+    "claude-haiku-4-5-v1":            "Anthropic",
+    "gemini-3.1-pro-agentic-v1":      "Google DeepMind",
+    "gemini-3.5-flash-agentic-v1":    "Google DeepMind",
+    "grok-4.20-reasoning-agentic-v1": "xAI",
+    "grok-3-agentic-v1":              "xAI",
+    "minimax-m2.7-agentic-v1":        "MiniMax",
+    "qwen-3.5-397b-agentic-v1":       "Alibaba Qwen",
+    "semgrep":                        "Semgrep",
+    "snyk":                           "Snyk",
+    "sonarqube":                      "SonarSource",
+}
+
 # Optional per-scanner methodology notes, rendered as a callout on the deep-dive
 # page. Use for scanners whose run conditions differ from the standard agentic
 # (OpenCode) harness, so the difference is transparent rather than implicit in
@@ -145,6 +207,7 @@ def build_scanners(data: dict) -> tuple[list[dict], int]:
             "slug": slug,
             "cat": cat,
             "ver": ver,
+            "url": SCANNER_URLS.get(slug),
             "repos": a.get("repos_scored", repos_total),
             "f2": round1(micro["f2_score"]),
             "f2s": round1(strict["f2_score"]),
@@ -265,7 +328,7 @@ def emit_data_js(scanners: list[dict], cwe: list[dict], dataset: dict) -> str:
     lines.append("   ============================================================ */")
     lines.append("(function () {")
     lines.append("  var S = [")
-    keys = ["name", "slug", "cat", "ver", "repos", "f2", "f2s", "f3", "f3s", "rec", "recs", "prec", "cost", "est", "sd"]
+    keys = ["name", "slug", "cat", "ver", "url", "repos", "f2", "f2s", "f3", "f3s", "rec", "recs", "prec", "cost", "est", "sd"]
     for s in scanners:
         parts = ", ".join(f"{k}: {js_value(s[k])}" for k in keys)
         lines.append(f"    {{ {parts} }},")
