@@ -77,8 +77,8 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
 # Vendor / company website per scanner, rendered as an external link (↗) next to
 # the leaderboard label. Kolega entries point at product landing pages.
 SCANNER_URLS: dict[str, str] = {
-    "kolega-enterprise-v1":           "https://kolega.ai/enterprise",
-    "kolega-v0.0.1":                  "https://kolega.dev",
+    "kolega-enterprise-v1":           "https://kolega.dev/#pricing",
+    "kolega-v0.0.1":                  "https://kolega.dev/#pricing",
     "gpt-5.5-agentic-v1":             "https://openai.com",
     "glm-5.1-agentic-v1":             "https://z.ai",
     "glm-5-agentic-v1":               "https://z.ai",

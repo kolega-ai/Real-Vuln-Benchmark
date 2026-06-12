@@ -18,6 +18,12 @@
   function on(s) { return state.cats[s.cat]; }
   function fmt(v) { return v.toFixed(1); }
   function leaderName() { return SC.reduce(function (m, s) { return activeF(s) > activeF(m) ? s : m; }, SC[0]).name; }
+  // explicit vendor-site link on the tag line, labeled with the domain
+  function extLink(s) {
+    if (!s.url) return '';
+    var host = s.url.replace('https://', '').replace('www.', '').split('/')[0];
+    return ' <span class="dim">·</span> <a class="sc-ext" href="' + s.url + '" target="_blank" rel="noopener">' + host + ' ↗</a>';
+  }
 
   var NS = 'http://www.w3.org/2000/svg';
   function svgEl(t, a, x) { var e = document.createElementNS(NS, t); for (var k in a) e.setAttribute(k, a[k]); if (x != null) e.textContent = x; return e; }
@@ -59,8 +65,7 @@
       tr.innerHTML =
         '<td class="l"><span class="rank">' + String(i + 1).padStart(2, '0') + '</span></td>' +
         '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' +
-          (s.url ? ' <a class="sc-ext" href="' + s.url + '" target="_blank" rel="noopener" title="' + s.url.replace('https://', '') + '">↗</a>' : '') +
-          (s.name === lead ? ' <span class="crown">▲</span>' : '') + '<div class="cat-tag">' + s.ver + '</div></td>' +
+          (s.name === lead ? ' <span class="crown">▲</span>' : '') + '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
