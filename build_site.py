@@ -74,34 +74,36 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
     "sonarqube":                      ("SonarQube",          "rule", "community"),
 }
 
-# Vendor / company website per scanner, rendered as an external link (↗) next to
-# the leaderboard label. Kolega entries point at product landing pages.
+# Model / product page per scanner, rendered as an explicit external link on the
+# leaderboard tag line. Kolega entries point at the pricing landing page; LLM
+# entries point at the vendor's page for that specific model (HF model card
+# where the vendor has no dedicated page); rule-based tools at their product page.
 SCANNER_URLS: dict[str, str] = {
     "kolega-enterprise-v1":           "https://kolega.dev/#pricing",
     "kolega-v0.0.1":                  "https://kolega.dev/#pricing",
-    "gpt-5.5-agentic-v1":             "https://openai.com",
-    "glm-5.1-agentic-v1":             "https://z.ai",
-    "glm-5-agentic-v1":               "https://z.ai",
-    "deepseek-v4-flash-agentic-v1":   "https://www.deepseek.com",
-    "deepseek-v4-pro-agentic-v1":     "https://www.deepseek.com",
-    "kimi-k2.6-agentic-v1":           "https://www.moonshot.ai",
-    "kimi-k2.5-agentic-v1":           "https://www.moonshot.ai",
-    "claude-fable-5-cc-v1":           "https://www.anthropic.com",
-    "claude-opus-4-8-agentic-v1":     "https://www.anthropic.com",
-    "claude-opus-4-7-agentic-v1":     "https://www.anthropic.com",
-    "claude-opus-4-6-agentic-v1":     "https://www.anthropic.com",
-    "claude-sonnet-4-6-agentic-v1":   "https://www.anthropic.com",
-    "claude-haiku-4-5-agentic-v1":    "https://www.anthropic.com",
-    "claude-haiku-4-5-v1":            "https://www.anthropic.com",
-    "gemini-3.1-pro-agentic-v1":      "https://deepmind.google",
-    "gemini-3.5-flash-agentic-v1":    "https://deepmind.google",
-    "grok-4.20-reasoning-agentic-v1": "https://x.ai",
-    "grok-3-agentic-v1":              "https://x.ai",
-    "minimax-m2.7-agentic-v1":        "https://www.minimax.io",
-    "qwen-3.5-397b-agentic-v1":       "https://qwen.ai",
-    "semgrep":                        "https://semgrep.dev",
-    "snyk":                           "https://snyk.io",
-    "sonarqube":                      "https://www.sonarsource.com",
+    "gpt-5.5-agentic-v1":             "https://openai.com/index/introducing-gpt-5-5/",
+    "glm-5.1-agentic-v1":             "https://docs.z.ai/guides/llm/glm-5.1",
+    "glm-5-agentic-v1":               "https://docs.z.ai/guides/llm/glm-5",
+    "deepseek-v4-flash-agentic-v1":   "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
+    "deepseek-v4-pro-agentic-v1":     "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
+    "kimi-k2.6-agentic-v1":           "https://huggingface.co/moonshotai/Kimi-K2.6",
+    "kimi-k2.5-agentic-v1":           "https://huggingface.co/moonshotai/Kimi-K2.5",
+    "claude-fable-5-cc-v1":           "https://www.anthropic.com/news/claude-fable-5-mythos-5",
+    "claude-opus-4-8-agentic-v1":     "https://www.anthropic.com/claude/opus",
+    "claude-opus-4-7-agentic-v1":     "https://www.anthropic.com/claude/opus",
+    "claude-opus-4-6-agentic-v1":     "https://www.anthropic.com/claude/opus",
+    "claude-sonnet-4-6-agentic-v1":   "https://www.anthropic.com/claude/sonnet",
+    "claude-haiku-4-5-agentic-v1":    "https://www.anthropic.com/claude/haiku",
+    "claude-haiku-4-5-v1":            "https://www.anthropic.com/claude/haiku",
+    "gemini-3.1-pro-agentic-v1":      "https://deepmind.google/models/gemini/pro/",
+    "gemini-3.5-flash-agentic-v1":    "https://deepmind.google/models/gemini/flash/",
+    "grok-4.20-reasoning-agentic-v1": "https://docs.x.ai/developers/models/grok-4.20",
+    "grok-3-agentic-v1":              "https://x.ai/news/grok-3",
+    "minimax-m2.7-agentic-v1":        "https://www.minimax.io/models/text/m27",
+    "qwen-3.5-397b-agentic-v1":       "https://huggingface.co/Qwen/Qwen3.5-397B-A17B",
+    "semgrep":                        "https://semgrep.dev/products/semgrep-code",
+    "snyk":                           "https://snyk.io/product/snyk-code/",
+    "sonarqube":                      "https://www.sonarsource.com/products/sonarqube/",
 }
 
 # Optional per-scanner methodology notes, rendered as a callout on the deep-dive
