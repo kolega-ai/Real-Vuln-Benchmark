@@ -1,0 +1,172 @@
+{
+  "results": [
+    {
+      "path": "app/main.py",
+      "check_id": "kolega.claude-adaptation.ssti",
+      "start": {
+        "line": 40,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Server-Side Template Injection (SSTI) via 'name' Parameter \u2014 Unauthenticated remote code execution; attacker can read secrets, exfiltrate environment variables (including SUPER_SECRET_TOKEN), traverse the filesystem, or spawn reverse shells. [verified: The user-supplied `name` parameter is interpolated via f-string directly into the Jinja2 template source string (`content = f\"<h1>Hello, {name}!</h1>...\"`) before being passed to `Template(content).render()`, so Jinja2 expressions in `name` (e.g. `{{7*7}}`) are compiled and executed. The WAF rule that targets `{{.*}}` is entirely disabled (`SecRuleEngine Off`), and there is no other sanitization, ]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "kolega": {
+            "cluster_id": "ssti",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/config.py",
+      "check_id": "kolega.claude-adaptation.hardcoded-credentials",
+      "start": {
+        "line": 15,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Hardcoded Credentials / Secret Token in Source Code \u2014 Anyone with read access to the repository (or a Docker image built from it) obtains the SUPER_SECRET_TOKEN and SUPER_SECRET_NAME, enabling credential replay or account takeover if the token is used elsewhere. [verified: Both SUPER_SECRET_TOKEN ('5u93R53Cr3tT0k3n') and SUPER_SECRET_NAME ('John Ripper') are hardcoded as Python literals in app/config.py lines 13 and 15 with FIXME comments acknowledging the issue; no env-var override is loaded because os.getenv() is commented out, so the secrets ship verbatim in source and any built Docker image. There is no secrets-management control in place \u2014 the docker-compose.ya]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "kolega": {
+            "cluster_id": "hardcoded_credentials",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/main.py",
+      "check_id": "kolega.claude-adaptation.reflected-xss",
+      "start": {
+        "line": 38,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Reflected XSS via 'name' Query Parameter \u2014 Attacker can execute arbitrary JavaScript in a victim's browser via a crafted link, enabling session hijacking, credential theft, or defacement. [verified: The `name` query parameter is embedded unescaped into raw HTML returned with `Content-Type: text/html` (via `HTMLResponse`/`Template.render()`), so a payload like `<img src=x onerror=alert(1)>` is reflected verbatim to the browser. The Coraza WAF rule for `<script>` tags is disabled (`SecRuleEngine Off`) and there is no other output encoding or CSP header to mitigate execution.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "kolega": {
+            "cluster_id": "reflected_xss",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/main.py",
+      "check_id": "kolega.claude-adaptation.missing-authentication",
+      "start": {
+        "line": 17,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing Authentication on All Endpoints \u2014 Any unauthenticated attacker on the internet can invoke all application functionality, including the SSTI sink, without any credential. [verified: The `GET /` endpoint has no authentication decorator, middleware, API key check, or bearer token validation anywhere in `main.py` or the application stack; `SUPER_SECRET_TOKEN` is defined in `config.py` but never referenced in any auth check. Any unauthenticated internet user can reach the SSTI and XSS sinks directly.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authentication",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/main.py",
+      "check_id": "kolega.claude-adaptation.missing-rate-limiting",
+      "start": {
+        "line": 32,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing Rate Limiting \u2014 DoS and Cost Amplification \u2014 Attacker can cause denial of service by exhausting server resources or incur financial cost by flooding requests that each trigger external HTTP calls. [verified: No rate-limiting middleware (slowapi, limits, or otherwise) is applied to the `GET /` endpoint, and the Caddy WAF is disabled (`SecRuleEngine Off`). Every request unconditionally triggers a synchronous `requests.get()` to an external service, meaning an attacker can flood the endpoint to exhaust outbound connections and amplify external HTTP costs without restriction.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "kolega": {
+            "cluster_id": "missing_rate_limiting",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/main.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-exposure",
+      "start": {
+        "line": 19,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "SUPER_SECRET_NAME Exposed as OpenAPI Schema Default Parameter Value \u2014 The hardcoded secret name is publicly disclosed via the auto-generated OpenAPI schema endpoint to any unauthenticated user, leaking a configuration secret intended to be private. [verified: SUPER_SECRET_NAME is hardcoded as 'John Ripper' in config.py and used as the default value for the `name` query parameter at main.py:19; FastAPI serializes parameter defaults into /openapi.json, exposing this value to any unauthenticated caller. While 'John Ripper' is a low-sensitivity name-like value rather than a cryptographic secret, it is a configuration secret intended to be private and its e]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_exposure",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/main.py",
+      "check_id": "kolega.claude-adaptation.missing-security-headers",
+      "start": {
+        "line": 41,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing HTTP Security Headers \u2014 Absence of CSP and X-Frame-Options enables clickjacking and widens the XSS attack surface; missing X-Content-Type-Options allows MIME-sniffing attacks. [verified: Neither `main.py` nor the Caddyfile sets `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`, or `Strict-Transport-Security` headers; the WAF that could have added them is disabled. The absence of CSP meaningfully widens the already-confirmed XSS attack surface and enables clickjacking.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-693"
+          ],
+          "kolega": {
+            "cluster_id": "missing_security_headers",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    }
+  ]
+}

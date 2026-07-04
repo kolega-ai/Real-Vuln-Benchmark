@@ -7,15 +7,15 @@
       "start": {
         "line": 41,
         "col": 12,
-        "offset": 0
+        "offset": 1302
       },
       "end": {
         "line": 41,
         "col": 37,
-        "offset": 0
+        "offset": 1327
       },
       "extra": {
-        "message": "User input from the 'name' query parameter is embedded into a string via f-string (line 38) which is then passed to jinja2.Template(content).render(). This allows Server-Side Template Injection (SSTI). An attacker can inject Jinja2 template directives such as {{7*7}} or {{config.__class__.__init__.__globals__['os'].popen('id').read()}} to achieve remote code execution on the server.",
+        "message": "User input from the 'name' query parameter is interpolated into an HTML string (line 38) and then rendered through Jinja2's Template(content).render(). This allows Server-Side Template Injection (SSTI) \u2014 an attacker can inject Jinja2 expressions like {{7*7}} that are evaluated server-side, potentially leading to Remote Code Execution. The test file (tests/test_main.py:39-41) contains a TODO confirming this known vulnerability.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -27,20 +27,20 @@
       }
     },
     {
-      "check_id": "python.security.xss.reflected",
+      "check_id": "python.security.injection.xss",
       "path": "app/main.py",
       "start": {
         "line": 38,
-        "col": 28,
-        "offset": 0
+        "col": 5,
+        "offset": 1089
       },
       "end": {
         "line": 38,
-        "col": 33,
-        "offset": 0
+        "col": 84,
+        "offset": 1169
       },
       "extra": {
-        "message": "User input from the 'name' query parameter is directly interpolated into HTML via f-string at line 38 (f\"<h1>Hello, {name}!</h1>...\") without any sanitization or escaping. An attacker can inject arbitrary JavaScript (e.g., <script>alert(1)</script>) which will be rendered in the victim's browser. Even though the string is passed through Jinja2 Template.render(), Jinja2 does not auto-escape by default when using Template() directly.",
+        "message": "User input from the 'name' query parameter is directly interpolated into an HTML string via f-string without any sanitization or HTML escaping: f\"<h1>Hello, {name}!</h1><h2>Public IP: <code>{public_ip}</code></h2>\". An attacker can inject arbitrary HTML/JavaScript by passing a malicious 'name' parameter (e.g., ?name=<script>alert(1)</script>). The response is served as HTML (response_class=HTMLResponse).",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -52,24 +52,24 @@
       }
     },
     {
-      "check_id": "python.security.xss.external-response",
+      "check_id": "python.security.ssrf",
       "path": "app/main.py",
       "start": {
-        "line": 38,
-        "col": 61,
-        "offset": 0
+        "line": 31,
+        "col": 33,
+        "offset": 803
       },
       "end": {
-        "line": 38,
+        "line": 31,
         "col": 71,
-        "offset": 0
+        "offset": 842
       },
       "extra": {
-        "message": "The 'public_ip' value obtained from an external HTTP service response (line 36: public_ip_response.text) is directly interpolated into HTML via f-string at line 38 ({public_ip}) without sanitization. If the external IP service is compromised or returns malicious HTML/JavaScript, it will be rendered in the user's browser, enabling cross-site scripting.",
+        "message": "The application makes an HTTP GET request to a URL from the PUBLIC_IP_SERVICE_URL environment variable using requests.get() without validating the URL scheme, host, or destination. The response text (public_ip_response.text) is used directly in the HTML output and rendered through Jinja2 Template. If the URL is misconfigured or manipulated (e.g., pointing to internal services like http://169.254.169.254/metadata), the server can be used to probe internal networks, and the response content could inject malicious HTML or template expressions.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+            "CWE-918: Server-Side Request Forgery (SSRF)"
           ],
           "confidence": "MEDIUM",
           "category": "security"
@@ -77,21 +77,21 @@
       }
     },
     {
-      "check_id": "python.secrets.hardcoded-credential-name",
+      "check_id": "python.security.hardcoded-credentials.name",
       "path": "app/config.py",
       "start": {
         "line": 13,
-        "col": 21,
-        "offset": 0
+        "col": 1,
+        "offset": 277
       },
       "end": {
         "line": 13,
-        "col": 33,
-        "offset": 0
+        "col": 35,
+        "offset": 312
       },
       "extra": {
-        "message": "SUPER_SECRET_NAME is hardcoded as the string literal \"John Ripper\" in source code instead of being loaded from an environment variable or secret store. Anyone with access to the source code obtains this credential. The FIXME comment indicates this is a known issue that should use os.getenv().",
-        "severity": "WARNING",
+        "message": "The SUPER_SECRET_NAME is hardcoded as \"John Ripper\" in the source code instead of being loaded from environment variables or a secure secret store. The FIXME comment confirms this should use os.getenv(). Hardcoded credentials in source code cannot be rotated without changing the code and are visible to anyone with access to the repository.",
+        "severity": "INFO",
         "metadata": {
           "cwe": [
             "CWE-798: Use of Hard-coded Credentials"
@@ -102,21 +102,21 @@
       }
     },
     {
-      "check_id": "python.secrets.hardcoded-credential-token",
+      "check_id": "python.security.hardcoded-credentials.token",
       "path": "app/config.py",
       "start": {
         "line": 15,
-        "col": 22,
-        "offset": 0
+        "col": 1,
+        "offset": 353
       },
       "end": {
         "line": 15,
-        "col": 39,
-        "offset": 0
+        "col": 41,
+        "offset": 394
       },
       "extra": {
-        "message": "SUPER_SECRET_TOKEN is hardcoded as the string literal \"5u93R53Cr3tT0k3n\" in source code instead of being loaded from an environment variable or secret store. Anyone with access to the source code obtains this sensitive token. The FIXME comment indicates this is a known issue that should use os.getenv().",
-        "severity": "WARNING",
+        "message": "The SUPER_SECRET_TOKEN is hardcoded as \"5u93R53Cr3tT0k3n\" in the source code instead of being loaded from environment variables or a secure secret store. The FIXME comment confirms this should use os.getenv(). Hardcoded credentials in source code cannot be rotated without changing the code and are visible to anyone with access to the repository.",
+        "severity": "INFO",
         "metadata": {
           "cwe": [
             "CWE-798: Use of Hard-coded Credentials"
@@ -132,21 +132,46 @@
       "start": {
         "line": 14,
         "col": 5,
-        "offset": 0
+        "offset": 318
       },
       "end": {
         "line": 14,
         "col": 23,
-        "offset": 0
+        "offset": 336
       },
       "extra": {
-        "message": "FastAPI is initialized with debug=config.DEBUG (line 14), which is controlled by the DEBUG environment variable (config.py line 9). When enabled, FastAPI's debug mode exposes detailed error traces including source code and local variables in error responses. The .env_temp template file ships with DEBUG=True, risking information exposure in production if used directly.",
+        "message": "The FastAPI application is initialized with debug=config.DEBUG, which enables detailed error pages with stack traces and sensitive information when DEBUG is True. The .env_temp file sets DEBUG=True by default, and docker-compose.yaml passes the DEBUG environment variable through. In production, debug mode can expose source code paths, environment variables, and internal application state.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
             "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
           ],
-          "confidence": "MEDIUM",
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.misconfiguration.waf-disabled",
+      "path": "caddy/Caddyfile",
+      "start": {
+        "line": 13,
+        "col": 13,
+        "offset": 168
+      },
+      "end": {
+        "line": 13,
+        "col": 29,
+        "offset": 185
+      },
+      "extra": {
+        "message": "The Web Application Firewall (Coraza WAF) rule engine is explicitly set to Off (SecRuleEngine Off), meaning all defined security rules \u2014 including SSTI blocking (rule 1001), SQL injection blocking (rule 1002), XSS blocking (rule 1003), and directory traversal blocking (rule 1004) \u2014 are inactive and will not block any attacks. This completely negates the intended protection layer for the known application vulnerabilities.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
           "category": "security"
         }
       }

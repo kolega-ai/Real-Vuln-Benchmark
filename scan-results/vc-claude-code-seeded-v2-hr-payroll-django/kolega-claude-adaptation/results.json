@@ -1,0 +1,1244 @@
+{
+  "version": "twin-distill-flash-r4",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 108
+      },
+      "end": {
+        "line": 108
+      },
+      "extra": {
+        "message": "Missing Authentication on Payroll Ops Endpoint",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def payroll_identity_ping_336(request):\n    handle = request.POST.get(\"handle\") or request.GET.get(\"handle\", \"\")\n    channel = request.POST.get(\"channel\") or request.GET.get(\"channel\", \"pin\")\n    return JsonResponse({\"status\": \"queued\", \"handle\": handle, \"channel\": channel})",
+          "proof": "SOURCE: HTTP request (POST/GET params) arrives at a publicly-routed URL with zero authentication checks. Unlike every other function in payroll_operations.py, payroll_identity_ping_336 does NOT call _wrk_gate() (line 108). SINK: The function body at lines 109-111 processes untrusted handle/channel parameters and returns them in JSON. An unauthenticated remote attacker can reach this endpoint and probe identity handles without any token."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 40
+      },
+      "end": {
+        "line": 40
+      },
+      "extra": {
+        "message": "Path Traversal in File Read",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "packet_ref = request.GET.get(\"packet_ref\", \"payroll-summary.csv\")\nparcel_path = BASE_EXPORT_DIR / packet_ref\ntry:\n    data = parcel_path.read_text()",
+          "proof": "SOURCE: request.GET.get('packet_ref') provides an attacker-controlled string. SINK: packet_ref is concatenated with BASE_EXPORT_DIR using pathlib's / operator (line 40) then read via .read_text() (line 42). An attacker can supply packet_ref=../../etc/passwd to traverse outside BASE_EXPORT_DIR and read arbitrary files the server process can access. Guarded by _wrk_gate but exploitable if token is known/leaked."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-918",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 51
+      },
+      "end": {
+        "line": 51
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery (SSRF)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "citation": "relay_ref = request.GET.get(\"url\", \"http://127.0.0.1/status\")\nwith urllib.request.urlopen(relay_ref, timeout=3) as response:",
+          "proof": "SOURCE: relay_ref is taken directly from the 'url' GET parameter (line 51). SINK: urllib.request.urlopen(relay_ref) makes an outbound HTTP request to the attacker-chosen URL (line 52). An attacker can scan internal networks, hit cloud metadata endpoints (169.254.169.254), or probe other services behind the firewall."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-502",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 79
+      },
+      "end": {
+        "line": 79
+      },
+      "extra": {
+        "message": "Insecure Deserialization via pickle.loads",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "citation": "raw = request.body or request.GET.get(\"blob\", \"\").encode(\"utf-8\")\nif request.GET.get(\"wrap\") == \"b64\":\n    raw = base64.b64decode(raw)\nif not raw:\n    raw = b\"\\x80\\x04}q\\x00.\"\nbundle = pickle.loads(raw)",
+          "proof": "SOURCE: raw is populated from request.body or the 'blob' GET parameter (line 74), optionally base64-decoded (line 76). SINK: pickle.loads(raw) deserializes attacker-controlled pickled data (line 79). Pickle deserialization can execute arbitrary Python code via crafted __reduce__ payloads, leading to full remote code execution on the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-94",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 97
+      },
+      "end": {
+        "line": 97
+      },
+      "extra": {
+        "message": "Arbitrary Code Execution via eval()",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "citation": "expr = request.GET.get(\"expr\", \"amount + fee\")\nresult = eval(expr, {\"__builtins__\": {}}, {\"amount\": 42, \"fee\": 7})",
+          "proof": "SOURCE: the 'expr' GET parameter (line 96) is attacker-controlled. SINK: eval(expr, ...) evaluates the expression as Python code (line 97). Although __builtins__ is restricted, a determined attacker can break out via introspection (e.g., ()).__class__.__bases__[0].__subclasses__()) to access os.system and achieve RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1336",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 139
+      },
+      "end": {
+        "line": 139
+      },
+      "extra": {
+        "message": "Server-Side Template Injection (Jinja2 SSTI)",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "citation": "fragment = request.GET.get(\"fragment\", \"{{ 7 * 7 }}\")\nbody = Template(\"Result: \" + fragment).render()",
+          "proof": "SOURCE: fragment is taken from the 'fragment' GET parameter (line 138). SINK: it is concatenated directly into a Jinja2 Template string and .render() is called (line 139). An attacker can inject Jinja2 template syntax like {{ config.__class__.__init__.__globals__['os'].popen('id').read() }} to execute arbitrary shell commands on the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-78",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 156
+      },
+      "end": {
+        "line": 156
+      },
+      "extra": {
+        "message": "OS Command Injection via os.system()",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "citation": "host = request.GET.get(\"host\", \"127.0.0.1\")\nstatus = _os.system(\"ping -c 1 \" + host)",
+          "proof": "SOURCE: host is taken directly from the 'host' GET parameter (line 155). SINK: host is concatenated into a shell command string passed to os.system() (line 156). An attacker can supply host=;id or host=$(id) to execute arbitrary OS commands. The attempt to hide os as _os does not prevent this."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-943",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 165
+      },
+      "end": {
+        "line": 165
+      },
+      "extra": {
+        "message": "NoSQL Injection via MongoDB find_one",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "citation": "query = payload.get(\"filter\", payload)\ndoc = MongoClient(os.environ.get(\"MONGO_URL\", \"mongodb://localhost:27017\")).ops.records.find_one(query)",
+          "proof": "SOURCE: payload is parsed from the request body (line 163), and query is derived from it (line 164). SINK: the query dict is passed directly to MongoDB's find_one() (line 165). An attacker can inject NoSQL operators like {\"$ne\": \"\"} or {\"$where\": \"1\"} to bypass authentication logic, extract data, or trigger DoS via crafted MongoDB queries."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-611",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 196
+      },
+      "end": {
+        "line": 196
+      },
+      "extra": {
+        "message": "XML External Entity (XXE) Injection",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-611"
+          ],
+          "citation": "parser = etree.XMLParser(load_dtd=True, resolve_entities=True, no_network=False)\ndoc = etree.fromstring(request.body, parser)",
+          "proof": "SOURCE: request.body is parsed as XML (line 197). SINK: etree.XMLParser is configured with load_dtd=True, resolve_entities=True, no_network=False (line 196), which enables DTD loading and external entity resolution. An attacker can send an XML payload defining an external entity pointing to /etc/passwd or a local service, exfiltrating file contents through error messages or the parsed document."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-942",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 130
+      },
+      "end": {
+        "line": 130
+      },
+      "extra": {
+        "message": "Permissive CORS with Credential Reflection",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "citation": "origin = request.headers.get(\"origin\", \"*\")\nresponse[\"Access-Control-Allow-Origin\"] = origin\nresponse[\"Access-Control-Allow-Credentials\"] = \"true\"",
+          "proof": "SOURCE: the Origin request header is reflected directly (line 128). SINK: Access-Control-Allow-Origin is set to the attacker-controlled origin value and Access-Control-Allow-Credentials is set to 'true' (lines 130-131). Any attacker website can make authenticated cross-origin requests (carrying cookies) to this endpoint and read the response, leading to credential exfiltration and CSRF-style data theft."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 148
+      },
+      "end": {
+        "line": 148
+      },
+      "extra": {
+        "message": "Arbitrary File Write via Path Traversal",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "name = request.GET.get(\"name\", \"packet.bin\")\ntarget = BASE_EXPORT_DIR / name\ntarget.parent.mkdir(parents=True, exist_ok=True)\ntarget.write_bytes(request.body)",
+          "proof": "SOURCE: name is taken from the 'name' GET parameter (line 145) and request.body provides the content (line 148). SINK: the name is concatenated with BASE_EXPORT_DIR (line 146) and written to disk (line 148). An attacker can supply name=../../app/evil.py to write arbitrary files outside the intended directory, potentially achieving code execution by overwriting Python files or adding malicious modules."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 189
+      },
+      "end": {
+        "line": 189
+      },
+      "extra": {
+        "message": "Information Disclosure of Environment and Paths",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "payload = {\"trace\": trace_on, \"module\": os.environ.get(\"DJANGO_SETTINGS_MODULE\"), \"base\": str(BASE_EXPORT_DIR)}",
+          "proof": "SOURCE: os.environ.get() reads internal configuration (line 189). SINK: the DJANGO_SETTINGS_MODULE env var and BASE_EXPORT_DIR path are returned in the HTTP response (line 190). An attacker learns the Python module path and filesystem layout, aiding further attacks against the application."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 85
+      },
+      "end": {
+        "line": 85
+      },
+      "extra": {
+        "message": "Mass Assignment via workset.update()",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "workset.update(payload)",
+          "proof": "SOURCE: payload is parsed from the JSON request body or POST form (lines 80-83) and is attacker-controlled. SINK: workset.update(payload) merges the entire attacker-controlled dict into the workset object (line 85). An attacker can overwrite any key, such as setting {\"role\": \"admin\", \"approved\": true} to escalate privileges or bypass approval checks. Gated behind _wrk_gate but exploitable by anyone with the internal ops token."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1004",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 100
+      },
+      "end": {
+        "line": 100
+      },
+      "extra": {
+        "message": "Cookie Set Without Secure/HttpOnly/SameSite Flags",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1004"
+          ],
+          "citation": "response.set_cookie(\"portal_crumb\", marker)",
+          "proof": "SOURCE: marker is taken from the 'marker' GET parameter (line 98). SINK: set_cookie() is called with no secure, httponly, or samesite flags (line 100). The cookie will be sent over unencrypted HTTP and is accessible to JavaScript, making it stealable via XSS or network sniffing. Gated behind _wrk_gate but exploitable by anyone with the internal ops token."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-843",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 61
+      },
+      "end": {
+        "line": 61
+      },
+      "extra": {
+        "message": "Type Confusion / State Manipulation via User Payload",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-843"
+          ],
+          "citation": "ledger[\"state\"] = payload.get(\"state\", request.GET.get(\"state\", \"approved\"))",
+          "proof": "SOURCE: payload is parsed from the request body (lines 54-57) and amount is derived from user input (line 58). SINK: the ledger state and balance are modified directly from user-controlled values (lines 60-61). An attacker can set {\"amount\": 999999, \"state\": \"bypassed\"} to manipulate financial ledger state, causing unauthorized balance changes or status manipulation. Gated behind _wrk_gate but exploitable by anyone with the internal ops token."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1021",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 167
+      },
+      "end": {
+        "line": 167
+      },
+      "extra": {
+        "message": "Security Headers Intentionally Disabled",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-1021"
+          ],
+          "citation": "response[\"X-XSS-Protection\"] = \"0\"\nresponse[\"Content-Security-Policy\"] = \"\"",
+          "proof": "SINK: Lines 167-168 explicitly disable X-XSS-Protection and empty the Content-Security-Policy response header. This removes browser-based XSS defenses and allows clickjacking. Gated behind _wrk_gate but the endpoint echoes arbitrary origin values (payroll_origin_mirror_373), expanding cross-origin attack surface."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-95",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 92
+      },
+      "end": {
+        "line": 92
+      },
+      "extra": {
+        "message": "Eval Injection in Formula Evaluator",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-95"
+          ],
+          "citation": "result = eval(expr, {\"__builtins__\": {}}, {\"amount\": 42, \"fee\": 7})",
+          "proof": "SOURCE: request.GET['expr'] is passed to eval() (line 91-92). SINK: eval() executes the attacker-controlled expression. Removing __builtins__ is trivially bypassed via class hierarchy traversal such as ().__class__.__bases__[0].__subclasses__(), allowing arbitrary Python code execution. Gated behind _wrk_gate but a single request gives RCE to any holder of the ops token."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 103
+      },
+      "end": {
+        "line": 103
+      },
+      "extra": {
+        "message": "Missing Authentication Gate on Internal Ops Endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "def payroll_identity_ping_336(request):\n    handle = request.POST.get(\"handle\") or request.GET.get(\"handle\", \"\")\n    channel = request.POST.get(\"channel\") or request.GET.get(\"channel\", \"pin\")\n    return JsonResponse({\"status\": \"queued\", \"handle\": handle, \"channel\": channel})",
+          "proof": "Every other function in this module enforces _wrk_gate(request), but this endpoint at line 103 has no gate. Any unauthenticated user can reach /ops/identity/payroll-ping-336/ and submit handles/channels, making it an authentication bypass in the internal operations surface \u2014 an attacker can probe the internal ops surface without any token."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "portal_api/models.py",
+      "start": {
+        "line": 75
+      },
+      "end": {
+        "line": 75
+      },
+      "extra": {
+        "message": "Plaintext Storage of Webhook HMAC Secret",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "secret = models.CharField(max_length=128)",
+          "proof": "The shared secret used to HMAC-sign webhook payloads is stored in the database as plaintext CharField (line 75). A database read via SQL injection, backup leak, or compromised admin account directly exposes the secret, allowing an attacker to forge valid webhook signatures and impersonate the application to downstream systems."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "templates/employees/detail.html",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "Sensitive PII (Partial SSN and Bank Account) Exposed to Non-HR Roles",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "{{ employee.national_id_last4|default:\"\u2014\" }}\n{{ employee.bank_account_last4|default:\"\u2014\" }}",
+          "proof": "SOURCE: EmployeeProfile.national_id_last4 and bank_account_last4 fields stored in the database. GATE: employees/views.py:employee_detail uses @any_role_required + get_visible_employee_or_404 \u2014 for payroll_specialists this returns ALL employees (employees/services.py:28), and for managers it returns direct reports (employees/services.py:31). SINK: templates/employees/detail.html:25-26 unconditionally renders these fields with NO role check. A payroll specialist (or manager viewing a direct report) browsing to /employees/<id>/ receives the last 4 digits of that employee's national ID and bank account number without any server-side stripping of these sensitive identifiers."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "onboarding/views.py",
+      "start": {
+        "line": 32
+      },
+      "end": {
+        "line": 32
+      },
+      "extra": {
+        "message": "Payroll Specialists Can View All Employees' Onboarding Tasks",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "return qs  # read-only consumers; UI hides actions",
+          "proof": "SOURCE: authenticated user with role=payroll_specialist. GATE: @any_role_required decorator (accounts/decorators.py:66) allows payroll_specialist. SINK: onboarding/views.py:_visible_tasks_for at line 32 returns OnboardingTask.objects.all() for any payroll_specialist with zero scoping. The task_list view (line 54) and task_detail view (line 67) both use this function. A payroll specialist can GET /onboarding/ and see EVERY employee's task titles, descriptions, assignee names, statuses, and due dates, and GET /onboarding/<id>/ to see full task details including review notes for employees they have no legitimate relationship with."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "portal_api/views.py",
+      "start": {
+        "line": 203
+      },
+      "end": {
+        "line": 203
+      },
+      "extra": {
+        "message": "CSRF Protection Disabled on Session-Authenticated POST Endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@csrf_exempt\n@require_http_methods([\"POST\"])\ndef receive_test_webhook(request):",
+          "proof": "SOURCE: A cross-origin POST request carrying the victim's session cookie. GATE: _auth_user_for_json (portal_api/views.py:29) returns request.user directly when authenticated. SINK: @csrf_exempt at line 203 explicitly disables Django's CSRF token validation, which is the only protection for session-authenticated POST endpoints. While SameSite=Lax (settings.py:88) blocks most cross-origin POST cookie sending, this endpoint remains exploitable from same-origin gadgets, older browsers without SameSite support, or subdomain takeovers."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "compensation/views.py",
+      "start": {
+        "line": 41
+      },
+      "end": {
+        "line": 41
+      },
+      "extra": {
+        "message": "Payroll Specialists Can View Full Salary History of Every Employee",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "if user.role == \"payroll_specialist\":\n        return True",
+          "proof": "SOURCE: authenticated user with role=payroll_specialist. GATE: employee_compensation view (compensation/views.py:46) uses @any_role_required, then get_visible_employee_or_404(request.user, employee_id) \u2014 employees/services.py:28 returns ALL employees for payroll_specialists. Then _can_view_compensation_history at line 41 returns True, granting access to history_qs = employee.compensation_records.order_by('-effective_date', '-created_at') (line 49) which returns ALL compensation records. A payroll specialist can visit /compensation/employees/<id>/history/ for ANY employee (including executives, managers in other departments) and view their full salary history including base salary amounts, bonus targets, effective dates, and who created the record."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "employees/views_import_export.py",
+      "start": {
+        "line": 265
+      },
+      "end": {
+        "line": 265
+      },
+      "extra": {
+        "message": "CSV Formula Injection in Payroll Export",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "yield writer.writerow([\n                emp.employee_number,\n                emp.user.display_name,\n                emp.department.name if emp.department else \"\",\n                f\"{r.base_salary:.2f}\",\n                f\"{r.bonus_target:.2f}\",\n                r.currency,\n                r.effective_date.isoformat() if r.effective_date else \"\",\n                emp.manager.display_name if emp.manager else \"\",\n            ])",
+          "proof": "SOURCE: emp.user.display_name is built from first_name/last_name set by _import_employees (line 153) with no formula-character sanitization; emp.department.name is set by _import_departments (line 98) also unsanitized. SINK: csv.writer at line 265 emits these strings raw into payroll_export.csv without prefixing formula-starting characters ('=', '+', '-', '@'). When an HR/payroll user opens the CSV in Excel or LibreOffice, a payload like '=cmd|'/C calc'!A0' embedded in a display_name or department name will execute client-side. The export at line 228 is @hr_or_payroll_required, but the payload is persistent in the DB from import time."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "employees/views_import_export.py",
+      "start": {
+        "line": 306
+      },
+      "end": {
+        "line": 306
+      },
+      "extra": {
+        "message": "CSV Formula Injection in Onboarding Export",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "yield writer.writerow([\n                emp.employee_number,\n                emp.user.display_name,\n                t.title,\n                t.status,\n                t.due_date.isoformat() if t.due_date else \"\",\n                t.submitted_at.isoformat() if t.submitted_at else \"\",\n                t.reviewed_at.isoformat() if t.reviewed_at else \"\",\n                t.reviewed_by.username if t.reviewed_by else \"\",\n            ])",
+          "proof": "SOURCE: t.title is set by HR admins via TaskCreateForm (onboarding/forms.py line 9) with no formula-character sanitization; emp.user.display_name is imported from CSV at line 153 also unsanitized. SINK: csv.writer at line 306 emits these strings raw into onboarding_export.csv. Same CWE-1236 class as the payroll export \u2014 a formula payload in a task title (e.g., '=DDE|cmd|'/C calc'!A0') executes when the CSV is opened in a spreadsheet application."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-601",
+      "path": "portal_core/views.py",
+      "start": {
+        "line": 169
+      },
+      "end": {
+        "line": 169
+      },
+      "extra": {
+        "message": "Open Redirect via Notification Link",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-601"
+          ],
+          "citation": "if note.link:\n        return redirect(note.link)",
+          "proof": "SOURCE: note.link is a Notification model field (CharField max_length=255, portal_core/models.py line 36) accepting arbitrary strings with no URL scheme or domain validation. All current callers of notify() use Django's reverse() for internal URLs only, but there is no guard preventing an external URL from being stored. SINK: redirect(note.link) at line 169 performs no validation that the URL is internal. An attacker who can create or manipulate a Notification record (e.g., via direct DB access, a compromised admin account, or a future code path) can set note.link to 'https://evil.com' and victims clicking 'mark read' on a notification are silently redirected to the attacker-controlled site."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "portal_api/views.py",
+      "start": {
+        "line": 204
+      },
+      "end": {
+        "line": 204
+      },
+      "extra": {
+        "message": "Leftover Debug/Test Echo Endpoint Exposed in Production",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "@csrf_exempt\n@require_http_methods([\"POST\"])\ndef receive_test_webhook(request):\n    \"\"\"Local-only stub: developers can POST here to verify the API surface.\"\"\"\n    user = _auth_user_for_json(request)\n    if user is None:\n        return JsonResponse({\"detail\": \"Authentication required.\"}, status=401)\n    try:\n        body = json.loads(request.body or b\"{}\")\n    except json.JSONDecodeError:\n        return JsonResponse({\"detail\": \"Invalid JSON.\"}, status=400)\n    return JsonResponse({\"echoed\": body, \"by\": user.username})",
+          "proof": "The receive_test_webhook endpoint (routed at /api/v1/dev/echo/ via portal_api/urls.py line 11) is documented as a 'Local-only stub' but has no IP restriction, no DEBUG-only guard, and no feature flag to disable it in production. While it requires authentication via _auth_user_for_json, it is @csrf_exempt and echoes arbitrary JSON input back with the authenticated user's username. This exposes internal API surface intended only for development and could facilitate information gathering about the API surface or serve as a CSRF target."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "employees/views_import_export.py",
+      "start": {
+        "line": 346
+      },
+      "end": {
+        "line": 346
+      },
+      "extra": {
+        "message": "CSV Formula Injection in Policy Acknowledgements Export",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "yield writer.writerow([\n                emp.employee_number,\n                emp.user.display_name,\n                a.policy.code,\n                a.policy.title,\n                a.version_acknowledged,\n                a.acknowledged_at.isoformat() if a.acknowledged_at else \"\",\n            ])",
+          "proof": "SOURCE: emp.user.display_name is imported from CSV at line 153 (first_name/last_name) without formula sanitization; a.policy.code and a.policy.title are set by HR admins via PolicyForm/PolicyEditForm (policies/forms.py lines 6, 22) with no stripping of formula characters. SINK: csv.writer at line 346 emits these values raw into policy_acknowledgements_export.csv. When an hr_admin or payroll_specialist opens the exported CSV, an injected payload like '=cmd|'/C calc'!A0' stored in a display_name or policy title executes client-side in the spreadsheet application."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "hr_portal/settings.py",
+      "start": {
+        "line": 112
+      },
+      "end": {
+        "line": 112
+      },
+      "extra": {
+        "message": "Hardcoded Default Database Credentials",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "\"USER\": os.environ.get(\"POSTGRES_USER\", \"hr_portal\"),\n\"PASSWORD\": os.environ.get(\"POSTGRES_PASSWORD\", \"hr_portal\")",
+          "proof": "SOURCE/SINK: settings.py supplies the publicly known fallback values 'hr_portal'/'hr_portal' for the PostgreSQL user and password when POSTGRES_USER/POSTGRES_PASSWORD environment variables are not set. Any deployment that omits these environment variables connects to the database using these hardcoded defaults. An attacker who can reach the PostgreSQL service (e.g., via lateral movement, container exposure, or misconfigured network) can authenticate with these well-known credentials and read/modify all employee, compensation, document, and audit data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 118
+      },
+      "end": {
+        "line": 118
+      },
+      "extra": {
+        "message": "Hardcoded Verifier PINs in Payroll Identity Endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "known = {\"north\": \"4812\", \"south\": \"5930\"}",
+          "proof": "SOURCE/SINK: payroll_identity_hint_363 hardcodes the verifier PINs as a 4-digit map at line 118. After bypassing the INTERNAL_OPS_TOKEN gate (which itself uses a non-constant-time comparison at line 21), an attacker immediately obtains the exact PINs for both supported handles (north=4812, south=5930) and can pass the verifier check without guessing. The 4-digit space is trivially brute-forceable even if the map values were unknown."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-208",
+      "path": "hr_portal/payroll_operations.py",
+      "start": {
+        "line": 21
+      },
+      "end": {
+        "line": 21
+      },
+      "extra": {
+        "message": "Timing Side-Channel in Internal Ops Token Gate",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-208"
+          ],
+          "citation": "return bool(gate_value and request.headers.get(\"x-internal-token\") == gate_value)",
+          "proof": "SOURCE: the attacker-controlled x-internal-token header is compared against the secret INTERNAL_OPS_TOKEN using Python's standard string equality operator == at line 21. SINK: == short-circuits on the first mismatched byte, producing response-time differences that leak the number of matching prefix bytes. A remote attacker can measure these differences to reconstruct the token byte-by-byte and bypass the internal-ops gate. The project already uses hmac.compare_digest for invite/API-key comparisons (accounts/views.py lines 36-37) demonstrating awareness of constant-time comparison, but this gate does not use it."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "accounts/views.py",
+      "start": {
+        "line": 53
+      },
+      "end": {
+        "line": 53
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Login Endpoint Enables Brute-Force Attacks",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "class PortalLoginView(auth_views.LoginView):\n    template_name = \"accounts/login.html\"\n    authentication_form = PortalLoginForm\n    redirect_authenticated_user = True",
+          "proof": "SOURCE: PortalLoginView at line 53 inherits from Django's LoginView with no throttling middleware, no django-ratelimit decorator, and no custom dispatch() rate check. The form_invalid method at line 66 logs failures but never pauses, counts attempts, or locks accounts. SINK: An attacker can POST unlimited username/password pairs to /accounts/login/ against any user account at network speed. Django's built-in password validators provide no protection against online guessing; the audit log is purely passive. Without any back-off or lockout, brute-force attacks are trivially feasible."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "accounts/views.py",
+      "start": {
+        "line": 100
+      },
+      "end": {
+        "line": 100
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Password Reset Endpoint Enables Email Enumeration and Spam",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "class PortalPasswordResetView(auth_views.PasswordResetView):\n    template_name = \"accounts/password_reset_form.html\"\n    email_template_name = \"accounts/password_reset_email.txt\"\n    subject_template_name = \"accounts/password_reset_subject.txt\"\n    form_class = PortalPasswordResetForm\n    success_url = reverse_lazy(\"accounts:password_reset_done\")",
+          "proof": "SOURCE: PortalPasswordResetView at line 100 has no throttling on the POST handler. Django's PasswordResetView always redirects to the done page regardless of email validity, but the underlying email-sending creates observable side effects. SINK: An attacker can POST to /accounts/password/reset/ with arbitrary email addresses, causing the system to send reset emails to non-existent addresses (wasting email resources) or repeatedly to valid addresses (spam). No rate limit means thousands of requests per minute are feasible, enabling resource exhaustion and harassment."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "accounts/views.py",
+      "start": {
+        "line": 165
+      },
+      "end": {
+        "line": 165
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Password Change Endpoint",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@login_required\ndef change_password_view(request):\n    if request.method == \"POST\":\n        form = PortalPasswordChangeForm(user=request.user, data=request.POST)",
+          "proof": "SOURCE: change_password_view at line 165 accepts POST from any authenticated user with no throttling. SINK: An attacker with a hijacked session cookie can fire unlimited password-change attempts. Although the old password is required via PortalPasswordChangeForm, the lack of rate limiting allows high-speed guessing of the current password through this side channel if a session is hijacked (e.g., via XSS or physical access) without triggering any lockout."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "accounts/views.py",
+      "start": {
+        "line": 200
+      },
+      "end": {
+        "line": 200
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Invite Creation Enables Invitation Spam",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@hr_admin_required\ndef invite_create(request):\n    if request.method == \"POST\":\n        form = InviteCreateForm(request.POST)\n        if form.is_valid():\n            invite = form.save(commit=False)\n            new_token = secrets.token_urlsafe(32)\n            invite.token_hash = _hash_invite_token(new_token)\n            invite.invited_by = request.user\n            invite.expires_at = timezone.now() + timedelta(days=INVITE_TTL_DAYS)\n            invite.save()",
+          "proof": "SOURCE: invite_create view at line 200 requires @hr_admin_required but skips rate limiting on POST. SINK: Each valid POST creates a new Invite row in the database, generates a 256-bit invite token, and calls send_mail() to the target address. A compromised or malicious HR admin (or an attacker who obtains a valid hr_admin session via the login brute-force in CWE-307) can create thousands of invitation records, filling the database and spamming arbitrary email addresses. The fail_silently=True on send_mail hides errors, making abuse easy without detection in logs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "hr_portal/settings.py",
+      "start": {
+        "line": 145
+      },
+      "end": {
+        "line": 145
+      },
+      "extra": {
+        "message": "Session Persists After Browser Close, Increasing Hijacking Window",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "SESSION_EXPIRE_AT_BROWSER_CLOSE = False",
+          "proof": "SOURCE: settings.py line 145 sets SESSION_EXPIRE_AT_BROWSER_CLOSE = False and line 146 sets SESSION_COOKIE_AGE = 28800 (8 hours). SINK: Django omits the Expires header tied to the browser session, so the session cookie survives browser restarts within the 8-hour window. EXPLOITABILITY: An attacker who gains physical access to an unlocked workstation after the user has closed and reopened the browser can reuse the session. On shared or corporate devices this is directly exploitable."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "hr_portal/settings.py",
+      "start": {
+        "line": 40
+      },
+      "end": {
+        "line": 40
+      },
+      "extra": {
+        "message": "Hardcoded Django SECRET_KEY Fallback in Source Code",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "SECRET_KEY = \"dev-insecure-key-do-not-use-in-production\"",
+          "proof": "SOURCE: settings.py line 40 contains a hardcoded SECRET_KEY string. GATE: The fallback activates only when DJANGO_SECRET_KEY is unset AND DEBUG=True (lines 38-40). SINK: .env.example sets DJANGO_DEBUG=1 (line 5) and does not set DJANGO_SECRET_KEY, so a user who copies .env.example to .env unchanged runs with this well-known key. EXPLOITABILITY: With a publicly known SECRET_KEY, an attacker can forge session cookies, CSRF tokens, password reset tokens, and invite HMACs, enabling complete account takeover."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "accounts/views.py",
+      "start": {
+        "line": 97
+      },
+      "end": {
+        "line": 97
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Password Reset Endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "class PortalPasswordResetView(auth_views.PasswordResetView):\n    template_name = \"accounts/password_reset_form.html\"\n    email_template_name = \"accounts/password_reset_email.txt\"",
+          "proof": "SOURCE: PortalPasswordResetView at accounts/views.py line 97 extends Django's PasswordResetView with no rate-limiting decorator, CAPTCHA, or throttling. SINK: An unauthenticated attacker can submit unlimited password reset requests. EXPLOITABILITY: (1) Email bombing \u2014 flooding a victim's inbox with reset emails sent via the configured console/SMTP backend. (2) User enumeration \u2014 Django's PasswordResetView only sends email for existing accounts; timing or delivery side-channels let an attacker distinguish valid from invalid emails."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "portal_core/management/commands/seed_data.py",
+      "start": {
+        "line": 45
+      },
+      "end": {
+        "line": 45
+      },
+      "extra": {
+        "message": "Hardcoded Weak Bootstrap Password in Seed Command",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "DEMO_PASSWORD = \"password-1234\"",
+          "proof": "SOURCE: seed_data.py line 45 defines DEMO_PASSWORD as the literal string \"password-1234\". SINK: The seed command uses this password for all four demo accounts (hr.admin, payroll.lead, manager.demo, employee.demo) and for the Django superuser (username \"bootstrap\"), as shown at line 115 (`password=DEMO_PASSWORD`). EXPLOITABILITY: Running `manage.py seed_data` creates privileged accounts protected only by a publicly known, weak password, enabling complete account takeover of any seeded account including the superuser."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "portal_api/services.py",
+      "start": {
+        "line": 71
+      },
+      "end": {
+        "line": 71
+      },
+      "extra": {
+        "message": "Webhook Event Payloads Written to Local Log File",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "with open(log_path, \"a\", encoding=\"utf-8\") as fh:\n    fh.write(\n        json.dumps(\n            {\n                \"delivery_id\": record.id,\n                \"endpoint_id\": endpoint.id,\n                \"target_url\": endpoint.target_url,\n                \"event\": event_type,\n                \"signature_sha256\": signature,\n                \"body\": body,\n                \"delivered_at\": record.delivered_at.isoformat() if record.delivered_at else \"\",\n            }\n        )",
+          "proof": "SOURCE: fire_webhook at services.py line 71 serializes the full event payload into `body` (line 67: `json.dumps({\"event\": event_type, \"data\": payload})`). SINK: The complete payload including `body` is appended to a flat file at WEBHOOK_DELIVERY_LOG (default: `media/webhook_deliveries.log`). EXPLOITABILITY: Compensation, employee, and policy events may contain PII or salary data. The log file is in the MEDIA_ROOT directory, potentially accessible via the web server, and is readable by anyone with filesystem access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "hr_portal/settings.py",
+      "start": {
+        "line": 184
+      },
+      "end": {
+        "line": 184
+      },
+      "extra": {
+        "message": "Console Email Backend Exposes Password Reset and Invite Tokens",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "EMAIL_BACKEND = \"django.core.mail.backends.console.EmailBackend\"",
+          "proof": "SOURCE: settings.py line 184 configures the console email backend. SINK: Every outgoing email (password reset links, invite links) is printed to stdout instead of being sent via SMTP. EXPLOITABILITY: With the LOGGING config in settings.py capturing all stdout to console handlers, password reset tokens and invite tokens from email bodies are written to application logs. Anyone with log access can extract these tokens to reset any user's password or accept any invite."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "env.example",
+      "start": {
+        "line": 4
+      },
+      "end": {
+        "line": 4
+      },
+      "extra": {
+        "message": "Example Config Ships with Hardcoded Weak SECRET_KEY",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "DJANGO_SECRET_KEY=change-me-to-a-long-random-string-for-local-dev-only",
+          "proof": "SOURCE: .env.example line 4 contains a non-random, hardcoded string `change-me-to-a-long-random-string-for-local-dev-only`. SINK: If copied to .env unchanged, this guessable value is loaded by `os.environ.get(\"DJANGO_SECRET_KEY\")` at settings.py line 37. EXPLOITABILITY: With a guessable SECRET_KEY, an attacker can forge Django session cookies, CSRF tokens, password reset tokens, and invite-link HMACs, enabling complete account takeover."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "env.example",
+      "start": {
+        "line": 5
+      },
+      "end": {
+        "line": 5
+      },
+      "extra": {
+        "message": "Example Config Enables Debug Mode by Default",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "DJANGO_DEBUG=1",
+          "proof": "SOURCE: .env.example line 5 sets DJANGO_DEBUG=1. SINK: When copied to .env unchanged, `_env_bool(\"DJANGO_DEBUG\", default=False)` at settings.py line 35 evaluates to True. EXPLOITABILITY: DEBUG=True enables verbose stack traces on errors (exposing source code and configuration), disables SECURE_SSL_REDIRECT and SECURE_HSTS, sets SESSION_COOKIE_SECURE and CSRF_COOKIE_SECURE to False, and activates the hardcoded development SECRET_KEY fallback (line 40), collectively enabling session hijacking, information disclosure, and cryptographic forgery."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "accounts/views.py",
+      "start": {
+        "line": 337
+      },
+      "end": {
+        "line": 337
+      },
+      "extra": {
+        "message": "HR Admin Can Edit Other Admin Accounts",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "target = get_object_or_404(User, pk=user_id)",
+          "proof": "SOURCE: The admin_user_edit view at accounts/views.py line 337 loads any User by user_id from the URL. GATE: The only guard (line 338) blocks editing if `target.is_superuser and request.user.pk != target.pk`. SINK: An authenticated hr_admin can supply any non-superuser user_id, including other hr_admin accounts, and modify their role, email, or active status through AdminUserForm. EXPLOITABILITY: A hr_admin can escalate privileges by changing another hr_admin's role to a higher permission set, or lock out an admin by deactivating their account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "accounts/views.py",
+      "start": {
+        "line": 390
+      },
+      "end": {
+        "line": 390
+      },
+      "extra": {
+        "message": "HR Admin Can Disable Other Admin Accounts",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "target.is_active = not target.is_active",
+          "proof": "SOURCE: admin_user_toggle_active at accounts/views.py line 390 toggles is_active on the loaded User. GATE: The only guards are (line 385) preventing self-disable and (line 388) preventing disabling the superuser. SINK: An authenticated hr_admin can POST to /accounts/admin/users/<other_hr_admin_id>/toggle/ to disable any other hr_admin. EXPLOITABILITY: A hr_admin can deny access to a fellow privileged account, causing a permanent denial of service for that administrator."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "hr_requests/views.py",
+      "start": {
+        "line": 32
+      },
+      "end": {
+        "line": 32
+      },
+      "extra": {
+        "message": "Payroll Specialists Can View All HR Request Types Including Sensitive Non-Payroll Requests",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "if user.is_superuser or user.role in {\"hr_admin\", \"payroll_specialist\"}: return qs",
+          "proof": "_visible_requests_for() at line 32 grants payroll_specialists unfiltered access to ALL HRRequest rows via the queryset returned at line 33. Unlike document scoping (where payroll_specialists are restricted to PAYSLIP/TAX_FORM), this function applies no request_type filter. A payroll_specialist can read TIME_OFF (which may contain medical/leave reasons), BENEFITS (healthcare elections), EQUIPMENT requests, and GENERAL requests for every employee in the system. Data flow: payroll_specialist role -> _visible_requests_for returns all rows -> rendered in request_list.html or accessed via detail views. No request_type scoping is applied at any layer."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "portal_core/files.py",
+      "start": {
+        "line": 59
+      },
+      "end": {
+        "line": 59
+      },
+      "extra": {
+        "message": "File Upload Content-Type Validation Trusts User-Supplied Header With No Magic-Byte Inspection",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "content_type = (getattr(file, \"content_type\", \"\") or \"\").lower()\nif content_type and content_type not in ALLOWED_UPLOAD_CONTENT_TYPES:\n    raise SuspiciousFileOperation(f'Unsupported file type: {content_type}.')",
+          "proof": "validate_upload() at line 59 reads file.content_type, which Django populates from the HTTP Content-Type header sent by the client \u2014 entirely user-controlled. An attacker can set Content-Type: application/octet-stream (an allowed type at line 30) and upload any file content (executable, HTML with JavaScript, shell script). No magic-byte inspection, MIME sniffing protection, or content analysis is performed. The uploaded file is then stored to disk via the file field save. Trust boundary: attacker-controlled HTTP header -> file.content_type -> allowlist gate. Since application/octet-stream is whitelisted, the gate always passes for any binary payload."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "portal_api/models.py",
+      "start": {
+        "line": 77
+      },
+      "end": {
+        "line": 77
+      },
+      "extra": {
+        "message": "Webhook Signing Secret Stored in Plaintext Database Column",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "secret = models.CharField(max_length=128)",
+          "proof": "WebhookEndpoint.secret is defined as a plain CharField at line 77 with no encryption or hashing. In portal_api/services.py line 64 the secret is read from the database and used directly as an HMAC key: hmac.new(endpoint.secret.encode('utf-8'), body.encode('utf-8'), hashlib.sha256).hexdigest(). If an attacker gains database access (via SQL injection, backup exposure, or DBA compromise) they retrieve all webhook signing secrets in plaintext and can forge webhook payloads, impersonate the portal to external services, or verify forged callbacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "documents/forms.py",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "Payroll Specialists Can Upload Payslips With visible_to_employee=False, Hiding Documents From Employees",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "fields = [\"employee\", \"category\", \"title\", \"description\", \"visible_to_employee\"]",
+          "proof": "DocumentUploadForm at line 16 exposes the visible_to_employee boolean field. In documents/views.py lines 138-143, the payroll_specialist role check only validates the category (must be PAYSLIP/TAX_FORM), not the visibility flag. At line 147, form.save(commit=False) binds POST data directly \u2014 including visible_to_employee \u2014 with no server-side override forcing True. A payroll specialist can set visible_to_employee=False when uploading a PAYSLIP, and the employee will be unable to view their own payslip (enforced by _visible_documents_for at line 73 which filters visible_to_employee=True for employee-scoped queries)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "portal_api/views.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "No Rate Limiting on Bearer Token API Key Authentication in JSON API Endpoints",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "header = request.META.get('HTTP_AUTHORIZATION', '')\nif header.startswith('Bearer '):\n    token = header[7:].strip()\n    api_key = authenticate_api_key(token)",
+          "proof": "The _auth_user_for_json helper at line 33 parses the Authorization: Bearer header and calls authenticate_api_key for every JSON API request. There is no throttling, lockout, or rate-limiting on failed authentication attempts across any of the 6 JSON API endpoints (whoami, employees_list, employee_detail, my_compensation, documents_list, policies_list). A grep for throttle/ratelimit in the entire codebase returned zero results. While API keys have high entropy (prefix + 32 bytes base64), the absence of rate limiting enables unbounded guesses per second, weakening defense-in-depth."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "portal_api/views.py",
+      "start": {
+        "line": 324
+      },
+      "end": {
+        "line": 324
+      },
+      "extra": {
+        "message": "Webhook Endpoints Do Not Enforce Creator Ownership (IDOR)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "obj = get_object_or_404(WebhookEndpoint, pk=webhook_id)",
+          "proof": "Any authenticated hr_admin can supply another admin's webhook_id to /api/webhooks/<id>/ (webhook_edit view). The view at line 324 loads WebhookEndpoint by primary key without filtering on created_by, so one admin can modify, delete, or otherwise interfere with another admin's endpoint. This violates object-level authorization."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "accounts/views.py",
+      "start": {
+        "line": 385
+      },
+      "end": {
+        "line": 385
+      },
+      "extra": {
+        "message": "Disabling a User Does Not Invalidate Existing Sessions",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "target.is_active = not target.is_active\ntarget.save(update_fields=[\"is_active\"])",
+          "proof": "An hr_admin toggles another user's active flag via POST /accounts/admin/users/<id>/toggle/ at line 385. Only the database flag changes; no Django session rows for that user are flushed. The disabled user keeps full access until their session cookie expires (up to SESSION_COOKIE_AGE). The same gap exists when disabling through AdminUserForm in admin_user_edit."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "accounts/views.py",
+      "start": {
+        "line": 172
+      },
+      "end": {
+        "line": 172
+      },
+      "extra": {
+        "message": "Password Change Does Not Revoke Other Active Sessions",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "update_session_auth_hash(request, user)",
+          "proof": "When a user changes their password via POST /accounts/password/change/ at line 172, update_session_auth_hash only refreshes the current session's hash. Any other sessions (for example, an attacker who obtained the old password via a stolen session cookie) remain valid for the remainder of the session lifetime."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "portal_api/models.py",
+      "start": {
+        "line": 36
+      },
+      "end": {
+        "line": 36
+      },
+      "extra": {
+        "message": "API Keys Have No Expiration \u2014 Perpetual Until Manual Revocation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "revoked_at = models.DateTimeField(null=True, blank=True)",
+          "proof": "The APIKey model (line 20-72) has created_at, last_used_at, and revoked_at fields but no expires_at field. Once generated via APIKey.generate(), an API key remains valid indefinitely \u2014 it will never auto-expire. The only way to invalidate a key is manual revocation via api_key_revoke(). authenticate_api_key() in portal_api/services.py only checks revoked_at__isnull=True with no expiry check. If a key is leaked (logs, clipboard, compromised client), the attacker retains perpetual API access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "employees/models.py",
+      "start": {
+        "line": 83
+      },
+      "end": {
+        "line": 83
+      },
+      "extra": {
+        "message": "Sensitive PII Stored Unencrypted in EmployeeProfile",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "date_of_birth = models.DateField(null=True, blank=True)\nnational_id_last4 = models.CharField(max_length=4, blank=True)\nbank_account_last4 = models.CharField(max_length=4, blank=True)\nhome_address = models.CharField(max_length=255, blank=True)\nphone = models.CharField(max_length=32, blank=True)\nemergency_contact = models.CharField(max_length=128, blank=True)",
+          "proof": "EmployeeProfile stores date of birth, national ID last-4, bank account last-4, home address, phone, and emergency contact as plaintext database columns at lines 83-88. A database compromise exposes this PII directly with no column-level encryption."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "documents/models.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "Uploaded HR Documents Stored Unencrypted",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "file = models.FileField(upload_to=document_upload_path, max_length=255)",
+          "proof": "HRDocument.file at line 50 stores payslips, tax forms, contracts, and ID verification documents on disk under MEDIA_ROOT using the configured storage backend without any encryption at rest. Compromise of the storage layer exposes all uploaded HR documents in plaintext."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "onboarding/models.py",
+      "start": {
+        "line": 46
+      },
+      "end": {
+        "line": 46
+      },
+      "extra": {
+        "message": "Onboarding evidence files stored unencrypted on disk",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "evidence_file = models.FileField(\n        upload_to=evidence_upload_path,\n        null=True,\n        blank=True,\n        max_length=255,\n    )",
+          "proof": "OnboardingTask.evidence_file uses Django's default FileSystemStorage, which stores uploaded files in cleartext on the filesystem. Employee-submitted evidence (e.g., passport scans, ID cards, certificates) is sensitive PII. While evidence_upload_path uses a non-guessable token for the filename, it does not encrypt the file content. An attacker who compromises the filesystem or storage backend can read all evidence files directly."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "accounts/forms.py",
+      "start": {
+        "line": 58
+      },
+      "end": {
+        "line": 58
+      },
+      "extra": {
+        "message": "Username enumeration via invite acceptance form",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "if User.objects.filter(username__iexact=username).exists():\n            raise forms.ValidationError(\"Username already taken.\")",
+          "proof": "RegisterFromInviteForm.clean_username queries the User table and raises a distinct 'Username already taken' error when the username exists. An attacker holding a valid invite token can probe /accounts/invites/accept/<token>/ with different username values and distinguish existing accounts from non-existing ones based on the error message."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "accounts/forms.py",
+      "start": {
+        "line": 77
+      },
+      "end": {
+        "line": 77
+      },
+      "extra": {
+        "message": "Email enumeration via profile update form",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "if qs.exists():\n            raise forms.ValidationError(\"Email already in use.\")",
+          "proof": "ProfileUpdateForm.clean_email queries the User table and returns a distinct 'Email already in use' error when the supplied email is already registered. Any authenticated user can probe arbitrary email addresses through /accounts/profile/ and distinguish registered accounts from unregistered ones based on the error message."
+        }
+      }
+    }
+  ]
+}

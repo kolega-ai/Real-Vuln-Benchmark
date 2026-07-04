@@ -1,0 +1,556 @@
+{
+  "results": [
+    {
+      "path": "backend/app/config.py",
+      "check_id": "kolega.claude-adaptation.hardcoded-credentials",
+      "start": {
+        "line": 9,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Hardcoded Default SECRET_KEY Used for Token Signing \u2014 Attacker can forge valid session tokens and API key HMACs for any user ID, leading to full authentication bypass and account takeover [verified: config.py hardcodes `secret_key` defaulting to the publicly known string 'dev-secret-do-not-use-in-production-this-is-long-enough' with no runtime guard, and security.py uses this value as the HMAC-SHA256 key for all session token and API key hashing \u2014 any attacker who knows the default (it's in the source) can forge valid token hashes for arbitrary user IDs.]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "kolega": {
+            "cluster_id": "hardcoded_credentials",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.insecure-deserialization",
+      "start": {
+        "line": 62,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Insecure Deserialization via pickle.loads on Attacker-Controlled Input \u2014 Full remote code execution on the server process; attacker can read secrets, exfiltrate data, pivot to internal network, or establish persistence [verified: The /ops/bundle/dispatch-thaw-172 endpoint passes the raw HTTP body (or base64-decoded query param) directly to pickle.loads() with no sanitization; the only control is _wrk_gate which checks a static X-Internal-Token header via non-constant-time comparison with no rate limiting, making the token itself recoverable. Any authenticated ops caller can achieve full RCE by sending crafted pickle bytes.]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_deserialization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.path-traversal",
+      "start": {
+        "line": 68,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Path Traversal in Vault Write Endpoint with Cleartext PII Storage \u2014 Arbitrary file write on the filesystem; also stores SSN and credit card numbers in plaintext files as a secondary sensitive data exposure [verified: The ref query param is used in BASE_EXPORT_DIR / f'{ref}.json' with no containment check, allowing path traversal (e.g., ref=../../app/config overwrites config.json); the same endpoint also writes attacker-supplied ssn and card fields to cleartext JSON, compounding the risk. Only the ops token gates access.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "kolega": {
+            "cluster_id": "path_traversal",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-at-rest",
+      "start": {
+        "line": 70,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Sensitive PII (SSN, Credit Card Numbers) Stored in Cleartext on Filesystem \u2014 SSN and credit card data stored unencrypted on the application server filesystem; any file read access results in PII breach [verified: The vault endpoint writes attacker-supplied ssn and card number fields as plaintext JSON to disk with no encryption; this violates PCI-DSS (plaintext PAN storage) and any file read access (via RCE from [0]/[1]/[2], backup exfiltration, or path traversal) directly exposes the PII.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_at_rest",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.code-injection",
+      "start": {
+        "line": 78,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Remote Code Execution via eval() on User-Controlled Expression \u2014 Full remote code execution; sandbox escape bypasses the empty __builtins__ restriction [verified: The expr query param is passed to eval() with only {'__builtins__': {}} as a restriction; this is a well-known non-sandbox since Python's object model is still reachable via ().__class__.__bases__[0].__subclasses__() allowing full sandbox escape and RCE. The only gate is the static ops token.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-95"
+          ],
+          "kolega": {
+            "cluster_id": "code_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.ssti",
+      "start": {
+        "line": 96,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Server-Side Template Injection (SSTI) via Jinja2 Template String Concatenation \u2014 Full server-side remote code execution through Jinja2 SSTI; no sandbox is applied [verified: The fragment query param is concatenated directly into a Jinja2 Template string (Template('Result: ' + fragment).render()) using the default unrestricted Environment, not SandboxedEnvironment; an attacker can inject {{ config.__class__.__init__.__globals__['os'].popen('id').read() }} for RCE. Only the static ops token stands between the attacker and exploitation.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "kolega": {
+            "cluster_id": "ssti",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.path-traversal",
+      "start": {
+        "line": 110,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Path Traversal via Unsanitized Filename Parameter in File Write Endpoint \u2014 Arbitrary file write anywhere on the filesystem writable by the process; can escalate to RCE by overwriting Python source files or inserting cron jobs [verified: The name query param is used directly in BASE_EXPORT_DIR / name with no Path.resolve() containment check; an attacker can supply name=../../etc/cron.d/backdoor to write arbitrary content outside the export directory. Only the static ops token gates access.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "kolega": {
+            "cluster_id": "path_traversal",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.nosql-injection",
+      "start": {
+        "line": 117,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "NoSQL Injection via Raw MongoDB Filter Passthrough \u2014 Extract arbitrary MongoDB records; bypass authentication or access controls within the ops MongoDB database [verified: payload.get('filter', payload) passes the entire JSON body as a MongoDB query filter to find_one() with no validation of operators; an attacker can inject $ne, $regex, $where, or other MongoDB operators to extract arbitrary records. Only the static ops token gates access.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "kolega": {
+            "cluster_id": "nosql_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.xxe",
+      "start": {
+        "line": 120,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "XML External Entity (XXE) Injection via lxml with DTD Resolution Enabled \u2014 Arbitrary local file read (e.g. /etc/passwd, .env with SECRET_KEY/DATABASE_URL) and SSRF to internal network services via external DTD fetching [verified: The lxml XMLParser is configured with load_dtd=True, resolve_entities=True, and no_network=False, and the full attacker-controlled request body is parsed; this enables classic XXE for local file read (file:// entities) and SSRF (HTTP entity fetches). No input sanitization exists beyond the ops token gate.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-611"
+          ],
+          "kolega": {
+            "cluster_id": "xxe",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/auth.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-exposure",
+      "start": {
+        "line": 186,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Plaintext Password Reset Tokens Written to Filesystem Log \u2014 Any attacker or process with read access to the upload directory can harvest valid password reset tokens and take over any user account [verified: The raw (unhashed) password reset token is explicitly written to `password_reset_tokens.log` on disk (auth.py ~line 186) while only the hash is stored in the DB; any process or user with filesystem read access to the parent of the uploads directory can harvest valid tokens within the 1-hour window and perform account takeover. No control sanitizes or removes this log file.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_exposure",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/webhooks.py",
+      "check_id": "kolega.claude-adaptation.ssrf",
+      "start": {
+        "line": 57,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Webhook SSRF - SSRF Guard Bypassed via DNS Rebinding and Not Enforced at Registration \u2014 Attacker can reach internal metadata services (AWS IMDS, GCP metadata), internal APIs, or other services not exposed externally; can exfiltrate IAM credentials in cloud environments [verified: The `_is_safe_url()` SSRF guard is never called at webhook registration time \u2014 ops_admin can store any URL including `http://169.254.169.254/` directly in the DB \u2014 and at delivery time there is a classic DNS rebinding TOCTOU: `socket.getaddrinfo()` resolves once for the check and `urllib.request.urlopen()` performs a second independent resolution, allowing a rebind from a passing public IP to a pr]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "kolega": {
+            "cluster_id": "ssrf",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/config.py",
+      "check_id": "kolega.claude-adaptation.insecure-cookie",
+      "start": {
+        "line": 13,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Session Cookie Missing Secure Flag by Default \u2014 Session cookies transmitted over unencrypted HTTP connections are vulnerable to network interception and session hijacking [verified: config.py sets `cookie_secure=False` by default and auth.py passes `secure=settings.cookie_secure` when setting the session cookie, meaning cookies are transmitted over plain HTTP unless COOKIE_SECURE is explicitly set in the environment; combined with `allow_credentials=True` in CORS middleware, sessions are exposed to network interception on any non-TLS deployment.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_cookie",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-in-logs",
+      "start": {
+        "line": 34,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Sensitive Credentials Logged in Cleartext (Authorization Header and Request Body) \u2014 Anyone with log read access (ops team, SIEM, log aggregators) can obtain plaintext credentials and authorization tokens from the log stream [verified: logger.warning logs both the full request body and the Authorization header verbatim at WARNING level; any credential or token submitted to this endpoint is permanently written to log stores accessible to ops staff, SIEM systems, and anyone who compromises log infrastructure.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_in_logs",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.denial-of-service",
+      "start": {
+        "line": 81,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Denial of Service via Unbounded count Parameter Causing Memory Exhaustion \u2014 Server memory exhaustion leading to process crash or OOM kill; denial of service for all users [verified: The count query param is passed to range(count) with no upper bound; an attacker can send count=2147483647 causing the server to allocate gigabytes of memory in a list comprehension, exhausting RAM and causing an OOM kill that denies service to all users.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "kolega": {
+            "cluster_id": "denial_of_service",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.hardcoded-credentials",
+      "start": {
+        "line": 86,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Hardcoded PIN Credentials with No Rate Limiting \u2014 Attacker can brute-force the 4-digit PINs to authenticate as 'north' or 'south' handles; credential exposure in source code [verified: PINs are hardcoded in source code as 4-digit values ('north':'4812','south':'5930') with no rate limiting and non-constant-time comparison; an attacker with the ops token can enumerate all 10,000 possible PINs in seconds to authenticate as either handle.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "kolega": {
+            "cluster_id": "hardcoded_credentials",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.misconfiguration",
+      "start": {
+        "line": 93,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CORS Origin Reflection with Credentials Allowed (CORS Bypass) \u2014 Any website the victim visits can make authenticated cross-origin requests to this endpoint using the victim's session cookies, enabling CSRF-style data exfiltration [verified: The endpoint reflects the Origin request header directly as Access-Control-Allow-Origin combined with Access-Control-Allow-Credentials: true, completely bypassing the restrictive global CORSMiddleware for this endpoint; however, direct browser exploitation is constrained because the endpoint requires X-Internal-Token which is not in the global CORS allow_headers list, blocking cross-origin browser]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-16"
+          ],
+          "kolega": {
+            "cluster_id": "misconfiguration",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.weak-prng",
+      "start": {
+        "line": 108,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Weak Pseudo-Random Number Generator Used for Nonce/Code Generation \u2014 If generated codes are used for security-sensitive purposes (e.g. OTPs, tokens), they are predictable after observing sufficient output [verified: The nonce endpoint uses random.choice (Mersenne Twister) instead of secrets.choice; the MT19937 state is fully recoverable after observing 624 outputs, allowing an attacker to predict all future nonces generated by this endpoint or any other random usage in the process.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-338"
+          ],
+          "kolega": {
+            "cluster_id": "weak_prng",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 124,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Client-Controlled Privilege Escalation via ops_badge Cookie/Header \u2014 Any caller with the INTERNAL_OPS_TOKEN can self-assign elevated privileges including full payroll and casework access [verified: The badge cookie or x-ops-badge header is client-supplied and used without any server-side session or role verification to gate elevated access (payroll: full, casework: open); any ops token holder can self-elevate by simply setting x-ops-badge: lead in the request.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-269"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/auth.py",
+      "check_id": "kolega.claude-adaptation.missing-rate-limiting",
+      "start": {
+        "line": 86,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing Rate Limiting on Login and Password Reset Endpoints \u2014 Unlimited brute-force of user passwords and password reset tokens; combined with the plaintext token log file, enables trivial account takeover [verified: No rate-limiting library, middleware, account lockout, or attempt counter exists anywhere in the codebase (confirmed by searching requirements.txt, main.py, deps.py, and auth.py); both the /login and /password-reset/request endpoints accept unlimited unauthenticated requests, enabling brute-force of passwords and enumeration of reset tokens.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "kolega": {
+            "cluster_id": "missing_rate_limiting",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.weak-authentication",
+      "start": {
+        "line": 17,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Non-Constant-Time Comparison of INTERNAL_OPS_TOKEN Enables Timing Attack \u2014 Attacker can brute-force/recover the INTERNAL_OPS_TOKEN via timing oracle, then exploit all RCE and path traversal endpoints behind the gate [verified: _wrk_gate uses Python's != string comparison (not hmac.compare_digest) with no rate limiting; while timing attacks over the internet are difficult due to network jitter, the absence of any rate limiting allows statistical averaging over millions of requests to recover the token, and on a low-latency network the attack is straightforwardly feasible.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-208"
+          ],
+          "kolega": {
+            "cluster_id": "weak_authentication",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-exposure",
+      "start": {
+        "line": 27,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Internal Filesystem Path Disclosed in Error Response \u2014 Discloses the private export directory path via crafted input, aiding path traversal attacks [verified: The error message includes both the attacker-controlled lot_ref value and BASE_EXPORT_DIR in a RuntimeError that is serialized into the HTTP 500 JSON response, disclosing the internal export directory path to any ops token holder.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_exposure",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.open-redirect",
+      "start": {
+        "line": 39,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Open Redirect via Unvalidated lane Parameter \u2014 Phishing attacks, OAuth token theft, and social engineering by abusing the trusted dispatch domain as a redirect proxy [verified: The lane query param is passed directly to RedirectResponse(lane) with no URL validation, enabling arbitrary external redirects; however practical phishing exploitation is limited because the gate requires X-Internal-Token as a custom header which browsers do not include in followed link requests, so only already-authenticated callers can trigger it.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-601"
+          ],
+          "kolega": {
+            "cluster_id": "open_redirect",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-exposure",
+      "start": {
+        "line": 130,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Sensitive Environment Variable and Path Disclosure via Trace Endpoint \u2014 Discloses server environment type and private export directory path, aiding attackers in chaining path traversal and other attacks [verified: The trace endpoint returns APP_ENV and the BASE_EXPORT_DIR path directly to any ops token holder; this discloses the exact filesystem path needed to calibrate path traversal payloads for findings [5] and [6].]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_exposure",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    }
+  ]
+}

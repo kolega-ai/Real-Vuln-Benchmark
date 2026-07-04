@@ -5,17 +5,17 @@
       "check_id": "python.security.injection.sql-injection",
       "path": "routes/signup.py",
       "start": {
-        "line": 15,
-        "col": 9,
+        "line": 16,
+        "col": 13,
         "offset": 0
       },
       "end": {
         "line": 18,
-        "col": 16,
+        "col": 15,
         "offset": 0
       },
       "extra": {
-        "message": "User input from form.registration_code.data is concatenated directly into SQL query using f-string. The validate_token function constructs a raw SQL query with user-controlled 'code' parameter, allowing SQL injection attacks.",
+        "message": "User input from 'code' parameter is directly interpolated into a SQL query using f-string formatting. The validate_token function executes: text(f\"SELECT id, code FROM {RegistrationCode.__tablename__} WHERE code = '{code}'\"). This allows SQL injection attacks.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -31,16 +31,16 @@
       "path": "routes/account.py",
       "start": {
         "line": 33,
-        "col": 13,
+        "col": 9,
         "offset": 0
       },
       "end": {
         "line": 33,
-        "col": 47,
+        "col": 45,
         "offset": 0
       },
       "extra": {
-        "message": "User input from request.args.get('search') is concatenated directly into SQL query using f-string. The search route constructs a raw SQL LIKE clause with user-controlled input, allowing SQL injection attacks.",
+        "message": "User input from 'search' query parameter is directly interpolated into a SQL LIKE clause using f-string: text(f\"text like '%{search_param}%'\"). This allows SQL injection attacks via the search functionality.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -52,24 +52,24 @@
       }
     },
     {
-      "check_id": "python.security.deserialization.pickle-insecure",
-      "path": "routes/account.py",
+      "check_id": "python.security.ssrf.ssrf",
+      "path": "utils/profile_image.py",
       "start": {
-        "line": 118,
-        "col": 9,
+        "line": 7,
+        "col": 5,
         "offset": 0
       },
       "end": {
-        "line": 118,
-        "col": 42,
+        "line": 8,
+        "col": 25,
         "offset": 0
       },
       "extra": {
-        "message": "Insecure deserialization using pickle.loads() on user-controlled cookie data. The 'preferences' cookie is base64 decoded and passed directly to pickle.loads(), allowing remote code execution via crafted pickle payloads.",
+        "message": "urlopen() is called with a user-controlled URL from form input without any validation or allowlist. This allows Server-Side Request Forgery (SSRF) attacks, enabling attackers to make requests to internal services, cloud metadata endpoints (169.254.169.254), or other restricted networks.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-502: Deserialization of Untrusted Data"
+            "CWE-918: Server-Side Request Forgery (SSRF)"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -77,32 +77,7 @@
       }
     },
     {
-      "check_id": "python.security.ssrf.request-open",
-      "path": "routes/account.py",
-      "start": {
-        "line": 60,
-        "col": 13,
-        "offset": 0
-      },
-      "end": {
-        "line": 61,
-        "col": 38,
-        "offset": 0
-      },
-      "extra": {
-        "message": "Server-Side Request Forgery (SSRF) vulnerability. User-controlled URL from form.url.data is passed to get_base64_image_blob() which uses urllib.request.urlopen() to fetch arbitrary URLs, allowing access to internal services and resources.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-918: Server-Side Request Forgery"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.injection.ssti",
+      "check_id": "python.security.xss.template-injection",
       "path": "app.py",
       "start": {
         "line": 31,
@@ -115,11 +90,11 @@
         "offset": 0
       },
       "extra": {
-        "message": "Server-Side Template Injection (SSTI) vulnerability. User-controlled request.path is concatenated into a template string passed to render_template_string(), allowing execution of arbitrary Jinja2 template code.",
+        "message": "render_template_string() is used with an f-string containing user-controlled input 'request.path'. This creates a Server-Side Template Injection (SSTI) vulnerability that can lead to Remote Code Execution. Additionally, the rendered content is passed to the template as 'detailed_message' which may be rendered without proper escaping.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+            "CWE-94: Code Injection"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -127,7 +102,107 @@
       }
     },
     {
-      "check_id": "python.security.auth.missing-auth",
+      "check_id": "python.security.xss.stored-xss",
+      "path": "templates/home.html",
+      "start": {
+        "line": 31,
+        "col": 26,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 44,
+        "offset": 0
+      },
+      "extra": {
+        "message": "User-controlled note text is rendered with the '| safe' Jinja2 filter, which disables auto-escaping. Since the note creation form uses CKEditor (rich text editor), stored XSS payloads can be embedded in note text and will execute when other users view the notes.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting (XSS)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.reflected-xss",
+      "path": "templates/search.html",
+      "start": {
+        "line": 9,
+        "col": 80,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 95,
+        "offset": 0
+      },
+      "extra": {
+        "message": "User-controlled search parameter is rendered directly in the template as 'value=\"{{search}}\"'. While Jinja2 auto-escaping helps with HTML entities, this is still vulnerable to XSS if the attribute context is not properly handled. An attacker can inject payloads like '\" onclick=\"alert(1)\" x=\"'.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting (XSS)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.deserialization.insecure-deserialization",
+      "path": "routes/account.py",
+      "start": {
+        "line": 118,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 118,
+        "col": 43,
+        "offset": 0
+      },
+      "extra": {
+        "message": "pickle.loads() is called on user-controlled data from the 'preferences' cookie without any validation. Insecure deserialization can lead to Remote Code Execution by crafting malicious pickle payloads that execute arbitrary Python code during deserialization.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.hardcoded-credentials",
+      "path": "app.py",
+      "start": {
+        "line": 11,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Hardcoded secret key 'super secret key' is used for Flask session management. This weak secret can be easily guessed, allowing attackers to forge session cookies and impersonate users including administrators.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.missing-authentication",
       "path": "routes/account.py",
       "start": {
         "line": 68,
@@ -136,11 +211,11 @@
       },
       "end": {
         "line": 95,
-        "col": 25,
+        "col": 22,
         "offset": 0
       },
       "extra": {
-        "message": "Missing authentication on sensitive route. The update_account POST endpoint lacks @login_required decorator, allowing unauthenticated users to modify account data including passwords.",
+        "message": "The '/account' POST endpoint (update_account function) is missing the @login_required decorator. This allows unauthenticated users to update account information. Additionally, the function uses 'current_user' which may reference an unauthenticated anonymous user, but still proceeds with updates.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -152,45 +227,20 @@
       }
     },
     {
-      "check_id": "python.security.auth.missing-auth",
-      "path": "routes/account.py",
+      "check_id": "python.security.access-control.idor",
+      "path": "routes/notes.py",
       "start": {
-        "line": 98,
+        "line": 39,
         "col": 1,
         "offset": 0
       },
       "end": {
-        "line": 106,
-        "col": 17,
+        "line": 52,
+        "col": 24,
         "offset": 0
       },
       "extra": {
-        "message": "Missing authentication on route. The toggle_darkmode POST endpoint lacks @login_required decorator, allowing unauthenticated users to modify user preferences and potentially exploit pickle deserialization chain.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-306: Missing Authentication for Critical Function"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.auth.broken-access-control",
-      "path": "routes/account.py",
-      "start": {
-        "line": 41,
-        "col": 1,
-        "offset": 0
-      },
-      "end": {
-        "line": 48,
-        "col": 52,
-        "offset": 0
-      },
-      "extra": {
-        "message": "Insecure Direct Object Reference (IDOR) vulnerability. The get_personal_notes route accepts a user_id parameter but does not verify that the current user is authorized to view that user's notes, allowing access to other users' private notes.",
+        "message": "The delete_note function retrieves and deletes a note by ID without verifying that the note belongs to the current user. Any authenticated user can delete any other user's notes by sending a POST request to /notes/<any_note_id>/delete.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -202,24 +252,24 @@
       }
     },
     {
-      "check_id": "python.security.auth.broken-access-control",
-      "path": "routes/notes.py",
+      "check_id": "python.security.access-control.idor",
+      "path": "routes/account.py",
       "start": {
-        "line": 39,
+        "line": 41,
         "col": 1,
         "offset": 0
       },
       "end": {
-        "line": 52,
-        "col": 21,
+        "line": 48,
+        "col": 49,
         "offset": 0
       },
       "extra": {
-        "message": "Missing authorization check. The delete_note route verifies the note exists but does not check if the current user owns the note before deletion, allowing users to delete other users' notes.",
+        "message": "The get_personal_notes function accepts a user_id parameter from the URL and returns notes for that user without verifying that the requested user_id matches the current authenticated user. This allows any authenticated user to view any other user's personal notes.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-862: Missing Authorization"
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -227,7 +277,7 @@
       }
     },
     {
-      "check_id": "python.security.mass-assignment",
+      "check_id": "python.security.access-control.privilege-escalation",
       "path": "routes/account.py",
       "start": {
         "line": 76,
@@ -235,166 +285,16 @@
         "offset": 0
       },
       "end": {
-        "line": 81,
-        "col": 50,
-        "offset": 0
-      },
-      "extra": {
-        "message": "Mass Assignment vulnerability allowing privilege escalation. The update_account route updates current_user.__dict__ with all form data including is_admin field, allowing users to escalate privileges to administrator.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.xss.unsafe-template",
-      "path": "templates/home.html",
-      "start": {
-        "line": 31,
-        "col": 1,
-        "offset": 0
-      },
-      "end": {
-        "line": 31,
-        "col": 48,
-        "offset": 0
-      },
-      "extra": {
-        "message": "Cross-Site Scripting (XSS) vulnerability. The note.text variable is rendered with |safe filter which disables Jinja2 auto-escaping, allowing stored XSS attacks via malicious note content.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-79: Cross-site Scripting"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.xss.unsafe-template",
-      "path": "templates/404.html",
-      "start": {
-        "line": 6,
-        "col": 1,
-        "offset": 0
-      },
-      "end": {
-        "line": 6,
-        "col": 28,
-        "offset": 0
-      },
-      "extra": {
-        "message": "Cross-Site Scripting (XSS) vulnerability. The detailed_message variable is rendered without escaping in the template. Since detailed_message comes from render_template_string with user-controlled request.path, this allows reflected XSS attacks.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-79: Cross-site Scripting"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.xss.unsafe-template",
-      "path": "templates/search.html",
-      "start": {
-        "line": 18,
-        "col": 1,
-        "offset": 0
-      },
-      "end": {
-        "line": 18,
+        "line": 91,
         "col": 70,
         "offset": 0
       },
       "extra": {
-        "message": "Cross-Site Scripting (XSS) vulnerability. The render_table macro is called with safe_columns=['text'] parameter which disables HTML escaping for the 'text' column, allowing stored XSS via note text content.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-79: Cross-site Scripting"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.xss.unsafe-template",
-      "path": "templates/personal_notes.html",
-      "start": {
-        "line": 16,
-        "col": 1,
-        "offset": 0
-      },
-      "end": {
-        "line": 16,
-        "col": 70,
-        "offset": 0
-      },
-      "extra": {
-        "message": "Cross-Site Scripting (XSS) vulnerability. The render_table macro is called with safe_columns=['text'] parameter which disables HTML escaping for the 'text' column, allowing stored XSS via note text content.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-79: Cross-site Scripting"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.secrets.hardcoded",
-      "path": "app.py",
-      "start": {
-        "line": 11,
-        "col": 1,
-        "offset": 0
-      },
-      "end": {
-        "line": 11,
-        "col": 34,
-        "offset": 0
-      },
-      "extra": {
-        "message": "Hardcoded cryptographic secret. The Flask secret_key is hardcoded as 'super secret key' which allows attackers to forge session cookies and bypass authentication.",
+        "message": "The update_account function accepts 'is_admin' from form data (AccountForm includes is_admin field) and updates the current user's __dict__ with form data including is_admin. This allows any user to escalate privileges to administrator by submitting is_admin=true in the form data.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.secrets.hardcoded",
-      "path": "db_seed.py",
-      "start": {
-        "line": 9,
-        "col": 1,
-        "offset": 0
-      },
-      "end": {
-        "line": 10,
-        "col": 50,
-        "offset": 0
-      },
-      "extra": {
-        "message": "Hardcoded credentials. A static registration code 'a36e990b-0024-4d55-b74a-f8d7528e1764' is hardcoded in the database seeding logic, which can be used to gain unauthorized access.",
-        "severity": "INFO",
-        "metadata": {
-          "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
+            "CWE-269: Improper Privilege Management"
           ],
           "confidence": "HIGH",
           "category": "security"

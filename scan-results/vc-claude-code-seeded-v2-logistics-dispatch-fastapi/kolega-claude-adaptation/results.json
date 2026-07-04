@@ -1,0 +1,1685 @@
+{
+  "version": "twin-distill-flash-r4",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "backend/app/config.py",
+      "start": {
+        "line": 9
+      },
+      "end": {
+        "line": 9
+      },
+      "extra": {
+        "message": "Hardcoded Cryptographic Secret Key used for HMAC token signing",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "secret_key: str = \"dev-secret-do-not-use-in-production-this-is-long-enough\"",
+          "proof": "SOURCE: The Settings class (config.py:9) compiles this static default value, loaded when no .env file provides a real secret. SINK: Used by security.py hash_token() as the HMAC-SHA256 key to hash session tokens, API keys, and password-reset tokens. An attacker who knows this static key can forge arbitrary session tokens and API key hashes, bypassing authentication entirely. The comment itself confirms it is a development secret that was never changed."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-502",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 61
+      },
+      "end": {
+        "line": 61
+      },
+      "extra": {
+        "message": "Remote Code Execution via pickle.loads on attacker-controlled bytes",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "citation": "bundle = pickle.loads(raw)",
+          "proof": "SOURCE: HTTP request body is read at line 59 (await request.body()), and if empty falls through to query parameter 'blob' at line 60, optionally base64-decoded at line 62. All three paths are fully attacker-controlled. SINK: pickle.loads(raw) at line 64 deserializes without any allowlist or integrity check. A crafted pickle payload executes arbitrary Python code via __reduce__ on the server. The _wrk_gate restricts access to holders of INTERNAL_OPS_TOKEN, but if the token is unset the gate is bypassed entirely (\"if not gate_value\")."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-94",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 76
+      },
+      "end": {
+        "line": 76
+      },
+      "extra": {
+        "message": "Arbitrary Code Execution via eval() on user-controlled expression",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "citation": "result = eval(expr, {\"__builtins__\": {}}, {\"amount\": 42, \"fee\": 7})",
+          "proof": "SOURCE: Query parameter 'expr' (line 75) is attacker-controlled, defaulting to \"amount + fee\". SINK: eval(expr, ...) at line 76 evaluates the expression with restricted builtins, but Python's eval sandbox is trivially bypassed (e.g., payload using __class__.__mro__ chains to regain access to os.system). The INTERNAL_OPS_TOKEN gate is the only barrier."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1336",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 110
+      },
+      "end": {
+        "line": 110
+      },
+      "extra": {
+        "message": "Server-Side Template Injection (SSTI) via Jinja2 with string concatenation",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "citation": "body = Template(\"Result: \" + fragment).render()",
+          "proof": "SOURCE: Query parameter 'fragment' (line 108) is attacker-controlled, defaulting to \"{{ 7 * 7 }}\". SINK: Concatenated directly into a Jinja2 Template string at line 110 before .render(). An attacker can inject arbitrary Jinja2 template expressions for RCE (e.g., fragment={{ cycler.__init__.__globals__.os.popen('id').read() }}). The response is HTMLResponse."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-611",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 158
+      },
+      "end": {
+        "line": 158
+      },
+      "extra": {
+        "message": "XML External Entity (XXE) Injection via lxml parser with DTD enabled",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-611"
+          ],
+          "citation": "parser = etree.XMLParser(load_dtd=True, resolve_entities=True, no_network=False)\ndoc = etree.fromstring(await request.body(), parser)",
+          "proof": "SOURCE: The HTTP request body (line 159) is attacker-controlled XML. SINK: etree.fromstring() with a parser configured with load_dtd=True, resolve_entities=True, no_network=False (line 157-158), enabling DTD loading, entity expansion, and network resolution. An attacker can exfiltrate local files via out-of-band DTD (e.g., <!ENTITY xxe SYSTEM \"file:///etc/passwd\">) or perform SSRF via <!ENTITY xxe SYSTEM \"http://attacker.com/data\">."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-943",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 133
+      },
+      "end": {
+        "line": 133
+      },
+      "extra": {
+        "message": "NoSQL Injection via unsanitized MongoDB query from user JSON payload",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "citation": "query = payload.get(\"filter\", payload)\ndoc = MongoClient(os.environ.get(\"MONGO_URL\", \"mongodb://localhost:27017\")).ops.records.find_one(query)",
+          "proof": "SOURCE: HTTP JSON body (line 131) is fully attacker-controlled. SINK: Line 132-133 takes the user's JSON and uses it directly as a MongoDB filter query in find_one(). An attacker can inject MongoDB operators like $regex, $where, $ne to bypass intended query logic, extract data from other documents (e.g., {\"$ne\": \"\"} matches everything), or potentially execute JavaScript via $where."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 116
+      },
+      "end": {
+        "line": 116
+      },
+      "extra": {
+        "message": "Path Traversal via unsanitized filename parameter allows arbitrary file write",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "target = BASE_EXPORT_DIR / name\ntarget.parent.mkdir(parents=True, exist_ok=True)\ntarget.write_bytes(body)",
+          "proof": "SOURCE: Query parameter 'name' (line 114) is attacker-controlled, defaulting to \"packet.bin\". SINK: Path concatenated at line 116 with no sanitization, then written at line 118. An attacker can set name=../../tmp/evil.sh to write arbitrary file content (the request body) outside the intended BASE_EXPORT_DIR directory, achieving arbitrary file write."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 69
+      },
+      "end": {
+        "line": 69
+      },
+      "extra": {
+        "message": "Path Traversal via unsanitized 'ref' parameter allows arbitrary JSON file write",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "ref = request.query_params.get(\"ref\", payload.get(\"ref\", \"daily\"))\ntarget = BASE_EXPORT_DIR / f\"{ref}.json\"\ntarget.write_text(json.dumps({\"ref\": ref, \"ssn\": payload.get(\"ssn\", \"111-22-3333\"), \"card\": payload.get(\"card\", \"4111111111111111\")}))",
+          "proof": "SOURCE: Query parameter 'ref' (line 68) is attacker-controlled. SINK: Concatenated into a path at line 69 without sanitization, then written at line 71. An attacker can use ref=../../tmp/evil to write JSON data (including SSN and credit card fields mirrored from the body) to an arbitrary .json location. The .json extension limits but does not prevent the traversal."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-601",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 39
+      },
+      "end": {
+        "line": 39
+      },
+      "extra": {
+        "message": "Open Redirect via user-controlled 'lane' parameter in RedirectResponse location",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-601"
+          ],
+          "citation": "return RedirectResponse(lane)",
+          "proof": "SOURCE: Query parameter 'lane' (line 38) is attacker-controlled, defaulting to \"/\". SINK: Passed directly as the URL to RedirectResponse at line 39 with no validation. An attacker can redirect victims to external phishing sites (e.g., lane=https://evil.com/phish) by crafting a link to /ops/after/dispatch-afterlane-021?lane=https://evil.com."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-942",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 103
+      },
+      "end": {
+        "line": 103
+      },
+      "extra": {
+        "message": "Permissive CORS with Allow-Credentials echoes arbitrary Origin header",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "citation": "origin = request.headers.get(\"origin\", \"*\")\nresponse.headers[\"Access-Control-Allow-Origin\"] = origin\nresponse.headers[\"Access-Control-Allow-Credentials\"] = \"true\"",
+          "proof": "SOURCE: The Origin HTTP request header (line 101) is attacker-controlled, defaulting to \"*\". SINK: Echoed back as the Access-Control-Allow-Origin header at line 103, with Access-Control-Allow-Credentials: true set at line 104. Any attacker's website can make credentialed cross-origin requests to this endpoint, and the browser will allow reading the response, leaking sensitive data and enabling CSRF-style attacks against the dispatch_operations endpoints."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "Information disclosure via error message reflecting user-controlled lot_ref",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "raise RuntimeError(f\"failed to import {lot_ref} from {BASE_EXPORT_DIR}\")\nreturn JSONResponse({\"status\": \"failed\", \"error\": str(exc), \"debug_type\": exc.__class__.__name__}, status_code=500)",
+          "proof": "SOURCE: Query parameter 'lot_ref' (line 23) is attacker-controlled. SINK: Its value is embedded in a RuntimeError message at line 25 and the full exception error string is returned in the JSON response at line 27. This leaks the BASE_EXPORT_DIR path and internal debug_type (exception class name), revealing implementation details to an attacker."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 87
+      },
+      "end": {
+        "line": 87
+      },
+      "extra": {
+        "message": "Information disclosure via verbose validation error responses",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "content={\"detail\": \"Validation failed\", \"errors\": exc.errors()[:10]},",
+          "proof": "UNTRUSTED SOURCE: malformed request body (user-controlled) -> SINK: `exc.errors()[:10]` returned in 422 response (line 87). The comment on line 84 claims to 'not leak internal validator error structure' but `exc.errors()` exposes field names, expected types, and rejected input values, giving attackers reconnaissance data about the API schema."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 93
+      },
+      "end": {
+        "line": 93
+      },
+      "extra": {
+        "message": "Reflected XSS via Jinja safe filter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "body = Template(\"{{ card|safe }}\").render(card=card)",
+          "proof": "UNTRUSTED SOURCE: `card` query parameter (default '<b>pending</b>', line 91). SINK: Jinja's `|safe` filter disables auto-escaping (line 93) and the result is returned as `HTMLResponse` (line 94), so a JavaScript payload executes in the victim's browser."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-208",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 18
+      },
+      "end": {
+        "line": 18
+      },
+      "extra": {
+        "message": "Timing attack on internal ops token comparison",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-208"
+          ],
+          "citation": "if not gate_value or request.headers.get(\"x-internal-token\") != gate_value:",
+          "proof": "UNTRUSTED SOURCE: request header 'x-internal-token'. SINK: Python's `!=` comparison is not constant-time (line 18); response timing differences can be measured to guess the INTERNAL_OPS_TOKEN byte-by-byte and bypass the gate."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 212
+      },
+      "end": {
+        "line": 212
+      },
+      "extra": {
+        "message": "Password reset tokens logged in cleartext",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "f.write(f\"{datetime.now(timezone.utc).isoformat()}\\t{email}\\t{raw}\\n\")",
+          "proof": "UNTRUSTED SOURCE: raw reset token generated at `generate_token()` (line 205). SINK: the unhashed token is appended to `password_reset_tokens.log` (line 212). Any local file-read primitive leaks the token and enables account takeover via `/api/auth/password-reset/confirm`."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/public_api.py",
+      "start": {
+        "line": 73
+      },
+      "end": {
+        "line": 73
+      },
+      "extra": {
+        "message": "Public API missing field-worker state restrictions",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "job.status = payload.status",
+          "proof": "UNTRUSTED SOURCE: `payload.status` from request body. SINK: the endpoint assigns the new status (line 73) without the field-worker guards present in `backend/app/routers/jobs.py` (lines 226-229) that prevent workers from cancelling or reassigning jobs. A field worker can cancel or reassign jobs through `/api/v1/jobs/{id}/status`."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "backend/app/routers/proofs.py",
+      "start": {
+        "line": 80
+      },
+      "end": {
+        "line": 80
+      },
+      "extra": {
+        "message": "Upload preserves dangerous file extensions",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "with open(target, \"wb\") as f:",
+          "proof": "UNTRUSTED SOURCE: `UploadFile.filename`. Flow: `sanitize_filename()` keeps the base name (line 73); `secrets.token_hex(16) + '_' + safe_orig` preserves the original extension (line 74); the file is written to disk (line 80). An attacker can upload `payload.html` or `payload.exe` while spoofing the Content-Type header to satisfy the MIME whitelist (line 56)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-918",
+      "path": "backend/app/webhooks.py",
+      "start": {
+        "line": 84
+      },
+      "end": {
+        "line": 84
+      },
+      "extra": {
+        "message": "SSRF via webhook DNS rebinding",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "citation": "with urllib.request.urlopen(req, timeout=5) as resp:",
+          "proof": "UNTRUSTED SOURCE: webhook URL configured by an admin. SINK: `_is_safe_url()` (line 40) resolves the hostname once, but `urlopen()` (line 84) performs a second DNS resolution. An attacker-controlled DNS server can return a public IP during the safety check and a private IP (e.g. 169.254.169.254) when connecting, bypassing the SSRF guard."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "backend/app/routers/admin_misc.py",
+      "start": {
+        "line": 45
+      },
+      "end": {
+        "line": 45
+      },
+      "extra": {
+        "message": "Webhook signing secrets stored in cleartext",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "        secret=secret,",
+          "proof": "Source: secrets.token_urlsafe(32) generated at line 44. Sink: the raw secret is stored in the Webhook model. A database compromise exposes every webhook secret, allowing signature forgery on webhook receivers."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/customers.py",
+      "start": {
+        "line": 105
+      },
+      "end": {
+        "line": 105
+      },
+      "extra": {
+        "message": "IDOR: dispatcher can reassign customer user linkage",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "            c.user_id = payload.user_id",
+          "proof": "Source: payload.user_id in the update customer request. Sink: the endpoint verifies the target user has role customer but does not check whether that user is already linked to another customer, allowing a dispatcher to move users between customer records."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "Authorization Header and Request Body Logged to Application Logs",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "logger.warning(\"route manifest intake body=%s auth=%s\", wire_text, request.headers.get(\"authorization\"))",
+          "proof": "SOURCE: The dispatch_manifest_tally_020 route (line 31) accepts arbitrary POST body data and derives the Authorization header from `request.headers.get(\"authorization\")`. SINK: Both values are passed directly as format arguments to `logger.warning()` at line 33, writing them verbatim to the application log file. If a client sends a Bearer token, Basic auth credentials, or other secrets in the Authorization header, they are persisted in plaintext in the log. The full request body (`wire_text`) is also logged, which may contain passwords, API keys, or PII. This is distinct from the already-reported CWE-209 at line 25 (which reflects error messages back to the HTTP response) \u2014 this finding concerns server-side log persistence of cleartext secrets (CWE-532)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 71
+      },
+      "end": {
+        "line": 71
+      },
+      "extra": {
+        "message": "Social Security Numbers and Credit Card Numbers Stored in Cleartext on Filesystem",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "target.write_text(json.dumps({\"ref\": ref, \"ssn\": payload.get(\"ssn\", \"111-22-3333\"), \"card\": payload.get(\"card\", \"4111111111111111\")}))",
+          "proof": "SOURCE: The dispatch_vault_stash_231 route accepts user-controlled JSON payload via `await request.json()` at line 67. The attacker provides `ssn` and `card` fields. SINK: At line 71, these values are serialized into a JSON string and written to a plaintext file on disk via `target.write_text(...)`. SSNs (CWE-359/PII) and credit card numbers (PCI-DSS scope) are stored unencrypted with default file permissions. The path `BASE_EXPORT_DIR / \"{ref}.json\"` is attacker-controlled via the `ref` query parameter (path traversal already reported at line 69 as a separate CWE-22). This is a distinct CWE-312 cleartext storage vulnerability \u2014 the PII itself is the secret being persisted, not the path used to reach the file."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 90
+      },
+      "end": {
+        "line": 90
+      },
+      "extra": {
+        "message": "Hardcoded Static Verifier Credentials Shared Across All Users",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "known = {\"north\": \"4812\", \"south\": \"5930\"}",
+          "proof": "SOURCE: The dispatch_identity_hint_365 route at line 88-95 uses a hardcoded dictionary mapping handle names to static verifier strings (\"north\"=\"4812\", \"south\"=\"5930\") at line 90. These verifier values are compiled into the source code, identical for every caller, and never change unless the code is redeployed. SINK: Line 93 performs `if verifier != known[handle]` \u2014 any client who knows or guesses these static values can authenticate as any handle. This is a distinct CWE-798 instance from the already-reported config.py:9 (HMAC signing key): that finding concerns the secret used for HMAC token signing; this finding concerns static application-layer credentials used for identity verification with no per-user variation, rotation mechanism, or cryptographic protection."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-330",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 123
+      },
+      "end": {
+        "line": 123
+      },
+      "extra": {
+        "message": "Predictable Token Generation Using random.choice Instead of secrets.choice",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-330"
+          ],
+          "citation": "alphabet = \"abcdefghijklmnopqrstuvwxyz0123456789\"\ncode = \"\".join(random.choice(alphabet) for _ in range(length))",
+          "proof": "SOURCE/SINK: The dispatch_nonce_roll_405 route at lines 120-125 generates a \"code\" using Python's `random.choice()` (line 124) seeded from the Mersenne Twister PRNG, which is predictable if an attacker observes enough outputs or knows the seed. The docstring says this is a \"nonce\" \u2014 a value that must be unpredictable. By contrast, cryptographic-quality randomness from `secrets.choice()` is available in the same module. An attacker who observes one or more outputs can reconstruct the internal PRNG state and predict future codes. This is distinct from the already-reported CWE-798 (hardcoded static secrets): CWE-330 concerns the algorithm/entropy source used to generate dynamic values, not the presence of static credentials."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1021",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 141
+      },
+      "end": {
+        "line": 141
+      },
+      "extra": {
+        "message": "Explicit Removal of Content-Security-Policy and X-XSS-Protection Headers Bypasses Global Middleware",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1021"
+          ],
+          "citation": "response.headers[\"X-XSS-Protection\"] = \"0\"\nresponse.headers[\"Content-Security-Policy\"] = \"\"",
+          "proof": "SOURCE/SINK: The dispatch_frame_slip_425 route at line 139-143 explicitly sets `X-XSS-Protection: 0` (line 141) and `Content-Security-Policy: \"\"` (line 142) on the response. Because Starlette's `response.headers` dict assignment sets the value directly, and the SecurityHeadersMiddleware (main.py:51-58) uses `setdefault()` which only writes if the header is absent, the route's values take precedence over the middleware's defaults. This means the global CSP header (`default-src 'none'; frame-ancestors 'none'`) and XSS protection are removed for this specific endpoint, enabling framing attacks and XSS in legacy browsers. Distinct from all already-reported findings: this is a deliberate bypass of a security control by setting conflicting headers, not a missing header."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-287",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 146
+      },
+      "end": {
+        "line": 146
+      },
+      "extra": {
+        "message": "Elevated Privilege via User-Controlled Cookie or Header Value (Improper Authentication)",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-287"
+          ],
+          "citation": "badge = request.cookies.get(\"ops_badge\") or request.headers.get(\"x-ops-badge\", \"\")\nif badge == \"lead\":",
+          "proof": "SOURCE: The dispatch_badge_gate_435 route at lines 144-149 reads the `ops_badge` cookie or `x-ops-badge` header directly from the HTTP request (line 146) with zero cryptographic validation. SINK: Line 147 checks `if badge == \"lead\"` \u2014 if the value equals the literal string \"lead\", the endpoint returns `{\"lane\": \"elevated\", \"payroll\": \"full\", \"casework\": \"open\"}`. Any authenticated user (or any user who can reach this route behind the _wrk_gate gate) can set either the cookie or header to \"lead\" and impersonate a \"lead\" user with access to elevated operations and payroll data. No HMAC, signing, or session validation is performed on this credential. This is a distinct CWE-287 from the already-reported findings: no other finding describes authentication-by-cookie-value without cryptographic verification."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 209
+      },
+      "end": {
+        "line": 209
+      },
+      "extra": {
+        "message": "Password Reset Tokens Written to Plaintext Log File on Filesystem",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "out = settings.upload_path.parent / \"password_reset_tokens.log\"\nwith open(out, \"a\", encoding=\"utf-8\") as f:\n    f.write(f\"{datetime.now(timezone.utc).isoformat()}\\t{email}\\t{raw}\\n\")",
+          "proof": "SOURCE: The request_password_reset endpoint at line 184 generates a plaintext password reset token via `raw = generate_token()` at line 206. SINK: Lines 209-210 open the file `password_reset_tokens.log` (in the parent directory of the upload path) and append the timestamp, email, and raw token in cleartext. Any process with filesystem read access (e.g., a compromised container, a backup process with overly broad permissions, or another vulnerability enabling local file read) can harvest these tokens and reset any user's password. This is distinct from the already-reported CWE-770 at auth.py line 183 (missing rate limiting causing resource exhaustion on the same endpoint): the already-reported finding is a denial-of-service vector, whereas this finding concerns the cleartext storage of high-value authentication tokens (CWE-312). It is also distinct from the already-reported CWE-798 config.py:9 (hardcoded HMAC key) because this is about dynamic per-user reset tokens being persisted in the clear."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 96
+      },
+      "end": {
+        "line": 96
+      },
+      "extra": {
+        "message": "User enumeration via distinct HTTP status codes for valid vs invalid handles",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "    if handle not in known:\n        return JSONResponse({\"detail\": \"unknown handle\"}, status_code=404)\n    if verifier != known[handle]:\n        return JSONResponse({\"detail\": \"bad verifier\"}, status_code=403)",
+          "proof": "UNTRUSTED SOURCE: User-controlled `handle` query parameter (line 92). SINK: The endpoint returns HTTP 404 when the handle is unknown (line 96) and HTTP 403 when the handle is known but the verifier is wrong (line 98). An attacker can enumerate valid handles by observing the different HTTP response codes, violating CWE-204 observable response discrepancy."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 48
+      },
+      "end": {
+        "line": 48
+      },
+      "extra": {
+        "message": "User-controlled modification of ledger object state attribute",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "    ledger[\"state\"] = payload.get(\"state\", \"approved\")",
+          "proof": "UNTRUSTED SOURCE: User-supplied JSON payload field `payload.get(\"state\")` (line 48). SINK: This value is directly assigned to the `ledger[\"state\"]` dictionary key with no validation or whitelist check. An attacker can inject arbitrary state values (e.g., \"overdrawn\", \"frozen\", \"compromised\") into the ledger object, bypassing business logic constraints on state transitions."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-16",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 140
+      },
+      "end": {
+        "line": 140
+      },
+      "extra": {
+        "message": "Deliberate disabling of XSS and CSP security headers",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-16"
+          ],
+          "citation": "    response.headers[\"X-XSS-Protection\"] = \"0\"\n    response.headers[\"Content-Security-Policy\"] = \"\"",
+          "proof": "UNTRUSTED SOURCE: The `/frame/dispatch-slip-425` endpoint (line 137) constructs a response. SINK: It explicitly sets `X-XSS-Protection` to \"0\" (disabling the browser's XSS auditor, line 140) and sets `Content-Security-Policy` to an empty string (removing any CSP constraints, line 141). This weakens the security posture of the application by removing defense-in-depth protections against XSS and content injection attacks on responses from this endpoint."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-117",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "Log injection via unescaped CRLF in request body",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-117"
+          ],
+          "citation": "logger.warning(\"route manifest intake body=%s auth=%s\", wire_text, request.headers.get(\"authorization\"))",
+          "proof": "SOURCE: `wire_text` is read from `(await request.body()).decode(\"utf-8\", errors=\"replace\")`, which is fully attacker-controlled HTTP body content. SINK: it is passed unsanitized as a format-string argument to `logger.warning()`. An attacker can embed CRLF sequences (`%0d%0a`) in the request body to forge arbitrary log lines, corrupting audit trails, log parsing, and downstream monitoring systems."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 81
+      },
+      "end": {
+        "line": 81
+      },
+      "extra": {
+        "message": "Unbounded count parameter causes memory exhaustion DoS",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "rows = [{\"idx\": idx, \"ref\": ref} for idx in range(count)]",
+          "proof": "SOURCE: `count` is a query parameter declared as `int` with a default of 500 and no upper bound validation. SINK: the list comprehension `[{\"idx\": idx, \"ref\": ref} for idx in range(count)]` materializes `count` dictionary objects in memory all at once. An attacker sending a request with a very large `count` (e.g. 10 million) causes the server to allocate gigabytes of RAM, leading to memory exhaustion and denial of service for other users."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 153
+      },
+      "end": {
+        "line": 153
+      },
+      "extra": {
+        "message": "Environment variable and filesystem path information disclosure",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "return {\"trace\": trace_on, \"module\": os.environ.get(\"APP_ENV\"), \"base\": str(BASE_EXPORT_DIR)}",
+          "proof": "SOURCE/SINK: the `/ops/trace/dispatch-panel-445` endpoint returns `os.environ.get(\"APP_ENV\")` (deployment environment name) and `str(BASE_EXPORT_DIR)` (private export directory filesystem path) to every caller who passes the ops gate. This leaks the deployment configuration and internal filesystem layout, aiding reconnaissance for directory traversal, path injection, or targeted attacks on the storage layer."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-208",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 114
+      },
+      "end": {
+        "line": 114
+      },
+      "extra": {
+        "message": "User enumeration via login timing side-channel",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-208"
+          ],
+          "citation": "verify_password(payload.password, fake_hash)",
+          "proof": "SOURCE: attacker-supplied `email` and `password` on the public `POST /api/auth/login` endpoint. SINK: `fake_hash = \"$2b$12$\" + \"C\" * 53` is a malformed bcrypt hash (53 'C' characters are not valid base64 for bcrypt's 31-byte hash component), so `verify_password(password, fake_hash)` fails almost instantly when the email does not exist. When the email exists, real bcrypt verification at cost factor 12 runs, which takes significantly longer (~100-200ms). The measurable timing difference allows an attacker to determine whether an email address is registered."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "backend/app/config.py",
+      "start": {
+        "line": 13
+      },
+      "end": {
+        "line": 13
+      },
+      "extra": {
+        "message": "Session cookie Secure flag disabled by default",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "cookie_secure: bool = False",
+          "proof": "SOURCE/SINK: the default setting `cookie_secure = False` in Settings is consumed by `_set_session_cookie()` in auth.py at line 37 (`secure=settings.cookie_secure`), which creates session cookies without the Secure attribute. When the application is served over HTTP (the default, as seen in `allowed_origins: str = \"http://localhost:5173\"`), the session token is transmitted in cleartext on every request and can be intercepted by any network attacker on the same path."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 47
+      },
+      "end": {
+        "line": 47
+      },
+      "extra": {
+        "message": "No rate limiting on user registration endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@router.post(\"/register\", response_model=schemas.UserPublic, status_code=status.HTTP_201_CREATED)\ndef register(",
+          "proof": "SOURCE: `POST /api/auth/register` accepts email and password from any anonymous caller. SINK: there is no throttling middleware, no IP-based rate limiting, no CAPTCHA, and no account-per-IP enforcement wrapping this endpoint. An attacker can automate account creation at high volume to fill the database with junk accounts, prepare credential-stuffing lists, or exhaust database storage."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 99
+      },
+      "end": {
+        "line": 99
+      },
+      "extra": {
+        "message": "No rate limiting on login endpoint allows brute-force password guessing",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@router.post(\"/login\", response_model=schemas.UserPublic)\ndef login(",
+          "proof": "SOURCE: `POST /api/auth/login` accepts email and password from any anonymous caller and returns a session cookie on success. SINK: there is no account lockout, no exponential backoff, no IP-based throttling, and no rate-limiting dependency. An attacker can issue thousands of requests per second to brute-force user passwords. The response path is constant-time within each branch, making offline-equivalent brute-forcing practical."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 184
+      },
+      "end": {
+        "line": 184
+      },
+      "extra": {
+        "message": "No rate limiting on password-reset request endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@router.post(\"/password-reset/request\", status_code=202)\ndef request_password_reset(",
+          "proof": "SOURCE: `POST /api/auth/password-reset/request` accepts an email from any anonymous caller. SINK: there is no rate limiting. An attacker can enumerate valid email addresses (despite the 202 always being returned, the token-creation code path has side effects like writing to `password_reset_tokens.log` on disk), and can flood the token-storage mechanism to exhaust disk space."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 218
+      },
+      "end": {
+        "line": 218
+      },
+      "extra": {
+        "message": "No rate limiting on password-reset confirmation endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@router.post(\"/password-reset/confirm\", status_code=204)\ndef confirm_password_reset(",
+          "proof": "SOURCE: `POST /api/auth/password-reset/confirm` accepts a raw token and new password from any anonymous caller. SINK: there is no rate limiting. Although the token is cryptographically strong (256-bit via `secrets.token_urlsafe` via `generate_token()`), unlimited attempts allow an attacker to submit tokens before expiry. The token is also written to a log file in the request path, compounding exposure."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/app/routers/public_api.py",
+      "start": {
+        "line": 30
+      },
+      "end": {
+        "line": 30
+      },
+      "extra": {
+        "message": "No rate limiting on public API endpoints authenticated via API keys",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def api_list_jobs(\n    status: models.JobStatus | None = None,",
+          "proof": "SOURCE: `GET /api/v1/jobs` and `POST /api/v1/jobs/{job_id}/status` authenticate via `X-API-Key` header (or session cookie). SINK: there is no per-key or per-IP rate limiting. A compromised or leaked API key can be used to flood the API, perform mass job-status transitions, or scrape all job data without restriction, affecting all authenticated GET and POST operations on this router."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-319",
+      "path": "backend/app/database.py",
+      "start": {
+        "line": 5
+      },
+      "end": {
+        "line": 5
+      },
+      "extra": {
+        "message": "Database connection configured without TLS/SSL",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-319"
+          ],
+          "citation": "engine = create_engine(settings.database_url, pool_pre_ping=True, future=True)",
+          "proof": "SOURCE/SINK: the SQLAlchemy engine is created from the default `database_url` = `\"postgresql+psycopg2://dispatch:dispatch@localhost:5432/dispatch\"` which specifies no SSL/TLS parameters. The connection string has no `?sslmode=require` suffix, and `create_engine` receives no `connect_args` dict with SSL options. All database traffic (queries, results, password hashes, PII) is transmitted in cleartext over the network. An attacker on the same subnet can sniff all application data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/workers.py",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "Dispatchers can list workers from any region \u2014 missing authorization boundary",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "@router.get(\"\", response_model=list[schemas.WorkerOut])\ndef list_workers(",
+          "proof": "The list_workers() endpoint (line 16) and get_worker() endpoint both lack region-scope filtering for dispatchers. The function filters out customers and restricts field_workers to themselves, but dispatchers fall through to `return query.offset(offset).limit(limit).all()` on line 37 with no call to dispatcher_region_ids() or assert_dispatcher_can_access_region(). A dispatcher assigned only to North Bay can pass `?region_id=SB` and enumerate all workers, employee codes, certifications, and availability in South Bay. This violates the least-privilege boundary enforced in jobs, incidents, and routes endpoints."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 117
+      },
+      "end": {
+        "line": 117
+      },
+      "extra": {
+        "message": "Failed login attempt email address written to audit log",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "write_audit(db, actor=None, action=\"user.login.failed\", target_type=\"user\", target_id=user.id if user else None, details={\"email\": email}, ip_address=get_client_ip(request), commit=True)",
+          "proof": "On every failed login attempt at line 117, the user-supplied email address (including typo'd addresses and attacker probe inputs) is stored in the AuditLog.details JSON column alongside the action \"user.login.failed\". This stores PII (email) in perpetuity in the database audit trail without any retention or minimization policy. An admin with direct database access or a high-privilege user viewing audit logs can extract a list of attempted login emails, revealing not just valid user emails but also attacker probe patterns."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-330",
+      "path": "backend/app/routers/jobs.py",
+      "start": {
+        "line": 30
+      },
+      "end": {
+        "line": 30
+      },
+      "extra": {
+        "message": "Predictable Job Codes Generated Using random.choices Instead of secrets",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-330"
+          ],
+          "citation": "code = \"JOB-\" + \"\".join(random.choices(string.ascii_uppercase + string.digits, k=8))",
+          "proof": "SOURCE: _gen_job_code() at line 30 uses the Mersenne Twister PRNG (random.choices) which is seeded from system time. SINK: The generated 8-character alphanumeric job code is stored as a unique identifier in the jobs table. An attacker who can sample a few job codes (e.g., via the jobs listing endpoint) can recover the PRNG state and predict future or unrevealed job codes, enabling enumeration of all jobs in the system (IDOR discovery) or race-condition attacks on job-code-dependent operations. The secrets module should be used instead."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-330",
+      "path": "backend/app/routers/incidents.py",
+      "start": {
+        "line": 27
+      },
+      "end": {
+        "line": 27
+      },
+      "extra": {
+        "message": "Predictable Incident Codes Generated Using random.choices Instead of secrets",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-330"
+          ],
+          "citation": "code = \"INC-\" + \"\".join(random.choices(string.ascii_uppercase + string.digits, k=8))",
+          "proof": "SOURCE: _gen_incident_code() at line 27 uses the Mersenne Twister PRNG (random.choices) seeded from system time. SINK: The generated 8-character alphanumeric incident code is stored as a unique identifier. Same attack as job codes: an attacker with a few samples can recover PRNG state and predict future incident codes, enabling unauthorized access to incident reports via enumeration."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "backend/app/routers/jobs.py",
+      "start": {
+        "line": 102
+      },
+      "end": {
+        "line": 102
+      },
+      "extra": {
+        "message": "CSRF \u2014 Job Creation Endpoint Uses Cookie Auth Without CSRF Token",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@router.post(\"\", status_code=201)\ndef create_job(",
+          "proof": "SOURCE: An attacker crafts a cross-site form/script targeting POST /api/jobs. SINK: The endpoint at line 102 authenticates solely via the dispatch_session cookie (SameSite=Lax) with no CSRF token validation. While SameSite=Lax provides partial browser protection for cross-site POST requests, it does not protect against same-site subdomain attacks, browsers that predate SameSite enforcement, or bypass techniques. A successful CSRF attack lets an attacker create arbitrary jobs, assign workers, and schedule service appointments in the victim dispatcher's name."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "backend/app/routers/jobs.py",
+      "start": {
+        "line": 260
+      },
+      "end": {
+        "line": 260
+      },
+      "extra": {
+        "message": "CSRF \u2014 Job Status Change Endpoint Uses Cookie Auth Without CSRF Token",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@router.post(\"/{job_id}/status\")\ndef change_status(",
+          "proof": "SOURCE: An attacker crafts a cross-site POST to /api/jobs/{job_id}/status with a crafted JobStatusChange payload. SINK: The endpoint at line 260 authenticates via the dispatch_session cookie only, with no CSRF token. An attacker can transition any job the victim can access to arbitrary statuses (e.g., cancel jobs, mark them complete, change them to 'failed'), causing operational disruption. SameSite=Lax is the only defense, which is insufficient against same-site attacks and older browsers."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 159
+      },
+      "end": {
+        "line": 159
+      },
+      "extra": {
+        "message": "CSRF \u2014 Profile Update Endpoint (Including Password Change) Uses Cookie Auth Without CSRF Token",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@router.put(\"/me\", response_model=schemas.UserPublic)\ndef update_me(",
+          "proof": "SOURCE: An attacker crafts a cross-site form targeting PUT /api/auth/me with a ProfileUpdate body. SINK: The endpoint at line 159 authenticates solely via the dispatch_session cookie. If the victim provides their current_password in the payload (required for password changes), a CSRF attack can change the victim's password, lock them out, or modify their name/phone. Additionally, password change at lines 172-174 invalidates all other sessions, causing a denial-of-service for the victim. SameSite=Lax alone is insufficient protection for this high-value endpoint."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "backend/seed.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "Hardcoded Demo Password in Seed Script Gives Known Credentials to All Seeded Accounts",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "DEMO_PASSWORD = \"Demo!Pass123\"",
+          "proof": "SOURCE: seed.py:33 defines DEMO_PASSWORD as a hardcoded plaintext string. SINK: This password is passed to hash_password() and used for ALL demo users (admin, dispatchers, workers, customers) at lines 59-61, 109, 121. If the seed script is run in any non-ephemeral environment (e.g., a shared staging server), every account has the same known password. While the password is bcrypt-hashed in the database, anyone with source access knows the plaintext and can authenticate as any seeded user."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 100
+      },
+      "end": {
+        "line": 100
+      },
+      "extra": {
+        "message": "Login CSRF \u2014 Login Endpoint Lacks CSRF Protection",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@router.post(\"/login\", response_model=schemas.UserPublic)\ndef login(",
+          "proof": "SOURCE: Untrusted attacker-controlled origin / form submission -> POST /api/auth/login with victim's browser. SINK: The endpoint at line 100 accepts credentials and sets a session cookie on success, but lacks any CSRF token validation. An attacker can force the victim's browser to log into an attacker-controlled account (login CSRF). While SameSite=Lax prevents the cookie from being sent on cross-site POST, the server's Set-Cookie response is still processed by the browser, binding the victim's future same-site requests to the attacker's account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "backend/app/routers/customers.py",
+      "start": {
+        "line": 79
+      },
+      "end": {
+        "line": 79
+      },
+      "extra": {
+        "message": "CSRF \u2014 Customer Update Endpoint Lacks CSRF Protection",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@router.put(\"/{customer_id}\", response_model=schemas.CustomerOut)\ndef update_customer(",
+          "proof": "SOURCE: Attacker-controlled origin -> authenticated PUT /api/customers/{id}. SINK: The endpoint at line 79 validates dispatcher/ops_admin role via require_roles but does not validate any CSRF token. SameSite=Lax on the session cookie provides partial protection but does not prevent same-site subdomain attacks or older browser bypasses. A CSRF attack can modify customer records including reassigning the user linkage, potentially linking a customer record to a different user account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "backend/app/routers/incidents.py",
+      "start": {
+        "line": 84
+      },
+      "end": {
+        "line": 84
+      },
+      "extra": {
+        "message": "CSRF \u2014 Incident Creation Endpoint Lacks CSRF Protection",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@router.post(\"\", status_code=201)\ndef create_incident(",
+          "proof": "SOURCE: Attacker-controlled origin -> authenticated POST /api/incidents. SINK: The endpoint at line 84 authenticates via the dispatch_session cookie with no CSRF token verification. SameSite=Lax provides partial but incomplete protection. A cross-origin request can create incidents linked to jobs the victim can view, using the victim's session cookie. This could be used to fabricate incident reports attributed to the victim."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 47
+      },
+      "end": {
+        "line": 47
+      },
+      "extra": {
+        "message": "Registration endpoint missing rate limiting",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@router.post(\"/register\", response_model=schemas.UserPublic, status_code=status.HTTP_201_CREATED)",
+          "proof": "Untrusted attacker -> unlimited POST /api/auth/register. The self-registration endpoint creates a customer user and customer record on every request with no throttling, allowing mass account creation and database/storage exhaustion."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/workers.py",
+      "start": {
+        "line": 71
+      },
+      "end": {
+        "line": 71
+      },
+      "extra": {
+        "message": "Worker detail endpoint allows any non-customer user to view any worker",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def get_worker(",
+          "proof": "Untrusted user-supplied worker_id -> get_worker. The route only blocks customers; field_workers and dispatchers can request /api/workers/{any_worker_id} and retrieve employee_code, certifications, availability, and region of any worker without an ownership check."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "backend/app/routers/users.py",
+      "start": {
+        "line": 18
+      },
+      "end": {
+        "line": 18
+      },
+      "extra": {
+        "message": "Dispatcher can enumerate all user accounts including admins",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "def list_users(",
+          "proof": "Authenticated dispatcher -> GET /api/users. The endpoint permits dispatchers to list every user record, returning the UserPublic schema for ops_admin, other dispatchers, workers, and customers, exposing account existence and PII beyond the dispatcher's need-to-know."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "backend/app/config.py",
+      "start": {
+        "line": 11
+      },
+      "end": {
+        "line": 11
+      },
+      "extra": {
+        "message": "Default session lifetime is excessively long",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "session_lifetime_minutes: int = 720",
+          "proof": "Settings default -> session cookie max_age and Session.expires_at. A 12-hour default session lifetime gives a large window for stolen session cookies to be replayed and does not enforce re-authentication for extended inactivity."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/users.py",
+      "start": {
+        "line": 22
+      },
+      "end": {
+        "line": 22
+      },
+      "extra": {
+        "message": "Dispatcher can list all users across all regions \u2014 missing tenant scope filter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "query = db.query(models.User)",
+          "proof": "SOURCE: dispatcher user making an authenticated GET /api/users. SINK: the query at users.py:28 runs `db.query(models.User)` with NO region/tenant filter \u2014 the require_roles dependency only checks role membership, not which regions the dispatcher manages. A dispatcher assigned to region A can enumerate every user in the system (email, full_name, role, phone, is_active) including ops_admins and users belonging to regions B, C, etc."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/users.py",
+      "start": {
+        "line": 54
+      },
+      "end": {
+        "line": 54
+      },
+      "extra": {
+        "message": "Dispatcher can read any individual user's PII regardless of region",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "user = db.query(models.User).filter(models.User.id == user_id).one_or_none()",
+          "proof": "SOURCE: dispatcher calling GET /api/users/{user_id} with an arbitrary user_id. SINK: the query at users.py:75 loads the User row by ID with zero ownership or region-scope verification. A dispatcher from region A can retrieve the email, full_name, role, phone, and is_active of any user \u2014 including ops_admins, customers, workers, and dispatchers in other regions."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/customers.py",
+      "start": {
+        "line": 130
+      },
+      "end": {
+        "line": 130
+      },
+      "extra": {
+        "message": "Dispatcher can create service locations in any region for any customer \u2014 no region scope",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "def create_location(",
+          "proof": "SOURCE: dispatcher calls POST /api/customers/{customer_id}/locations with a region_id payload field. SINK: the route loads ANY customer by ID (no region scope check on the customer) and validates region_id exists but NOT whether the dispatcher has access to that region. A dispatcher assigned only to region A can create a ServiceLocation for a customer from region B and set its region_id to region C \u2014 cross-tenant data injection."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/customers.py",
+      "start": {
+        "line": 35
+      },
+      "end": {
+        "line": 35
+      },
+      "extra": {
+        "message": "Field workers and dispatchers can enumerate all customers with PII \u2014 no scope filtering",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "query = db.query(models.Customer)\n    if q:\n        like = f\"%{q.lower()}%\"\n        query = query.filter(or_(models.Customer.name.ilike(like), models.Customer.contact_email.ilike(like)))\n    return query.order_by(models.Customer.name.asc()).offset(offset).limit(limit).all()",
+          "proof": "SOURCE: any authenticated user who is NOT a customer (ops_admin, dispatcher, field_worker) calls GET /api/customers. SINK: at line 35, the query loads ALL customers from the DB with no region or worker-assignment filter. The `user.role` check (line 30) only restricts customers to seeing themselves; all other roles get the full list. A field_worker in region A can enumerate every customer's name, contact_email, and contact_phone \u2014 PII from all regions."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "backend/app/routers/proofs.py",
+      "start": {
+        "line": 61
+      },
+      "end": {
+        "line": 61
+      },
+      "extra": {
+        "message": "File upload validates only client-supplied Content-Type \u2014 no magic-byte verification",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "if not file.content_type or file.content_type not in ALLOWED_CONTENT_TYPES:\n        raise HTTPException(status_code=400, detail=\"Unsupported file type\")",
+          "proof": "SOURCE: an attacker uploads a file with forged `Content-Type: image/png` while the actual bytes are a malicious script/executable. SINK: the check at line 61 only inspects `file.content_type` \u2014 a header entirely controlled by the HTTP client. There is NO magic-byte / file-signature verification of the content. The `ALLOWED_CONTENT_TYPES` set includes `text/plain`, `application/pdf`, and image types. An attacker can upload arbitrary file content (HTML with JS as `text/plain`, a `.php` file as `image/jpeg`, etc.). While the download endpoint uses Content-Disposition: attachment and X-Content-Type-Options: nosniff, the raw file stored on disk with arbitrary content still risks polyglot attacks, archive bombs, and other content-based exploits."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 172
+      },
+      "end": {
+        "line": 172
+      },
+      "extra": {
+        "message": "API keys not invalidated when password is changed \u2014 keys remain valid after credential rotation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "db.query(models.Session).filter(models.Session.user_id == user.id).delete()",
+          "proof": "SOURCE: user changes password via PUT /api/auth/me with `new_password`. SINK: line 172 deletes ALL `Session` rows for the user but does NOT deactivate or delete their `ApiKey` rows. The `_user_from_api_key` function in deps.py only checks that the key_hash matches, `is_active=True`, and the referenced User is active. After a password change (voluntary or forced by an admin), any leaked/compromised API key continues to grant full access. The same pattern exists in users.py:106-114 (admin update_user with new_password) and users.py:134 (disable_user) \u2014 only Sessions are purged, ApiKeys are untouched."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "backend/app/routers/proofs.py",
+      "start": {
+        "line": 82
+      },
+      "end": {
+        "line": 82
+      },
+      "extra": {
+        "message": "Uploaded proof files containing PII/PHI stored unencrypted on filesystem",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "with open(target, \"wb\") as f:\n        f.write(data)",
+          "proof": "SOURCE: file upload at POST /api/jobs/{job_id}/proofs. SINK: line 82-83 writes the raw file bytes to the filesystem at `{upload_path}/jobs/{job_id}/{stored_name}` with no encryption. The `category` field includes 'signature', 'photo', 'form', 'document' \u2014 all potentially containing PII/PHI (photographs of people, signed documents, completed forms). While file permissions are set to 0o600 (owner-only), the data is not encrypted at rest, violating best practices for sensitive document storage."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-863",
+      "path": "backend/app/routers/public_api.py",
+      "start": {
+        "line": 52
+      },
+      "end": {
+        "line": 52
+      },
+      "extra": {
+        "message": "Public API job-status endpoint bypasses field_worker restrictions \u2014 workers can cancel jobs via /api/v1",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-863"
+          ],
+          "citation": "def api_update_status(\n    job_id: str,\n    payload: schemas.JobStatusChange,\n    request: Request,\n    db: Session = Depends(get_db),\n    user: models.User = Depends(get_current_user),\n):\n    job = db.query(models.Job).filter(models.Job.id == job_id).one_or_none()\n    if not job:\n        raise HTTPException(status_code=404, detail=\"Not found\")\n    if not user_can_modify_job(db, user, job):\n        raise HTTPException(status_code=403, detail=\"Forbidden\")",
+          "proof": "SOURCE: a field_worker calls POST /api/v1/jobs/{job_id}/status with `{\"status\": \"cancelled\"}`. SINK: the internal `change_status` endpoint at jobs.py:266-267 explicitly rejects field_workers setting `cancelled` (`if user.role == models.UserRole.field_worker and new_status == models.JobStatus.cancelled: raise HTTPException(...)`). However the public API endpoint at public_api.py:52-59 only checks `user_can_modify_job` (which returns True for an assigned field_worker) and the generic status-transition map (JOB_STATUS_TRANSITIONS allows cancelled from unassigned, assigned, and en_route). A field_worker who cannot cancel a job through the internal `/api/jobs/{id}/status` route can trivially bypass that policy by hitting `/api/v1/jobs/{id}/status` with the same cookie or API key."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/users.py",
+      "start": {
+        "line": 78
+      },
+      "end": {
+        "line": 78
+      },
+      "extra": {
+        "message": "Dispatcher can view any user by ID with no region/scope verification",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "actor: models.User = Depends(require_roles(models.UserRole.ops_admin, models.UserRole.dispatcher)),",
+          "proof": "GET /api/users/{user_id} accepts ops_admin or dispatcher. A dispatcher supplies a user_id via URL path and the endpoint returns the full UserPublic record (email, role, phone, is_active) with NO check that the target user belongs to the dispatcher's region or customer scope. Any dispatcher can retrieve the profile of any user in the system by guessing or enumerating UUIDs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "backend/app/routers/customers.py",
+      "start": {
+        "line": 28
+      },
+      "end": {
+        "line": 28
+      },
+      "extra": {
+        "message": "Dispatchers and field workers can enumerate all customers with no region/job scoping",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "user: models.User = Depends(get_current_user),",
+          "proof": "list_customers at customers.py:23 only restricts the 'customer' role (self-only). ALL other roles \u2014 ops_admin, dispatcher, AND field_worker \u2014 receive the full customer directory unfiltered via the user dependency at line 28. A field worker who has never been assigned to a job for 'Acme Corp' can still retrieve Acme's full customer record, contact details, and notes. There is no region filter for dispatchers and no job-assignment filter for field workers."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/customers.py",
+      "start": {
+        "line": 89
+      },
+      "end": {
+        "line": 89
+      },
+      "extra": {
+        "message": "Dispatcher can update any customer including reassigning user_id link \u2014 no region check",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "actor: models.User = Depends(require_roles(models.UserRole.ops_admin, models.UserRole.dispatcher)),",
+          "proof": "PUT /api/customers/{customer_id} at line 84 accepts ops_admin or dispatcher. There is NO region check on the target customer \u2014 a dispatcher from region 'east' can modify any customer record. Additionally, the CustomerUpdate schema includes a user_id field; the endpoint allows a dispatcher to re-link a customer to a different customer-user account (lines 100-108), potentially hijacking a customer's portal access to their jobs. No assert_dispatcher_can_access_region is called anywhere in this handler."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "backend/app/routers/customers.py",
+      "start": {
+        "line": 137
+      },
+      "end": {
+        "line": 137
+      },
+      "extra": {
+        "message": "Dispatchers and field workers can list any customer's service locations with no scope filtering",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "_ensure_customer_visible(user, c)",
+          "proof": "list_locations at line 129 filters by customer_id and calls _ensure_customer_visible (line 137) which restricts only the customer role. Dispatchers and field workers can retrieve the full address list (including lat/lng, address lines, notes) for ANY customer. A field worker can enumerate all service locations of a competitor customer they have never serviced."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/customers.py",
+      "start": {
+        "line": 146
+      },
+      "end": {
+        "line": 146
+      },
+      "extra": {
+        "message": "Dispatcher can create service locations in regions outside their assigned scope",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "actor: models.User = Depends(require_roles(models.UserRole.ops_admin, models.UserRole.dispatcher)),",
+          "proof": "create_location at line 141 validates the region exists but does NOT call assert_dispatcher_can_access_region. A dispatcher assigned only to region 'east' can POST to /api/customers/{id}/locations with region_id='west' and successfully create a location. The location.region_id from the payload is accepted verbatim (line 157: `region_id=payload.region_id`). Compare with create_job which correctly calls assert_dispatcher_can_access_region before proceeding."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/workers.py",
+      "start": {
+        "line": 71
+      },
+      "end": {
+        "line": 71
+      },
+      "extra": {
+        "message": "Dispatcher can view any worker by ID across all regions \u2014 no scope filtering",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "def get_worker(\n    worker_id: str,\n    db: Session = Depends(get_db),\n    user: models.User = Depends(get_current_user),",
+          "proof": "get_worker at line 71 blocks customers (line 76) and restricts field_workers to self (line 79-80). But dispatchers have NO region scoping \u2014 a dispatcher from region 'east' can GET /api/workers/{id} and retrieve employee_code, certifications, availability, and user_id for a worker in region 'west'."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/routes.py",
+      "start": {
+        "line": 77
+      },
+      "end": {
+        "line": 77
+      },
+      "extra": {
+        "message": "Dispatcher can assign a worker from any region to a route \u2014 no region-match check",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "w = db.query(models.Worker).filter(models.Worker.id == payload.worker_id).one_or_none()",
+          "proof": "create_route at line 72 validates the region via assert_dispatcher_can_access_region (line 75) but only checks worker existence (line 77), not region membership. A dispatcher from region 'east' can create a route in region 'east' and assign a worker whose region_id is 'west'. The worker lookup at line 77 only filters by worker ID; there is no `if w.region_id != payload.region_id` check, unlike the pattern in create_job (jobs.py line 145)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/routes.py",
+      "start": {
+        "line": 133
+      },
+      "end": {
+        "line": 133
+      },
+      "extra": {
+        "message": "Dispatcher can reassign existing route to worker from any region \u2014 no worker-region check during route update",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "w = db.query(models.Worker).filter(models.Worker.id == payload.worker_id).one_or_none()",
+          "proof": "SOURCE: attacker-controlled worker_id in PUT /api/routes/{route_id} RouteUpdate payload. SINK: update_route (line 133-135) validates only that the Worker row exists via db.query; it never checks worker.region_id against the route's region_id. The dispatcher's region is already verified for the route's region (line 124), but the assigned worker is not checked. A dispatcher can reassign a route from a worker in region A to a worker in region B, granting the region-B worker visibility into the route and its stop-jobs outside their authorized region."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/jobs.py",
+      "start": {
+        "line": 145
+      },
+      "end": {
+        "line": 145
+      },
+      "extra": {
+        "message": "Worker with null region_id bypasses region-mismatch check during job creation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "if worker.region_id and worker.region_id != location.region_id:",
+          "proof": "In create_job, the worker region guard at line 145 uses short-circuit evaluation: `if worker.region_id and worker.region_id != location.region_id`. When worker.region_id is None (globally available or database misconfiguration), the condition short-circuits to False and NO region validation occurs. A worker whose region_id was never set (perhaps intended for a different region) can be assigned to jobs in any region, bypassing intended regional isolation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/jobs.py",
+      "start": {
+        "line": 245
+      },
+      "end": {
+        "line": 245
+      },
+      "extra": {
+        "message": "Worker with null region_id bypasses region-mismatch check during job reassignment",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "if worker.region_id and worker.region_id != job.region_id:",
+          "proof": "In assign_job, the same short-circuit guard pattern at line 245: `if worker.region_id and worker.region_id != job.region_id`. Workers with region_id=None bypass the entire region-mismatch check, allowing cross-region worker assignment during job reassignment operations."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/incidents.py",
+      "start": {
+        "line": 190
+      },
+      "end": {
+        "line": 190
+      },
+      "extra": {
+        "message": "Incident assignee user not validated for region membership \u2014 cross-region assignment possible",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "u = db.query(models.User).filter(models.User.id == payload.assigned_to_user_id).one_or_none()",
+          "proof": "SOURCE: attacker-controlled assigned_to_user_id in PUT /api/incidents/{incident_id} IncidentUpdate payload. SINK: update_incident (line 190-192) validates only that the User row exists, then sets inc.assigned_to_user_id = u.id and sends a notification at line 193. No check ensures the assignee is an ops_admin/dispatcher, belongs to the incident's region, or is authorized to handle incidents. A dispatcher from region 'east' can assign an incident linked to a region-east job to a user from region 'west', leaking incident existence/code via the notification."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/public_api.py",
+      "start": {
+        "line": 57
+      },
+      "end": {
+        "line": 57
+      },
+      "extra": {
+        "message": "Public API status-change endpoint missing field_worker 'cancel' and 'reassign' restrictions present in internal API",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "if not user_can_modify_job(db, user, job):",
+          "proof": "SOURCE: session-authenticated field worker calling POST /api/v1/jobs/{id}/status. SINK: api_update_status (line 57) calls user_can_modify_job but contains NO equivalent field_worker role restrictions. The internal change_status (jobs.py lines 276-278) explicitly blocks field workers from cancelling jobs: `if user.role == models.UserRole.field_worker and new_status == models.JobStatus.cancelled: raise HTTPException(...)`. A field worker authenticated via session cookie can POST to /api/v1/jobs/{id}/status with status='cancelled' and bypass the internal API guard."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "backend/app/models.py",
+      "start": {
+        "line": 335
+      },
+      "end": {
+        "line": 335
+      },
+      "extra": {
+        "message": "Webhook HMAC secrets stored as plaintext in database",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "secret: Mapped[str] = mapped_column(String(128), nullable=False)",
+          "proof": "The Webhook model stores the shared HMAC secret as a raw String(128) column \u2014 no hashing, no encryption at rest. In admin_misc.py line 41-48, `secret = secrets.token_urlsafe(32)` generates the value and it is inserted directly into the database. By contrast, passwords use password_hash and API keys use key_hash. Anyone with database read access can extract all webhook secrets and forge valid HMAC signatures on webhook deliveries. The secret is also returned in the API response body at creation time (admin_misc.py line 57)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/routes.py",
+      "start": {
+        "line": 86
+      },
+      "end": {
+        "line": 86
+      },
+      "extra": {
+        "message": "IDOR \u2014 dispatcher can assign route to worker in any region via worker_id in RouteCreate",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "worker_id=payload.worker_id,",
+          "proof": "SOURCE: attacker-controlled worker_id in POST /api/routes RouteCreate payload. SINK: create_route (line 86) writes the untrusted worker_id into models.Route. Only worker existence is checked (line 78-80); no check verifies the worker belongs to the route's region. A dispatcher can create a route in their region but assign it to a worker from any region, who then gains access to the route and its stops via GET /api/routes/{route_id}, leaking cross-region job data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/routes.py",
+      "start": {
+        "line": 136
+      },
+      "end": {
+        "line": 136
+      },
+      "extra": {
+        "message": "IDOR \u2014 dispatcher can reassign existing route to worker in any region via worker_id in RouteUpdate",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "r.worker_id = payload.worker_id",
+          "proof": "SOURCE: attacker-controlled worker_id in PUT /api/routes/{route_id} RouteUpdate payload. SINK: update_route (line 136) writes the untrusted worker_id into r.worker_id. Only worker existence is checked (line 133-135); no check verifies the worker belongs to the route's region. A dispatcher can reassign a route from a worker in region A to a worker in region B, granting the region-B worker visibility into the route and its stops/jobs outside their authorized region."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/incidents.py",
+      "start": {
+        "line": 192
+      },
+      "end": {
+        "line": 192
+      },
+      "extra": {
+        "message": "IDOR \u2014 dispatcher can assign incident to arbitrary user via assigned_to_user_id",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "inc.assigned_to_user_id = u.id",
+          "proof": "SOURCE: attacker-controlled assigned_to_user_id in PUT /api/incidents/{incident_id} IncidentUpdate payload. SINK: update_incident (line 192) writes the untrusted assigned_to_user_id into inc.assigned_to_user_id and notifies the user (line 193). Only user existence is checked (line 190-191); no check ensures the assignee is an ops_admin/dispatcher, belongs to the incident's region, or is authorized to handle incidents. A dispatcher can assign incidents to customers, field workers, or admins from any region, leaking incident existence/code via notifications."
+        }
+      }
+    }
+  ]
+}

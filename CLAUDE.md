@@ -34,7 +34,7 @@ python score.py --repo realvuln-VAmPI --scanner semgrep
 | Script | Purpose |
 |--------|---------|
 | `score.py` | Score one repo against one or all scanners |
-| `dashboard.py` | Computes scores → writes `reports/dashboard.json` (the data source of truth) + a legacy Plotly view at `reports/legacy-dashboard.html` |
+| `dashboard.py` | Computes scores → writes `reports/dashboard.json` (the data source of truth). HTML is built by `build_site.py` |
 | `build_site.py` | Builds the public site into `reports/` from `dashboard.json`: generates `realvuln-data.js`, substitutes `{{...}}` dataset tokens in `site/*.html`, and copies `site/` over the deployed files |
 | `validate_gt.py` | Schema validation for ground-truth JSON |
 
@@ -44,7 +44,23 @@ python score.py --repo realvuln-VAmPI --scanner semgrep
 - `scan-results/{repo}/{scanner}/results.json` — Semgrep-format scanner output
 - `config/cwe-families.json` — CWE groupings for per-category metrics
 - `site/` — source for the public website (HTML pages, `styles.css`, `dashboard.css`, `app.js`, `dashboard.js`); `{{TOKEN}}` placeholders are filled by `build_site.py`
-- `reports/` — deploy directory synced to S3/CloudFront. The built site (`index.html`, `dashboard.html`, assets, `realvuln-data.js`) lives at the top level (tracked); per-repo subdirs and large JSON are gitignored. Build with `make dashboard` (rescore + build) or `make site` (build only)
+- `reports/` — deploy directory served by a single Cloudflare Worker (`reports/wrangler.jsonc`, `assets.directory: "."`) at **realvuln.com**. The *latest* built site (`index.html`, `dashboard.html`, assets, `realvuln-data.js`) lives at the top level (tracked); per-repo subdirs and large JSON are gitignored. Build with `make dashboard` (rescore + build) or `make site` (build only)
+- `reports/v/<version>/` — **immutable per-version snapshots** served at `realvuln.com/v/<version>/`. Written once by `release.py`, never regenerated, and tracked in git so they stay permanent (the paper cites `realvuln.com/v/1.0.0/`). `reports/versions.json` indexes them and drives the dashboard's version switcher (`site/versions.js`)
+
+## Versioning / Releasing
+
+The live site keeps **latest at `/`** and **every past release frozen under `/v/<version>/`**, so URLs printed in the paper never change meaning.
+
+```bash
+make dashboard               # rescore + build the new version into reports/ root
+make release VERSION=2.0.0   # freeze reports/ root -> reports/v/2.0.0/, update versions.json
+# review reports/, then deploy with wrangler (needs explicit user approval to push/deploy)
+make versions                # rebuild reports/versions.json from existing snapshots only
+```
+
+- `release.py` refuses to overwrite an existing `reports/v/<version>/` (a frozen release is immutable; `--force` overrides).
+- `build_site.py` warns if the version currently in `reports/` was never frozen — freeze it before rebuilding or it is lost.
+- The brand version label comes from `benchmark_version` in `dashboard.json` via the `{{VERSION}}` token; `site/versions.js` upgrades it into a dropdown at runtime.
 
 ## Critical Domain Concepts
 

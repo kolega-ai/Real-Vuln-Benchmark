@@ -1,0 +1,215 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-1336",
+      "path": "app/main.py",
+      "start": {
+        "line": 40
+      },
+      "end": {
+        "line": 40
+      },
+      "extra": {
+        "message": "Server-Side Template Injection (SSTI) via name parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "citation": "return Template(content).render()",
+          "proof": "SOURCE: The `name` query parameter on line 18 is attacker-controlled via the HTTP request URL. FLOW: On line 36, `name = name or config.SUPER_SECRET_NAME` accepts the user-supplied value unmodified. On line 37, that value is interpolated into an f-string (`content = f\"<h1>Hello, {name}!...</h1>\"`), embedding raw user input into a Jinja2 template string. SINK: On line 40, `Template(content).render()` compiles and evaluates that string as a Jinja2 template. Because the entire content string (including user input embedded via f-string) is passed to `Template()`, an attacker can inject Jinja2 syntax such as `{{7*7}}`, `{{config}}`, or `{{''.__class__.__mro__[1].__subclasses__()}}` to achieve server-side template execution. This yields full Remote Code Execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "app/main.py",
+      "start": {
+        "line": 40
+      },
+      "end": {
+        "line": 40
+      },
+      "extra": {
+        "message": "Reflected Cross-Site Scripting (XSS) via name parameter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "return Template(content).render()",
+          "proof": "SOURCE: The `name` query parameter on line 18 is attacker-controlled. FLOW: On line 36 the raw value is accepted, and on line 37 it is embedded into an HTML string via f-string interpolation. SINK: On line 40, `Template(content).render()` returns HTML that reflects the attacker input. Jinja2's default ad-hoc Template environment does NOT enable autoescaping (autoescape=False by default). An attacker can send `/?name=<script>alert(document.cookie)</script>` and the script tag will be rendered unescaped in the victim's browser, executing arbitrary JavaScript."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "app/config.py",
+      "start": {
+        "line": 15
+      },
+      "end": {
+        "line": 15
+      },
+      "extra": {
+        "message": "Hardcoded SUPER_SECRET_TOKEN",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "SUPER_SECRET_TOKEN = \"5u93R53Cr3tT0k3n\"  # FIXME: os.getenv(\"SUPER_SECRET_TOKEN\")",
+          "proof": "SOURCE: The SUPER_SECRET_TOKEN credential is defined as a hardcoded string literal on line 15 of config.py. The inline comment `# FIXME: os.getenv(\"SUPER_SECRET_TOKEN\")` explicitly acknowledges it should be read from an environment variable. SINK: This token is hardcoded in source control and will be identical across all deployments. Anyone with access to the repository (or who can read the source via SSTI or source map disclosure) obtains this credential."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "app/main.py",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "Debug Mode Enabled in Production",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "debug=config.DEBUG,",
+          "proof": "SOURCE: FastAPI is instantiated with `debug=config.DEBUG` on line 14 of main.py. The .env_temp file sets `DEBUG=True`, and config.DEBUG resolves to `os.getenv(\"DEBUG\", \"False\").lower() in (\"true\", \"1\", \"yes\", \"y\")` on config.py line 9. SINK: With debug=True, FastAPI/Starlette will return detailed stack traces and source-code snippets on unhandled exceptions, leaking internal paths, variable values, and source code to anyone who triggers an error on the endpoint."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-248",
+      "path": "app/main.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "Uncaught Exception Causes Information Disclosure via Stack Trace",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-248"
+          ],
+          "citation": "except (requests.HTTPError, requests.exceptions.InvalidSchema):",
+          "proof": "SOURCE: The external HTTP request to config.PUBLIC_IP_SERVICE_URL on line 31 can raise many exception types beyond the two caught here \u2014 including requests.exceptions.ConnectionError, requests.exceptions.Timeout, requests.exceptions.TooManyRedirects, and requests.exceptions.RequestException. SINK: These unhandled exceptions propagate up to FastAPI's global exception handler. Because debug=config.DEBUG evaluates to True (app/main.py:14), FastAPI returns full Python stack traces to the client, exposing source code snippets, framework internals, environment variable names, and internal file paths."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1188",
+      "path": "caddy/Caddyfile",
+      "start": {
+        "line": 13
+      },
+      "end": {
+        "line": 13
+      },
+      "extra": {
+        "message": "Web Application Firewall (WAF) Disabled \u2014 SecRuleEngine Off",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1188"
+          ],
+          "citation": "SecRuleEngine Off",
+          "proof": "SOURCE: The Caddyfile defines Coraza WAF rules to block SSTI (id:1001), SQL Injection (id:1002), XSS (id:1003), and Directory Traversal (id:1004) attacks. SINK: Line 13 sets SecRuleEngine Off, which completely disables rule processing. All defined security rules are inert \u2014 requests pass through the proxy with zero WAF inspection. Combined with the debug-mode and SSTI/XSS vulnerabilities in the application, this removes the only defense-in-depth layer that could have blocked these attacks at the proxy level."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1188",
+      "path": "docker-compose.yaml",
+      "start": {
+        "line": 27
+      },
+      "end": {
+        "line": 27
+      },
+      "extra": {
+        "message": "Direct Application Port Exposure Bypassing Reverse Proxy WAF",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1188"
+          ],
+          "citation": "\"1337:1337\" # app",
+          "proof": "SOURCE: The docker-compose configuration maps host port 1337 to container port 1337 inside the caddy service container. SINK: The Caddy reverse proxy normally protects the app via WAF rules defined in caddy/Caddyfile, but exposing port 1337 directly allows attackers to reach the app on this port completely bypassing Caddy. The FastAPI app is directly reachable at http://<host>:1337/ without traversing the proxy, which means ALL WAF rules (SSTI blocking, SQLi blocking, XSS blocking, directory traversal blocking) are circumvented."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "caddy/Caddyfile",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "Verbose WAF Debug Logging Exposes Sensitive Request Data (SecDebugLogLevel 9)",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "SecDebugLogLevel 9",
+          "proof": "SOURCE: The Coraza WAF directive SecDebugLogLevel is set to 9, the most verbose debug logging level. SINK: At level 9, the WAF logs every request's full URI, headers, request body contents, and all matched/unmatched rule evaluations to the Coraza debug log. If the log stream is captured, persisted, or leaked (common in container environments where stdout/stderr feed into log aggregators), this exposes sensitive information such as query parameters, authentication tokens in headers, and PII submitted in request bodies."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "env_temp",
+      "start": {
+        "line": 3
+      },
+      "end": {
+        "line": 3
+      },
+      "extra": {
+        "message": "Environment Template Committed with DEBUG=True Default",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "DEBUG=True",
+          "proof": "SOURCE: The .env_temp file is committed to the repository (only .env is in .gitignore at line 107). It serves as the template for the .env configuration file and sets DEBUG=True as the default. SINK: Developers copying .env_temp to .env inherit this insecure default. The data flow: committed .env_temp:3 DEBUG=True \u2192 copied to .env \u2192 os.getenv('DEBUG') returns 'True' \u2192 config.DEBUG evaluates to True \u2192 FastAPI(debug=True) at app/main.py:14, enabling verbose error pages with full stack traces and auto-reload."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "app/main.py",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Outbound-HTTP Endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@app.get(\"/\", response_class=HTMLResponse)\nasync def try_hack_me(name: str = config.SUPER_SECRET_NAME):",
+          "proof": "SOURCE: The root GET / endpoint (line 19) makes an outbound HTTP request via requests.get(config.PUBLIC_IP_SERVICE_URL) on line 31. SINK: No rate-limiting middleware, throttling, or request-limiting decorator is applied anywhere in the FastAPI application. An attacker can flood this endpoint to exhaust server resources (CPU, memory, file descriptors, outbound connection pool), abuse the outbound call to hammer the external IP service, or cause the server's outbound IP to be rate-limited or banned by the upstream provider."
+        }
+      }
+    }
+  ]
+}

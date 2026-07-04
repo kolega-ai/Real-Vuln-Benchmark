@@ -5,19 +5,24 @@
 (function () {
   'use strict';
   if (!window.RV) return;
-  var SC = window.RV.SCANNERS, COL = window.RV.COL,
+  var COL = window.RV.COL,
       CAT_LABEL = window.RV.CAT_LABEL,
       CWE = window.RV.CWE;
+  var BY_TAB = window.RV.SCANNERS_BY_TAB || { all: window.RV.SCANNERS };
+  var TAB_TOTALS = window.RV.TAB_TOTALS || { all: (window.RV.SCANNERS || []).length };
   var METRIC_LABEL = { f2: 'F2', f3: 'F3' };
 
-  var state = { metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1, cats: { sec: true, llm: true, rule: true } };
+  var state = { tab: 'all', metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1, cats: { sec: true, llm: true, rule: true } };
+  // active scanner list + repo total for the selected corpus tab (reassigned on tab switch)
+  var SC = BY_TAB[state.tab] || window.RV.SCANNERS;
+  function tabTotal() { return TAB_TOTALS[state.tab] || SC.length; }
 
   function mk(base) { return state.mode === 'strict' ? base + 's' : base; }
   function val(s, base) { return s[mk(base)]; }
   function activeF(s) { return val(s, state.metric); }
   function on(s) { return state.cats[s.cat]; }
   function fmt(v) { return v.toFixed(1); }
-  function leaderName() { return SC.reduce(function (m, s) { return activeF(s) > activeF(m) ? s : m; }, SC[0]).name; }
+  function leaderName() { var r = SC.filter(function (s) { return !s.partial; }); if (!r.length) r = SC; return r.reduce(function (m, s) { return activeF(s) > activeF(m) ? s : m; }, r[0]).name; }
   // explicit vendor-site link on the tag line, labeled with the domain
   function extLink(s) {
     if (!s.url) return '';
@@ -33,11 +38,26 @@
   function hideTip() { if (tip) tip.style.opacity = '0'; }
 
   // ---- KPIs ----
+  function setText(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
   function renderKPIs() {
-    var lead = SC[0]; SC.forEach(function (s) { if (activeF(s) > activeF(lead)) lead = s; });
-    document.getElementById('kpi-metric-val').textContent = fmt(activeF(lead));
-    document.getElementById('kpi-metric-lbl').textContent = 'Best ' + METRIC_LABEL[state.metric] + ' (' + state.mode + ')';
-    document.getElementById('kpi-metric-sub').textContent = lead.name;
+    // headline KPIs consider only fully-covered (ranked) scanners
+    var pool = SC.filter(function (s) { return !s.partial; });
+    if (!pool.length) pool = SC;
+    var lead = pool[0]; pool.forEach(function (s) { if (activeF(s) > activeF(lead)) lead = s; });
+    setText('kpi-metric-val', fmt(activeF(lead)));
+    setText('kpi-metric-lbl', 'Best ' + METRIC_LABEL[state.metric] + ' (' + state.mode + ')');
+    setText('kpi-metric-sub', lead.name);
+    // corpus-tab-dependent KPIs
+    setText('kpi-scanners-val', SC.length);
+    setText('kpi-repos-val', tabTotal());
+    setText('kpi-repos-sub', window.RV.TAB_LABELS ? window.RV.TAB_LABELS[state.tab] : 'All apps');
+    var recLead = pool[0];
+    pool.forEach(function (s) { if (val(s, 'rec') > val(recLead, 'rec')) recLead = s; });
+    setText('kpi-recall-val', (val(recLead, 'rec') * 100).toFixed(1));
+    setText('kpi-recall-sub', recLead.name);
+    var loc = (window.RV.DATASET && window.RV.DATASET.loc) || 0;
+    setText('kpi-loc-val', loc.toLocaleString());
+    setText('kpi-loc-sub', 'across all repos');
   }
 
   // ---- leaderboard ----
@@ -46,31 +66,50 @@
     if (!tbody) return;
     var rows = SC.slice(), k = state.sortKey, dir = state.sortDir;
     rows.sort(function (a, b) {
+      // partial-coverage entries always sink below fully-covered ones
+      if (!a.partial !== !b.partial) return a.partial ? 1 : -1;
       if (k === 'name') return dir * a.name.localeCompare(b.name);
       if (k === 'prec') return dir * (a.prec - b.prec);
+      if (k === 'noise') return dir * ((1 - a.prec) - (1 - b.prec));
       if (k === 'repos') return dir * (a.repos - b.repos);
       if (k === 'cost') { var ac = a.cost == null ? -1 : a.cost, bc = b.cost == null ? -1 : b.cost; return dir * (ac - bc); }
+      if (k === 'cpv') { var av = a.cpv == null ? -1 : a.cpv, bv = b.cpv == null ? -1 : b.cpv; return dir * (av - bv); }
+      if (k === 'tp') return dir * ((a.tp || 0) - (b.tp || 0));
+      if (k === 'fp') return dir * ((a.fp || 0) - (b.fp || 0));
+      if (k === 'fptp') { var ar = a.tp ? a.fp / a.tp : Infinity, br = b.tp ? b.fp / b.tp : Infinity; return dir * (ar - br); }
       if (k === 'recall') return dir * (val(a, 'rec') - val(b, 'rec'));
       return dir * (val(a, k) - val(b, k));
     });
-    var maxA = Math.max.apply(null, SC.map(activeF));
+    var ranked = SC.filter(function (s) { return !s.partial; });
+    var maxA = Math.max.apply(null, (ranked.length ? ranked : SC).map(activeF));
     var lead = leaderName();
     tbody.innerHTML = '';
-    rows.forEach(function (s, i) {
+    var rankNo = 0;
+    rows.forEach(function (s) {
       var tr = document.createElement('tr');
-      if (s.name === lead) tr.className = 'leader';
-      tr.style.opacity = on(s) ? '1' : '0.24';
-      var pct = Math.round((activeF(s) / maxA) * 100);
-      var reposCls = s.repos < 26 ? ' class="repos-bad"' : '';
+      if (s.name === lead && !s.partial) tr.className = 'leader';
+      if (s.partial) tr.classList.add('partial');
+      tr.style.opacity = on(s) ? '' : '0.24';
+      var pct = Math.min(100, Math.round((activeF(s) / maxA) * 100));
+      var total = tabTotal();
+      var reposCls = s.repos < total ? ' class="repos-bad"' : '';
+      var rankCell = s.partial
+        ? '<span class="rank" title="Unranked — scanned fewer than 95% of this corpus; score not comparable">—</span>'
+        : '<span class="rank">' + String(++rankNo).padStart(2, '0') + '</span>';
       tr.innerHTML =
-        '<td class="l"><span class="rank">' + String(i + 1).padStart(2, '0') + '</span></td>' +
+        '<td class="l">' + rankCell + '</td>' +
         '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' +
           '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
+        '<td title="Real vulnerabilities found (true positives)">' + (s.tp == null ? '—' : s.tp.toLocaleString()) + '</td>' +
+        '<td title="False positives — flagged but not a real vulnerability">' + (s.fp == null ? '—' : s.fp.toLocaleString()) + '</td>' +
+        '<td title="False positives per true positive (FP ÷ TP) — lower is better">' + (s.tp ? (s.fp / s.tp).toFixed(2) : '—') + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
-        '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/26</span></td>' +
-        '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + s.cost.toFixed(0)) + '</td>';
+        '<td title="Noise — share of findings that were false alarms (100% − precision)">' + (100 - s.prec * 100).toFixed(1) + '</td>' +
+        '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/' + total + '</span></td>' +
+        '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : ' title="API spend per 100,000 lines of code scanned"') + '>' + (s.cost == null ? '—' : s.cost === 0 ? 'Free' : (s.est ? '~$' : '$') + s.cost.toLocaleString()) + '</td>' +
+        '<td class="dim" title="API spend per 100 real vulnerabilities found">' + (s.cpv == null ? '—' : s.cpv === 0 ? 'Free' : '$' + s.cpv.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})) + '</td>';
       tbody.appendChild(tr);
     });
     var mth = document.querySelector('#dlb th.metric-th');
@@ -124,21 +163,27 @@
     });
   }
   function renderCost() {
+    var pts = SC.filter(function (s) { return s.cost != null; });
+    // round the axis up to a clean ceiling above the priciest scanner
+    var maxCost = pts.reduce(function (m, s) { return Math.max(m, s.cost); }, 0);
+    var step = maxCost > 400 ? 200 : maxCost > 200 ? 100 : maxCost > 100 ? 50 : 20;
+    var xMax = Math.max(step, Math.ceil(maxCost / step) * step);
+    var xTicks = []; for (var t = 0; t <= xMax; t += step) xTicks.push(t);
     renderScatter('cost-scatter', {
-      points: SC.filter(function (s) { return s.cost != null; }),
+      points: pts,
       x: function (s) { return s.cost; }, y: function (s) { return activeF(s); },
-      xMax: 70, yMax: 100, xTicks: [0, 20, 40, 60], yTicks: [0, 25, 50, 75, 100],
-      xFmt: function (t) { return '$' + t; }, yFmt: function (t) { return String(t); },
-      xLabel: 'Run cost (USD) →', yLabel: METRIC_LABEL[state.metric] + ' →',
-      tip: function (s) { return METRIC_LABEL[state.metric] + ' ' + fmt(activeF(s)) + ' · ' + (s.est ? '~$' : '$') + s.cost.toFixed(2) + (s.est ? ' (est.)' : ''); }
+      xMax: xMax, yMax: 100, xTicks: xTicks, yTicks: [0, 25, 50, 75, 100],
+      xFmt: function (t) { return '$' + t.toLocaleString(); }, yFmt: function (t) { return String(t); },
+      xLabel: 'Cost per 100k LOC (USD) →', yLabel: METRIC_LABEL[state.metric] + ' →',
+      tip: function (s) { return METRIC_LABEL[state.metric] + ' ' + fmt(activeF(s)) + ' · ' + (s.est ? '~$' : '$') + s.cost.toLocaleString() + '/100k LOC' + (s.est ? ' (est.)' : ''); }
     });
-    var tag = document.getElementById('cost-metric-tag'); if (tag) tag.textContent = METRIC_LABEL[state.metric] + ' vs cost';
+    var tag = document.getElementById('cost-metric-tag'); if (tag) tag.textContent = METRIC_LABEL[state.metric] + ' vs cost/100k LOC';
   }
 
   // ---- ranking bars ----
   function renderRanking(id, getter, fmtFn) {
     var host = document.getElementById(id); if (!host) return;
-    var rows = SC.slice().sort(function (a, b) { return getter(b) - getter(a); });
+    var rows = SC.filter(function (s) { return !s.partial; }).sort(function (a, b) { return getter(b) - getter(a); });
     var max = Math.max.apply(null, rows.map(getter));
     host.innerHTML = '';
     rows.forEach(function (s) {
@@ -160,7 +205,9 @@
     var host = document.getElementById('cat-stats'); if (!host) return;
     host.innerHTML = '';
     ['sec', 'llm', 'rule'].forEach(function (cat) {
-      var grp = SC.filter(function (s) { return s.cat === cat; });
+      var grp = SC.filter(function (s) { return s.cat === cat && !s.partial; });
+      if (!grp.length) grp = SC.filter(function (s) { return s.cat === cat; });
+      if (!grp.length) return;
       var arr = grp.map(activeF).sort(function (a, b) { return a - b; });
       var best = Math.max.apply(null, arr);
       var med = arr.length % 2 ? arr[(arr.length - 1) / 2] : (arr[arr.length / 2 - 1] + arr[arr.length / 2]) / 2;
@@ -199,6 +246,19 @@
 
   // ---- controls ----
   function rerenderAll() { renderKPIs(); renderLeaderboard(); renderPR(); renderCost(); renderRankings(); renderCategory(); }
+
+  // ---- corpus tabs (All / Intentionally Vulnerable / Vibe Coded) ----
+  document.querySelectorAll('#corpus-tabs .ctab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var tab = btn.getAttribute('data-tab');
+      if (!BY_TAB[tab] || tab === state.tab) return;
+      document.querySelectorAll('#corpus-tabs .ctab').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      state.tab = tab;
+      SC = BY_TAB[tab];
+      rerenderAll();
+    });
+  });
 
   document.querySelectorAll('.metric-toggle [data-metric]').forEach(function (btn) {
     btn.addEventListener('click', function () {

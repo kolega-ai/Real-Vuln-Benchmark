@@ -252,6 +252,59 @@ def _llm_repair_json(broken_json: str) -> str | None:
         return None
 
 
+def _llm_extract_json(raw_text: str) -> str | None:
+    """Use GPT-4o-mini to EXTRACT findings JSON from raw model output.
+
+    Used when regex extraction finds no JSON block at all — e.g. reasoning
+    models that wrap findings in prose/<think> tags. Extraction, not generation:
+    the model only pulls findings already present in the text, never invents
+    them. Returns a JSON string or None. Gated by LLM_JSON_REPAIR + OPENAI_API_KEY.
+    """
+    import logging
+    import os
+
+    logger = logging.getLogger("output_validator")
+    if os.environ.get("LLM_JSON_REPAIR", "1") == "0":
+        return None
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    max_chars = 200_000  # raw agent transcripts are large; findings come at the end
+    if len(raw_text) > max_chars:
+        raw_text = raw_text[-max_chars:]
+
+    logger.warning("Attempting LLM JSON extraction via gpt-4o-mini (%d chars)", len(raw_text))
+    try:
+        import openai
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You extract security findings from a code scanner's raw output, which may "
+                        "contain reasoning, prose, or markdown. Output ONLY a JSON object of the form "
+                        '{"results":[{"check_id":"...","path":"...","start":{"line":1},'
+                        '"extra":{"message":"...","severity":"ERROR","metadata":{"cwe":["CWE-..."]}}}]}. '
+                        "Include ONLY findings explicitly present in the text — never invent any, and "
+                        "preserve their file paths and line numbers exactly. If the text reports no "
+                        'vulnerabilities, output {"results":[]}. No markdown fences, no explanation.'
+                    ),
+                },
+                {"role": "user", "content": raw_text},
+            ],
+            max_completion_tokens=16_000,
+            temperature=0,
+        )
+        logger.info("LLM JSON extraction returned")
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        logger.warning("LLM JSON extraction failed: %s", e)
+        return None
+
+
 def validate_output(raw_text: str) -> ValidationResult:
     """Validate and repair LLM output into Semgrep-compatible JSON.
 
@@ -262,14 +315,20 @@ def validate_output(raw_text: str) -> ValidationResult:
         ValidationResult with the validated/repaired data or errors.
     """
     json_str = extract_json_from_text(raw_text)
-    if json_str is None:
-        return ValidationResult(
-            valid=False,
-            data=None,
-            errors=["Could not extract JSON from LLM output"],
-        )
-
     llm_repaired = False
+    if json_str is None:
+        # No JSON block found by regex (common with reasoning models that bury
+        # findings in prose/<think>). Ask the LLM to extract the findings.
+        extracted = _llm_extract_json(raw_text)
+        json_str = extract_json_from_text(extracted) if extracted else None
+        if json_str is None:
+            return ValidationResult(
+                valid=False,
+                data=None,
+                errors=["Could not extract JSON from LLM output"],
+            )
+        llm_repaired = True
+
     try:
         data = json.loads(json_str)
     except json.JSONDecodeError as e:

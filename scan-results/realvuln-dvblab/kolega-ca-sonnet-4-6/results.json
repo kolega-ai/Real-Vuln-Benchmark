@@ -1,0 +1,556 @@
+{
+  "results": [
+    {
+      "path": "backend/app.py",
+      "check_id": "kolega.claude-adaptation.cors-misconfiguration",
+      "start": {
+        "line": 49,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CORS Origin Reflection with Credentials Allowed \u2014 Attacker can host a malicious page that makes credentialed cross-origin requests to the API, reading JWT tokens, account balances, SSNs, and triggering transfers on behalf of authenticated victims. [verified: Lines 48-53 unconditionally reflect the client-supplied `Origin` header as `Access-Control-Allow-Origin` and simultaneously set `Access-Control-Allow-Credentials: true` with no allowlist; any attacker-controlled origin is trusted, completely defeating the Same-Origin Policy for credentialed requests.]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-346"
+          ],
+          "kolega": {
+            "cluster_id": "cors_misconfiguration",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/auth.py",
+      "check_id": "kolega.claude-adaptation.hardcoded-credentials",
+      "start": {
+        "line": 19,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Hardcoded JWT Secret Key ('secret') \u2014 An attacker knowing the key 'secret' can forge valid JWT tokens for any user_id, bypassing all authentication and gaining access to any account. [verified: JWT tokens are signed and verified with the hardcoded literal string `'secret'` in both `backend/routes/auth_routes.py:44` and `backend/auth.py:22`, with no environment variable or config indirection whatsoever. Any attacker who reads the source or simply guesses this trivial key can forge valid JWT tokens for any `user_id`, bypassing all authentication.]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-321"
+          ],
+          "kolega": {
+            "cluster_id": "hardcoded_credentials",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/auth_routes.py",
+      "check_id": "kolega.claude-adaptation.sql-injection",
+      "start": {
+        "line": 35,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "SQL Injection in /api/login (SELECT) \u2014 Authentication bypass, full user credential dump including MD5 hashes, account takeover. [verified: At line 35, the username is directly interpolated into a raw SQL SELECT query (`f\"SELECT * FROM user WHERE username = '{username}'\"`) executed via db.session.execute() with no parameterization or escaping, allowing classic authentication bypass payloads like `' OR '1'='1'--` to return all users or bypass the password check entirely.]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "kolega": {
+            "cluster_id": "sql_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/auth_routes.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 133,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "IDOR \u2014 Unauthorized Password Change via user_id in Request Body \u2014 Any authenticated user can change the password of any other account, enabling full account takeover of all users including admins. [verified: At lines 102-104, `user_id` is taken directly from the request body and used in `User.query.get(user_id)` with no check that `user_id == current_user.id`; the `@token_required` decorator only establishes identity without enforcing ownership, so any authenticated user can change any other user's password.]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/auth_routes.py",
+      "check_id": "kolega.claude-adaptation.insecure-deserialization",
+      "start": {
+        "line": 153,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Insecure Deserialization / RCE via yaml.load with unsafe Loader \u2014 Remote code execution on the server; full system compromise including database exfiltration, lateral movement, and persistent access. [verified: At line 115, `yaml.load(profile_yaml, Loader=yaml.Loader)` is called on attacker-supplied YAML from the request body; yaml.Loader is the full unsafe loader that supports Python object constructors (e.g., `!!python/object/apply:os.system`), and the only guard (line 116) checks if the result is a dict, which does not prevent RCE since the constructor executes during parsing before the isinstance che]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_deserialization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "frontend/src/components/PasswordUpdate.js",
+      "check_id": "kolega.claude-adaptation.insecure-direct-object-reference",
+      "start": {
+        "line": 21,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "IDOR \u2014 Attacker-Controlled user_id in Password Update Request Body \u2014 An authenticated attacker can change any other user's password by supplying a different user_id in the POST body, achieving full account takeover of any account in the application. [verified: The `/api/update-password` backend reads `user_id` exclusively from the attacker-controlled JSON request body (`data.get('user_id')`) and performs no ownership check \u2014 `current_user` injected by `@token_required` is accepted as a parameter but never referenced inside the function. Any authenticated user can therefore supply an arbitrary `user_id` in the POST body and reset any other account's pass]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_direct_object_reference",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "frontend/src/components/TransactionList.js",
+      "check_id": "kolega.claude-adaptation.sql-injection",
+      "start": {
+        "line": 35,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "SQL Injection via Transaction Search Input (Frontend Trigger) \u2014 Attacker can extract the entire database (all users, passwords, SSNs, balances), modify data, or potentially execute admin SQLite functions by crafting a malicious search string. [verified: The backend /api/transactions/search endpoint builds its SQL query via f-string interpolation: `description LIKE '%{search_term}%'`, with search_term taken directly from the query string after only URL-encoding on the frontend (which does not neutralize SQL metacharacters). There is no parameterization or sanitization, enabling a full SQL injection attack to extract all users, passwords, SSNs, and]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "kolega": {
+            "cluster_id": "sql_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app.py",
+      "check_id": "kolega.claude-adaptation.security-misconfiguration",
+      "start": {
+        "line": 213,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Flask Debug Mode Enabled on 0.0.0.0 \u2014 An attacker who triggers an unhandled exception can access the Werkzeug interactive debugger and execute arbitrary Python code on the server. [verified: Line 213 sets `debug=True` with `host='0.0.0.0'`, enabling the Werkzeug interactive REPL on all interfaces; an attacker who triggers any unhandled exception can access the debugger (PIN is derivable from filesystem metadata) and execute arbitrary Python code.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "kolega": {
+            "cluster_id": "security_misconfiguration",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/models.py",
+      "check_id": "kolega.claude-adaptation.weak-cryptography",
+      "start": {
+        "line": 22,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Weak Password Hashing \u2014 Unsalted MD5 \u2014 If the database is leaked (e.g., via SQLi), all user passwords can be recovered instantly using precomputed rainbow tables or fast GPU cracking. [verified: Both `backend/models.py` (line 22, `hashlib.md5(password.encode()).hexdigest()`) and `backend/auth_routes.py` use unsalted MD5 for password hashing \u2014 no salt, no KDF, no stretching. If the database is obtained (e.g., via the confirmed SQLi on the same routes), all password hashes are immediately reversible via precomputed rainbow tables or fast GPU cracking.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-916"
+          ],
+          "kolega": {
+            "cluster_id": "weak_cryptography",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/auth_routes.py",
+      "check_id": "kolega.claude-adaptation.sql-injection",
+      "start": {
+        "line": 23,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "SQL Injection in /api/register (INSERT) \u2014 Attacker can manipulate the INSERT query, potentially exfiltrate data, truncate tables, or corrupt the database at registration time. [verified: The username from request.get_json() is interpolated directly into an f-string INSERT query at line 22-23 (`INSERT INTO user ... VALUES ('{username}', ...)`) with no parameterization; the only prior check (line 18) uses ORM to verify uniqueness but does not sanitize or escape the value before it is passed to db.session.execute() as raw SQL.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "kolega": {
+            "cluster_id": "sql_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/auth_routes.py",
+      "check_id": "kolega.claude-adaptation.missing-rate-limiting",
+      "start": {
+        "line": 32,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "No Rate Limiting / Brute-Force Protection on /api/login \u2014 An attacker can perform unlimited credential stuffing or brute-force attacks against any user account with no detection or blocking. [verified: The `LoginAttempt` model records attempts (lines 51-57 of models.py) but the login route at lines 30-70 never queries `LoginAttempt` to enforce rate limiting, lockout, or throttling; unlimited login attempts are possible against any account with no server-side enforcement.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "kolega": {
+            "cluster_id": "missing_rate_limiting",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/auth_routes.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-exposure",
+      "start": {
+        "line": 97,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Sensitive PII (SSN, DOB) Exposed in API Responses \u2014 Full SSNs, dates of birth, phone numbers, and addresses are returned to any authenticated caller of /api/me, enabling identity theft. [verified: The `/api/me` endpoint at line 80 returns the full profile via `current_user.get_profile()`, and the profile blob contains SSN, DOB, phone, and address fields seeded in plaintext in app.py; there is no filtering or redaction of sensitive fields before the response is returned to any authenticated caller.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_exposure",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/auth_routes.py",
+      "check_id": "kolega.claude-adaptation.missing-authentication",
+      "start": {
+        "line": 123,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Password Change Requires No Current Password Verification \u2014 Any attacker with a valid JWT (stolen via XSS, token leakage, or network interception) can permanently change the account password with no re-authentication, achieving full account takeover and locking out the legitimate owner [verified: The `/api/update-password` endpoint at lines 98-109 requires only a valid JWT (via @token_required) and a new_password; it never reads or verifies the current password before calling `user.set_password(new_password)`, so any attacker with a stolen or IDOR-obtained session token can permanently change the victim's password with no re-authentication barrier.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-620"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authentication",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/transaction_routes.py",
+      "check_id": "kolega.claude-adaptation.business-logic",
+      "start": {
+        "line": 14,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Negative Transfer Amount Enables Fund Theft \u2014 Any authenticated user can steal money from any other user by sending a negative transfer amount; attacker needs zero existing balance to drain victim accounts completely [verified: There is no validation that `amount` is positive anywhere between line 14 (where it is read) and lines 30\u201334 (where it is used); a negative amount makes the `balance < amount` check trivially false and causes `balance -= amount` to increase the sender's balance while decreasing the victim's, enabling fund theft with zero starting balance.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-840"
+          ],
+          "kolega": {
+            "cluster_id": "business_logic",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/transaction_routes.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 42,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "IDOR \u2014 Cross-User Transaction History Access \u2014 Any authenticated user can enumerate and read all transactions of any other user, exposing financial history and transaction metadata. [verified: Line 47 reads `user_id` from the attacker-controlled query string (`request.args.get('user_id', current_user.id)`) and uses it to filter transactions without ever comparing it to `current_user.id`, so any authenticated user can pass an arbitrary `user_id` to read any other user's full transaction history.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/transaction_routes.py",
+      "check_id": "kolega.claude-adaptation.sql-injection",
+      "start": {
+        "line": 44,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "SQL Injection + IDOR in /api/transactions \u2014 Any authenticated user can read any other user's full transaction history; SQL injection enables further database exfiltration. [verified: Line 47 accepts `user_id` directly from the query string with no ownership check against `current_user.id`, and line 49 inserts it verbatim into an f-string SQL query with no parameterization \u2014 both IDOR and SQLi are confirmed with no compensating controls.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "kolega": {
+            "cluster_id": "sql_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/transaction_routes.py",
+      "check_id": "kolega.claude-adaptation.sql-injection",
+      "start": {
+        "line": 73,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "SQL Injection in /api/transactions/search \u2014 Full database read/exfiltration via UNION or error-based injection; can leak all users, passwords, SSNs, and balances. [verified: Line 89 takes `search_term` from the query string and line 93 splices it directly into an f-string SQL query; the code's own comment confirms the deliberate vulnerability, and there is no sanitization or parameterization anywhere on this path.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "kolega": {
+            "cluster_id": "sql_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "frontend/src/App.js",
+      "check_id": "kolega.claude-adaptation.insecure-token-storage",
+      "start": {
+        "line": 52,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "JWT Stored in localStorage (XSS-Accessible Token Storage) \u2014 Any XSS payload can silently steal the authentication token and replay it to take over the victim's banking session, including viewing balances, transaction history, SSNs, and initiating transfers. [verified: The JWT is stored via localStorage.setItem('token', data.token) at line 52 and read back by every subsequent API call, making it trivially accessible to any JavaScript running on the page. No HttpOnly cookie or other exfiltration barrier exists; combined with the absence of server-side token revocation (confirmed in threat model), any XSS vulnerability\u2014present or future\u2014allows full session takeove]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-922"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_token_storage",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "frontend/src/components/TransactionList.js",
+      "check_id": "kolega.claude-adaptation.insecure-direct-object-reference",
+      "start": {
+        "line": 15,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "IDOR \u2014 user_id Query Parameter Exposes Any User's Transactions \u2014 An authenticated attacker can read the complete transaction history of any other user by iterating user_id values, exposing financial activity, transfer recipients, and descriptions. [verified: The backend /api/transactions endpoint reads user_id directly from the query string with no ownership check \u2014 `request.args.get('user_id', current_user.id)` \u2014 and the @token_required decorator only validates the JWT without verifying the requested user_id matches the token owner. Any authenticated user can substitute any other user's ID to retrieve their full transaction history.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_direct_object_reference",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app.py",
+      "check_id": "kolega.claude-adaptation.information-disclosure",
+      "start": {
+        "line": 76,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Verbose 500 Error Handler Exposes Database Schema via Error Messages \u2014 Attacker receives full SQLAlchemy/SQLite error messages including the executed SQL query, table names, column names, and constraint names, enabling error-based SQL injection exploitation and schema enumeration [verified: The 500 handler at line 76 returns `str(error)` verbatim, and SQLAlchemy exceptions include the offending SQL statement text; when SQL injection payloads cause database errors the full query with injected content, table names, and column names are disclosed in the HTTP response, enabling error-based SQL injection enumeration.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "kolega": {
+            "cluster_id": "information_disclosure",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/auth_routes.py",
+      "check_id": "kolega.claude-adaptation.insecure-session-management",
+      "start": {
+        "line": 87,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "No Server-Side JWT Token Invalidation on Logout \u2014 A stolen or captured JWT token remains usable for up to 24 hours after logout, enabling session hijacking even after the user believes they have ended their session. [verified: The logout endpoint at line 72-75 performs no server-side action (no token blocklist, no session invalidation), and the JWT is signed with a 24-hour expiry; a stolen token remains fully valid for up to 24 hours after logout with no mechanism to revoke it.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_session_management",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/transaction_routes.py",
+      "check_id": "kolega.claude-adaptation.race-condition",
+      "start": {
+        "line": 29,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Race Condition / Double-Spend in /api/transfer \u2014 An attacker can send concurrent transfer requests to overdraft their account and transfer more funds than their balance allows, causing financial loss. [verified: The balance check on line 30 and the deduction on line 33 are two separate non-atomic operations with no row-level lock or database transaction isolation; `isolation_level=None` in the SQLAlchemy config (autocommit mode) makes this worse, so concurrent requests can both pass the check before either deduction is committed, enabling a double-spend.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-362"
+          ],
+          "kolega": {
+            "cluster_id": "race_condition",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/routes/auth_routes.py",
+      "check_id": "kolega.claude-adaptation.user-enumeration",
+      "start": {
+        "line": 19,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Username Enumeration via Registration and Login Responses \u2014 Attacker can enumerate valid usernames to focus brute-force or credential stuffing attacks. [verified: The registration endpoint returns a distinct `'Username already exists'` error (line 19) when a username is taken versus success for a new username, allowing an attacker to enumerate valid usernames by probing /api/register; the login endpoint uses a generic message but registration provides the enumeration vector.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "kolega": {
+            "cluster_id": "user_enumeration",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    }
+  ]
+}

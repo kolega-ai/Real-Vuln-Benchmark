@@ -188,7 +188,8 @@ def compute_scanner_costs(
     """
     from collections import defaultdict
     costs: dict[str, dict] = defaultdict(
-        lambda: {"total_cost": 0.0, "successful_runs": 0, "repos_scanned": set()}
+        lambda: {"total_cost": 0.0, "successful_runs": 0, "repos_scanned": set(),
+                 "loc_passes": 0}
     )
 
     for repo_dir in scan_dir.iterdir():
@@ -206,16 +207,23 @@ def compute_scanner_costs(
                     if d.get("exit_status") == "success":
                         costs[scanner_dir.name]["successful_runs"] += 1
                         costs[scanner_dir.name]["repos_scanned"].add(repo_dir.name)
+                        # accumulate LOC per successful run so cost/LOC counts every
+                        # pass over the code, matching the all-runs cost numerator
+                        costs[scanner_dir.name]["loc_passes"] += repo_loc.get(repo_dir.name, 0)
                 except (json.JSONDecodeError, OSError):
                     pass
 
     result = {}
     for scanner in scanners:
-        c = costs.get(scanner, {"total_cost": 0.0, "successful_runs": 0, "repos_scanned": set()})
+        c = costs.get(scanner, {"total_cost": 0.0, "successful_runs": 0,
+                                "repos_scanned": set(), "loc_passes": 0})
         runs = c["successful_runs"]
+        # distinct LOC of the corpus this scanner covered (reported for reference)
         total_loc = sum(repo_loc.get(r, 0) for r in c["repos_scanned"])
-        # Cost per 100 LOC: total cost / (total LOC / 100)
-        cost_per_100_loc = round(c["total_cost"] / (total_loc / 100), 4) if total_loc > 0 else 0
+        # LOC summed across every successful run — the denominator that matches the
+        # all-runs total_cost numerator (a 3-run scanner scans the corpus ~3x)
+        loc_passes = c["loc_passes"]
+        cost_per_100_loc = round(c["total_cost"] / (loc_passes / 100), 4) if loc_passes > 0 else 0
         result[scanner] = {
             "total_cost": round(c["total_cost"], 4),
             "successful_runs": runs,
@@ -398,6 +406,50 @@ def compute_aggregates(
         }
 
     return agg
+
+
+# Repo-source subsets for the public dashboard tabs. Keyed by GT `authorship`.
+REPO_SOURCES = {"intentional": "human_authored", "vibe": "llm_generated"}
+
+
+def load_repo_sources(gt_dir: Path, repos: list[str]) -> dict[str, str]:
+    """Map repo -> source key ('intentional' | 'vibe') from GT authorship.
+
+    Repos without an authorship field fall back on the vc- name prefix used by
+    the seeded (vibe-coded) corpus.
+    """
+    by_authorship = {v: k for k, v in REPO_SOURCES.items()}
+    sources: dict[str, str] = {}
+    for repo in repos:
+        gt_path = gt_dir / repo / "ground-truth.json"
+        authorship = ""
+        if gt_path.exists():
+            with open(gt_path) as f:
+                authorship = json.load(f).get("authorship") or ""
+        fallback = "vibe" if repo.startswith("vc-") else "intentional"
+        sources[repo] = by_authorship.get(authorship, fallback)
+    return sources
+
+
+def compute_source_aggregates(
+    grid: dict[str, dict[str, dict | None]],
+    scanners: list[str],
+    gt_dir: Path,
+) -> tuple[dict[str, dict], dict[str, list[str]]]:
+    """Per-source aggregates for the dashboard tabs.
+
+    Returns (source_aggregates, source_repos) where each source's aggregates
+    are computed by compute_aggregates over only that source's repos — so
+    strict mode penalizes unscanned repos within the subset, not outside it.
+    """
+    repo_sources = load_repo_sources(gt_dir, list(grid))
+    source_aggregates: dict[str, dict] = {}
+    source_repos: dict[str, list[str]] = {}
+    for source in REPO_SOURCES:
+        sub_grid = {r: grid[r] for r in grid if repo_sources[r] == source}
+        source_repos[source] = sorted(sub_grid)
+        source_aggregates[source] = compute_aggregates(sub_grid, scanners, gt_dir)
+    return source_aggregates, source_repos
 
 
 def compute_cwe_coverage(
@@ -1743,6 +1795,8 @@ def build_json_report(
     aggregates: dict[str, dict],
     manifest: dict | None = None,
     scanner_metadata: dict | None = None,
+    source_aggregates: dict | None = None,
+    source_repos: dict | None = None,
 ) -> dict:
     """Build machine-readable JSON report."""
     report: dict = {
@@ -1767,6 +1821,10 @@ def build_json_report(
         report["default_prompt_version"] = manifest.get("default_prompt_version")
     if scanner_metadata:
         report["scanner_metadata"] = scanner_metadata
+    if source_aggregates:
+        report["source_aggregates"] = source_aggregates
+    if source_repos:
+        report["source_repos"] = source_repos
     return report
 
 
@@ -1777,13 +1835,6 @@ def build_json_report(
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Multi-Scanner Dashboard — compare F2 scores across repos"
-    )
-    parser.add_argument(
-        "-o", "--output",
-        # Legacy Plotly view. The public site (reports/dashboard.html) is built by
-        # build_site.py from the JSON below; keep this off that path so it can't clobber it.
-        default=str(SCRIPT_DIR / "reports" / "legacy-dashboard.html"),
-        help="Legacy HTML output path (default: reports/legacy-dashboard.html)",
     )
     parser.add_argument(
         "--json",
@@ -1892,6 +1943,7 @@ def main() -> int:
     # Score everything
     grid = score_all(repos, scanners, gt_dir, scan_dir, cwe_families)
     aggregates = compute_aggregates(grid, scanners, gt_dir)
+    source_aggregates, source_repos = compute_source_aggregates(grid, scanners, gt_dir)
     scanner_costs = compute_scanner_costs(scan_dir, scanners, repo_loc)
     scanner_metadata = compute_scanner_metadata(scan_dir, scanners)
 
@@ -1931,40 +1983,28 @@ def main() -> int:
         if dropped:
             print(f"Dropped {dropped} scanners with < {args.min_repos} repos")
 
-    # Build outputs
-    output_path = Path(args.output)
-    detail_dir_name = "scanners"
-    html = build_html(
-        grid, scanners, aggregates, repos,
-        detail_dir=detail_dir_name,
-        gt_total_vulns=gt_total_vulns,
-        gt_total_traps=gt_total_traps,
-        gt_total_repos=gt_total_repos,
-        gt_total_loc=gt_total_loc,
-        cwe_families=cwe_families,
-        manifest=manifest,
-    )
+    # Prune every emitted structure to the kept scanners — otherwise dropped
+    # scanners' data still ships in dashboard.json (and build_detail_pages
+    # regenerates their detail pages from `aggregates`).
+    kept = set(scanners)
+    aggregates = {s: v for s, v in aggregates.items() if s in kept}
+    scanner_metadata = {s: v for s, v in scanner_metadata.items() if s in kept}
+    grid = {
+        repo: {s: v for s, v in row.items() if s in kept}
+        for repo, row in grid.items()
+    }
+    source_aggregates = {
+        src: {s: v for s, v in per.items() if s in kept}
+        for src, per in source_aggregates.items()
+    }
+
+    # dashboard.py is the data source of truth: it emits dashboard.json only.
+    # All HTML (reports/dashboard.html, scanners/*.html) is built by build_site.py.
     report = build_json_report(
         grid, scanners, aggregates,
         manifest=manifest, scanner_metadata=scanner_metadata,
+        source_aggregates=source_aggregates, source_repos=source_repos,
     )
-
-    # Write main dashboard
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(html)
-    print(f"HTML dashboard: {output_path}")
-
-    # Write scanner detail pages
-    scanner_detail_dir = output_path.parent / detail_dir_name
-    scanner_detail_dir.mkdir(parents=True, exist_ok=True)
-    for scanner in scanners:
-        detail_html = build_scanner_detail_html(
-            scanner, grid, repos, aggregates,
-            scanner_metadata=scanner_metadata.get(scanner, {"has_metrics": False}),
-        )
-        detail_path = scanner_detail_dir / f"{scanner}.html"
-        detail_path.write_text(detail_html)
-    print(f"Scanner detail pages: {scanner_detail_dir}/ ({len(scanners)} pages)")
 
     json_path = Path(args.json)
     json_path.parent.mkdir(parents=True, exist_ok=True)

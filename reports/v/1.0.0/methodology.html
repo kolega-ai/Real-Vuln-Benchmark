@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-BD1PYVN294"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-BD1PYVN294');
+</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Methodology — RealVuln</title>
+<meta name="description" content="RealVuln benchmark design: target-type taxonomy, ground-truth labeling, the finding-matching algorithm, and recall-weighted F3 scoring." />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<!-- RV-ARCHIVE-BANNER -->
+<div style="background:#3a2e12;color:#f0e6d2;border-bottom:1px solid #cfa45c;font:500 13px/1.5 system-ui,sans-serif;padding:8px 16px;text-align:center">You are viewing an <strong>archived release</strong> — RealVuln <strong>v1.0</strong>, the version described in the paper. <a href="https://realvuln.com" style="color:#cfa45c;font-weight:700;text-decoration:underline">View the latest benchmark &rarr;</a></div>
+
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="index.html"><span class="mark">▚</span> real<span style="color:var(--accent)">vuln</span> <span class="v">v1.0</span></a>
+    <nav class="topnav">
+      <span class="navlinks" style="display:contents">
+        <a href="dashboard.html">Dashboard</a>
+        <a href="methodology.html" style="color:var(--fg)">Methodology</a>
+        <a href="dataset.html">Dataset</a>
+        <a href="findings.html">Findings</a>
+        <a href="roadmap.html">Roadmap</a>
+      </span>
+      <a class="gh" href="https://github.com/kolega-ai/Real-Vuln-Benchmark" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+      <button class="nav-toggle" aria-label="Menu">≡</button>
+    </nav>
+  </div>
+</header>
+
+<div class="mobile-menu" id="mobile-menu">
+  <a href="dashboard.html">Dashboard</a>
+  <a href="methodology.html">Methodology</a>
+  <a href="dataset.html">Dataset</a>
+  <a href="findings.html">Findings</a>
+  <a href="roadmap.html">Roadmap</a>
+  <a href="https://github.com/kolega-ai/Real-Vuln-Benchmark" target="_blank" rel="noopener">GitHub ↗</a>
+</div>
+
+<main>
+
+<section class="wrap page-hero" data-screen-label="Methodology — hero">
+  <div class="breadcrumb"><a href="index.html">RealVuln</a><span class="sep">/</span><span>Methodology</span></div>
+  <div class="ph-num">01 · Methodology</div>
+  <h1>Benchmark design &amp; scoring</h1>
+  <p class="lede">Every design choice optimizes for one property: results that can be audited line by line and reproduced exactly. This page documents the taxonomy, labeling, matching, and metrics.</p>
+</section>
+
+<!-- motivation -->
+<section class="content" data-screen-label="Motivation">
+  <div class="wrap">
+    <div class="subhead"><span class="sn">1.1</span><h2>Motivation</h2></div>
+    <div class="prose">
+      <p>Static analysis is core to secure development, but noise has eroded its practical value. A reported false-positive rate of <strong>99.5%</strong> for command-injection findings in Python/Flask applications, and NIST's finding that only <strong>8–30%</strong> of tool warnings were security-relevant, are representative of the field.<sup class="ref">[Ghost Security; NIST SATE]</sup> A separate 36-scanner study found the best automated tool detected only <strong>22.7%</strong> of known vulnerabilities.<sup class="ref">[Fluid Attacks]</sup></p>
+      <p>LLM-powered scanners claim deeper reasoning about data flow and exploitability, but no open benchmark existed to test that claim on real code. Existing benchmarks each fall short on at least one dimension: synthetic code (OWASP Benchmark, NIST Juliet), closed data (SastBench), vendor-controlled methodology (ZeroPath, Cycode, DryRun), or no false-positive measurement. RealVuln is built to address these simultaneously.</p>
+    </div>
+
+    <div class="figure" style="margin-top:30px;padding:0;overflow:hidden">
+      <div class="codeblock" style="border:none;border-radius:0;background:transparent">
+        <div class="cb-head"><span class="cb-title">comparison with prior SAST benchmarks</span></div>
+        <pre>                          Real   Open   Open    FP     Multi   LLM
+                          Code   Data   Scoring Test   Scanner Scan.
+  OWASP Benchmark          <span class="tok">✕</span>      ✓      ✓       ✓      ✓       <span class="tok">✕</span>
+  NIST Juliet              <span class="tok">✕</span>      ✓      <span class="tok">✕</span>       <span class="tok">✕</span>      <span class="tok">✕</span>       <span class="tok">✕</span>
+  SastBench                ✓      <span class="tok">✕</span>      <span class="tok">✕</span>       ✓      <span class="tok">✕</span>       <span class="tok">✕</span>
+  Fluid Attacks            ✓      <span class="tok">✕</span>      <span class="tok">✕</span>       ✓      ✓       <span class="tok">✕</span>
+  Cycode / DryRun          ✓      ~      <span class="tok">✕</span>       <span class="tok">✕</span>      ✓       <span class="tok">✕</span>
+  <span class="str">RealVuln (ours)          ✓      ✓      ✓       ✓      ✓       ✓</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- pipeline -->
+<section class="content" data-screen-label="Pipeline">
+  <div class="wrap">
+    <div class="subhead"><span class="sn">1.2</span><h2>Pipeline</h2></div>
+    <div class="steps">
+      <div class="step">
+        <div class="sn">01 / collect</div>
+        <h4>Real repositories</h4>
+        <p>26 intentionally vulnerable Python applications, each pinned to a specific commit SHA so every scanner analyzes identical source trees.</p>
+      </div>
+      <div class="step">
+        <div class="sn">02 / label</div>
+        <h4>Hand-built ground truth</h4>
+        <p>Every entry manually reviewed: a unique id, CWE classification, file and line range, severity, and free-text evidence.</p>
+      </div>
+      <div class="step">
+        <div class="sn">03 / match</div>
+        <h4>Three-field matching</h4>
+        <p>A finding matches on file path, CWE (within an acceptable set), and line number (±10 lines). Each entry is consumed at most once.</p>
+      </div>
+      <div class="step">
+        <div class="sn">04 / score</div>
+        <h4>Recall-weighted F3</h4>
+        <p>Unmatched findings become false positives; unmatched vulnerable entries, false negatives. Scored under F2 and F3, each in standard and strict mode.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- taxonomy -->
+<section class="content" data-screen-label="Taxonomy">
+  <div class="wrap">
+    <div class="subhead"><span class="sn">1.3</span><h2>Target-type taxonomy</h2></div>
+    <p class="section-intro">Five target types classify the code under test on a code-realism axis. Version 1.0 covers Type 1: high vulnerability density, auditable labels, and resistance to training-data contamination. Types 2–5 are planned. A second axis records code <em>authorship</em> (human-authored, LLM-assisted, LLM-generated); all v1.0 targets are human-authored.</p>
+    <div class="types" style="margin-top:24px">
+      <div class="type-row on">
+        <div class="tn">1</div>
+        <div class="td"><h4>Intentionally vulnerable apps</h4><p>Educational &amp; CTF projects — PyGoat, DVPWA, VAmPI. High vulnerability density, diverse CWE coverage.</p></div>
+        <div class="ts"><span class="badge live">v1.0 · live</span></div>
+      </div>
+      <div class="type-row">
+        <div class="tn">2</div>
+        <div class="td"><h4>Previously-vulnerable platforms</h4><p>Production apps pinned to pre-patch commits with disclosed CVEs, at realistic vulnerability density.</p></div>
+        <div class="ts"><span class="badge soon">v2 · planned</span></div>
+      </div>
+      <div class="type-row">
+        <div class="tn">3</div>
+        <div class="td"><h4>Previously-vulnerable libraries</h4><p>Open-source libraries pinned to known-vulnerable versions, patched for disclosed CVEs.</p></div>
+        <div class="ts"><span class="badge soon">v2 · planned</span></div>
+      </div>
+      <div class="type-row">
+        <div class="tn">4</div>
+        <div class="td"><h4>Benchmark roll-ups</h4><p>Existing benchmarks (OWASP Benchmark, NIST Juliet) imported and re-scored under RealVuln metrics.</p></div>
+        <div class="ts"><span class="badge soon">v2 · planned</span></div>
+      </div>
+      <div class="type-row">
+        <div class="tn">5</div>
+        <div class="td"><h4>Academic reproductions</h4><p>Published scanner evaluations encoded as reproducible configurations.</p></div>
+        <div class="ts"><span class="badge soon">future</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ground truth -->
+<section class="content" data-screen-label="Ground truth">
+  <div class="wrap">
+    <div class="subhead"><span class="sn">1.4</span><h2>Ground-truth labeling</h2></div>
+    <p class="section-intro">Every finding was produced by manual review. Each labeled entry records the following fields:</p>
+    <dl class="deflist" style="margin-top:24px">
+      <dt>id · is_vulnerable</dt>
+      <dd>A unique identifier and a boolean flag distinguishing real vulnerabilities from false-positive traps.</dd>
+      <dt>primary_cwe</dt>
+      <dd>The most precise weakness, plus an <span class="mono" style="font-size:.85em">acceptable_cwes</span> list of alternative CWE identifiers a scanner may reasonably report for the same flaw.</dd>
+      <dt>location</dt>
+      <dd>File path and a <span class="mono" style="font-size:.85em">start_line</span>/<span class="mono" style="font-size:.85em">end_line</span> range pinpointing the code.</dd>
+      <dt>severity</dt>
+      <dd>One of critical, high, medium, or low.</dd>
+      <dt>evidence</dt>
+      <dd>The annotation source (manual review, CVE id, or published walkthrough) and a free-text rationale for why the code is, or is not, vulnerable.</dd>
+    </dl>
+    <p class="prose" style="margin-top:26px"><strong>False-positive traps.</strong> 120 of the 817 entries (14.7%) are code patterns that appear suspicious but are demonstrably safe — for example, a login function passing user input to an ORM's <span class="mono" style="font-size:.9em;color:var(--fg-2)">filter_by()</span>, which auto-parameterizes the query. Flagging a trap is penalized as a false positive, and the traps double as true negatives for false-positive-rate computation.</p>
+  </div>
+</section>
+
+<!-- matching -->
+<section class="content" data-screen-label="Matching">
+  <div class="wrap">
+    <div class="subhead"><span class="sn">1.5</span><h2>Matching algorithm</h2></div>
+    <div class="grid-2" style="align-items:start;gap:34px">
+      <div class="prose">
+        <p>Each scanner finding is matched against ground truth on three fields: <strong>file path</strong> (exact after normalization), <strong>CWE</strong> (must appear in the entry's acceptable set), and <strong>line number</strong> (within ±10 lines of the range). When a finding matches multiple entries, real vulnerabilities are preferred over traps. Each entry is consumed at most once.</p>
+        <p>Some scanners report attack chains across several files. A finding may declare <strong>alternative locations</strong>; if any matches, it is not a false positive, and a finding whose alternatives match distinct entries is credited with multiple true positives — so chain-of-evidence reporting is not penalized.</p>
+      </div>
+      <div>
+        <div class="deflist">
+          <dt>True positive</dt><dd>Matches a vulnerable entry.</dd>
+          <dt>False positive</dt><dd>Matches a trap, or flags code with no entry.</dd>
+          <dt>False negative</dt><dd>A vulnerable entry the scanner missed.</dd>
+          <dt>True negative</dt><dd>A trap the scanner correctly ignored.</dd>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- scoring -->
+<section class="content" id="scoring" data-screen-label="Scoring">
+  <div class="wrap">
+    <div class="subhead"><span class="sn">1.6</span><h2>Scoring</h2></div>
+    <div class="grid-2" style="align-items:start;gap:34px">
+      <div class="prose">
+        <p>Two base metrics underpin scoring. <strong>Precision</strong> is the fraction of flagged findings that were real; <strong>recall</strong> is the fraction of real vulnerabilities found. The F<sub>β</sub> family combines them as a weighted harmonic mean, where β controls the trade-off.</p>
+        <p>In security the costs are asymmetric: a single missed vulnerability can lead to a breach, while a false positive costs an analyst minutes. F1 (β=1) weights both equally, implicitly assuming those costs are equal. RealVuln's primary metric is <strong>F3</strong> (β=3), which weights recall nine times over precision. F1 and F2 are reported throughout so results can be re-ranked under any preference.</p>
+        <p><strong>Aggregation.</strong> The conservative <span class="mono" style="font-size:.9em">strict_micro</span> mode pools confusion-matrix counts across repositories and treats any repository a scanner failed to complete as all-false-negatives. All headline scores use this strict mode.</p>
+      </div>
+      <div>
+        <div class="formula">
+          F<sub style="font-size:.7em">3</sub> &nbsp;=&nbsp; 10 ·
+          <span class="frac"><span class="num">P · R</span><span class="den"><span class="accent">9</span>P + R</span></span>
+          &nbsp;× 100
+        </div>
+        <p class="figure-cap" style="text-align:center;margin-bottom:22px">β = 3 · recall weighted 9× · scaled to [0, 100]</p>
+        <div class="formula" style="font-size:14px;color:var(--fg-2)">
+          F2 = 5·PR / (4P+R) &nbsp;·&nbsp; F3 = 10·PR / (9P+R)
+        </div>
+        <p class="figure-cap" style="text-align:center">Per-CWE-family and per-severity breakdowns are computed alongside the aggregates.</p>
+      </div>
+    </div>
+    <div class="cmd" style="margin-top:30px"><span class="p">$</span> python score.py --repo realvuln-pygoat --all-scanners</div>
+  </div>
+</section>
+
+<!-- page nav -->
+<section class="content" style="border-top:1px solid var(--hair)">
+  <div class="wrap">
+    <div class="page-nav">
+      <a class="pn" href="dashboard.html"><div class="pnl">← Back</div><div class="pnt">Dashboard</div></a>
+      <a class="pn next" href="dataset.html"><div class="pnl">Next →</div><div class="pnt">The corpus</div></a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-base" style="margin-top:0;padding-top:0;border-top:none">
+      <span>RealVuln · MIT License · arXiv:2604.13764 · v1.0, March 2026</span>
+      <span class="disc">RealVuln is independent research by John Pellew and Faizan Raza, founding members of Kolega.Dev. Kolega.Dev is among the scanners evaluated here — so every ground-truth label, scanner output, and scoring script is released openly for independent reproduction and audit.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

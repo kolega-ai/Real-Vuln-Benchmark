@@ -2,24 +2,25 @@
   "version": "1.0.0",
   "results": [
     {
-      "check_id": "python.security.injection.ssti",
+      "check_id": "python.security.xss.reflected",
       "path": "app/main.py",
       "start": {
         "line": 38,
-        "col": 29,
-        "offset": 1150
+        "col": 5,
+        "offset": 1100
       },
       "end": {
         "line": 41,
-        "col": 35,
-        "offset": 1280
+        "col": 42,
+        "offset": 1300
       },
       "extra": {
-        "message": "User input 'name' from query parameter is interpolated into a Jinja2 template string and rendered via Template(content).render(). An attacker can inject Jinja2 template expressions like {{7*7}} or {{config.items()}} leading to arbitrary code execution. The test file (tests/test_main.py:39-41) confirms this was a known concern.",
+        "message": "Reflected Cross-Site Scripting (XSS) vulnerability. User-controlled input from the 'name' query parameter (line 19) is interpolated directly into HTML content at line 38 using f-string without any sanitization or escaping. The HTML is then rendered via Jinja2's Template.render() at line 41. Since the user input is baked into the HTML string BEFORE being passed to the Template, Jinja2's auto-escaping does not protect against this. An attacker can inject malicious scripts by providing name=<script>alert('xss')</script> in the query string. The test file (tests/test_main.py:39-41) even contains a TODO comment acknowledging this vulnerability.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
+            "CWE-80: Improper Neutralization of Script-Related HTML Tags in a Web Page"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -27,49 +28,24 @@
       }
     },
     {
-      "check_id": "python.security.injection.xss",
+      "check_id": "python.security.xss.external-data",
       "path": "app/main.py",
       "start": {
         "line": 38,
-        "col": 17,
-        "offset": 1138
+        "col": 5,
+        "offset": 1100
       },
       "end": {
-        "line": 38,
-        "col": 77,
-        "offset": 1198
+        "line": 41,
+        "col": 42,
+        "offset": 1300
       },
       "extra": {
-        "message": "User input 'name' from query parameter and 'public_ip' from external HTTP response are interpolated directly into HTML without escaping. An attacker can inject <script> tags or other HTML to execute JavaScript in victims' browsers, stealing cookies or performing actions on their behalf.",
+        "message": "Cross-Site Scripting via external data source. The 'public_ip' value obtained from an external HTTP request (line 31) is interpolated directly into HTML content at line 38 without sanitization. If the external IP service (config.PUBLIC_IP_SERVICE_URL) is compromised or returns malicious content, it could lead to XSS. While less severe than user-controlled input, this still represents improper handling of untrusted data from external sources.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.ssrf",
-      "path": "app/main.py",
-      "start": {
-        "line": 31,
-        "col": 31,
-        "offset": 980
-      },
-      "end": {
-        "line": 31,
-        "col": 67,
-        "offset": 1016
-      },
-      "extra": {
-        "message": "URL from environment variable PUBLIC_IP_SERVICE_URL is passed to requests.get() without validation. If an attacker can control the environment variable (via container config, CI/CD variables, or compromised .env file), they can force the server to make requests to internal resources or attacker-controlled servers. The response is also rendered unsanitized in HTML, enabling secondary XSS.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-918: Server-Side Request Forgery (SSRF)"
           ],
           "confidence": "MEDIUM",
           "category": "security"
@@ -77,21 +53,47 @@
       }
     },
     {
-      "check_id": "python.security.secrets.hardcoded",
+      "check_id": "python.security.hardcoded-credentials",
       "path": "app/config.py",
       "start": {
         "line": 15,
-        "col": 22,
-        "offset": 380
+        "col": 1,
+        "offset": 340
       },
       "end": {
         "line": 15,
-        "col": 38,
-        "offset": 396
+        "col": 46,
+        "offset": 386
       },
       "extra": {
-        "message": "Hardcoded secret token '5u93R53Cr3tT0k3n' is committed to source code. Anyone with repository access can view this secret. Secrets should be loaded from environment variables or a secrets manager, as noted in the FIXME comment.",
-        "severity": "WARNING",
+        "message": "Hardcoded credential detected. A secret token '5u93R53Cr3tT0k3n' is hardcoded in the source code at line 15. The FIXME comment indicates this should be loaded from an environment variable instead. Hardcoded credentials in source code can be exposed through version control, code sharing, or binary analysis, enabling unauthorized access.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.hardcoded-sensitive-value",
+      "path": "app/config.py",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 280
+      },
+      "end": {
+        "line": 13,
+        "col": 41,
+        "offset": 321
+      },
+      "extra": {
+        "message": "Hardcoded sensitive value. The 'SUPER_SECRET_NAME' value 'John Ripper' is hardcoded in the source code. While less critical than the token, this still represents hardcoded sensitive configuration that should be externalized to environment variables as indicated by the FIXME comment.",
+        "severity": "INFO",
         "metadata": {
           "cwe": [
             "CWE-798: Use of Hard-coded Credentials"
