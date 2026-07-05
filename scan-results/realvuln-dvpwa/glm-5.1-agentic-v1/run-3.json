@@ -7,15 +7,15 @@
       "start": {
         "line": 42,
         "col": 9,
-        "offset": 1100
+        "offset": 900
       },
       "end": {
-        "line": 43,
-        "col": 47,
-        "offset": 1200
+        "line": 45,
+        "col": 35,
+        "offset": 1045
       },
       "extra": {
-        "message": "User-controlled input (student name from POST request) is interpolated into SQL query using Python string formatting (% operator). The value of 'name' is substituted into the query string before it is passed to cursor.execute(), allowing an attacker to inject arbitrary SQL. For example, a name value of `'); DROP TABLE students; --` would execute dropped table. Compare with the parameterized queries used elsewhere (e.g., Student.get, Review.create).",
+        "message": "User-controlled `name` parameter is interpolated into SQL query using Python `%` string formatting ('%(name)s') instead of parameterized query placeholders. The resulting string is passed directly to cursor.execute() with no binding. An attacker can inject arbitrary SQL via the student name field on POST /students/. Contrast with Review.create() and Course.create() which correctly use parameterized queries.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -32,15 +32,15 @@
       "start": {
         "line": 33,
         "col": 5,
-        "offset": 900
+        "offset": 780
       },
       "end": {
         "line": 35,
-        "col": 23,
-        "offset": 1000
+        "col": 37,
+        "offset": 880
       },
       "extra": {
-        "message": "Jinja2 template engine is configured with autoescape=False, disabling automatic HTML escaping for all templates. This allows user-controlled data rendered in templates without explicit '| e' filters to be interpreted as HTML/JavaScript, enabling Cross-Site Scripting attacks. Multiple templates render user-controlled data (student names, course titles, descriptions, review text, user names) without explicit escaping.",
+        "message": "Jinja2 autoescaping is explicitly set to False (autoescape=False). This disables automatic HTML escaping of all template variables, making every user-controlled value rendered in templates vulnerable to Cross-Site Scripting (XSS). This is the root enabler for multiple stored XSS vulnerabilities in this application.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -52,7 +52,82 @@
       }
     },
     {
-      "check_id": "python.security.xss.unescaped-course-title",
+      "check_id": "python.security.xss.stored-review-text",
+      "path": "sqli/templates/course.jinja2",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 680
+      },
+      "end": {
+        "line": 22,
+        "col": 30,
+        "offset": 710
+      },
+      "extra": {
+        "message": "User-submitted review text (from POST /courses/{id}/review) is rendered as {{ review.review_text }} without any escaping. Since autoescape is disabled, an attacker can inject arbitrary HTML/JavaScript via the review form, which is stored in the database and executed in every visitor's browser who views the course page. This is a stored XSS vulnerability.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.stored-course-title",
+      "path": "sqli/templates/course.jinja2",
+      "start": {
+        "line": 14,
+        "col": 8,
+        "offset": 380
+      },
+      "end": {
+        "line": 14,
+        "col": 30,
+        "offset": 402
+      },
+      "extra": {
+        "message": "Course title (user-submitted via POST /courses/) is rendered as {{ course.title }} without escaping. Since autoescape is disabled, an attacker with admin access (or via CSRF since CSRF protection is disabled) can inject HTML/JavaScript in the course title, which is stored and executed for all visitors viewing the course page.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.stored-course-description",
+      "path": "sqli/templates/course.jinja2",
+      "start": {
+        "line": 15,
+        "col": 7,
+        "offset": 410
+      },
+      "end": {
+        "line": 15,
+        "col": 32,
+        "offset": 435
+      },
+      "extra": {
+        "message": "Course description (user-submitted via POST /courses/) is rendered as {{ course.description }} without escaping. Since autoescape is disabled, an attacker can inject HTML/JavaScript in the course description field, resulting in stored XSS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.stored-course-title-listing",
       "path": "sqli/templates/courses.jinja2",
       "start": {
         "line": 17,
@@ -61,11 +136,11 @@
       },
       "end": {
         "line": 17,
-        "col": 35,
+        "col": 37,
         "offset": 520
       },
       "extra": {
-        "message": "Course title (user-controlled via Course.create from POST data) is rendered without HTML escaping. With autoescape=False in the Jinja2 configuration, this allows XSS if a course title contains malicious HTML/JavaScript.",
+        "message": "Course title rendered as {{ course.title }} without escaping in the courses listing page. Stored XSS via the course creation form.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -77,20 +152,20 @@
       }
     },
     {
-      "check_id": "python.security.xss.unescaped-course-description",
+      "check_id": "python.security.xss.stored-course-description-listing",
       "path": "sqli/templates/courses.jinja2",
       "start": {
         "line": 18,
-        "col": 49,
-        "offset": 580
+        "col": 43,
+        "offset": 570
       },
       "end": {
         "line": 18,
-        "col": 72,
-        "offset": 603
+        "col": 68,
+        "offset": 595
       },
       "extra": {
-        "message": "Course description (user-controlled via Course.create from POST data) is rendered without HTML escaping. With autoescape=False, this allows XSS.",
+        "message": "Course description rendered as {{ course.description }} without escaping in the courses listing page. Stored XSS via the course creation form.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -102,95 +177,20 @@
       }
     },
     {
-      "check_id": "python.security.xss.unescaped-review-text",
-      "path": "sqli/templates/course.jinja2",
-      "start": {
-        "line": 22,
-        "col": 25,
-        "offset": 700
-      },
-      "end": {
-        "line": 22,
-        "col": 49,
-        "offset": 724
-      },
-      "extra": {
-        "message": "Review text (user-controlled via Review.create from POST form data) is rendered without HTML escaping. With autoescape=False, an attacker can submit a review containing <script> tags that will execute in other users' browsers.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-79: Cross-site Scripting"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.xss.unescaped-course-title-detail",
-      "path": "sqli/templates/course.jinja2",
-      "start": {
-        "line": 14,
-        "col": 9,
-        "offset": 430
-      },
-      "end": {
-        "line": 14,
-        "col": 28,
-        "offset": 449
-      },
-      "extra": {
-        "message": "Course title (user-controlled) rendered without escaping on the course detail page, enabling XSS.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-79: Cross-site Scripting"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.xss.unescaped-course-description-detail",
-      "path": "sqli/templates/course.jinja2",
-      "start": {
-        "line": 15,
-        "col": 9,
-        "offset": 460
-      },
-      "end": {
-        "line": 15,
-        "col": 33,
-        "offset": 484
-      },
-      "extra": {
-        "message": "Course description (user-controlled) rendered without escaping on the course detail page, enabling XSS.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-79: Cross-site Scripting"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.xss.unescaped-student-name",
+      "check_id": "python.security.xss.stored-student-name",
       "path": "sqli/templates/students.jinja2",
       "start": {
         "line": 16,
-        "col": 55,
-        "offset": 480
+        "col": 56,
+        "offset": 460
       },
       "end": {
         "line": 16,
-        "col": 67,
-        "offset": 492
+        "col": 69,
+        "offset": 473
       },
       "extra": {
-        "message": "Student name (user-controlled via Student.create from POST data) is rendered without HTML escaping. Combined with autoescape=False, this allows stored XSS through student names.",
+        "message": "Student name rendered as {{ name }} without escaping in the students listing page. Since autoescape is disabled and Student.create() is also vulnerable to SQL injection, an attacker can inject HTML/JavaScript via the student name field. Note that student.jinja2 uses the `| e` filter but students.jinja2 does not.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -202,45 +202,45 @@
       }
     },
     {
-      "check_id": "python.security.xss.unescaped-user-name",
-      "path": "sqli/templates/base.jinja2",
+      "check_id": "python.security.xss.stored-course-title-review",
+      "path": "sqli/templates/review.jinja2",
       "start": {
-        "line": 25,
-        "col": 50,
-        "offset": 800
+        "line": 32,
+        "col": 44,
+        "offset": 930
       },
       "end": {
-        "line": 25,
-        "col": 104,
-        "offset": 854
+        "line": 32,
+        "col": 62,
+        "offset": 948
       },
       "extra": {
-        "message": "User first_name, middle_name, and last_name are rendered without HTML escaping in the base template navigation bar. If user names in the database contain malicious content, it will execute as HTML/JavaScript in every page for authenticated users.",
+        "message": "Course title rendered as {{ course.title }} without escaping in the review page template. Stored XSS via the course creation form propagates to the review page.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-79: Cross-site Scripting"
           ],
-          "confidence": "MEDIUM",
+          "confidence": "HIGH",
           "category": "security"
         }
       }
     },
     {
-      "check_id": "python.security.xss.unescaped-course-title-review",
-      "path": "sqli/templates/review.jinja2",
+      "check_id": "python.security.xss.stored-student-name-evaluate",
+      "path": "sqli/templates/evaluate.jinja2",
       "start": {
-        "line": 32,
-        "col": 47,
-        "offset": 830
+        "line": 25,
+        "col": 42,
+        "offset": 650
       },
       "end": {
-        "line": 32,
-        "col": 64,
-        "offset": 847
+        "line": 25,
+        "col": 61,
+        "offset": 669
       },
       "extra": {
-        "message": "Course title rendered without escaping in the review form template, enabling XSS.",
+        "message": "Student name rendered as {{ student.name }} without escaping in the evaluate error template. Stored XSS via the student name field propagates to the evaluation error page.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -257,15 +257,15 @@
       "start": {
         "line": 27,
         "col": 13,
-        "offset": 770
+        "offset": 610
       },
       "end": {
         "line": 27,
-        "col": 29,
-        "offset": 786
+        "col": 28,
+        "offset": 625
       },
       "extra": {
-        "message": "The csrf_middleware is commented out in the application middleware stack. A CSRF middleware implementation exists in sqli/middlewares.py but is not enabled. All POST endpoints (login, student creation, course creation, review creation, evaluation, logout) are vulnerable to Cross-Site Request Forgery attacks.",
+        "message": "CSRF middleware is commented out (# csrf_middleware), leaving all POST endpoints unprotected against Cross-Site Request Forgery. An attacker can trick authenticated users into submitting forms that create students, courses, reviews, or evaluate marks. The templates even include _csrf_token hidden fields, but the server never validates them.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -277,20 +277,20 @@
       }
     },
     {
-      "check_id": "python.security.auth.missing-auth-student-create",
+      "check_id": "python.security.auth.missing-authentication-student-create",
       "path": "sqli/views.py",
       "start": {
         "line": 54,
-        "col": 5,
-        "offset": 1700
+        "col": 9,
+        "offset": 1400
       },
       "end": {
         "line": 57,
-        "col": 56,
-        "offset": 1800
+        "col": 58,
+        "offset": 1530
       },
       "extra": {
-        "message": "The POST handler for /students/ creates a new student without any authentication or authorization check. While the template conditionally shows the form to authenticated users, the server-side handler does not use @authorize() or check get_auth_user(). Any unauthenticated user can create students by sending a POST request.",
+        "message": "POST /students/ creates a new student without any authentication check. The `students` view handler has no @authorize() decorator and no manual auth check before processing the POST request. Any unauthenticated user can create students.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -302,45 +302,20 @@
       }
     },
     {
-      "check_id": "python.security.auth.missing-auth-course-create",
-      "path": "sqli/views.py",
-      "start": {
-        "line": 86,
-        "col": 5,
-        "offset": 2700
-      },
-      "end": {
-        "line": 90,
-        "col": 41,
-        "offset": 2800
-      },
-      "extra": {
-        "message": "The POST handler for /courses/ creates a new course without any authentication or authorization check. The template shows this form only to admin users (auth_user.is_admin), but the server-side handler does not enforce this. Any unauthenticated user can create courses by sending a POST request, bypassing the intended admin-only restriction.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-862: Missing Authorization"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.auth.missing-auth-review-create",
+      "check_id": "python.security.auth.missing-authentication-review-create",
       "path": "sqli/views.py",
       "start": {
         "line": 119,
         "col": 9,
-        "offset": 3600
+        "offset": 3100
       },
       "end": {
         "line": 129,
-        "col": 49,
-        "offset": 3750
+        "col": 47,
+        "offset": 3600
       },
       "extra": {
-        "message": "The POST handler for /courses/{course_id}/review creates a review without any authentication check. Any unauthenticated user can submit reviews for any course.",
+        "message": "POST /courses/{id}/review creates a review without any authentication check. The `review` view handler has no @authorize() decorator and no manual auth check before processing the POST request. Any unauthenticated user can submit reviews.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -352,20 +327,20 @@
       }
     },
     {
-      "check_id": "python.security.auth.missing-auth-evaluate",
+      "check_id": "python.security.authz.missing-authorization-course-create",
       "path": "sqli/views.py",
       "start": {
-        "line": 139,
-        "col": 5,
-        "offset": 3950
+        "line": 86,
+        "col": 9,
+        "offset": 2250
       },
       "end": {
-        "line": 152,
-        "col": 31,
-        "offset": 4200
+        "line": 90,
+        "col": 42,
+        "offset": 2500
       },
       "extra": {
-        "message": "The POST handler for /students/{student_id}/evaluate/{course_id} creates marks (grades) without any authentication or authorization check. The template shows this form only to admin users, but the server does not enforce this. Any unauthenticated user can assign grades to any student for any course.",
+        "message": "POST /courses/ creates a course without checking that the user is an admin. While the template (courses.jinja2:25) restricts the form to admin users, the view handler performs no authorization check. Any authenticated or unauthenticated user can create courses via a direct POST request.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -377,25 +352,50 @@
       }
     },
     {
-      "check_id": "python.security.crypto.weak-password-hash",
+      "check_id": "python.security.authz.missing-authorization-evaluate",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 134,
+        "col": 22,
+        "offset": 3650
+      },
+      "end": {
+        "line": 152,
+        "col": 35,
+        "offset": 4400
+      },
+      "extra": {
+        "message": "POST /students/{id}/evaluate/{id} creates a mark/grade without checking that the user is an admin. The course.jinja2 template (line 41) restricts the evaluate form to admin users only, but the `evaluate` view handler performs no authorization check. Any unauthenticated user can assign grades to students.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.weak-password-hashing",
       "path": "sqli/dao/user.py",
       "start": {
         "line": 40,
         "col": 5,
-        "offset": 1050
+        "offset": 1100
       },
       "end": {
         "line": 41,
-        "col": 63,
-        "offset": 1110
+        "col": 62,
+        "offset": 1162
       },
       "extra": {
-        "message": "Password verification uses unsalted MD5 hashing (md5(password.encode('utf-8')).hexdigest()). MD5 is cryptographically broken and unsuitable for password hashing. No salt is used, making the hashes vulnerable to rainbow table and brute-force attacks. Should use a dedicated password hashing function like bcrypt, scrypt, or argon2.",
+        "message": "Password verification uses unsalted MD5 hash comparison: `self.pwd_hash == md5(password.encode('utf-8')).hexdigest()`. MD5 is cryptographically broken and unsuitable for password hashing. No salt is used, making all password hashes vulnerable to rainbow table attacks. Should use a dedicated password hashing function like bcrypt, scrypt, or argon2.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-916: Use of Password Hash With Insufficient Computational Effort",
-            "CWE-328: Use of Weak Hash"
+            "CWE-328: Use of Weak Hash",
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -416,11 +416,36 @@
         "offset": 40
       },
       "extra": {
-        "message": "Database credentials (username 'postgres' and password 'postgres') are hardcoded in the configuration file. These are real database credentials that could grant full access to the PostgreSQL database if leaked.",
+        "message": "Database credentials are hardcoded in the configuration file: user 'postgres' with password 'postgres'. This file is tracked in version control, exposing credentials to anyone with repository access.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
             "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.config.session-httponly-disabled",
+      "path": "sqli/middlewares.py",
+      "start": {
+        "line": 20,
+        "col": 37,
+        "offset": 680
+      },
+      "end": {
+        "line": 20,
+        "col": 52,
+        "offset": 695
+      },
+      "extra": {
+        "message": "Session cookie is created with httponly=False in RedisStorage, making the session cookie accessible to JavaScript. Combined with the XSS vulnerabilities present in this application, an attacker can steal session cookies via injected scripts.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -433,45 +458,19 @@
       "start": {
         "line": 24,
         "col": 5,
-        "offset": 680
+        "offset": 570
       },
       "end": {
         "line": 24,
         "col": 15,
-        "offset": 690
+        "offset": 580
       },
       "extra": {
-        "message": "The aiohttp Application is created with debug=True, which enables detailed error pages and debug information that can expose internal application details to attackers.",
+        "message": "The aiohttp Application is instantiated with debug=True. Debug mode can expose sensitive information including stack traces, application internals, and configuration details in error responses.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
-            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
-            "CWE-16: Configuration"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.session.httponly-disabled",
-      "path": "sqli/middlewares.py",
-      "start": {
-        "line": 20,
-        "col": 37,
-        "offset": 650
-      },
-      "end": {
-        "line": 20,
-        "col": 52,
-        "offset": 665
-      },
-      "extra": {
-        "message": "The Redis session storage is initialized with httponly=False, which means the session cookie is accessible to JavaScript via document.cookie. If an XSS vulnerability is exploited, the attacker can steal the session cookie and hijack the user's session.",
-        "severity": "INFO",
-        "metadata": {
-          "cwe": [
-            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+            "CWE-489: Active Debug Code"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -483,16 +482,16 @@
       "path": "sqli/templates/errors/50x.jinja2",
       "start": {
         "line": 6,
-        "col": 5,
+        "col": 1,
         "offset": 150
       },
       "end": {
         "line": 6,
-        "col": 31,
-        "offset": 176
+        "col": 30,
+        "offset": 179
       },
       "extra": {
-        "message": "The 50x error template renders the full exception __dict__ attribute: {{ error.__dict__ }}. This can expose sensitive internal information including stack traces, file paths, database queries, and configuration details. Combined with autoescape=False, this also enables XSS through error attributes.",
+        "message": "The 50x error template renders {{ error.__dict__ }} which dumps the entire exception object's internal state, potentially exposing stack traces, internal paths, database query details, and other sensitive information to end users.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [

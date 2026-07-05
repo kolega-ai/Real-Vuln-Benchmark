@@ -1,0 +1,408 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.security.config.default-credentials",
+      "path": "bad/db_init.py",
+      "start": {
+        "line": 9,
+        "col": 5,
+        "offset": 77
+      },
+      "end": {
+        "line": 13,
+        "col": 5,
+        "offset": 187
+      },
+      "extra": {
+        "message": "db_init.py creates default accounts with hardcoded credentials (admin/SuperSecret, elliot/123123123, tim/12345678). These weak default credentials are written into the production database, allowing trivial login by anyone who knows them.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.plaintext-password-storage",
+      "path": "bad/db_init.py",
+      "start": {
+        "line": 20,
+        "col": 9,
+        "offset": 403
+      },
+      "end": {
+        "line": 20,
+        "col": 150,
+        "offset": 545
+      },
+      "extra": {
+        "message": "db_init.py stores user passwords in plaintext: the INSERT on line 20 writes the raw password and the table schema (line 17) has no salt/hash column. libuser.login() then compares plaintext passwords directly. A database leak exposes every credential immediately. Passwords must be hashed with a salted KDF (the good/ version uses scrypt).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.weak-prng",
+      "path": "bad/libapi.py",
+      "start": {
+        "line": 14,
+        "col": 5,
+        "offset": 206
+      },
+      "end": {
+        "line": 14,
+        "col": 76,
+        "offset": 278
+      },
+      "extra": {
+        "message": "libapi.keygen() generates API authentication keys with random.getrandbits(2048), which is a non-cryptographic PRNG. The resulting tokens can be predictable to an attacker who can observe outputs. Use the 'secrets' module (or os.urandom) for security-critical tokens.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.apikey-glob-bypass",
+      "path": "bad/libapi.py",
+      "start": {
+        "line": 33,
+        "col": 5,
+        "offset": 637
+      },
+      "end": {
+        "line": 33,
+        "col": 57,
+        "offset": 690
+      },
+      "extra": {
+        "message": "libapi.authenticate() builds a glob pattern with the raw X-APIKEY header value: Path('/tmp/').glob('vulpy.apikey.*.' + key). Because glob treats '*' as a wildcard, sending 'X-APIKEY: *' matches every existing key file and returns the first user's username, authenticating as an arbitrary user without a valid API key. This is a complete authentication bypass.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.session-cookie-forgery",
+      "path": "bad/libsession.py",
+      "start": {
+        "line": 6,
+        "col": 5,
+        "offset": 64
+      },
+      "end": {
+        "line": 6,
+        "col": 75,
+        "offset": 135
+      },
+      "extra": {
+        "message": "The vulpy_session cookie is merely base64(json.dumps({'username': ...})) with no cryptographic signature/MAC (libsession.create, line 6). load() (line 20) decodes and trusts it without verifying integrity. Anyone can craft a cookie such as base64({\"username\":\"admin\"}) to impersonate any user, yielding a full authentication bypass / session impersonation. Sign the cookie (e.g. itsdangerous/Fernet) as the good/ version does.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-565: Reliance on Cookies without Validation and Integrity Protection",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.no-bruteforce-protection",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 32
+      },
+      "end": {
+        "line": 17,
+        "col": 20,
+        "offset": 403
+      },
+      "extra": {
+        "message": "libuser.login() performs authentication but the 'failures' column is never incremented on a bad password and never checked, and there is no rate limiting or account lockout. An attacker can attempt unlimited password guesses, enabling online brute-force attacks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.logging.sensitive-data-in-log",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 8,
+        "col": 5,
+        "offset": 114
+      },
+      "end": {
+        "line": 8,
+        "col": 34,
+        "offset": 144
+      },
+      "extra": {
+        "message": "libuser.login() (and other DB helpers) call conn.set_trace_callback(print), which prints every executed SQL statement to stdout. In login() this prints the query containing the user's plaintext password, leaking credentials into logs.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.sql-injection",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 12,
+        "col": 5,
+        "offset": 207
+      },
+      "end": {
+        "line": 12,
+        "col": 123,
+        "offset": 326
+      },
+      "extra": {
+        "message": "libuser.login() interpolates the username and password received from the login form directly into the SQL query via str.format(): \"SELECT * FROM users WHERE username = '{}' and password = '{}'\".format(username, password). An attacker can bypass authentication (e.g. username = \"admin' --\") or extract arbitrary data. Use parameterized queries (? placeholders).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.sql-injection",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 25,
+        "col": 5,
+        "offset": 512
+      },
+      "end": {
+        "line": 25,
+        "col": 160,
+        "offset": 668
+      },
+      "extra": {
+        "message": "libuser.create() concatenates the username and password from the registration form into the INSERT statement via %-formatting (line 25). This allows SQL injection at account-creation time (e.g. injecting a row or extracting data). Use parameterized queries.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.sql-injection",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 53,
+        "col": 5,
+        "offset": 1207
+      },
+      "end": {
+        "line": 53,
+        "col": 98,
+        "offset": 1301
+      },
+      "extra": {
+        "message": "libuser.password_change() interpolates the new password and username into the UPDATE statement via str.format(): \"UPDATE users SET password = '{}' WHERE username = '{}'\".format(password, username). Because the session cookie is also forgeable, both fields are attacker-controlled, enabling SQL injection (e.g. overwriting arbitrary users' passwords). Use parameterized queries.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.csrf.get-state-change",
+      "path": "bad/mod_mfa.py",
+      "start": {
+        "line": 57,
+        "col": 1,
+        "offset": 1464
+      },
+      "end": {
+        "line": 63,
+        "col": 45,
+        "offset": 1652
+      },
+      "extra": {
+        "message": "mod_mfa.do_mfa_disable performs a state-changing operation (disabling MFA) on a GET request (methods=['GET']). An attacker can trigger it via <img src=\"/mfa/disable\"> or a link, exploiting CSRF to silently disable a victim's MFA protection. State changes must use POST with CSRF protection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.csrf.missing-protection",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 64,
+        "col": 1,
+        "offset": 1826
+      },
+      "end": {
+        "line": 83,
+        "col": 48,
+        "offset": 2560
+      },
+      "extra": {
+        "message": "mod_user.do_chpasswd changes the user's password on a POST request with no CSRF token and without requiring the current password. A malicious site can force a logged-in victim's browser to submit this form and take over the account. Add CSRF protection (e.g. Flask-WTF) and verify the old password before changing it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.stored",
+      "path": "bad/templates/posts.view.html",
+      "start": {
+        "line": 23,
+        "col": 35,
+        "offset": 779
+      },
+      "end": {
+        "line": 23,
+        "col": 56,
+        "offset": 801
+      },
+      "extra": {
+        "message": "posts.view.html renders post text with the Jinja2 'safe' filter ({{ post.text | safe }}), disabling HTML autoescaping. Post text comes from user input (mod_posts.do_create form field 'text' and the /api/post API), so this is a stored XSS vulnerability allowing script execution in other users' browsers. Remove the 'safe' filter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.config.hardcoded-secret",
+      "path": "bad/vulpy-ssl.py",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 234
+      },
+      "end": {
+        "line": 13,
+        "col": 36,
+        "offset": 270
+      },
+      "extra": {
+        "message": "Flask SECRET_KEY is hardcoded as the trivially guessable 'aaaaaaa' (vulpy-ssl.py:13). This allows an attacker to forge Flask session cookies and any signed data. Use a long, random secret loaded from environment/configuration.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.config.hardcoded-secret",
+      "path": "bad/vulpy.py",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 315
+      },
+      "end": {
+        "line": 16,
+        "col": 36,
+        "offset": 351
+      },
+      "extra": {
+        "message": "Flask SECRET_KEY is hardcoded as the trivially guessable 'aaaaaaa' (vulpy.py:16). This allows an attacker to forge Flask session cookies and any signed data. Use a long, random secret loaded from environment/configuration.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.config.debug-mode-enabled",
+      "path": "bad/vulpy.py",
+      "start": {
+        "line": 55,
+        "col": 1,
+        "offset": 1270
+      },
+      "end": {
+        "line": 55,
+        "col": 71,
+        "offset": 1341
+      },
+      "extra": {
+        "message": "app.run(debug=True) enables the Werkzeug interactive debugger, which leaks source code and detailed stack traces on errors and, if the debugger PIN is derived/obtained, allows arbitrary remote code execution. Debug mode must never be enabled in a deployed application.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

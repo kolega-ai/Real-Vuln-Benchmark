@@ -51,6 +51,11 @@ class RunMetrics:
     prompt_version: str = ""
     prompt_label: str = ""
 
+    # Benchmark / ground-truth versioning
+    benchmark_version: str = ""
+    ground_truth_version: str = ""
+    ground_truth_content_hash: str = ""
+
     def to_dict(self) -> dict:
         """JSON-serializable dict."""
         return asdict(self)

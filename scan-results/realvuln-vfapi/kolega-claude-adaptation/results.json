@@ -1,0 +1,677 @@
+{
+  "version": "twin-distill-flash-r4",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "main.py",
+      "start": {
+        "line": 182
+      },
+      "end": {
+        "line": 182
+      },
+      "extra": {
+        "message": "SQL Injection in GET /select via username query parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "resp = await run_sql_query(f'SELECT * FROM users WHERE username = \"{username}\";')",
+          "proof": "Untrusted SOURCE: `username` query string parameter from FastAPI automatic parameter binding (line 181) -> SINK: directly interpolated into SQL f-string on line 182 and passed to `run_sql_query` -> `db.execute(query)` (line 145). No parameterization or escaping. Attacker can send `GET /select?username=\" OR 1=1 --` to dump all users or use UNION SELECT for arbitrary data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-943",
+      "path": "main.py",
+      "start": {
+        "line": 224
+      },
+      "end": {
+        "line": 224
+      },
+      "extra": {
+        "message": "NoSQL Injection in POST /find via raw JSON query body",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "citation": "query = await request.json()\n    return get_nosql_users(query)",
+          "proof": "Untrusted SOURCE: `await request.json()` parses attacker-controlled JSON POST body (line 224) -> SINK: passed directly to `get_nosql_users(query)` (line 225) which calls `users.find(query)` (line 171). MontyDB supports MongoDB operators including `$regex`, `$ne`, `$gt`, `$where`, and `$or`. Attacker can send `POST /find` with body `{\"username\": {\"$ne\": \"\"}}` to enumerate all users or use `$where` for blind extraction."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "main.py",
+      "start": {
+        "line": 231
+      },
+      "end": {
+        "line": 231
+      },
+      "extra": {
+        "message": "SQL Injection in DELETE /user via username query parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "await run_sql_query(f'DELETE FROM users WHERE username = \"{username}\";', commit=True)",
+          "proof": "Untrusted SOURCE: `username` query string parameter (line 228) -> SINK: directly interpolated into DELETE SQL statement via f-string on line 231 with `commit=True`. Attacker can send `DELETE /user?username=\" OR 1=1 --` to delete all users in the database, causing irreversible data loss."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-327",
+      "path": "main.py",
+      "start": {
+        "line": 187
+      },
+      "end": {
+        "line": 187
+      },
+      "extra": {
+        "message": "Use of broken MD5 hash algorithm for password storage",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-327"
+          ],
+          "citation": "user.password = md5(user.password.encode()).hexdigest()",
+          "proof": "Untrusted SOURCE: `user.password` from request JSON body (Pydantic User model) -> SINK: `md5(...).hexdigest()` on line 187. MD5 is cryptographically broken (collision and preimage attacks). An attacker who extracts password hashes via the SQLi/NoSQLi vulnerabilities can reverse them in seconds using GPU-accelerated rainbow tables. Same vulnerable pattern used in seed data at line 113."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-328",
+      "path": "main.py",
+      "start": {
+        "line": 187
+      },
+      "end": {
+        "line": 187
+      },
+      "extra": {
+        "message": "Use of MD5 for password hashing",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-328"
+          ],
+          "citation": "user.password = md5(user.password.encode()).hexdigest()",
+          "proof": "Untrusted SOURCE: `user.password` from request body -> SINK: `md5(...).hexdigest()` storing password hash. MD5 is a cryptographically broken hash algorithm vulnerable to collision attacks and extremely fast to compute with modern hardware, enabling rapid offline brute-force."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "main.py",
+      "start": {
+        "line": 205
+      },
+      "end": {
+        "line": 205
+      },
+      "extra": {
+        "message": "SQL Injection in PUT /user via user model fields",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "query = f'''\nINSERT INTO users (\n                    name,\n                    username,\n                    password,\n                    address,\n                    email,\n                    contact\n                ) VALUES ( \n                            \"{user.name}\",\n                            \"{user.username}\",\n                            \"{user.password}\",\n                            \"{user.address}\",\n                            \"{user.email}\",\n                            \"{user.contact}\"\n                            );\n'''[1:-1]\n    await run_sql_query(query, commit=True)",
+          "proof": "Untrusted SOURCE: JSON body fields `name`, `username`, `password`, `address`, `email`, `contact` from Pydantic User model -> SINK: f-string interpolation into INSERT statement (lines 188-204) executed via `run_sql_query(query, commit=True)` (line 205). All six fields are attacker-controlled and unsanitized, enabling arbitrary SQL manipulation or data exfiltration."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-943",
+      "path": "main.py",
+      "start": {
+        "line": 171
+      },
+      "end": {
+        "line": 171
+      },
+      "extra": {
+        "message": "NoSQL Injection in get_nosql_users via raw query object",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "citation": "user_data = tuple(users.find(query))",
+          "proof": "Untrusted SOURCE: `query` parameter arriving from `await request.json()` at line 224 -> SINK: `users.find(query)` on line 171. The attacker-supplied JSON object is passed directly to MontyDB's `find()` method without sanitization, enabling MongoDB query operators such as `{\"id\": {\"$in\": [1,2]}}`, `$where`, `$ne`, `$regex` for unauthorized data access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-916",
+      "path": "main.py",
+      "start": {
+        "line": 187
+      },
+      "end": {
+        "line": 187
+      },
+      "extra": {
+        "message": "Use of broken MD5 hash without salt for passwords",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-916"
+          ],
+          "citation": "user.password = md5(user.password.encode()).hexdigest()",
+          "proof": "Untrusted SOURCE: `user.password` from request body -> SINK: `md5(...).hexdigest()`. MD5 is cryptographically broken and extremely fast to compute. Additionally, no salt is used, making precomputed rainbow-table attacks trivial against extracted password hashes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "main.py",
+      "start": {
+        "line": 242
+      },
+      "end": {
+        "line": 242
+      },
+      "extra": {
+        "message": "Unauthenticated database reset via POST /reset",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "remove(f'{DB_FILENAME}.sql.db')\n    rmtree(f'{DB_FILENAME}.nosql.db')",
+          "proof": "Untrusted SOURCE: any unauthenticated HTTP POST to `/reset` (line 240) -> SINK: `remove()` and `rmtree()` deleting SQL and NoSQL database files (lines 242-243) followed by `init_db()` (line 244). No authentication or authorization check exists, permitting any remote attacker to destroy all application data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "main.py",
+      "start": {
+        "line": 231
+      },
+      "end": {
+        "line": 231
+      },
+      "extra": {
+        "message": "Missing authorization on DELETE /user",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "await run_sql_query(f'DELETE FROM users WHERE username = \"{username}\";', commit=True)",
+          "proof": "Untrusted SOURCE: `username` query parameter from any unauthenticated HTTP request (line 228) -> SINK: deletion from both NoSQL collection (line 230) and SQL table (line 231) with `commit=True`. No identity or ownership verification is performed, allowing anyone to delete arbitrary user records."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "main.py",
+      "start": {
+        "line": 161
+      },
+      "end": {
+        "line": 161
+      },
+      "extra": {
+        "message": "Exposure of password hashes in SQL multi-row responses",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "return {'users': _data}",
+          "proof": "Untrusted SOURCE: `username` query parameter to GET /select -> `run_sql_query` returns all column data including password hash at index 3 -> SINK: `return {'users': _data}` (line 161) returns raw tuple list containing every row's password hash. Via the SQLi in GET /select (e.g., `?username=\" OR 1=1 --`), an attacker retrieves all stored MD5 password hashes without authentication."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "main.py",
+      "start": {
+        "line": 186
+      },
+      "end": {
+        "line": 186
+      },
+      "extra": {
+        "message": "Missing authorization on PUT /user creation endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "async def put_user(user: User):",
+          "proof": "Untrusted SOURCE: any unauthenticated HTTP PUT request to `/user` with JSON body -> SINK: `put_user` handler (line 186) creates a user in both SQLite (line 205) and MontyDB (line 207) without any authentication or authorization check, allowing an attacker to create arbitrary user records."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "main.py",
+      "start": {
+        "line": 242
+      },
+      "end": {
+        "line": 242
+      },
+      "extra": {
+        "message": "Cross-Site Request Forgery on POST /reset",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.post('/reset')\nasync def reset_database():\n    remove(f'{DB_FILENAME}.sql.db')\n    rmtree(f'{DB_FILENAME}.nosql.db')\n    await init_db()\n    return {'resp': 'done'}",
+          "proof": "This endpoint handles POST requests, does not read the request body (so any Content-Type works including form-url-encoded), and has no CSRF token, no SameSite cookie enforcement, and no origin/referer header checking. An attacker can host a page with <form action='http://target/reset' method='POST'> which auto-submits via JavaScript; browsers do not block form POST submissions via CORS preflight. If combined with cookie-based auth at a higher layer (e.g. VPN/proxy auth), a victim's browser would destroy the database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "main.py",
+      "start": {
+        "line": 223
+      },
+      "end": {
+        "line": 223
+      },
+      "extra": {
+        "message": "Missing authentication on DELETE /user endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "@app.delete('/user')\nasync def delete_user(username: Optional[str] = '', user: Optional[User] = None):\n    if username:\n        db_client.vfapi.users.delete_one({'username': username})\n        await run_sql_query(f'DELETE FROM users WHERE username = \"{username}\";', commit=True)",
+          "proof": "The DELETE /user endpoint has no authentication or authorization checks. Any unauthenticated client can send a DELETE request with any username as a query parameter and permanently remove that user from both the SQL and NoSQL databases. The username parameter is directly from the HTTP request (untrusted source) and flows into db_client.vfapi.users.delete_one() and run_sql_query() (sinks) with no identity or permission check."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "main.py",
+      "start": {
+        "line": 223
+      },
+      "end": {
+        "line": 223
+      },
+      "extra": {
+        "message": "IDOR \u2014 any user can delete any other user by username",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "@app.delete('/user')\nasync def delete_user(username: Optional[str] = '', user: Optional[User] = None):\n    if username:\n        db_client.vfapi.users.delete_one({'username': username})",
+          "proof": "The DELETE /user endpoint accepts a username query parameter from the HTTP request and deletes that user's record. There is no ownership check \u2014 the endpoint does not verify that the requesting party owns or is authorized to delete the targeted user object. An attacker can enumerate or guess usernames and delete arbitrary user accounts. The untrusted 'username' query parameter (source) flows directly into db_client.vfapi.users.delete_one() (sink) without any authorization gate."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "main.py",
+      "start": {
+        "line": 186
+      },
+      "end": {
+        "line": 186
+      },
+      "extra": {
+        "message": "Missing authentication on PUT /user user-creation endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "@app.put('/user')\nasync def put_user(user: User):\n    user.password = md5(user.password.encode()).hexdigest()\n    query = f'''\nINSERT INTO users (\n                    name,\n                    username,\n                    ...",
+          "proof": "The PUT /user endpoint creates new users in both the SQL and NoSQL databases with no authentication required. An unauthenticated attacker can insert arbitrary user records, including setting their own password hash. The User model comes directly from the HTTP request body (untrusted source) and every field flows into both database insert operations (sinks). There is no login, API key, token, or any identity verification before writing to the database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "main.py",
+      "start": {
+        "line": 242
+      },
+      "end": {
+        "line": 242
+      },
+      "extra": {
+        "message": "Missing rate limiting on POST /reset database-destroying endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@app.post('/reset')\nasync def reset_database():\n    remove(f'{DB_FILENAME}.sql.db')\n    rmtree(f'{DB_FILENAME}.nosql.db')\n    await init_db()\n    return {'resp': 'done'}",
+          "proof": "The POST /reset endpoint, which destroys and re-initializes the entire database, is completely unprotected by rate limiting. An attacker can call it repeatedly to cause persistent denial of service \u2014 any data inserted by legitimate users is immediately wiped. There is no throttling middleware, no per-IP limit, no token bucket, and no cooldown period. Combined with missing authentication (CWE-306), the endpoint is trivially abused by any unauthenticated client as many times as desired."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "main.py",
+      "start": {
+        "line": 223
+      },
+      "end": {
+        "line": 223
+      },
+      "extra": {
+        "message": "Missing rate limiting on DELETE /user endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@app.delete('/user')\nasync def delete_user(username: Optional[str] = '', user: Optional[User] = None):\n    if username:\n        db_client.vfapi.users.delete_one({'username': username})\n        await run_sql_query(f'DELETE FROM users WHERE username = \"{username}\";', commit=True)",
+          "proof": "The DELETE /user endpoint has no rate limiting. An unauthenticated attacker can enumerate usernames and rapidly delete every user in the database, causing total data loss. There is no throttling, IP-based blocking, or any other rate-control mechanism. The endpoint is particularly dangerous because it deletes from both database engines (NoSQL + SQL) in a single call."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "main.py",
+      "start": {
+        "line": 260
+      },
+      "end": {
+        "line": 260
+      },
+      "extra": {
+        "message": "Missing authentication on GET /docs and /redoc API documentation",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "@app.get('/docs', include_in_schema=False)\ndef return_docs():\n    return HTMLResponse('...<title>' + app.title + ' - Swagger UI</title>...', status_code=200)\n\n@app.get('/redoc', include_in_schema=False)\ndef return_redoc():\n    return HTMLResponse('...<title>' + app.title + ' - ReDoc</title>...', status_code=200)",
+          "proof": "The GET /docs (line 260) and GET /redoc (line 272) endpoints provide full interactive API documentation (Swagger UI and ReDoc) with no authentication. These pages enumerate every API endpoint, their parameters, request bodies, and response schemas. An attacker can use these to discover all attack surfaces without any authentication. The /openapi.json schema endpoint is also unprotected and programmatically accessible."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-359",
+      "path": "main.py",
+      "start": {
+        "line": 171
+      },
+      "end": {
+        "line": 171
+      },
+      "extra": {
+        "message": "Sensitive data exposure: passwords returned in multi-user SQL query responses",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-359"
+          ],
+          "citation": "        return {'users': _data}",
+          "proof": "The run_sql_query function at line 171 returns raw cursor tuples when multiple rows match. Unlike the single-row path (lines 163-170) which explicitly extracts fields skipping password at index 3, the multi-row return dumps the entire raw cursor result including passwords at index 3. Combined with the SQL injection vulnerability in /select endpoint (line 183: f'SELECT * FROM users WHERE username = \"{username}\";'), an attacker can inject username=\" OR 1=1 -- to return all users, and each raw tuple contains (id, name, username, password-MD5-hash, address, email, contact). The attacker-controlled username (SOURCE) flows through SQL injection to the multi-row code path (SINK) at line 171, exposing password hashes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "main.py",
+      "start": {
+        "line": 181
+      },
+      "end": {
+        "line": 181
+      },
+      "extra": {
+        "message": "Missing rate limiting on all API endpoints",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.get('/select')",
+          "proof": "SOURCE: HTTP request to any endpoint (GET /select, POST /find, PUT /user, POST /reset, etc.) -> SINK: handler functions with no throttling middleware. There is no slowapi, no rate-limiting decorator, no per-IP or per-endpoint cap anywhere in the application. An attacker can brute-force enumerate usernames via GET /select, flood POST /find with arbitrary NoSQL queries, mass-create users via PUT /user, or trigger repeated expensive DB resets via POST /reset \u2014 all at unlimited velocity."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "run.sh",
+      "start": {
+        "line": 38
+      },
+      "end": {
+        "line": 38
+      },
+      "extra": {
+        "message": "Development server (npm run dev) exposed in startup script",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "cd ui && npm run dev -- --port 8008 &",
+          "proof": "SOURCE: run.sh startup script -> SINK: npm run dev launched unconditionally when --reload is passed. The dev server exposes HMR endpoints, source maps, verbose error messages with stack traces, and lacks production hardening. The script's echo '[+] Starting Vulnerable API UI <dev>' confirms this is intentional dev mode. Any deployment using this script would serve the dev server on port 8008."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "main.py",
+      "start": {
+        "line": 184
+      },
+      "end": {
+        "line": 184
+      },
+      "extra": {
+        "message": "Unauthenticated exposure of user PII via GET /select",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "return resp",
+          "proof": "SOURCE: username query parameter (untrusted client input) -> SINK: run_sql_query() -> return resp. The endpoint has no authentication. run_sql_query returns the full SQL row including name, address, email, contact, and MD5 password hash. Any client can retrieve PII for any user by supplying a username via ?username=."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "main.py",
+      "start": {
+        "line": 217
+      },
+      "end": {
+        "line": 217
+      },
+      "extra": {
+        "message": "Unauthenticated exposure of user PII via GET /find",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "return get_nosql_users({'username': username})",
+          "proof": "SOURCE: username query parameter -> SINK: get_nosql_users() -> users.find() -> return. The endpoint has no authentication. get_nosql_users strips _id and password fields but still returns name, username, address, email, and contact \u2014 all PII. Any client can call GET /find?username=<value> to enumerate any user's personal data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-16",
+      "path": "main.py",
+      "start": {
+        "line": 260
+      },
+      "end": {
+        "line": 260
+      },
+      "extra": {
+        "message": "Interactive Swagger UI exposed despite disabled default docs",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-16"
+          ],
+          "citation": "@app.get('/docs', include_in_schema=False)\ndef return_docs():",
+          "proof": "SOURCE: FastAPI is configured with docs_url=False (line 50), yet a custom /docs endpoint at line 258 serves the full Swagger UI HTML bundle (line 260). This publicly reveals all API routes, parameters, request bodies, and response schemas to anyone who visits /docs, defeating the intent of disabling the default docs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-327",
+      "path": "main.py",
+      "start": {
+        "line": 114
+      },
+      "end": {
+        "line": 114
+      },
+      "extra": {
+        "message": "Broken MD5 hash used for seed password storage",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-327"
+          ],
+          "citation": "\"{md5(fake.password().encode()).hexdigest()}\"",
+          "proof": "SOURCE: init_sql_db() -> fake.password() (generated seed password) -> SINK: md5().hexdigest() stored in SQLite database. MD5 is a cryptographically broken hash that enables fast offline cracking (billions of hashes/sec with commodity hardware). All seed user passwords are stored with zero salt and a broken algorithm. This is distinct from the same MD5 pattern at line 188 in PUT /user for user-registered passwords."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "main.py",
+      "start": {
+        "line": 186
+      },
+      "end": {
+        "line": 186
+      },
+      "extra": {
+        "message": "No rate limiting on user creation endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@app.put('/user')\nasync def put_user(user: User):",
+          "proof": "SOURCE: HTTP PUT to /user with a User JSON body -> SINK: run_sql_query(INSERT...) + db_client.vfapi.users.insert_one(...). There is zero throttling on this endpoint, allowing an attacker to mass-create millions of user records, filling the database and degrading service for legitimate users."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "static/robots.txt",
+      "start": {
+        "line": 1
+      },
+      "end": {
+        "line": 1
+      },
+      "extra": {
+        "message": "Sensitive API endpoints disclosed in robots.txt",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "User-Agent: *\nDisallow: /select\nDisallow: /find\nDisallow: /user\nDisallow: /reset",
+          "proof": "SOURCE: Static file served at /robots.txt via FileResponse. The robots.txt explicitly lists four API endpoints (/select, /find, /user, /reset) that the operator wishes to hide from crawlers. This advertises the existence and paths of these sensitive endpoints to any automated scanner or attacker who requests the file, reducing the discovery effort from active scanning to a single passive request."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "main.py",
+      "start": {
+        "line": 181
+      },
+      "end": {
+        "line": 181
+      },
+      "extra": {
+        "message": "IDOR on GET /select \u2014 any user can read any SQL user record by username",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "@app.get('/select')\nasync def sql_return_users_from_username(username: str):\n    resp = await run_sql_query(f'SELECT * FROM users WHERE username = \"{username}\";')\n    return resp",
+          "proof": "SOURCE: username query parameter (untrusted client input) -> SINK: run_sql_query(SELECT * FROM users WHERE username = \"{username}\"). The endpoint performs zero authentication or authorization. A client supplies any username and receives that user's full record (name, username, password hash, address, email, contact). This is a read-path IDOR distinct from the DELETE IDOR."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "main.py",
+      "start": {
+        "line": 195
+      },
+      "end": {
+        "line": 195
+      },
+      "extra": {
+        "message": "IDOR on DELETE /user via User.address body field",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "db_client.vfapi.users.delete_one({'address': user.address})\n        await run_sql_query(f'DELETE FROM users WHERE address = {user.address};', commit=True)",
+          "proof": "SOURCE: The `user: Optional[User]` parameter is a Pydantic model populated from the unauthenticated request body \u2014 the client controls `user.address`. SINK: `delete_one({'address': user.address})` and `DELETE FROM users WHERE address = {user.address}` both use that attacker-supplied address to delete database records. No authentication, no authorization, no ownership check exists. An attacker can delete any user by guessing/enumerating their address. The SQL injection on line 196 (bare f-string interpolation of address) makes this trivially exploitable to delete the entire users table."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "main.py",
+      "start": {
+        "line": 182
+      },
+      "end": {
+        "line": 182
+      },
+      "extra": {
+        "message": "User enumeration via GET /select response discrepancy",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "resp = await run_sql_query(f'SELECT * FROM users WHERE username = \"{username}\";')",
+          "proof": "SOURCE: attacker-supplied `username` query parameter. SINK: `run_sql_query` returns a user object dict (id, name, username, etc.) when the username exists, but returns `{'users': []}` (empty list) when it does not. This observable response discrepancy lets an attacker enumerate valid usernames with a simple GET request."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "main.py",
+      "start": {
+        "line": 220
+      },
+      "end": {
+        "line": 220
+      },
+      "extra": {
+        "message": "User enumeration via GET /find response discrepancy",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "return get_nosql_users({'username': username})",
+          "proof": "SOURCE: attacker-supplied `username` query parameter. SINK: `get_nosql_users` returns a user document dict when the username exists, but returns an empty tuple `()` when it does not. This observable response discrepancy lets an attacker enumerate valid usernames against the NoSQL collection."
+        }
+      }
+    }
+  ]
+}

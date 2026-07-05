@@ -54,11 +54,41 @@ def discover_llm_scanners(scan_dir: Path) -> set[str]:
     return llm_slugs
 
 
+def load_benchmark_manifest() -> dict:
+    """Load current benchmark/GT metadata."""
+    manifest_path = PROJECT_ROOT / "benchmark-manifest.json"
+    if not manifest_path.exists():
+        return {}
+    with open(manifest_path) as f:
+        return json.load(f)
+
+
+def metrics_path_for_result(result_file: Path) -> Path:
+    """Return the operational metrics path for a run result file."""
+    return result_file.with_suffix("").with_suffix(".metrics.json")
+
+
+def result_matches_current_gt(result_file: Path, current_gt_hash: str | None) -> bool:
+    """Return true when a run is stamped with the requested GT hash."""
+    if not current_gt_hash:
+        return True
+    metrics_path = metrics_path_for_result(result_file)
+    if not metrics_path.exists():
+        return False
+    try:
+        with open(metrics_path) as f:
+            metrics = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return False
+    return metrics.get("ground_truth_content_hash") == current_gt_hash
+
+
 def collect_results(
     scan_dir: Path,
     gt_dir: Path,
     scanner_slugs: set[str] | None = None,
     repo_filter: list[str] | None = None,
+    current_gt_hash: str | None = None,
 ) -> dict:
     """Collect and score all LLM benchmark results.
 
@@ -94,6 +124,7 @@ def collect_results(
             run_files = sorted([
                 f for f in scanner_dir.glob("run-*.json")
                 if not f.name.endswith(".metrics.json")
+                and result_matches_current_gt(f, current_gt_hash)
             ])
             if not run_files:
                 continue
@@ -119,7 +150,7 @@ def collect_results(
                 }
 
                 # Load metrics if available
-                metrics_path = rf.with_suffix("").with_suffix(".metrics.json")
+                metrics_path = metrics_path_for_result(rf)
                 if metrics_path.exists():
                     with open(metrics_path) as f:
                         run_score["operational_metrics"] = json.load(f)
@@ -161,13 +192,22 @@ def main() -> int:
         default=PROJECT_ROOT / "reports" / "llm-benchmark-results.json",
         help="Output JSON path",
     )
+    parser.add_argument(
+        "--allow-legacy-results",
+        action="store_true",
+        help="Include runs without a metrics file stamped with the current GT hash",
+    )
     args = parser.parse_args()
 
     scan_dir = PROJECT_ROOT / "scan-results"
     gt_dir = PROJECT_ROOT / "ground-truth"
+    manifest = load_benchmark_manifest()
+    current_gt_hash = None if args.allow_legacy_results else manifest.get("ground_truth_content_hash")
+    if current_gt_hash:
+        print(f"Requiring current GT hash: {current_gt_hash}")
 
     scanner_slugs = set(args.models) if args.models else None
-    results = collect_results(scan_dir, gt_dir, scanner_slugs, args.repos)
+    results = collect_results(scan_dir, gt_dir, scanner_slugs, args.repos, current_gt_hash)
 
     if not results:
         print("No results to collect.", file=sys.stderr)

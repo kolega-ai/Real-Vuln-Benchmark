@@ -1,0 +1,1132 @@
+{
+  "results": [
+    {
+      "path": "backend/app/core/config.py",
+      "check_id": "kolega.claude-adaptation.hardcoded-credentials",
+      "start": {
+        "line": 11,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Hardcoded Default Secrets (JWT Secret Key and Database Credentials) \u2014 JWT token forgery (impersonate any user) and unauthorized database access if defaults are used in production. [verified: config.py line 14 defaults SECRET_KEY to 'local-dev-change-me' (used by security.py to sign all JWTs) and line 12 defaults DATABASE_URL to 'postgresql+psycopg://dispatch:dispatch@localhost:5432/dispatch_ops'; no startup guard validates, warns, or rejects these defaults, so a deployment omitting the env vars runs with publicly known credentials enabling JWT forgery and database compromise.]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "kolega": {
+            "cluster_id": "hardcoded_credentials",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/core/config.py",
+      "check_id": "kolega.claude-adaptation.hardcoded-secret",
+      "start": {
+        "line": 14,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Hardcoded default JWT secret key enables token forgery \u2014 An attacker can forge JWTs for any user (including ops_admin) if the SECRET_KEY env var is not set, gaining full administrative access to the application and all its data. [verified: Same default JWT secret 'local-dev-change-me' at config.py line 14 is used directly by security.py jwt.encode() and jwt.decode(); no startup check across the entire codebase prevents deployment with this known default, enabling complete authentication bypass via forged JWTs.]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "kolega": {
+            "cluster_id": "hardcoded_secret",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.path-traversal",
+      "start": {
+        "line": 26,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Path Traversal / Arbitrary File Read in ops parcel endpoint \u2014 Arbitrary file read from the server filesystem, exposing secrets, database files, source code, and system files. [verified: User-controlled `packet_ref` is joined to `BASE_EXPORT_DIR` via `BASE_EXPORT_DIR / packet_ref` on line 26 with no path sanitization, then read with `.read_text()`, enabling directory traversal to arbitrary files. The token gate is authentication only.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "kolega": {
+            "cluster_id": "path_traversal",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.ssrf",
+      "start": {
+        "line": 32,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Server-Side Request Forgery (SSRF) in ops relay endpoint \u2014 Access to internal network services, cloud metadata endpoints, and local file reads via file:// scheme. [verified: User-controlled `url` parameter is passed directly to `urllib.request.urlopen(url)` on line 32 with no scheme/host validation, allowing access to internal services and cloud metadata. Authentication does not constrain the URL target.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "kolega": {
+            "cluster_id": "ssrf",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.log-injection",
+      "start": {
+        "line": 53,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Log Injection with Bearer Token Exposure in ops wire endpoint \u2014 Log forgery/poisoning and exposure of valid Authorization bearer tokens in application logs. [verified: The entire request body and Authorization header are logged at WARNING level on line 53 via `logger.warning(\"ops tally body=%s bearer=%s\", body, request.headers.get(\"authorization\"))`, leaking bearer tokens into logs and enabling log-forgery via newline injection. Token exposure directly undermines the ops gate.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-117"
+          ],
+          "kolega": {
+            "cluster_id": "log_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.code-injection",
+      "start": {
+        "line": 55,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Code Injection via eval() in ops formula endpoint \u2014 Arbitrary Python code execution on the server, leading to full system compromise. [verified: User-controlled `expr` parameter is passed to `eval()` on line 55 with only `__builtins__` disabled \u2014 sandbox escapes via `().__class__.__bases__[0].__subclasses__()` are well-known. The internal token gate authenticates but does not validate or restrict the evaluated expression.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "kolega": {
+            "cluster_id": "code_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-in-logs",
+      "start": {
+        "line": 60,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Sensitive data (Authorization header) written to application logs \u2014 Bearer tokens, API keys, or other credentials sent in the Authorization header are exposed in application logs, accessible to anyone with log access [verified: The Authorization header value is logged at WARNING level on line 53 (`logger.warning(..., request.headers.get(\"authorization\"))`), exposing bearer tokens in application logs accessible to anyone with log access.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_in_logs",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.ssti",
+      "start": {
+        "line": 63,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Server-Side Template Injection (SSTI) in ops Jinja endpoint \u2014 Remote code execution on the server via Jinja2 template injection, allowing full system compromise. [verified: User-controlled `fragment` query parameter is concatenated directly into a Jinja2 Template string with no sanitization on line 82 (`Template(\"Result: \" + fragment).render()`), enabling SSTI and potential RCE. The `_wrk_gate` token check is authentication, not input validation, and does not neutralize the injection.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "kolega": {
+            "cluster_id": "ssti",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.ssti",
+      "start": {
+        "line": 78,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Server-Side Template Injection via Jinja2 in /ops/jinja \u2014 Attacker with internal token executes arbitrary code on the server via Jinja2 SSTI, gaining full system access [verified: Same SSTI as finding 0: user-controlled `fragment` is concatenated into `Template(\"Result: \" + fragment).render()` on line 82 with no sanitization, enabling Jinja2 template injection and RCE.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "kolega": {
+            "cluster_id": "ssti",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.path-traversal",
+      "start": {
+        "line": 84,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Path traversal in /ops/dock file write \u2014 Attacker with internal token writes arbitrary files to the server filesystem, enabling code execution or data destruction [verified: Same path traversal write as finding 10: `name` joined to `BASE_EXPORT_DIR` on line 90 without sanitization, allowing arbitrary file write via `target.write_bytes(body)`.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "kolega": {
+            "cluster_id": "path_traversal",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.path-traversal-write",
+      "start": {
+        "line": 90,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Unrestricted File Write with Path Traversal in ops dock endpoint \u2014 Arbitrary file write anywhere on the filesystem, enabling code execution via webshell, cron job, or SSH key overwrite. [verified: User-controlled `name` parameter is joined to `BASE_EXPORT_DIR` on line 90 (`target = BASE_EXPORT_DIR / name`) with no path sanitization, and the full request body is written via `target.write_bytes(body)`, enabling arbitrary file write via directory traversal.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "kolega": {
+            "cluster_id": "path_traversal_write",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.xxe",
+      "start": {
+        "line": 95,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "XML External Entity injection in /ops/xml endpoint \u2014 Attacker with internal token reads local files or performs SSRF via crafted XML with external entities [verified: Same XXE as finding 4: `XMLParser(resolve_entities=True, load_dtd=True, no_network=False)` on line 96 enables external entity resolution on attacker-supplied XML body.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-611"
+          ],
+          "kolega": {
+            "cluster_id": "xxe",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.nosql-injection",
+      "start": {
+        "line": 104,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "NoSQL Injection in ops MongoDB endpoint \u2014 Bypass query filters to access unauthorized data, potential JavaScript execution on MongoDB server. [verified: User-supplied JSON `filter` field (or entire payload) is passed directly to `find_one(query)` on line 109 without sanitization, allowing MongoDB operator injection (`$where`, `$regex`, `$ne`). The `_wrk_gate` provides no query-level protection.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "kolega": {
+            "cluster_id": "nosql_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.ssti",
+      "start": {
+        "line": 106,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Server-side template injection (SSTI) via Jinja2 user-controlled template fragment \u2014 Remote code execution and arbitrary file read on the server via Jinja2 sandbox escape techniques; full application compromise. [verified: Same SSTI as findings 0 and 13: user-controlled `fragment` concatenated into Jinja2 Template on line 82 with no sanitization, enabling template injection and potential RCE.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "kolega": {
+            "cluster_id": "ssti",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.path-traversal",
+      "start": {
+        "line": 112,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Path traversal \u2014 arbitrary file write via user-controlled path with unbounded body \u2014 Attacker can write arbitrary files anywhere on the filesystem (e.g. overwrite application code, write cron jobs, drop SSH authorized_keys), leading to remote code execution or persistent backdoor. [verified: Same path traversal write as findings 10 and 16: user-controlled `name` joined to `BASE_EXPORT_DIR` on line 90 without sanitization, enabling arbitrary file write via directory traversal.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "kolega": {
+            "cluster_id": "path_traversal",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.xxe",
+      "start": {
+        "line": 127,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "XXE via external entity resolution in XML parser \u2014 Attacker can read arbitrary files from the server filesystem, perform internal network scanning via SSRF, or cause denial of service through entity expansion attacks. [verified: Same XXE as findings 4 and 17: `XMLParser(resolve_entities=True, load_dtd=True, no_network=False)` on line 96 parses attacker-supplied XML with external entity resolution enabled.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-611"
+          ],
+          "kolega": {
+            "cluster_id": "xxe",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.nosql-injection",
+      "start": {
+        "line": 141,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "NoSQL injection via user-controlled MongoDB query filter \u2014 Attacker can execute arbitrary JavaScript on the MongoDB server (via $where), exfiltrate data through regex-based blind extraction, or bypass query constraints to access unauthorized records. [verified: Same NoSQL injection as findings 5 and 19: user-supplied JSON filter passed directly to `find_one(query)` on line 109, enabling MongoDB operator injection and query manipulation.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "kolega": {
+            "cluster_id": "nosql_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.missing-rate-limiting",
+      "start": {
+        "line": 198,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing rate limiting on authentication endpoints \u2014 Attacker performs unlimited brute-force password guessing and password-reset token enumeration without lockout or throttling [verified: Same as finding [1]: no rate-limiting mechanism exists; all four auth endpoints are reachable without throttling, enabling unlimited brute-force and token-guessing attacks.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "kolega": {
+            "cluster_id": "missing_rate_limiting",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.insecure-cookie",
+      "start": {
+        "line": 207,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Session cookie missing Secure flag \u2014 Session tokens transmitted over plain HTTP can be intercepted via MITM attacks, leading to session hijacking [verified: Same as finding [3]: line 207 sets secure=False on the session cookie with no compensating TLS enforcement, exposing JWT tokens over plaintext HTTP.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_cookie",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-in-logs",
+      "start": {
+        "line": 234,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Password reset tokens written to plaintext log file \u2014 Attacker with filesystem access reads password-reset tokens from the log and resets any user's password [verified: password_reset_request (line 322) writes the plaintext reset token via json.dumps into storage/mock_outbox/password_resets.log; any filesystem reader can harvest active tokens and reset arbitrary user passwords.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_in_logs",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.missing-rate-limiting",
+      "start": {
+        "line": 261,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing Rate Limiting on Authentication Endpoints \u2014 Credential brute-forcing, account lockout bypass, denial of service via resource exhaustion on auth endpoints. [verified: No rate-limiting middleware, decorator, or in-memory throttle exists anywhere in the codebase (confirmed by search); POST /api/auth/login, /register, /password-reset/request, and /password-reset/confirm are all reachable without any request-limiting control.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "kolega": {
+            "cluster_id": "missing_rate_limiting",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.insecure-cookie",
+      "start": {
+        "line": 269,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing Secure Flag on Session Cookie \u2014 Session tokens can be intercepted over unencrypted HTTP, enabling session hijacking via man-in-the-middle attacks. [verified: Line 207 sets secure=False explicitly on the session cookie; no compensating HTTPS redirect or HSTS header is enforced, so the JWT token is transmitted over unencrypted HTTP when the app is accessed without TLS.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_cookie",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.idor",
+      "start": {
+        "line": 287,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Customer portal self-registration allows arbitrary customer_id association without affiliation verification \u2014 An unauthenticated attacker can register as a portal user for any customer in the system, gaining access to that customer's jobs, proof uploads (customer-visible), messages, incidents (customer_summary), and contact details exposed through the API \u2014 a cross-tenant data breach against arbitrary customer accounts. [verified: register (line 287) checks only db.get(Customer, payload.customer_id) for existence with no affiliation/invitation verification; after registration, job_query_for_user scopes by user.customer_id, granting immediate cross-tenant data access to the claimed customer's jobs, proofs, and incidents.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "kolega": {
+            "cluster_id": "idor",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-in-logs",
+      "start": {
+        "line": 322,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Password reset tokens stored in plaintext log file \u2014 An attacker who gains filesystem read access can collect active password reset tokens from the log and take over any user account that has requested a password reset. [verified: Same as finding [12]: line 322 logs the plaintext password-reset token alongside the user email to password_resets.log, enabling account takeover by any actor with filesystem read access.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_in_logs",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.open-redirect",
+      "start": {
+        "line": 48,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Open Redirect in ops after endpoint \u2014 Phishing and credential theft by redirecting authenticated users to attacker-controlled sites. [verified: User-controlled `lane` parameter is passed directly to `RedirectResponse(lane)` on line 49 with no URL validation, allowing redirect to arbitrary external sites. The token gate does not validate the redirect target.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-601"
+          ],
+          "kolega": {
+            "cluster_id": "open_redirect",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.denial-of-service",
+      "start": {
+        "line": 51,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Denial of service via unbounded count parameter in /ops/spool \u2014 Attacker with internal token exhausts server memory by requesting a massive count, causing application crash or unavailability [verified: User-controlled `count` parameter on line 57 drives `range(count)` with no upper bound for in-memory list allocation, enabling memory exhaustion and denial of service.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "kolega": {
+            "cluster_id": "denial_of_service",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.xss",
+      "start": {
+        "line": 59,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Reflected XSS via Jinja2 |safe filter in /ops/blurb \u2014 Attacker with internal token injects arbitrary JavaScript that executes in the victim's browser context when they visit the crafted URL [verified: Same XSS as finding 6: `card` rendered with `|safe` filter in `HTMLResponse` on line 64, disabling HTML escaping and enabling script injection in a victim's browser.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "kolega": {
+            "cluster_id": "xss",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.cors-misconfiguration",
+      "start": {
+        "line": 67,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Reflected CORS origin with credentials in /ops/origin \u2014 Any malicious website can make authenticated cross-origin requests to the /ops/origin endpoint with the victim's cookies/credentials [verified: Same CORS misconfiguration as finding 8: Origin header reflected into `Access-Control-Allow-Origin` with `Access-Control-Allow-Credentials: true` on line 74, allowing any origin to make credentialed requests.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "kolega": {
+            "cluster_id": "cors_misconfiguration",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.denial-of-service",
+      "start": {
+        "line": 70,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Denial of service via unbounded in-memory list allocation \u2014 Attacker can exhaust server memory by requesting a huge count value, causing the application to crash or become unresponsive, denying service to legitimate users. [verified: Same DoS as finding 21: unbounded `count` drives `range(count)` on line 57 for in-memory list creation with no upper limit, enabling memory exhaustion.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "kolega": {
+            "cluster_id": "denial_of_service",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.xss",
+      "start": {
+        "line": 76,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Cross-site scripting (XSS) via Jinja2 |safe filter on user-controlled HTML \u2014 Attacker can execute arbitrary JavaScript in the browser of anyone who visits the crafted URL, enabling session theft, credential phishing, or DOM manipulation. [verified: Same XSS as findings 6 and 14: `card` rendered with `|safe` in `HTMLResponse` on line 64, disabling auto-escaping and enabling script injection in victim browsers.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "kolega": {
+            "cluster_id": "xss",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.header-injection",
+      "start": {
+        "line": 78,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "HTTP Header Injection / CORS Misconfiguration in ops origin endpoint \u2014 HTTP response splitting, arbitrary CORS origin with credentials, enabling cross-origin attacks with session cookies. [verified: The endpoint on line 72 reflects the `Origin` request header into `Access-Control-Allow-Origin` and sets `Access-Control-Allow-Credentials: true`, allowing any origin to make credentialed cross-origin requests. CRLF header injection is mitigated by modern ASGI but the permissive CORS with credentials is exploitable.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-113"
+          ],
+          "kolega": {
+            "cluster_id": "header_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.weak-prng",
+      "start": {
+        "line": 89,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Weak PRNG used for security-sensitive code generation in /ops/nonce \u2014 Generated nonces/codes are predictable, allowing an attacker to guess valid values and bypass any security checks relying on them [verified: `random.choice` (Mersenne Twister) is used on line 93 instead of `secrets.choice` for generating values explicitly named nonces, making outputs predictable if PRNG state is reconstructed from observed values.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-330"
+          ],
+          "kolega": {
+            "cluster_id": "weak_prng",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.permissive-cors",
+      "start": {
+        "line": 92,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Reflected CORS header with credentials allows cross-origin requests from any origin \u2014 Any malicious website can make authenticated cross-origin requests to the ops endpoints, potentially reading sensitive data or performing actions on behalf of authenticated users whose browsers visit the attacker's site. [verified: Same CORS misconfiguration as findings 8 and 23: reflected Origin with credentials on line 74 allows cross-origin credentialed requests from any origin.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "kolega": {
+            "cluster_id": "permissive_cors",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.denial-of-service",
+      "start": {
+        "line": 114,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Denial of service via unbounded file upload to filesystem \u2014 Attacker can exhaust server disk space by repeatedly uploading large payloads, causing application and potentially system-wide failures due to full disk. [verified: The `/ops/dock` endpoint on line 90 writes the full request body to disk via `target.write_bytes(body)` with no size limit enforcement, allowing an attacker to exhaust disk space through repeated large uploads.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "kolega": {
+            "cluster_id": "denial_of_service",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.weak-prng",
+      "start": {
+        "line": 121,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Weak PRNG used for nonce/code generation in /ops endpoint \u2014 An attacker who observes a sequence of generated codes can predict future outputs, compromising any downstream use of these nonces for security purposes (CSRF tokens, transaction IDs, one-time codes). [verified: Same weak PRNG as finding 25: `random.choice` on line 93 instead of `secrets.choice` for generating security-sensitive nonce values, making outputs predictable.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-330"
+          ],
+          "kolega": {
+            "cluster_id": "weak_prng",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.missing-security-headers",
+      "start": {
+        "line": 57,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing HTTP Security Headers (HSTS, X-Content-Type-Options, X-Frame-Options) \u2014 Users' session cookies may be transmitted over unencrypted HTTP connections (no HSTS enforcement), the SPA frontend is vulnerable to clickjacking attacks (no X-Frame-Options), and browsers may incorrectly MIME-sniff responses leading to XSS or other code execution (no X-Content-Type-Options). [verified: No HSTS, X-Content-Type-Options, or X-Frame-Options headers are set anywhere in the application code; the only middleware added is CORSMiddleware (main.py line 57), and the SPA catch-all route serves index.html without any security headers. The session cookie uses secure=False, compounding the absence of HSTS enforcement.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-16"
+          ],
+          "kolega": {
+            "cluster_id": "missing_security_headers",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.csrf",
+      "start": {
+        "line": 207,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing CSRF Protection on All State-Changing Endpoints \u2014 An attacker can craft malicious websites or emails that, when visited by an authenticated user, silently perform state-changing operations such as creating/deleting jobs, changing job statuses, creating incidents, reordering routes, or modifying user accounts \u2014 all within the victim's authorized session context. [verified: The app authenticates via the dispatch_session cookie (set with SameSite=Lax) and accepts it as an alternative to the Authorization header at main.py line ~205, yet contains zero CSRF tokens, Origin/Referer validation, or custom-header checks anywhere in the codebase. SameSite=Lax provides partial mitigation in modern browsers but is not a complete CSRF defense per OWASP guidance.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "kolega": {
+            "cluster_id": "csrf",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.account-enumeration",
+      "start": {
+        "line": 213,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Account enumeration via registration endpoint \u2014 Attacker enumerates valid user email addresses for targeted phishing, credential stuffing, or password-reset attacks [verified: Same as finding [2]: register endpoint line 213 returns HTTP 409 'Email already registered' vs 422 for other failures, enabling unauthenticated email enumeration.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-203"
+          ],
+          "kolega": {
+            "cluster_id": "account_enumeration",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.account-enumeration",
+      "start": {
+        "line": 283,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "User Account Enumeration via Registration Endpoint \u2014 Attacker can build a list of valid registered email addresses for targeted phishing or credential-stuffing attacks. [verified: Line 213 returns HTTP 409 'Email already registered' when email exists, vs 422 for invalid customer_id on line 287; an unauthenticated attacker can probe email addresses and observe the distinct status codes.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "kolega": {
+            "cluster_id": "account_enumeration",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.denial-of-service",
+      "start": {
+        "line": 410,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Unbounded memory consumption in CSV import \u2014 Attacker exhausts server memory by uploading an extremely large CSV file, causing application crash or unavailability [verified: Same as finding [6]: import_csv (line 410) reads the entire upload into memory via await file.read() with no size ceiling, unlike the 10 MB gate on proof uploads.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "kolega": {
+            "cluster_id": "denial_of_service",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.csv-formula-injection",
+      "start": {
+        "line": 437,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in export endpoints \u2014 Attacker injects spreadsheet formulas into CSV exports; when an admin opens the exported file in Excel, arbitrary commands or data exfiltration occurs [verified: Same as finding [0]: csv_response (line 837) delivers customer_summary and internal_notes into CSV output with no formula-character escaping, and IncidentCreate accepts these fields without sanitization.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_formula_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.denial-of-service",
+      "start": {
+        "line": 804,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Unbounded file upload in CSV import allows memory exhaustion DoS \u2014 An authenticated dispatcher or admin can crash the server by uploading an extremely large CSV file, causing denial of service for all users. [verified: import_csv (line 410) calls await file.read() with no size limit; unlike upload_proof (line 384) which enforces a 10 MB cap, an authenticated dispatcher/admin can exhaust server memory with an arbitrarily large CSV.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "kolega": {
+            "cluster_id": "denial_of_service",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.csv-formula-injection",
+      "start": {
+        "line": 837,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV Formula Injection in Data Exports \u2014 Arbitrary command execution on the machine of any user who opens the exported CSV in a spreadsheet application. [verified: csv_response (line 837) writes DB values via csv.DictWriter with no prefixing of =/+/-/@; incident fields customer_summary and internal_notes flow from user input (IncidentCreate schema) through the database to the CSV sink with zero sanitization.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_formula_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.csv-formula-injection",
+      "start": {
+        "line": 861,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in incident export via unescaped user-controlled text \u2014 When an administrator opens the exported CSV in a spreadsheet application, injected formulas can execute arbitrary commands, exfiltrate data, or establish outbound connections from the victim's machine. [verified: Same as findings [0] and [13]: csv_response (line 837) writes incident customer_summary and internal_notes into CSV via DictWriter with no formula-character prefixing, and no sanitization exists in the input path.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_formula_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 866,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Route CSV export lacks authorization scoping for field_worker role \u2014 A field worker can export the complete route schedule for all regions, bypassing the per-worker scoping enforced on the /api/routes listing endpoint and gaining cross-region visibility into other workers' routes, job assignments, and stop orders. [verified: Same root cause as finding [4]: export/routes (line 866) queries all Route rows with only a dispatcher filter (line 868), omitting the field_worker scope (Route.worker_id == user.id) that /api/routes enforces.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/dispatch_operations.py",
+      "check_id": "kolega.claude-adaptation.information-disclosure",
+      "start": {
+        "line": 101,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Information disclosure of environment variables and filesystem paths in /ops/trace \u2014 Attacker learns internal server paths and environment configuration, aiding further targeted attacks [verified: The endpoint on line 101 exposes `APP_ENV` environment variable and `BASE_EXPORT_DIR` filesystem path in its JSON response, disclosing internal server configuration that aids targeted attacks but has no direct exploitation path.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "kolega": {
+            "cluster_id": "information_disclosure",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.account-enumeration",
+      "start": {
+        "line": 201,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Account enumeration via login timing side-channel \u2014 Attacker determines which email addresses have accounts by measuring response time differences, enabling targeted attacks [verified: Login line 200-201 short-circuits verify_password (bcrypt) when user is None; when user exists, bcrypt runs with measurable delay, creating a network-observable timing side-channel that leaks account existence.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-203"
+          ],
+          "kolega": {
+            "cluster_id": "account_enumeration",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    }
+  ]
+}

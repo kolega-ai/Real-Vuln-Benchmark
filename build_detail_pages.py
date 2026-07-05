@@ -31,7 +31,7 @@ SHELL_HEAD = """<!DOCTYPE html>
 
 <header class="topbar">
   <div class="wrap topbar-inner">
-    <a class="brand" href="../index.html"><span class="mark">▚</span> real<span style="color:var(--accent)">vuln</span> <span class="v">v1.0</span></a>
+    <a class="brand" href="../index.html"><span class="mark">▚</span> real<span style="color:var(--accent)">vuln</span> <span class="v">v{ver}</span></a>
     <nav class="topnav">
       <span class="navlinks" style="display:contents">
         <a href="../dashboard.html" style="color:var(--fg)">Dashboard</a>
@@ -66,13 +66,14 @@ SHELL_FOOT = """</main>
 <footer class="footer">
   <div class="wrap">
     <div class="footer-base" style="margin-top:0;padding-top:0;border-top:none">
-      <span>RealVuln · MIT License · arXiv:2604.13764 · v1.0, March 2026</span>
+      <span>RealVuln · Apache 2.0 · arXiv:2604.13764 · v{ver}</span>
       <span class="disc">RealVuln is independent research by John Pellew and Faizan Raza, founding members of Kolega.Dev. Kolega.Dev is among the scanners evaluated here — so every ground-truth label, scanner output, and scoring script is released openly for independent reproduction and audit.</span>
     </div>
   </div>
 </footer>
 
 <script src="../app.js"></script>
+<script src="../versions.js"></script>
 </body>
 </html>
 """
@@ -139,7 +140,7 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
     rows.sort(key=lambda r: r["f2"], reverse=True)
     max_total = max((r["tp"] + r["fp"] + r["fn"] for r in rows), default=1) or 1
 
-    out = [inject_analytics(SHELL_HEAD.format(title=name))]
+    out = [inject_analytics(SHELL_HEAD.format(title=name, ver=VER))]
 
     # hero
     out.append('<section class="wrap page-hero">')
@@ -254,12 +255,19 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
 
     out.append('  <p class="figure-cap" style="margin-top:30px"><a href="../dashboard.html">← Back to the leaderboard</a></p>')
     out.append("</div></section>")
-    out.append(SHELL_FOOT)
+    out.append(SHELL_FOOT.format(ver=VER))
     return "\n".join(out)
 
 
+# benchmark version (e.g. "2.0") shown in the shared shell; set in main()
+VER = "1.0"
+
+
 def main() -> None:
+    global VER
     data = json.loads((REPORTS / "dashboard.json").read_text())
+    bv = str(data.get("benchmark_version", "") or "")
+    VER = ".".join(bv.split(".")[:2]) if bv else "1.0"
     aggs, grid = data["aggregates"], data["grid"]
     meta_all = data.get("scanner_metadata", {})
     outdir = REPORTS / "scanners"

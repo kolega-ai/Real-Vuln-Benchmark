@@ -1,0 +1,110 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-94",
+      "path": "main.py",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "Server-Side Template Injection (SSTI) via Jinja2 from_string",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "citation": "output = Jinja2.from_string(\"Welcome \" + username + \"!\").render()",
+          "proof": "SOURCE: The `username` query parameter is accepted directly from the HTTP query string via FastAPI route handler `read_root(username=None)` at line 8. The user-supplied string is concatenated into a Jinja2 template string on line 14 via `from_string(\"Welcome \" + username + \"!\").render()`. Because Jinja2 evaluates template expressions ({{...}}, {%...%}) at render time and `Environment()` is created without any sandboxing, an attacker can inject arbitrary template syntax. SINK: The rendered output is returned via `HTMLResponse(content=output)` at line 19, confirming the result. An attacker can achieve RCE by injecting e.g. `{{ config.__class__.__init__.__globals__['os'].popen('id').read() }}`, demonstrating code execution on the server. The commented-out safe implementation on line 17 shows the developer was aware of the correct pattern (passing user input as a template variable) but left the vulnerable code active."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "main.py",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "Reflected Cross-Site Scripting (XSS) via HTMLResponse",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "return HTMLResponse(content=output)",
+          "proof": "SOURCE: The `username` query parameter (line 8) is untrusted user input. It flows through `Jinja2.from_string(...).render()` (line 14) where Jinja2's default `Environment()` has `autoescape=False` (see line 11), so HTML in the input passes through unescaped. SINK: The resulting string is passed to `HTMLResponse(content=output)` (line 19), which serves it as `text/html` without Content-Type sanitization or CSP headers. An attacker visiting `/?username=<img src=x onerror=alert(1)>` will have the script rendered and executed in the victim's browser. The `autoescape=False` default is confirmed at line 11 where `Environment()` is created without the `autoescape=True` argument."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-693",
+      "path": "main.py",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "Missing security headers on HTML response (CSP / X-Frame-Options / X-Content-Type-Options)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-693"
+          ],
+          "citation": "return HTMLResponse(content=output)",
+          "proof": "SOURCE: The HTMLResponse at line 19 does not set any security headers: no Content-Security-Policy, X-Frame-Options, nor X-Content-Type-Options. SINK: The browser receives the response with default security policies only. An attacker can embed this page in an iframe (clickjacking), the browser may MIME-sniff the response differently, and the reflected XSS (already identified at line 19) has no CSP to mitigate it. FastAPI/Starlette supports adding headers via the `headers` parameter or middleware, but none are configured."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1104",
+      "path": "requirements.txt",
+      "start": {
+        "line": 1
+      },
+      "end": {
+        "line": 1
+      },
+      "extra": {
+        "message": "Unpinned third-party dependencies allow supply-chain compromise",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1104"
+          ],
+          "citation": "fastapi\nuvicorn\njinja2",
+          "proof": "SOURCE: All three dependencies (fastapi, uvicorn, jinja2) are specified without version pinning in requirements.txt. SINK: Running `pip install -r requirements.txt` will install the latest available versions, which could silently introduce malicious code or breaking changes. An attacker who compromises the PyPI package for any of these dependencies, or a dependency of a dependency, can distribute a tainted version that will be auto-installed on next deployment. Pinning to known-good versions with hash verification (e.g. `fastapi==0.78.0 --hash=sha256:...`) is the standard mitigation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-116",
+      "path": "main.py",
+      "start": {
+        "line": 11
+      },
+      "end": {
+        "line": 11
+      },
+      "extra": {
+        "message": "Jinja2 Environment created without autoescape=True \u2014 HTML output not escaped",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-116"
+          ],
+          "citation": "Jinja2 = Environment()",
+          "proof": "SOURCE: The Jinja2 `Environment()` is created at line 11 without `autoescape=True`. Jinja2's default `select_autoescape()` infers autoescape from the template file extension, but `from_string()` templates have no filename, so autoescape silently defaults to `False`. SINK: Any user-supplied value containing `<script>`, `'`, `\"`, `<`, `>`, or `&` is rendered verbatim into the HTML response at line 19. This means even the safe implementation (commented-out line 17: `{{ user_name }}`) would NOT escape HTML entities in `username`, enabling XSS independently of the SSTI flaw. An attacker can inject arbitrary HTML/JavaScript via the `username` parameter, e.g. `/?username=<script>alert(document.cookie)</script>`."
+        }
+      }
+    }
+  ]
+}

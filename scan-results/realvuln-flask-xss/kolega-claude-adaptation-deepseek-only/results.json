@@ -1,0 +1,656 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "app/blueprints/api/views.py",
+      "start": {
+        "line": 44
+      },
+      "end": {
+        "line": 44
+      },
+      "extra": {
+        "message": "Missing Authentication on API Message Creation Endpoint",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "    def post(self):",
+          "proof": "SOURCE: The `post()` method at line 44 has NO authentication decorator (unlike `index`, `get`, `delete` which all have `@admin_required`). SINK: The method accepts `request.get_json()` at line 46 and stores `data.get('message')` at line 47 into the database via `Message(message=message)` at line 49. The stored message is then rendered UNSAFELY in `app/templates/admin/message.html` at line 25 via `{{ message.message | safe }}`. An unauthenticated attacker can POST to `/api/v1/messages/` with a JavaScript payload that executes in any admin's browser when they visit the admin messages panel."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "app/templates/admin/message.html",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "Stored XSS via Unsafe '| safe' Filter in Admin Messages Panel",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "                <td>{{ message.message | safe }}</td>",
+          "proof": "SOURCE: User-controlled `message` content arrives into the database from two paths: (1) the unauthenticated API endpoint at `app/blueprints/api/views.py` line 44-49 which reads `data.get('message')` from `request.get_json()`, and (2) the feedback form at `app/blueprints/account_area/views.py` line 52 which reads `request.form.get('feedback')`. SINK: At line 25 of this template, `{{ message.message | safe }}` renders the message content WITHOUT Jinja2's auto-escaping (the `| safe` filter marks it as safe HTML). Any HTML/JavaScript in the message executes in the admin's browser session."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "app/blueprints/sandboxes/templates/sandboxes/unsafe_params.html",
+      "start": {
+        "line": 5
+      },
+      "end": {
+        "line": 5
+      },
+      "extra": {
+        "message": "Reflected XSS via GET Parameter 'name'",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "        <h1>Hello, {{ name | safe }}</h1>",
+          "proof": "SOURCE: `app/blueprints/sandboxes/views.py` line 10 reads `name = request.args.get('name', 'world!')` from the HTTP query string. SINK: This template at line 5 renders `{{ name | safe }}` which bypasses HTML escaping via the `| safe` Jinja2 filter. An attacker can inject arbitrary JavaScript via `?name=<script>alert(1)</script>` in the URL, which executes in the victim's browser immediately."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "app/blueprints/sandboxes/templates/sandboxes/unsafe_cookies.html",
+      "start": {
+        "line": 5
+      },
+      "end": {
+        "line": 5
+      },
+      "extra": {
+        "message": "Reflected XSS via Cookie 'name' Value",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "        <h1>Hello, {{ name | safe }}</h1>",
+          "proof": "SOURCE: `app/blueprints/sandboxes/views.py` line 25 reads `request.cookies.get('name', 'world')` from the user's cookie, and line 28 reads `request.form.get('name', None)` from POST body. SINK: This template at line 5 renders `{{ name | safe }}` with the `| safe` filter that disables escaping. An attacker can set a cookie `name=<img src=x onerror=alert(1)>` and when the victim visits `/sandbox/unsafe_cookies`, the JavaScript executes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-601",
+      "path": "app/blueprints/xss_protection/views.py",
+      "start": {
+        "line": 11
+      },
+      "end": {
+        "line": 11
+      },
+      "extra": {
+        "message": "Open Redirect via Unsanitized 'next' Parameter",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-601"
+          ],
+          "citation": "    return redirect(next)",
+          "proof": "SOURCE: Line 10 reads `next = request.args.get('next', url_for('index'))` directly from the URL query string. SINK: Line 11 passes this value directly to Flask's `redirect()` function with NO validation or allowlist. An attacker can craft `/toggle_xss_protection/?next=https://evil.com` to redirect authenticated users to a malicious site after toggling the XSS protection setting, enabling phishing attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "app/models/models.py",
+      "start": {
+        "line": 11
+      },
+      "end": {
+        "line": 11
+      },
+      "extra": {
+        "message": "Plaintext Password Storage and Exposure",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "    password = db.Column(db.String(200))",
+          "proof": "SOURCE: User passwords are accepted as plaintext via the login form at `app/blueprints/login/views.py` line 16 (`request.form.get('password')`). STORAGE SINK: At `app/models/models.py` line 11, passwords are stored in a plain `db.String(200)` column with no hashing (no pbkdf2/bcrypt/scrypt). LOGIN SINK: At `app/blueprints/login/views.py` line 16, `user.password == password` compares plaintext directly. EXPOSURE SINK: At `app/models/models.py` line 28, the `serialize` property returns `'password': self.password`, exposing plaintext passwords through the admin-only API at `app/blueprints/api/views.py` line 24. Anyone with DB access or admin API access can read all users' passwords."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "app/flask_xss.py",
+      "start": {
+        "line": 27
+      },
+      "end": {
+        "line": 27
+      },
+      "extra": {
+        "message": "Hardcoded Flask Secret Key in Source Code",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "    app.config['SECRET_KEY'] = 'Keep it secret, keep it safe'",
+          "proof": "SOURCE: The secret key is hardcoded as a string literal at line 27. SINK: This static value is used as Flask's `SECRET_KEY`, which signs session cookies, CSRF tokens, and flash messages. An attacker who has read access to the repository (which is public) can forge session cookies by signing arbitrary payloads with this known key, leading to session impersonation and privilege escalation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-256",
+      "path": "app/models/models.py",
+      "start": {
+        "line": 10
+      },
+      "end": {
+        "line": 10
+      },
+      "extra": {
+        "message": "Plaintext password storage with no hashing",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-256"
+          ],
+          "citation": "password = db.Column(db.String(200))",
+          "proof": "SOURCE: app/models/models.py line 10 \u2014 password is defined as a plain String column with no hashing. SINK: app/blueprints/login/views.py line 15 \u2014 `user.password == password` compares the stored plaintext directly. Passwords are stored and compared in cleartext. Any database compromise exposes all user credentials. Additionally, the User.serialize property (line 23) leaks the plaintext password if serialized."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "app/blueprints/account_area/views.py",
+      "start": {
+        "line": 53
+      },
+      "end": {
+        "line": 53
+      },
+      "extra": {
+        "message": "Sensitive Form Data Written to stdout via print() in send_feedback",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "    print(request.form)",
+          "proof": "SOURCE: User-controlled form data from request.form (line 52-53) is passed directly to Python's built-in print() function. SINK: print() writes the entire ImmutableMultiDict of form submission data to stdout (the server process standard output stream). In production environments, stdout is typically captured by log aggregation systems (systemd journal, Docker logs, cloud logging, etc.), making the full form contents persistently available to anyone with log access. Although the send_feedback form only includes a 'feedback' text field (not passwords), this endpoint: (1) logs whatever raw text the user submits\u2014which may contain PII, secrets, or internal references\u2014without any sanitization or redaction; (2) sets a dangerous precedent where sensitive form data is dumped to stdout, making it likely a future developer adds similar print() calls in change_password or change_email (which DO handle passwords). The existing findings cover plaintext storage (CWE-312), debug mode (CWE-489), and EXPLAIN_TEMPLATE_LOADING (CWE-200), but none address the application-level logging of unsanitized user input to stdout via print()."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "app/templates/_base.html",
+      "start": {
+        "line": 67
+      },
+      "end": {
+        "line": 67
+      },
+      "extra": {
+        "message": "Reflected XSS via Unquoted Attribute value={{ g.path }} \u2014 URL Path Injection",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "<input name=\"next\" type=\"hidden\" value={{ g.path }}>",
+          "proof": "SOURCE: request.path (user-controlled URL path) is assigned to g.path at flask_xss.py:68. SINK: g.path is rendered into an unquoted HTML attribute at _base.html:67 as value={{ g.path }}. Jinja2 autoescaping escapes <>&\"' but NOT spaces or '='. An attacker crafts a URL like /foo%20onmouseover%3Dalert(1) \u2014 after URL decoding, request.path becomes /foo onmouseover=alert(1). When rendered, the space terminates the unquoted value attribute and onmouseover=alert(1) becomes a new event-handler attribute, executing JavaScript on mouseover."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "app/blueprints/account_area/views.py",
+      "start": {
+        "line": 65
+      },
+      "end": {
+        "line": 65
+      },
+      "extra": {
+        "message": "User-Submitted Feedback Logged to stdout via print(request.form)",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print(request.form)",
+          "proof": "SOURCE: request.form contains user-submitted feedback text at the /account_area/send_feedback POST endpoint. SINK: line 65 calls print(request.form), writing the entire form data (including the 'feedback' field) to stdout. In production deployments, stdout is typically captured in server/container logs. Any attacker who gains access to logs can read all user feedback submissions, which may contain sensitive or personally identifiable information intentionally submitted through the feedback mechanism."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "app/blueprints/login/views.py",
+      "start": {
+        "line": 9
+      },
+      "end": {
+        "line": 9
+      },
+      "extra": {
+        "message": "CSRF Protection Missing on Login POST Enables Cross-Site Request Forgery",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@authentication.route('/login', methods=['POST', 'GET'])\ndef login():\n    if current_user.is_authenticated:\n        return redirect(url_for('index'))\n    elif request.method == 'POST':\n        username = request.form.get('username', None)\n        password = request.form.get('password', None)\n        user = User.query.filter_by(username=username).first()\n        if user and user.password == password:\n            login_user(user)",
+          "proof": "The /auth/login route (line 9) accepts POST requests and creates an authenticated session via login_user(user). No CSRF token is generated, embedded in the login form (login/login.html uses the generic forms.html macro which has no csrf_token field), or validated on submission. An attacker can craft a cross-origin HTML form that POSTs known credentials to /auth/login, forcing the victim's browser to establish a session as the attacker-controlled account. This Login CSRF enables the attacker to pre-set credentials the victim will unknowingly use, then trick the victim into performing sensitive actions under that session."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "app/blueprints/login/views.py",
+      "start": {
+        "line": 27
+      },
+      "end": {
+        "line": 27
+      },
+      "extra": {
+        "message": "CSRF Protection Missing on Logout Enables Forced Session Termination",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@authentication.route('/logout', methods=['POST', 'GET'])\ndef logout():\n    logout_user()\n    return redirect(url_for('index'))",
+          "proof": "The /auth/logout route accepts POST requests and destroys the session via logout_user() with no CSRF token validation. No Flask-WTF CSRFProtect extension is initialized anywhere in the application (confirmed in flask_xss.py). An attacker can embed a hidden auto-submitting form pointing to /auth/logout on a malicious page. When the authenticated victim visits that page, their session is silently terminated, forcing re-authentication."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "app/blueprints/account_area/views.py",
+      "start": {
+        "line": 15
+      },
+      "end": {
+        "line": 15
+      },
+      "extra": {
+        "message": "CSRF Protection Missing on change_password POST Enables Account Takeover",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@account_area.route('/change_password', methods=['POST'])\n@login_required\ndef change_password():\n    form_data = request.form\n    current_password = form_data.get('current-password', None)\n    new_password = form_data.get('new-password', None)",
+          "proof": "The /account_area/change_password route is a POST-only endpoint that changes the user's password (User.query.filter_by(id=current_user.id).update({'password': new_password}); db.session.commit()) without any CSRF token validation. The forms.html template does not include csrf_token, and Flask-WTF CSRF protection is not configured. An attacker can craft a cross-origin HTML form targeting this endpoint; when the authenticated victim visits the attacker's page, the form auto-submits and silently changes the victim's password to one chosen by the attacker, resulting in full account takeover."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "app/blueprints/account_area/views.py",
+      "start": {
+        "line": 41
+      },
+      "end": {
+        "line": 41
+      },
+      "extra": {
+        "message": "CSRF Protection Missing on change_email POST Enables Account Hijacking",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@account_area.route('/change_email', methods=['POST'])\n@login_required\ndef change_email():\n    form_data = request.form\n    new_email = form_data.get('email', None)",
+          "proof": "The /account_area/change_email route accepts POST requests and changes the user's email address (User.query.filter_by(id=current_user.id).update({'email': new_email}); db.session.commit()) with no CSRF token validation. An attacker can forge a cross-origin POST request from a malicious page. Changing the victim's email address compromises account recovery flows and can enable further account hijacking."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "app/blueprints/account_area/views.py",
+      "start": {
+        "line": 61
+      },
+      "end": {
+        "line": 61
+      },
+      "extra": {
+        "message": "CSRF Protection Missing on send_feedback POST Enables Unwanted Message Injection",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@account_area.route('/send_feedback', methods=['POST'])\n@login_required\ndef send_feedback():\n    form_data = request.form\n    print(request.form)\n    feedback = form_data.get('feedback', None)",
+          "proof": "The /account_area/send_feedback route accepts POST requests and creates a Message record (Message(message=feedback, from_user=current_user.username)) with no CSRF token validation. The admin panel renders these messages unsafely at app/templates/admin/message.html:28-29 via {{ message.message | safe }} and {{ message.from_user | safe }}, creating a stored XSS vector. An attacker can craft a cross-origin form submission that injects arbitrary JavaScript payloads in the victim's name, which execute when an admin views the messages page."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "app/blueprints/api/views.py",
+      "start": {
+        "line": 58
+      },
+      "end": {
+        "line": 58
+      },
+      "extra": {
+        "message": "CSRF Protection Missing on acknowledge_message POST Endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@route('/acknowledge/<id>', methods=['POST'])\n@admin_required\ndef acknowledge_message(self, id):\n    Message.query.filter_by(id=id).update({\n        'acknowledged': True\n    })\n    db.session.commit()",
+          "proof": "The acknowledge_message endpoint uses methods=['POST'] (confirmed at line 57-58) and modifies database state (setting acknowledged=True) with no CSRF token validation. The endpoint uses cookie-based session authentication (Flask-Login), making it vulnerable to CSRF via standard cross-origin HTML form POST. An attacker can silently acknowledge messages, potentially hiding evidence of previous attacks from the admin."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "app/flask_xss.py",
+      "start": {
+        "line": 26
+      },
+      "end": {
+        "line": 26
+      },
+      "extra": {
+        "message": "Debug Mode Enabled Leaks Verbose Stack Traces and Enables Remote Code Execution",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "app.config['DEBUG'] = True",
+          "proof": "Flask debug mode is enabled (app.config['DEBUG'] = True). This activates the Werkzeug debugger which displays verbose stack traces including source code snippets, local variable values, and internal file paths to users on any unhandled exception. If the debugger PIN is known or guessable (default in older Werkzeug versions), an attacker can execute arbitrary Python code on the server via the interactive debugger console."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "app/flask_xss.py",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "EXPLAIN_TEMPLATE_LOADING Enabled Leaks Internal Filesystem Paths",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "app.config['EXPLAIN_TEMPLATE_LOADING'] = True",
+          "proof": "The Flask configuration option EXPLAIN_TEMPLATE_LOADING is set to True, causing the Jinja2 template engine to emit verbose log messages detailing every template file it attempted to load and the full search order including absolute filesystem paths. When combined with DEBUG=True (line 26), these messages are exposed to users on error pages, revealing the internal directory structure."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "app/blueprints/login/templates/login/login.html",
+      "start": {
+        "line": 5
+      },
+      "end": {
+        "line": 5
+      },
+      "extra": {
+        "message": "Default Admin Credentials Exposed in Login Template UI",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "<div class=\"text-info\">Use credentials \"admin/admin\" to log in as admin</div>",
+          "proof": "The login template at login.html:5 explicitly displays the default admin credentials 'admin/admin' to every unauthenticated visitor of the login page. These credentials match the default in manage.py:17 (def add_admin(password='admin')), which creates the admin user with password 'admin'. Any unauthenticated user who visits /auth/login immediately learns the admin credentials, enabling direct privilege escalation to full admin access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "app/blueprints/sandboxes/views.py",
+      "start": {
+        "line": 38
+      },
+      "end": {
+        "line": 38
+      },
+      "extra": {
+        "message": "Cookie Set Without Secure/HttpOnly/SameSite Flags Enables Theft via XSS and CSRF",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "response.set_cookie('name', name)",
+          "proof": "The response.set_cookie('name', name) call sets a cookie without Secure, HttpOnly, or SameSite attributes. The 'name' value originates from user-controlled input (request.form.get('name') or request.cookies.get('name')) with no sanitization. Without HttpOnly, the cookie is accessible to JavaScript in the browser, enabling exfiltration via stored XSS in admin/message.html (which uses |safe filter). Without Secure, the cookie is transmitted over unencrypted HTTP. Without SameSite, the cookie is sent on cross-origin requests, expanding the CSRF attack surface."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "app/blueprints/login/views.py",
+      "start": {
+        "line": 9
+      },
+      "end": {
+        "line": 9
+      },
+      "extra": {
+        "message": "No Rate Limiting on Login Endpoint Enables Automated Brute-Force Attacks",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@authentication.route('/login', methods=['POST', 'GET'])\ndef login():\n    if current_user.is_authenticated:\n        return redirect(url_for('index'))\n    elif request.method == 'POST':\n        username = request.form.get('username', None)\n        password = request.form.get('password', None)\n        user = User.query.filter_by(username=username).first()\n        if user and user.password == password:\n            login_user(user)",
+          "proof": "The /auth/login route accepts unlimited POST requests with no rate limiting, account lockout, CAPTCHA, or exponential backoff. An attacker can programmatically submit millions of password guesses against any account (including the admin account with known default password 'admin' from login.html:5 and manage.py:17). Combined with the plaintext password comparison at line 17 (user.password == password), the attacker can also mount a timing side-channel attack to enumerate the password character by character."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "app/blueprints/account_area/views.py",
+      "start": {
+        "line": 15
+      },
+      "end": {
+        "line": 15
+      },
+      "extra": {
+        "message": "No Rate Limiting on Password Change Endpoint Enables Brute-Force of Current Password",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@account_area.route('/change_password', methods=['POST'])\n@login_required\ndef change_password():\n    form_data = request.form\n    current_password = form_data.get('current-password', None)\n    ...\n    if not current_user.password == current_password:\n        error = 'Current password incorrect'",
+          "proof": "The /account_area/change_password route accepts unlimited POST requests with no rate limiting or throttling. An attacker who has obtained a valid session (e.g., via XSS, session theft, or CSRF-based login) can brute-force the victim's current password by submitting unlimited POST requests with different current-password values. The error message 'Current password incorrect' provides a clear oracle distinguishing correct from incorrect guesses, enabling an automated password guessing attack against the authenticated session."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-208",
+      "path": "app/blueprints/login/views.py",
+      "start": {
+        "line": 17
+      },
+      "end": {
+        "line": 17
+      },
+      "extra": {
+        "message": "Timing Side-Channel in Plaintext Password Comparison",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-208"
+          ],
+          "citation": "if user and user.password == password:",
+          "proof": "The login view performs a direct Python string comparison at line 17 (user.password == password). Python's string comparison short-circuits on the first differing character after checking length equality, meaning comparison time varies based on how many prefix characters match. Response timing is observable over the network. The password is stored in plaintext (models/models.py:11) and there is no rate limiting on the endpoint, enabling repeated measurement attempts."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-208",
+      "path": "app/blueprints/account_area/views.py",
+      "start": {
+        "line": 26
+      },
+      "end": {
+        "line": 26
+      },
+      "extra": {
+        "message": "Timing Side-Channel in Password Change Current-Password Comparison",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-208"
+          ],
+          "citation": "if not current_user.password == current_password:",
+          "proof": "The change_password view performs a direct Python string comparison at line 26 (current_user.password == current_password). Python's string comparison short-circuits on the first differing character, making comparison time vary by prefix match length. An attacker with a valid session can send unlimited POST requests to /account_area/change_password (no rate limiting present) and measure response times to enumerate the current password character by character."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "manage.py",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "Sensitive Admin Credentials Written to stdout",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print('New admin credentials are admin/{}'.format(password))",
+          "proof": "The add_admin command formats the password (default 'admin') directly into a string and emits it to stdout at line 25. In container, CI/CD pipeline, systemd journal, or any environment where stdout is captured to log files, the plaintext admin password persists in log output visible to anyone with log read access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-384",
+      "path": "app/blueprints/login/views.py",
+      "start": {
+        "line": 17
+      },
+      "end": {
+        "line": 17
+      },
+      "extra": {
+        "message": "Session Fixation \u2014 Session Identifier Not Regenerated After login_user()",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-384"
+          ],
+          "citation": "login_user(user)\n            return redirect(url_for('index'))",
+          "proof": "Flask-Login does NOT regenerate the session identifier upon authentication. The session cookie value remains identical before and after login_user() is called at line 18. An attacker who obtains a pre-login session cookie (e.g., by having the victim visit a page that sets a session, or via man-in-the-middle on HTTP) can trick a victim into authenticating with that same session, then reuse the unchanged post-login session cookie to impersonate the authenticated victim on all protected routes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-915",
+      "path": "app/blueprints/api/views.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "Mass Assignment of from_user Enables Identity Spoofing in Message Creation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "citation": "from_user = data.get('from_user', 'Anonymous')",
+          "proof": "SOURCE: request.get_json() (line 44, untrusted HTTP body) extracts 'from_user' directly without any server-side validation at line 50. SINK: Message(message=message, from_user=from_user) at line 52 creates a message with the attacker-chosen sender identity. The Message model has no foreign key to User, so the claimed sender is never verified against the authenticated user. The post() method has no authentication decorator, so even unauthenticated attackers can impersonate any user\u2014including admin\u2014by sending {\"message\":\"x\",\"from_user\":\"admin\"}. The impersonated from_user is later rendered unsafely via | safe in admin/message.html, creating a stored-XSS pipeline."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-476",
+      "path": "app/blueprints/api/views.py",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "Null Pointer Dereference in MessagesView.get Causes Information Disclosure via Debug Traceback",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-476"
+          ],
+          "citation": "message = Message.query.filter_by(id=id).first().serialize",
+          "proof": "SOURCE: URL path parameter 'id' (user-supplied, untrusted). SINK: Message.query.filter_by(id=id).first().serialize at line 25 chains method calls without a null guard. When the id does not match any existing Message, .first() returns None, and .serialize on None raises AttributeError. The if not message: guard on line 26 is unreachable dead code because the exception fires on line 25. With DEBUG=True (flask_xss.py:26), the unhandled exception triggers the Werkzeug debugger, leaking application source code, config values, and stack frames in the HTTP response."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "app/blueprints/api/views.py",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "Denial of Service via Unbounded Message Query Combined with Unauthenticated Message Creation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "messages = Message.query.all()",
+          "proof": "MessagesView.index() at line 16 loads every Message row from the database with zero limit/offset/pagination. Combined with the unauthenticated POST endpoint (line 43, no @admin_required), any attacker can issue {\"message\":\"x\"} repeatedly to create an unbounded number of Message records. When an admin visits GET /api/v1/messages/, every record is fetched into memory at once and serialized, potentially exhausting server heap memory. No pagination, row limit, or request size cap exists on either endpoint."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "app/blueprints/account_area/views.py",
+      "start": {
+        "line": 34
+      },
+      "end": {
+        "line": 34
+      },
+      "extra": {
+        "message": "Insufficient Session Expiration \u2014 Password Change Does Not Invalidate Existing Flask-Login Sessions",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "User.query.filter_by(id=current_user.id).update({\n            'password': new_password\n        })\n        db.session.commit()\n        return render_template('account_area/account_area.html')",
+          "proof": "The change_password handler updates the user's password in the database at lines 34-36 and commits at line 37. No call to logout_user(), session.clear(), or any session-rotation mechanism follows the password update \u2014 the handler simply returns the template at line 38. The existing Flask-Login session cookie (signed with the hardcoded SECRET_KEY from flask_xss.py line 27) remains valid. An attacker who has stolen a session cookie retains authenticated access even after the legitimate user changes their password."
+        }
+      }
+    }
+  ]
+}

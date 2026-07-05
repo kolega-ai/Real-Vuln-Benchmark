@@ -1,0 +1,235 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.security.injection.sql-injection-select",
+      "path": "main.py",
+      "start": {
+        "line": 182,
+        "col": 32,
+        "offset": 5189
+      },
+      "end": {
+        "line": 182,
+        "col": 84,
+        "offset": 5241
+      },
+      "extra": {
+        "message": "In the GET /select handler, the `username` query parameter is interpolated directly into a SQL string via f-string ('SELECT * FROM users WHERE username = \"{username}\"') and executed by run_sql_query -> db.execute with no parameterization or escaping. An attacker can submit username=\" OR 1=1 -- to bypass the filter, dump all users (including password hashes via the multi-row return path), or pivot with UNION queries.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.sql-injection-insert",
+      "path": "main.py",
+      "start": {
+        "line": 188,
+        "col": 5,
+        "offset": 5375
+      },
+      "end": {
+        "line": 205,
+        "col": 44,
+        "offset": 5962
+      },
+      "extra": {
+        "message": "In the PUT /user handler, every field of the User model (name, username, password, address, email, contact) is concatenated into an INSERT statement using an f-string (lines 188-204) and executed by run_sql_query(query, commit=True) on line 205 without parameterized queries. A malicious JSON body can break out of the quoted values and inject arbitrary SQL (e.g., extra rows, stacked queries, DROP).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.sql-injection-delete-username",
+      "path": "main.py",
+      "start": {
+        "line": 231,
+        "col": 29,
+        "offset": 6812
+      },
+      "end": {
+        "line": 231,
+        "col": 79,
+        "offset": 6862
+      },
+      "extra": {
+        "message": "In the DELETE /user handler, the `username` query parameter is interpolated directly into a DELETE statement via f-string ('DELETE FROM users WHERE username = \"{username}\"') and executed with commit. An attacker can inject username=\" OR 1=1 -- to delete every row in the users table or craft arbitrary destructive SQL.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.sql-injection-delete-address",
+      "path": "main.py",
+      "start": {
+        "line": 235,
+        "col": 29,
+        "offset": 7021
+      },
+      "end": {
+        "line": 235,
+        "col": 80,
+        "offset": 7072
+      },
+      "extra": {
+        "message": "In the DELETE /user handler's `elif user:` branch, `user.address` (from the request body) is interpolated directly into a DELETE statement via f-string ('DELETE FROM users WHERE address = {user.address}') without even surrounding quotes. Any attacker-controlled address value yields trivial SQL injection, allowing arbitrary row deletion or stacked queries.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.nosql-injection-find",
+      "path": "main.py",
+      "start": {
+        "line": 224,
+        "col": 13,
+        "offset": 6543
+      },
+      "end": {
+        "line": 225,
+        "col": 34,
+        "offset": 6597
+      },
+      "extra": {
+        "message": "The POST /find handler reads an arbitrary JSON body via `await request.json()` and passes it verbatim as the query filter to get_nosql_users -> users.find(query). An attacker can submit MongoDB-style operators such as {\"username\":{\"$ne\":null}} to dump every user, or use $regex/$gt to enumerate data, bypassing intended username-based lookup. No validation restricts the query shape.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.weak-password-hash-md5",
+      "path": "main.py",
+      "start": {
+        "line": 187,
+        "col": 21,
+        "offset": 5331
+      },
+      "end": {
+        "line": 187,
+        "col": 60,
+        "offset": 5370
+      },
+      "extra": {
+        "message": "Passwords are hashed with hashlib.md5 without a salt on user registration (line 187: user.password = md5(user.password.encode()).hexdigest()) and during DB seeding (line 113). MD5 is cryptographically broken and unsalted MD5 hashes are trivially crackable via rainbow tables/GPU brute force. Passwords must be stored using a slow, salted KDF such as bcrypt, scrypt, or argon2.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+            "CWE-759: Use of a One-Way Hash without a Salt"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.missing-auth-delete-user",
+      "path": "main.py",
+      "start": {
+        "line": 227,
+        "col": 1,
+        "offset": 6599
+      },
+      "end": {
+        "line": 236,
+        "col": 29,
+        "offset": 7116
+      },
+      "extra": {
+        "message": "The DELETE /user endpoint performs destructive operations (NoSQL delete_one on lines 230/234 and SQL DELETE on lines 231/235) with no authentication, authorization, or ownership checks whatsoever. Any anonymous remote client can delete arbitrary users by supplying a username or user body, leading to permanent data loss.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.missing-auth-reset",
+      "path": "main.py",
+      "start": {
+        "line": 242,
+        "col": 1,
+        "offset": 7269
+      },
+      "end": {
+        "line": 247,
+        "col": 28,
+        "offset": 7438
+      },
+      "extra": {
+        "message": "The POST /reset endpoint deletes the SQL database file (line 244), removes the NoSQL database directory (line 245), and re-initializes all data (line 246) with no authentication or authorization. Any anonymous client can wipe the entire dataset, causing full data loss and a denial-of-service condition.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.info-disclosure.pii-without-auth",
+      "path": "main.py",
+      "start": {
+        "line": 182,
+        "col": 32,
+        "offset": 5189
+      },
+      "end": {
+        "line": 183,
+        "col": 16,
+        "offset": 5259
+      },
+      "extra": {
+        "message": "The /select (and /find) endpoints return users' personally identifiable information (address, email, and contact/phone number) for any supplied username with no authentication or access control. An anonymous attacker can enumerate and harvest PII for arbitrary users, and the multi-row return path of run_sql_query (line 162) also exposes password hashes.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,411 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.security.injection.sql-injection",
+      "path": "sqli/dao/student.py",
+      "start": {
+        "line": 42,
+        "col": 9,
+        "offset": 1229
+      },
+      "end": {
+        "line": 43,
+        "col": 52,
+        "offset": 1317
+      },
+      "extra": {
+        "message": "SQL injection: the student name is interpolated into the SQL statement via Python %-formatting (\"VALUES ('%(name)s')\" % {'name': name}) and executed with cur.execute(q) without parameterization. The name originates from user POST data (views.py:57, data['name'] -> Student.create). An attacker can submit a payload such as x'); DROP TABLE students;-- or use UNION to extract arbitrary data. Note that every other DAO in this codebase uses parameterized queries, confirming this is the unsafe path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.autoescape-disabled",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 35,
+        "col": 17,
+        "offset": 1088
+      },
+      "end": {
+        "line": 35,
+        "col": 33,
+        "offset": 1105
+      },
+      "extra": {
+        "message": "Cross-Site Scripting: Jinja2 is configured with autoescape=False, disabling automatic HTML-escaping of all template output. Multiple user-controlled values are rendered without explicit escaping (course title/description in courses.jinja2:17-18 and course.jinja2:14-15, review text in course.jinja2:22, student name in students.jinja2:16), enabling stored XSS. An attacker can create a course/review/student whose <script> payload executes in other users' browsers (e.g. session theft via the non-HttpOnly session cookie).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.stored",
+      "path": "sqli/templates/course.jinja2",
+      "start": {
+        "line": 22,
+        "col": 21,
+        "offset": 678
+      },
+      "end": {
+        "line": 22,
+        "col": 44,
+        "offset": 702
+      },
+      "extra": {
+        "message": "Stored XSS: review text submitted via POST /courses/{id}/review (stored through Review.create) is rendered with {{ review.review_text }} without any escaping (autoescape is disabled). Because the review endpoint also lacks authentication, any anonymous attacker can plant a malicious <script> payload that executes for every visitor of the course page.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.stored",
+      "path": "sqli/templates/courses.jinja2",
+      "start": {
+        "line": 17,
+        "col": 17,
+        "offset": 427
+      },
+      "end": {
+        "line": 18,
+        "col": 73,
+        "offset": 525
+      },
+      "extra": {
+        "message": "Stored XSS: course title ({{ course.title }}) and description ({{ course.description }}) submitted via POST /courses/ (stored through Course.create) are rendered without escaping (autoescape is disabled), allowing an attacker who can create a course to inject arbitrary JavaScript executed on the courses listing and course detail pages.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.stored",
+      "path": "sqli/templates/students.jinja2",
+      "start": {
+        "line": 16,
+        "col": 66,
+        "offset": 412
+      },
+      "end": {
+        "line": 16,
+        "col": 75,
+        "offset": 422
+      },
+      "extra": {
+        "message": "Stored XSS: the student name (submitted via POST /students/ through Student.create) is rendered with {{ name }} on the students listing page without escaping (autoescape is disabled). Note that student.jinja2 escapes this value with |e, but this listing page does not, so the same data is exploitable here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.csrf.disabled",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 27,
+        "col": 13,
+        "offset": 841
+      },
+      "end": {
+        "line": 27,
+        "col": 30,
+        "offset": 859
+      },
+      "extra": {
+        "message": "Cross-Site Request Forgery: the csrf_middleware is commented out (# csrf_middleware,) in the application middleware stack, so the _csrf_token values submitted by every form (index/students/courses/review/logout) are generated but never validated. All state-changing POST endpoints (login, create student, create course, create review, evaluate/grade, logout) can be triggered by a cross-site forged request.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.session.cookie-httponly",
+      "path": "sqli/middlewares.py",
+      "start": {
+        "line": 20,
+        "col": 42,
+        "offset": 712
+      },
+      "end": {
+        "line": 20,
+        "col": 56,
+        "offset": 727
+      },
+      "extra": {
+        "message": "The session cookie is created with httponly=False (RedisStorage(app['redis'], httponly=False)), making the session identifier readable by JavaScript. Combined with the stored XSS vulnerabilities present in this app, this allows an attacker to steal the session token. The cookie is also created without a Secure attribute, so it is transmitted over plain HTTP.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.weak-password-hash",
+      "path": "sqli/dao/user.py",
+      "start": {
+        "line": 41,
+        "col": 33,
+        "offset": 1198
+      },
+      "end": {
+        "line": 41,
+        "col": 73,
+        "offset": 1239
+      },
+      "extra": {
+        "message": "Passwords are verified by comparing the stored hash to md5(password.encode('utf-8')).hexdigest() (an unsalted MD5). MD5 is fast and cryptographically broken, and an unsalted hash is trivially recoverable via rainbow tables/dictionary attacks. Combined with the weak default credentials seeded in 001-fixtures.sql, disclosure of the users table would expose every account including the administrator. A dedicated password hash (bcrypt/argon2/PBKDF2) with a per-user salt should be used.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.missing-authorization",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 52,
+        "col": 1,
+        "offset": 1548
+      },
+      "end": {
+        "line": 57,
+        "col": 53,
+        "offset": 1791
+      },
+      "extra": {
+        "message": "Missing authorization: the students POST handler creates a new student (await Student.create(conn, data['name'])) with no authentication/authorization check. The UI only shows the form to logged-in users (students.jinja2 {% if auth_user %}), but the view has no @authorize decorator or session check, so any unauthenticated user can create students by POSTing directly to /students/.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.missing-authorization",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 84,
+        "col": 1,
+        "offset": 2653
+      },
+      "end": {
+        "line": 90,
+        "col": 53,
+        "offset": 2948
+      },
+      "extra": {
+        "message": "Missing authorization / privilege escalation: the courses POST handler creates a new course (await Course.create(...)) with no authorization check. The UI restricts this form to administrators (courses.jinja2 {% if auth_user and auth_user.is_admin %}), but the view has no @authorize(ensure_admin=True) decorator, so any unauthenticated user can create courses by POSTing directly to /courses/, bypassing the admin-only restriction.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.missing-authorization",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 112,
+        "col": 1,
+        "offset": 3603
+      },
+      "end": {
+        "line": 129,
+        "col": 62,
+        "offset": 4300
+      },
+      "extra": {
+        "message": "Missing authorization: the review POST handler creates a course review (await Review.create(conn, course_id, review_text)) with no authentication/authorization check. Any unauthenticated user can submit reviews by POSTing directly to /courses/{id}/review; this also enables anonymous planting of stored XSS payloads via the unescaped review_text field.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.missing-authorization",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 135,
+        "col": 1,
+        "offset": 4432
+      },
+      "end": {
+        "line": 152,
+        "col": 42,
+        "offset": 5185
+      },
+      "extra": {
+        "message": "Missing authorization / privilege escalation: the evaluate POST handler assigns a grade (await Mark.create(conn, student_id, course_id, data['points'])) with no authorization check. The UI restricts grading to administrators (course.jinja2 {% if auth_user.is_admin %}), but the view has no @authorize(ensure_admin=True) decorator, so any unauthenticated user can assign grades by POSTing directly to /students/{id}/evaluate/{course_id}, bypassing the admin-only restriction.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.no-brute-force-protection",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 33,
+        "col": 5,
+        "offset": 913
+      },
+      "end": {
+        "line": 45,
+        "col": 57,
+        "offset": 1408
+      },
+      "extra": {
+        "message": "The login handler performs password verification (user.check_password(password)) with no rate limiting, account lockout, or throttling. Combined with the weak/default seeded credentials (superadmin/superadmin, j.doe/password) and fast unsalted MD5 hashing, an attacker can perform unrestricted online password guessing against any account.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.misconfiguration.debug-enabled",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 24,
+        "col": 9,
+        "offset": 763
+      },
+      "end": {
+        "line": 24,
+        "col": 19,
+        "offset": 774
+      },
+      "extra": {
+        "message": "Security misconfiguration: the aiohttp Application is created with debug=True. Debug mode exposes detailed error tracebacks, internal application state, and configuration details in error responses, leaking sensitive information that aids further attacks.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.credentials.hardcoded-default",
+      "path": "migrations/001-fixtures.sql",
+      "start": {
+        "line": 10,
+        "col": 3,
+        "offset": 108
+      },
+      "end": {
+        "line": 13,
+        "col": 73,
+        "offset": 361
+      },
+      "extra": {
+        "message": "Hardcoded default credentials: the database is seeded with well-known accounts, including a super-admin superadmin/superadmin (is_admin=TRUE) and users with passwords password and spidey. These credentials are committed to the repository and provide immediate administrative access to anyone who knows them.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-259: Use of Hard-coded Password",
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.credentials.hardcoded-db",
+      "path": "config/dev.yaml",
+      "start": {
+        "line": 2,
+        "col": 1,
+        "offset": 4
+      },
+      "end": {
+        "line": 3,
+        "col": 20,
+        "offset": 41
+      },
+      "extra": {
+        "message": "Hardcoded database credentials (user=postgres, password=postgres) are stored in the configuration file committed to the repository. Anyone with repository access obtains full database credentials.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

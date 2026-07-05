@@ -1,0 +1,1223 @@
+{
+  "version": "twin-distill-flash-r4",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "python/app.py",
+      "start": {
+        "line": 165
+      },
+      "end": {
+        "line": 165
+      },
+      "extra": {
+        "message": "SQL Injection in Login \u2014 direct string interpolation",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "query = f\"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'\"",
+          "proof": "SOURCE: form.username.data and form.password.data (user-controlled HTTP POST form input, lines 161-162) -> SINK: f-string interpolation into query executed at conn.execute(query). Attacker can enter username ' OR '1'='1' -- to bypass authentication entirely and authenticate as any user (e.g., admin)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "python/app.py",
+      "start": {
+        "line": 247
+      },
+      "end": {
+        "line": 247
+      },
+      "extra": {
+        "message": "SQL Injection in Comment Search \u2014 direct string interpolation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "query = f\"SELECT * FROM comments WHERE content LIKE '%{search_term}%'\"",
+          "proof": "SOURCE: form.search.data (user-controlled POST form field 'search', line 245) -> SINK: f-string interpolation into cursor.execute(query) at line 249. Attacker can inject ' OR '1'='1 to dump all comments or UNION SELECT to exfiltrate other tables (users, reports)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-502",
+      "path": "python/app.py",
+      "start": {
+        "line": 436
+      },
+      "end": {
+        "line": 436
+      },
+      "extra": {
+        "message": "Insecure Deserialization \u2014 pickle.loads on user-supplied data",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "citation": "obj = pickle.loads(decoded)",
+          "proof": "SOURCE: form.data.data (user-controlled POST text, line 433) -> base64.b64decode(data) at line 435 -> pickle.loads(decoded) at line 436. Pickle deserialization of untrusted data allows arbitrary code execution (RCE) on the server by crafting a malicious pickle payload that executes system commands via __reduce__."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-918",
+      "path": "python/app.py",
+      "start": {
+        "line": 386
+      },
+      "end": {
+        "line": 386
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery \u2014 unvalidated URL in requests.get",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "citation": "response = requests.get(url, timeout=2)",
+          "proof": "SOURCE: form.url.data (user-controlled POST form field 'url', line 384) -> SINK: requests.get(url, timeout=2) at line 386. No validation or allowlist is applied to the URL before making the request. An attacker can target internal services (http://127.0.0.1:5000/admin, http://169.254.169.254/latest/meta-data/) to access internal resources or cloud metadata."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "python/app.py",
+      "start": {
+        "line": 322
+      },
+      "end": {
+        "line": 322
+      },
+      "extra": {
+        "message": "Unrestricted File Upload \u2014 files saved without content-type or extension validation",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "file.save(file_path)\nif filename.endswith('.php'):",
+          "proof": "SOURCE: request.files['file'] (user-controlled file upload) -> file.save(file_path) at line 322 executes unconditionally BEFORE the .php extension check at line 323. The file is saved regardless of extension. Combined with the /uploads/<filename> route (line 332) that serves uploaded files via send_from_directory, an attacker can upload a PHP webshell and execute arbitrary code if PHP is installed, or upload malicious JavaScript/SVG for stored XSS."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "python/app.py",
+      "start": {
+        "line": 345
+      },
+      "end": {
+        "line": 345
+      },
+      "extra": {
+        "message": "IDOR in Profile \u2014 no authorization check on user_id parameter",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "user = conn.execute(\"SELECT * FROM users WHERE id = ?\", (user_id,)).fetchone()",
+          "proof": "SOURCE: URL path segment <int:user_id> (user-controlled, line 339) -> SINK: database query returning another user's profile data at line 345. Although the app detects that user_id != logged_in_user['id'] (line 353), it STILL executes the query and renders user data (username, email, role) in the template at lines 358-359. Any authenticated user can enumerate all users by changing the numeric ID in /profile/<id>."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "python/app.py",
+      "start": {
+        "line": 613
+      },
+      "end": {
+        "line": 613
+      },
+      "extra": {
+        "message": "BOLA in API \u2014 any authenticated user can access any user's data via API",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "user = conn.execute(\"SELECT * FROM users WHERE id = ?\", (user_id,)).fetchone()\nreturn jsonify({\"id\": user['id'], \"username\": user['username'], \"email\": user['email'], \"role\": user['role'], \"flag\": \"CTF{bola_success}\"})",
+          "proof": "SOURCE: URL path segment <int:user_id> (user-controlled, line 610) -> SINK: API returns JSON of any user at line 619. The endpoint checks auth (session exists) but not authorization (that user_id belongs to the session user). Any authenticated user can retrieve all users' emails and roles via /api/user/<id>."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "python/templates/dom_xss.html",
+      "start": {
+        "line": 145
+      },
+      "end": {
+        "line": 145
+      },
+      "extra": {
+        "message": "DOM-based XSS \u2014 hash fragment unsanitized into innerHTML",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "document.getElementById('message').innerHTML = message;",
+          "proof": "SOURCE: window.location.hash (attacker-controlled URL fragment, line 139). The hash is parsed with URLSearchParams, and the 'message' parameter is taken directly (line 143) -> SINK: assigned to innerHTML at line 145 with zero sanitization. An attacker can craft a URL like /dom-xss#message=<img src=x onerror=alert(document.cookie)> to execute arbitrary JavaScript in the victim's browser, bypassing server-side checks entirely."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "python/app.py",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "Hardcoded Cryptographic Secret Key in source",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "app.config['SECRET_KEY'] = 'secure-secret-key-12345'",
+          "proof": "The Flask SECRET_KEY is hardcoded as a weak, guessable string 'secure-secret-key-12345' at line 25. This key is used to sign session cookies, CSRF tokens, and all Flask-WTF forms. An attacker who knows this key (it is in source code) can forge arbitrary session cookies to impersonate any user (e.g., admin) and bypass CSRF protections."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-330",
+      "path": "python/app.py",
+      "start": {
+        "line": 186
+      },
+      "end": {
+        "line": 186
+      },
+      "extra": {
+        "message": "Predictable Session Token \u2014 deterministic format with fixed suffix",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-330"
+          ],
+          "citation": "session['token'] = f\"SESSION_{user['username'].lower()}_12345\"",
+          "proof": "SOURCE: user['username'].lower() from database (logged-in user's username) combined with fixed suffix '_12345' -> SINK: stored in session['token'] at line 186. The token format SESSION_{username}_12345 is completely deterministic. If an attacker knows a victim's username, they can forge the token without any authentication."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "python/app.py",
+      "start": {
+        "line": 284
+      },
+      "end": {
+        "line": 284
+      },
+      "extra": {
+        "message": "CSRF on Transfer \u2014 state-changing action accepted via GET request",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "if request.method == 'GET':\n    print(f\"CSRF exploit detected for user {session['user']}\")\n    success = \"Exploit Successful! CSRF attack simulated.\"",
+          "proof": "SOURCE: amount = request.args.get('amount', type=int) reads the transfer amount from a GET query parameter (line 275). SINK: The transfer action (simulated) is executed even though the request method is GET (lines 284-288) with no CSRF token, no SameSite cookie, and no Origin/Referer validation. An attacker can craft an <img src='http://target/transfer?amount=1000'> tag on any external page; when the victim loads it, their browser sends the GET request with the victim's session cookie, completing the transfer."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "python/app.py",
+      "start": {
+        "line": 538
+      },
+      "end": {
+        "line": 538
+      },
+      "extra": {
+        "message": "CSRF Protection Disabled on /csrf Settings Endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@csrf.exempt\n@app.route('/csrf', methods=['GET', 'POST'])\ndef csrf_page():",
+          "proof": "SOURCE: Any external attacker-controlled HTML page can auto-submit a POST form to /csrf. SINK: The route is decorated with @csrf.exempt (line 538), which disables Flask-WTF's built-in CSRF protection. The POST handler (line 546-548) performs a state-changing action (updates user email via session and calls update_progress). An attacker who lures a logged-in victim to a malicious page can trigger an unauthorized email change without the victim's consent, since the victim's session cookie is automatically included by the browser."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "python/app.py",
+      "start": {
+        "line": 304
+      },
+      "end": {
+        "line": 304
+      },
+      "extra": {
+        "message": "CSRF Protection Disabled on /upload Endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@csrf.exempt\n@app.route('/upload', methods=['GET', 'POST'])\ndef upload():",
+          "proof": "SOURCE: An attacker's malicious HTML page with an auto-submitting form targeting /upload. SINK: The @csrf.exempt decorator (line 304) disables CSRF protection on the file upload handler (line 306). The POST handler (lines 310-322) saves an arbitrary uploaded file to the static/uploads directory with no token validation. A logged-in victim visiting the attacker's page will silently upload a file (e.g., a PHP webshell or malicious HTML). Combined with missing auth on /uploads/<filename> (line 335), this yields stored XSS or RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "python/app.py",
+      "start": {
+        "line": 661
+      },
+      "end": {
+        "line": 661
+      },
+      "extra": {
+        "message": "Flask Debug Mode Enabled Exposing Werkzeug Interactive Console",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "app.run(host='0.0.0.0', port=5000, debug=True)",
+          "proof": "SOURCE: Any unauthenticated network attacker can reach the server bound to 0.0.0.0:5000. SINK: debug=True (line 661) enables the Werkzeug debugger, which exposes an interactive Python console at /console when an unhandled exception occurs. This console allows arbitrary Python code execution on the server, giving the attacker full RCE. Binding to 0.0.0.0 makes this accessible from any reachable network host."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "python/database.py",
+      "start": {
+        "line": 97
+      },
+      "end": {
+        "line": 97
+      },
+      "extra": {
+        "message": "Plaintext Password Storage in Database",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "conn.execute(\"INSERT OR IGNORE INTO users (username, password, email, role) VALUES (?, ?, ?, ?)\",\n                     (\"admin\", \"password\", \"admin@example.com\", \"admin\"))",
+          "proof": "SOURCE: The init_db() function (line 97-100) inserts user records with plaintext passwords ('password', 'password2') into the users table with zero hashing. SINK: The password column is stored as-is in the SQLite database. Combined with the multiple SQL injection vulnerabilities in app.py (lines 165-177, 223-229), an attacker can extract every user's password in cleartext with a single SQLi payload like ' OR '1'='1' --."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "python/app.py",
+      "start": {
+        "line": 629
+      },
+      "end": {
+        "line": 629
+      },
+      "extra": {
+        "message": "Unauthenticated Endpoint Exposes File Contents",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "with open('static/comments.txt', 'r') as f:\n            content = f.read()\n        return content",
+          "proof": "SOURCE: Any unauthenticated HTTP GET to /comments-log. SINK: The route (line 627) reads and returns static/comments.txt (line 629-631) with no session check, unlike every other data-displaying route in the app which requires 'user' in session. If comment data accumulates in this file, it becomes readable by anyone on the network without authentication."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "python/app.py",
+      "start": {
+        "line": 177
+      },
+      "end": {
+        "line": 177
+      },
+      "extra": {
+        "message": "SQL Injection in Login Authentication",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "user = conn.execute(query).fetchone()",
+          "proof": "SOURCE: request.form username/password (lines 157-158) -> STRING CONCAT: f-string at line 165 builds 'SELECT * FROM users WHERE username = '<user>' AND password = '<pass>'' -> SINK: conn.execute(query).fetchone() at line 177. An attacker can inject ' OR '1'='1' -- into the username field to bypass authentication entirely and log in as any user, including admin."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "python/app.py",
+      "start": {
+        "line": 623
+      },
+      "end": {
+        "line": 623
+      },
+      "extra": {
+        "message": "Missing Authentication on /api/flag Endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "def api_flag():\n    return jsonify({\"flag\": \"flag{flask_api_vuln}\"})",
+          "proof": "SOURCE: Unauthenticated HTTP GET to /api/flag (route at line 622). SINK: The handler returns the flag JSON (line 624) with zero session or authentication checks. Every other data-exposing route in the app checks 'if 'user' not in session', but this one omits it entirely, making the flag accessible to anyone who can reach the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-287",
+      "path": "python/app.py",
+      "start": {
+        "line": 472
+      },
+      "end": {
+        "line": 472
+      },
+      "extra": {
+        "message": "Broken Authentication via Predictable Session ID",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-287"
+          ],
+          "citation": "if submitted_token == session.get('session_id'):",
+          "proof": "SOURCE: Attacker-supplied request.form['session_token'] (line 470) is compared against session['session_id']. The session_id is set during login (line 191) using the predictable pattern f\"{user['username'].lower()}_auth_123\". SINK: The equality check at line 472 accepts any matching token. An attacker who knows the victim's username (e.g., 'admin') can trivially guess the session ID as 'admin_auth_123' and pass authentication on the /broken-auth endpoint, bypassing proper credential verification."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "python/database.py",
+      "start": {
+        "line": 97
+      },
+      "end": {
+        "line": 97
+      },
+      "extra": {
+        "message": "Hardcoded Default Admin Credentials",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "conn.execute(\"INSERT OR IGNORE INTO users (username, password, email, role) VALUES (?, ?, ?, ?)\",\n                     (\"admin\", \"password\", \"admin@example.com\", \"admin\"))",
+          "proof": "SOURCE: The credentials (\"admin\", \"password\") are hardcoded in source code at line 97-98. SINK: These credentials are inserted into the users table on every application start. Anyone with read access to the source code (e.g., via public repository, compromised host, or insider access) can log in as admin with password 'password' and gain full administrative privileges."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "python/app.py",
+      "start": {
+        "line": 335
+      },
+      "end": {
+        "line": 335
+      },
+      "extra": {
+        "message": "Missing Authentication on Uploaded File Serving",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "return send_from_directory(app.config['UPLOAD_FOLDER'], filename)",
+          "proof": "SOURCE: Any unauthenticated HTTP GET to /uploads/<filename> (route at line 333). SINK: send_from_directory (line 335) serves the requested file with zero authentication checks \u2014 unlike every other sensitive route in the app which begins with 'if 'user' not in session'. Combined with the unrestricted file upload (CWE-434) on /upload which accepts .php and arbitrary extensions, an attacker can upload a malicious HTML file with JavaScript and share the direct /uploads/malicious.html URL with any victim for stored XSS, or access uploaded PHP webshells (connect.php, flatted.php) without a login."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1004",
+      "path": "python/app.py",
+      "start": {
+        "line": 195
+      },
+      "end": {
+        "line": 195
+      },
+      "extra": {
+        "message": "Sensitive Cookie Without HttpOnly/Secure/SameSite Flags",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1004"
+          ],
+          "citation": "response.set_cookie('vuln_session_id', predictable_session_id)",
+          "proof": "SOURCE: Flask's set_cookie() defaults to httponly=False, secure=False, samesite=None. The code at line 195 calls set_cookie('vuln_session_id', predictable_session_id) without overriding any of these defaults. SINK: The 'vuln_session_id' cookie is stored in the victim's browser without HttpOnly, meaning any DOM XSS or Reflected XSS (e.g., from dom_xss.html innerHTML) can read this cookie via document.cookie. Without Secure, the cookie leaks over plaintext HTTP. Without SameSite, it is sent on cross-origin POST requests, enabling CSRF on the /broken-auth endpoint which validates this exact cookie value at line 472."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-117",
+      "path": "python/app.py",
+      "start": {
+        "line": 516
+      },
+      "end": {
+        "line": 516
+      },
+      "extra": {
+        "message": "Log Injection via DOM XSS hash Query Parameter",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-117"
+          ],
+          "citation": "log_action(session['user'], \"DOM XSS Attempt\", f\"Payload: {hash}\")",
+          "proof": "SOURCE: `hash = request.args.get('hash', '')` (line 514) reads the user-controlled `hash` query parameter. SINK: The unsanitized `hash` value is passed as the `details` argument to `log_action()` (line 516), which stores it in the `logs` table. An attacker can inject CRLF sequences (`%0d%0a`) via the hash parameter to forge fake log entries, corrupting audit trail integrity. Even though the INSERT is parameterized (preventing SQLi), the raw attacker-controlled bytes are persisted verbatim."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "python/app.py",
+      "start": {
+        "line": 413
+      },
+      "end": {
+        "line": 413
+      },
+      "extra": {
+        "message": "Information Exposure Through Verbose XXE Error Message",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "error = str(e)",
+          "proof": "SOURCE: When `ET.fromstring(xml_data)` raises an exception during XXE payload processing, the exception object `e` may contain internal file paths, library versions, or partial file contents. SINK: `error = str(e)` captures the raw exception string (line 413) which is passed to the template and rendered as `{{ error }}` in the HTML response, exposing internal server details to the attacker."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "python/app.py",
+      "start": {
+        "line": 444
+      },
+      "end": {
+        "line": 444
+      },
+      "extra": {
+        "message": "Information Exposure Through Verbose Deserialization Error Message",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "error = str(e)",
+          "proof": "SOURCE: When `pickle.loads()` raises an exception on malformed input, the exception object `e` may contain full Python stack traces, internal module paths (e.g., site-packages paths), and payload fragments. SINK: `error = str(e)` captures the raw exception string (line 444) which is passed to the template and rendered as `{{ error }}` in the HTML response, exposing internal server architecture to the attacker."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-665",
+      "path": "python/app.py",
+      "start": {
+        "line": 154
+      },
+      "end": {
+        "line": 154
+      },
+      "extra": {
+        "message": "Database Reset on Every Login Request Causes Persistent Data Loss",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-665"
+          ],
+          "citation": "init_db()  # Ensure the database is initialized",
+          "proof": "SOURCE: Every HTTP GET or POST to `/` triggers `login()`. SINK: `login()` calls `init_db()` (line 154) on every invocation. `init_db()` drops and recreates the `users`, `progress`, `logs`, `reports`, and `comments` tables (database.py lines 68-72), deleting all data and restoring default credentials. An unauthenticated attacker can wipe the entire application database simply by visiting or posting to the login page."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "python/database.py",
+      "start": {
+        "line": 109
+      },
+      "end": {
+        "line": 109
+      },
+      "extra": {
+        "message": "Plaintext User Credentials Logged to stdout During Database Initialization",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print(f\"Users table after init: {users}\")",
+          "proof": "SOURCE: `init_db()` fetches the entire `users` table (including plaintext password column) via `conn.execute(\"SELECT * FROM users\").fetchall()` (line 107). SINK: The result is printed to stdout at line 109 via `print(f\"Users table after init: {users}\")`. Because `login()` calls `init_db()` on every authentication attempt (app.py:154), every login POST leaks all user credentials (e.g., admin:password) to stdout/server logs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "python/app.py",
+      "start": {
+        "line": 645
+      },
+      "end": {
+        "line": 645
+      },
+      "extra": {
+        "message": "Improper Authorization in Reset Endpoint Allows Global Data Destruction",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "conn.execute(\"DELETE FROM comments\")",
+          "proof": "SOURCE: Authenticated users can POST to `/reset/comment` or `/reset/upload` \u2014 a `page` parameter from the URL drives the action. SINK: The handler performs `conn.execute(\"DELETE FROM comments\")` (line 645) deleting all comments from every user, and `shutil.rmtree(app.config['UPLOAD_FOLDER'])` (line 652) destroying all uploaded files. No ownership check, role check, or confirmation is enforced \u2014 any authenticated user can destroy all shared data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "python/app.py",
+      "start": {
+        "line": 605
+      },
+      "end": {
+        "line": 605
+      },
+      "extra": {
+        "message": "Cross-Site Request Forgery on Logout via GET Request",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "session.clear()",
+          "proof": "SOURCE: The `/logout` endpoint accepts GET requests (route at line 603). SINK: `session.clear()` (line 605) destroys the user's session state. Because no CSRF token is required and GET requests are automatically cross-origin via `<img>`, `<script>`, or `<link>` tags, a malicious site can force a logged-in victim to log out by embedding `<img src=\"http://app/logout\">` \u2014 a state-changing action on a side-effect-free HTTP method."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "python/app.py",
+      "start": {
+        "line": 322
+      },
+      "end": {
+        "line": 322
+      },
+      "extra": {
+        "message": "Unrestricted Upload File Size Permits Disk-Fill Denial of Service",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "file.save(file_path)",
+          "proof": "SOURCE: The `/upload` route (CSRF-exempt) accepts file uploads via `request.files['file']`. SINK: `file.save(file_path)` (line 322) writes the uploaded file to disk without checking `Content-Length`, file size, or setting `MAX_CONTENT_LENGTH`. An authenticated attacker can upload arbitrarily large files repeatedly to exhaust disk space, causing denial of service for all users."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "python/app.py",
+      "start": {
+        "line": 152
+      },
+      "end": {
+        "line": 152
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Login Endpoint Enables Brute-Force Attacks",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.route('/', methods=['GET', 'POST'])\ndef login():\n    init_db()\n    form = LoginForm()\n    error = None\n    executed_query = None\n\n    if request.method == 'POST':\n        if form.validate_on_submit():\n            username = form.username.data\n            password = form.password.data\n            query = f\"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'\"",
+          "proof": "SOURCE: Login form at `/` accepts unlimited POST requests with user-controlled `username` and `password` fields (lines 159-160). SINK: No rate-limiting decorator, account-lockout counter, CAPTCHA, or throttling mechanism exists anywhere in the request-processing path. An attacker can script automated POST requests to brute-force credentials at full network speed against all user accounts."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "python/app.py",
+      "start": {
+        "line": 167
+      },
+      "end": {
+        "line": 167
+      },
+      "extra": {
+        "message": "SQL Query Containing Plaintext Password Logged to stdout",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print(f\"Executing: {query}\")",
+          "proof": "SOURCE: User-supplied `username` and `password` form fields (lines 159-160) are interpolated into a SQL query string at line 162. SINK: The resulting SQL query (e.g., `\"SELECT * FROM users WHERE username = 'admin' AND password = 'mypass'\"`) is printed verbatim to stdout at line 167. If server stdout is captured in logs, the user's plaintext password is persisted in log files."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "python/app.py",
+      "start": {
+        "line": 203
+      },
+      "end": {
+        "line": 203
+      },
+      "extra": {
+        "message": "Database Exception Details Exposed to User in Login Route",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "error = f\"Database error: {str(e)}\"",
+          "proof": "SOURCE: The `sqlite3` exception object `e` raised when executing the crafted SQL query (lines 169-173) can contain table schemas, column names, and internal file paths. SINK: `error = f\"Database error: {str(e)}\"` (line 203) constructs an error message from the raw exception string, which is rendered in the `login.html` template response. An attacker sending malformed SQL can trigger errors that reveal internal database structure to the user."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "python/app.py",
+      "start": {
+        "line": 344
+      },
+      "end": {
+        "line": 344
+      },
+      "extra": {
+        "message": "Sensitive User Data Logged to stdout in Profile Route",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print(f\"Session user: {session['user']}\")\nuser = conn.execute(\"SELECT * FROM users WHERE id = ?\", (user_id,)).fetchone()\nprint(f\"Target user: {user}\")\nlogged_in_user = conn.execute(\"SELECT id FROM users WHERE username = ?\", (session['user'],)).fetchone()\nprint(f\"Logged-in user: {logged_in_user}\")\nprint(f\"Comparing user_id={user_id} with logged_in_user['id']={logged_in_user['id']}\")",
+          "proof": "SOURCE: The session user object and database query results for both the target user and logged-in user (full rows including id, username, email, role, and plaintext password). SINK: Lines 344, 346, 351, 355 print the session username, the complete target user database row, the logged-in user row, and the ID comparison to stdout. Anyone with access to stdout or server logs can read other users' database records including plaintext passwords."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "python/app.py",
+      "start": {
+        "line": 255
+      },
+      "end": {
+        "line": 255
+      },
+      "extra": {
+        "message": "SQL Execution Exception Details Exposed to User in Comment Search",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "error = f\"Error executing query: {str(e)}\"",
+          "proof": "SOURCE: The sqlite3 exception raised when executing the vulnerable LIKE query with user-controlled 'search_term'. SINK: Full exception text is assigned to 'error' at line 255 and rendered in comment.html. An attacker can use malformed search terms to trigger SQL syntax errors that disclose database type, query structure, or schema information directly in the browser."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "python/app.py",
+      "start": {
+        "line": 387
+      },
+      "end": {
+        "line": 387
+      },
+      "extra": {
+        "message": "Verbose Error Disclosure from HTTP Request Library in SSRF Endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "result = f\"Error fetching URL: {str(e)}\"",
+          "proof": "SOURCE: Exception from the 'requests' library when attempting to fetch the user-supplied URL. SINK: The full exception message including connection details, DNS resolution failures, timeout durations, and internal network info is returned in 'result' and rendered in ssrf.html. An attacker can distinguish closed ports from filtered ports or leak internal hostnames from DNS error messages, aiding network reconnaissance."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "python/app.py",
+      "start": {
+        "line": 463
+      },
+      "end": {
+        "line": 463
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Broken Authentication Session Token Guessing",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.route('/broken-auth', methods=['GET', 'POST'])",
+          "proof": "SOURCE: User-supplied 'session_token' POST parameter. SINK: The submitted token is compared against session.get('session_id') with no rate-limiting throttle. Since session IDs follow the predictable pattern '{username}_auth_123', an attacker can brute-force all possible session ID variations for any known username with unlimited request volume."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "python/app.py",
+      "start": {
+        "line": 24
+      },
+      "end": {
+        "line": 24
+      },
+      "extra": {
+        "message": "Flask Session Cookie Lacks Secure Flag \u2014 Transmitted Over HTTP",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "app.config['SECRET_KEY'] = 'secure-secret-key-12345'",
+          "proof": "SOURCE: Flask app configuration block. The app sets SECRET_KEY and UPLOAD_FOLDER but never sets SESSION_COOKIE_SECURE=True. SINK: Flask's default session cookie (named 'session') is created without the Secure flag, transmitted over unencrypted HTTP connections. An attacker performing passive network sniffing can capture the session cookie and hijack the session. This finding addresses the Flask framework session cookie distinct from the custom 'vuln_session_id' cookie."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "python/app.py",
+      "start": {
+        "line": 480
+      },
+      "end": {
+        "line": 480
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Blind SQLi Endpoint Enables Automated Data Extraction",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.route('/blind-sqli', methods=['GET', 'POST'])",
+          "proof": "SOURCE: User-controlled 'user_id' POST field (WTForms integer field, bypassable via raw HTTP). SINK: The value is interpolated into a SQL query with no rate limiting. The endpoint uses time-based inference (elapsed_time > 2) to detect exploitation. Without throttling, an attacker can issue hundreds of requests per second to extract the entire database character-by-character via blind SQLi timing."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "python/app.py",
+      "start": {
+        "line": 231
+      },
+      "end": {
+        "line": 231
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Comment Search Endpoint Enables Automated SQL Injection",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.route('/comment', methods=['GET', 'POST'])",
+          "proof": "SOURCE: User-controlled 'search' POST field. SINK: The search term is interpolated into a SQL LIKE query with no rate-limiting control. An attacker can send automated requests to perform blind SQLi data extraction, UNION-based data exfiltration, or error-based enumeration at full network speed."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "python/app.py",
+      "start": {
+        "line": 504
+      },
+      "end": {
+        "line": 504
+      },
+      "extra": {
+        "message": "Blind SQLi Exception Details Exposed in Error Response",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "error = str(e)",
+          "proof": "SOURCE: Exception raised during execution of the vulnerable SQL query. SINK: The raw exception message is assigned to 'error' at line 504 via str(e) and rendered in blind_sqli.html. An attacker using crafted payloads can trigger SQL errors that leak database structure, table names, or column names in the HTTP response body."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "python/hackable/passwords.txt",
+      "start": {
+        "line": 1
+      },
+      "end": {
+        "line": 1
+      },
+      "extra": {
+        "message": "Hardcoded Credentials in hackable/passwords.txt File",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "admin:admin123\nuser1:password123",
+          "proof": "SOURCE: The file contains cleartext username:password pairs (admin:admin123, user1:password123) committed to the repository. SINK: Any attacker with access to the source repository or deployed filesystem can read these credentials and use them to authenticate."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "python/hackable/flag.txt",
+      "start": {
+        "line": 1
+      },
+      "end": {
+        "line": 1
+      },
+      "extra": {
+        "message": "Sensitive CTF Flag Exposed in hackable/flag.txt",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "flag{flask_hidden_flag}",
+          "proof": "SOURCE: The file contains a CTF flag (flag{flask_hidden_flag}) committed to the repository. SINK: The flag is accessible to anyone who can read the repository or deployed filesystem. In a production context this represents sensitive information exposed via source files."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "report.py",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "Multiple CTF Flags Embedded in report.py Source Code",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "c.drawString(100, 510, \"Flags: flag{php_admin_access}, flag{php_hidden_flag}, flag{flask_api_vuln}, flag{flask_hidden_flag}, flag{file_based_comment_vuln}, flag{api_idor_vuln}\")",
+          "proof": "SOURCE: The report.py file contains a hardcoded string listing multiple CTF flags. SINK: These flags are embedded in plaintext source code committed to the repository, trivially discoverable by anyone with repository access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-552",
+      "path": "python/app.py",
+      "start": {
+        "line": 27
+      },
+      "end": {
+        "line": 27
+      },
+      "extra": {
+        "message": "Upload Directory Placed Under Publicly Served Static Folder",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-552"
+          ],
+          "citation": "app.config['UPLOAD_FOLDER'] = 'static/uploads'",
+          "proof": "SOURCE: User-uploaded files via the /upload POST handler (line 324) are saved under `static/uploads/`. SINK: The `/static/<path:filename>` route (line 639) serves files from this directory tree via `send_from_directory('static', filename)` with no authentication or authorization check, and the `/uploads/<filename>` route (line 329) does the same. An attacker who uploads a `.php` web shell or malicious JavaScript file can immediately access and execute it by requesting the public URL, enabling remote code execution or XSS."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1327",
+      "path": "python/app.py",
+      "start": {
+        "line": 661
+      },
+      "end": {
+        "line": 661
+      },
+      "extra": {
+        "message": "Debug-Enabled Flask Server Binds to All Network Interfaces",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1327"
+          ],
+          "citation": "app.run(host='0.0.0.0', port=5000, debug=True)",
+          "proof": "SOURCE: The Flask application is launched with `debug=True`, which enables the Werkzeug interactive debugger and detailed traceback pages. SINK: `host='0.0.0.0'` binds the server to all network interfaces, making the debug console accessible to any remote host that can reach the server. An attacker can exploit the interactive debugger to execute arbitrary Python code on the server by submitting a crafted request that triggers an unhandled exception, achieving remote code execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-384",
+      "path": "python/app.py",
+      "start": {
+        "line": 180
+      },
+      "end": {
+        "line": 180
+      },
+      "extra": {
+        "message": "Session Fixation Due to Missing Session Regeneration on Login",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-384"
+          ],
+          "citation": "session['user'] = user['username']",
+          "proof": "SOURCE: An attacker can set a victim's session cookie (e.g., via URL parameter or cross-site scripting) before authentication. The Flask session is identified by a client-side signed cookie. SINK: At line 180, the login handler writes `session['user'] = user['username']` into the existing session without calling `session.clear()` or regenerating the session identifier. The same session ID that was set by the attacker before login becomes the authenticated session ID. The attacker can reuse the original session cookie after the victim logs in, gaining access to the victim's account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-269",
+      "path": "python/app.py",
+      "start": {
+        "line": 182
+      },
+      "end": {
+        "line": 182
+      },
+      "extra": {
+        "message": "Admin Privilege Stored in Forgeable Client-Side Session Cookie",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-269"
+          ],
+          "citation": "session['is_admin'] = True if user['username'] == 'admin' else False",
+          "proof": "SOURCE: The authorization decision `is_admin` is stored in the Flask client-side signed session cookie. SINK: The `SECRET_KEY` is hardcoded as `'secure-secret-key-12345'` at line 26. Flask's session cookie is signed but not encrypted; an attacker who knows or guesses the secret key can forge a session cookie with `is_admin=True` for any username. This bypasses server-side role checks and escalates privileges to full admin access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "python/app.py",
+      "start": {
+        "line": 608
+      },
+      "end": {
+        "line": 608
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on API User Endpoint Enables IDOR Enumeration",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@app.route('/api/user/<int:user_id>')",
+          "proof": "SOURCE: An authenticated attacker supplies arbitrary integer `user_id` values in the URL path to `/api/user/<user_id>`. SINK: The endpoint at line 608 accepts the request, queries the database, and returns user data (id, username, email, role, flag) for each valid user ID without any request throttling or rate limiting. An attacker can automate sequential enumeration (e.g., `/api/user/1`, `/api/user/2`, ... `/api/user/1000`) to exfiltrate all user records from the system."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "python/app.py",
+      "start": {
+        "line": 650
+      },
+      "end": {
+        "line": 650
+      },
+      "extra": {
+        "message": "Missing Authorization \u2014 Any Authenticated User Can Delete All Comments",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "conn.execute(\"DELETE FROM comments\")",
+          "proof": "SOURCE: The `/reset/<page>` route at line 644 accepts POST requests from any authenticated session (checking only `if 'user' not in session` at line 646). No admin or role check is performed against `session['is_admin']` or the database `role` column. SINK: When `page == 'comment'`, line 650 executes `DELETE FROM comments` \u2014 an unqualified DELETE that removes every comment row in the database. A regular non-admin user can POST to `/reset/comment` and wipe the entire comments table."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "python/app.py",
+      "start": {
+        "line": 182
+      },
+      "end": {
+        "line": 182
+      },
+      "extra": {
+        "message": "Broken Function-Level Authorization \u2014 Admin Flag Set but Never Enforced",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "session['is_admin'] = True if user['username'] == 'admin' else False",
+          "proof": "SOURCE: At login (line 182), `session['is_admin']` is set based on the username. The database `users` table has a `role` column with values 'admin' and 'user' (from database.py). SINK: No route in the entire application ever reads or enforces `session['is_admin']` or the database `role` column. Every protected route (dashboard, comment, transfer, upload, ssrf, xxe, deserialize, report, reset, etc.) only checks `if 'user' not in session`. A non-admin user like `user2` can access all functionality \u2014 upload files, delete all comments via `/reset/comment`, submit reports, reset challenge progress \u2014 with the same privileges as the admin user. The authorization infrastructure is defined but completely ignored at runtime."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "python/app.py",
+      "start": {
+        "line": 324
+      },
+      "end": {
+        "line": 324
+      },
+      "extra": {
+        "message": "No File Size Limit on Upload Endpoint Enables Resource Exhaustion DoS",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "file.save(file_path)",
+          "proof": "SOURCE: The `/upload` endpoint at line 306 is decorated with `@csrf.exempt` and accepts file uploads from any authenticated user. SINK: `file.save(file_path)` at line 324 writes the uploaded file to disk with no `MAX_CONTENT_LENGTH` configured (Flask defaults to None = unlimited). An attacker can upload arbitrarily large files to exhaust disk space on the server. The CSRF exemption also allows a victim's browser to be tricked into uploading large files cross-origin via a crafted form, amplifying the attack surface."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-285",
+      "path": "python/app.py",
+      "start": {
+        "line": 309
+      },
+      "end": {
+        "line": 309
+      },
+      "extra": {
+        "message": "Shared Upload Directory Listing Exposes All Users' Uploaded Files",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-285"
+          ],
+          "citation": "files = os.listdir(app.config['UPLOAD_FOLDER'])",
+          "proof": "SOURCE: The `/upload` route at line 306 calls `os.listdir(app.config['UPLOAD_FOLDER'])` at line 309. SINK: The returned list of filenames is passed to the template context as `files=files` (lines 330-332) and rendered in the upload page, displaying every filename in the shared `static/uploads/` directory to any authenticated user \u2014 including filenames uploaded by other users. There is no owner/tenant filter or per-user directory isolation, so one user can enumerate and discover files uploaded by all other users, enabling reconnaissance for sensitive uploaded content."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "python/app.py",
+      "start": {
+        "line": 370
+      },
+      "end": {
+        "line": 370
+      },
+      "extra": {
+        "message": "User enumeration via differential responses on /profile/<int:user_id>",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "flash('User not found.', 'error')\n        return redirect(url_for('dashboard'))",
+          "proof": "SOURCE: Attacker-controlled user_id path parameter. SINK: If the user exists, the route returns HTTP 200 with the profile page; if not, it flashes 'User not found.' and redirects to /dashboard. The observable difference in response status and flash message reveals whether a given user ID is registered."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "python/app.py",
+      "start": {
+        "line": 620
+      },
+      "end": {
+        "line": 620
+      },
+      "extra": {
+        "message": "User enumeration via differential responses on /api/user/<int:user_id>",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "return jsonify({\"error\": \"User not found\"}), 404",
+          "proof": "SOURCE: Attacker-controlled user_id path parameter. SINK: The API returns HTTP 200 with full user data (id, username, email, role) when the ID exists and is not the current user, and returns 404 with error message when the ID does not exist. This enables efficient enumeration of valid user IDs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "python/app.py",
+      "start": {
+        "line": 585
+      },
+      "end": {
+        "line": 585
+      },
+      "extra": {
+        "message": "Unbounded report writeup permits storage denial of service",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "conn.execute(\"INSERT INTO reports (timestamp, user, challenge, writeup) VALUES (?, ?, ?, ?)\",\n                             (current_time, session['user'], challenge, writeup))",
+          "proof": "SOURCE: The writeup field from the ReportForm is a TextAreaField with only a DataRequired validator \u2014 no maximum length is enforced. SINK: The value is inserted directly into the SQLite reports table. An attacker can submit multi-megabyte writeups to exhaust disk space and database resources, causing a storage denial of service."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "python/app.py",
+      "start": {
+        "line": 630
+      },
+      "end": {
+        "line": 630
+      },
+      "extra": {
+        "message": "Unbounded file read in /comments-log can exhaust server memory",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "with open('static/comments.txt', 'r') as f:\n            content = f.read()",
+          "proof": "SOURCE: The static/comments.txt file, whose size is not bounded by any application logic. SINK: The endpoint reads the entire file into memory with a single f.read() call and returns it. If the file becomes large (e.g., written by other application features or administrators), it causes unbounded memory consumption on the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "python/database.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "Plaintext PII and role stored in the users table",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "email TEXT,\n                role TEXT DEFAULT 'user'",
+          "proof": "SOURCE: The users table schema created at application initialization. SINK: email (PII) and role (privilege level) columns are stored in cleartext with no encryption at rest. If the SQLite database file is exposed via path traversal, backup leakage, or server misconfiguration, user PII and privilege levels are leaked directly. This is distinct from the plaintext password storage finding."
+        }
+      }
+    }
+  ]
+}

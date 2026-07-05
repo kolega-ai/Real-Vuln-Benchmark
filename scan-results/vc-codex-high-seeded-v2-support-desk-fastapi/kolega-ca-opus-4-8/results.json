@@ -1,0 +1,316 @@
+{
+  "results": [
+    {
+      "path": "app/config.py",
+      "check_id": "kolega.claude-adaptation.hardcoded-secret",
+      "start": {
+        "line": 15,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Hardcoded default session/HMAC secret key \u2014 Attacker who knows the default can forge valid session cookies (impersonate any user including admin) and forge API-key/reset-token hashes. [verified: app/config.py:13 falls back to the publicly-known literal 'dev-only-change-me-support-desk', and security.py uses settings.secret_key to sign session cookies (URLSafeTimedSerializer) and HMAC reset/API-key tokens with no startup check rejecting the default, so an unset SECRET_KEY lets an attacker forge admin sessions and token hashes.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "kolega": {
+            "cluster_id": "hardcoded_secret",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/routers/integrations.py",
+      "check_id": "kolega.claude-adaptation.idor",
+      "start": {
+        "line": 24,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Cross-org ticket creation / user provisioning via integration API key \u2014 Any valid API key can create tickets and provision customer accounts in arbitrary organizations, crossing tenant isolation. [verified: ApiKey model has no organization/tenant field, and create_ticket_from_api resolves the org solely from attacker-controlled payload.organization_external_ref with no key-to-tenant binding, so any valid API key can create tickets and auto-provision customer_user accounts (emailing temp passwords) in arbitrary organizations, breaking per-org isolation.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "kolega": {
+            "cluster_id": "idor",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/routers/integrations.py",
+      "check_id": "kolega.claude-adaptation.idor",
+      "start": {
+        "line": 77,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Integration API ticket status update lacks tenant scoping (cross-org BOLA) \u2014 Any valid integration API key can transition the status of arbitrary tickets belonging to other organizations, corrupting workflow state and triggering webhooks for tickets they should not control. [verified: Same code path: db.get(Ticket, ticket_id) at app/routers/integrations.py:76 plus transition_ticket performs no tenant scoping, and ApiKey lacks any organization_id, so any X-API-Key holder can transition arbitrary tickets across organizations by iterating ticket_id, also triggering ticket.updated webhooks.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "kolega": {
+            "cluster_id": "idor",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/routers/admin.py",
+      "check_id": "kolega.claude-adaptation.csv-injection",
+      "start": {
+        "line": 290,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in admin report export \u2014 Spreadsheet formula injection/command execution for staff opening admin report CSVs. [verified: export_report builds CSV rows from attacker-controlled ticket subject (free-text str, schemas.py:122), organization name, and requester email, then passes them to csv_response (services.py:292) which uses a bare csv.DictWriter with no neutralization of cells starting with = + - @. Staff opening the report CSV are exposed to spreadsheet formula injection.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/routers/auth.py",
+      "check_id": "kolega.claude-adaptation.insecure-cookie",
+      "start": {
+        "line": 24,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Session cookie missing Secure flag by default \u2014 Session token can be sniffed over HTTP, enabling session hijacking. [verified: config.py defaults secure_cookies to false and set_session_cookie uses secure=settings.secure_cookies, so the HttpOnly session cookie is sent over plain HTTP by default, exposing it to interception.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_cookie",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/routers/auth.py",
+      "check_id": "kolega.claude-adaptation.missing-rate-limiting",
+      "start": {
+        "line": 35,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing brute-force protection on authentication endpoints \u2014 Attackers can brute-force passwords and reset tokens at unlimited speed. [verified: login, request_reset, and confirm_reset perform credential/token checks with no throttling; a codebase-wide search for rate limiting returns no matches in deps.py or main.py, leaving brute-force unprotected.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "kolega": {
+            "cluster_id": "missing_rate_limiting",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/routers/auth.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-logging",
+      "start": {
+        "line": 110,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Password reset token written to plaintext outbox log \u2014 Anyone with file/log access can read reset tokens and take over accounts. [verified: request_reset (auth.py:110) passes the plaintext reset token into send_mock_email, which writes the full body to settings.email_outbox on disk as plaintext JSON (services.py:124-128); the DB only stores the hash, so the usable secret persists in cleartext on disk readable by anyone with file/log access. Reachable via unauthenticated /api/auth/password-reset/request, but exploitation requires local]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_logging",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/routers/reports.py",
+      "check_id": "kolega.claude-adaptation.csv-injection",
+      "start": {
+        "line": 96,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in reports export \u2014 Spreadsheet formula injection / command execution for users opening exported report CSVs. [verified: export_report builds CSV rows from attacker-controlled fields (organization.name set from unauthenticated registration payload.organization_name, ticket subject from payload.subject) and passes them to csv_response, which uses plain csv.DictWriter with no prefixing/escaping of leading formula characters (=,+,-,@), confirming CSV formula injection.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/routers/tickets.py",
+      "check_id": "kolega.claude-adaptation.csv-injection",
+      "start": {
+        "line": 91,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in scoped ticket export \u2014 Formula/command execution in the spreadsheet of whoever opens the exported CSV, enabling data exfiltration or code execution. [verified: `export_scoped_tickets` (tickets.py:91) writes attacker-controlled ticket `subject`, `organization.name`, and `requester.email` into CSV via `csv_response`/`csv.DictWriter` (services.py:292), which performs no neutralization of leading `= + - @`; the schema only enforces length, so a customer-supplied formula like `=cmd|'/c calc'!A1` reaches staff spreadsheets verbatim.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/services.py",
+      "check_id": "kolega.claude-adaptation.csv-injection",
+      "start": {
+        "line": 238,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in ticket/report exports \u2014 When a staff user opens an exported CSV in a spreadsheet, attacker-crafted ticket subjects can execute formulas (data exfiltration, command execution via DDE). [verified: Same csv_response sink writes untrusted subject/organization/email fields without sanitizing formula-trigger characters; /api/tickets/export.csv and reports exports include customer/integration-sourced subjects, so a crafted subject executes as a formula on open.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/services.py",
+      "check_id": "kolega.claude-adaptation.csv-injection",
+      "start": {
+        "line": 324,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in ticket/report exports \u2014 Spreadsheet formula execution / data exfiltration on the machine of staff who open exported CSVs. [verified: csv_response (app/services.py) uses csv.DictWriter with no neutralization of leading =,+,-,@; tickets.py:101 and reports/admin exports feed attacker-controlled ticket subject, organization.name, and requester.email into cells, enabling spreadsheet formula injection when staff open the CSV.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/routers/auth.py",
+      "check_id": "kolega.claude-adaptation.user-enumeration",
+      "start": {
+        "line": 62,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Account/organization enumeration on registration \u2014 Attacker can determine valid registered emails and existing organizations, aiding targeted attacks. [verified: register raises 409 'Email is already registered' vs 409 'Organization already exists' (auth.py:62-64), distinct from login's generic 401 'Invalid credentials', allowing enumeration of valid emails and organizations.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "kolega": {
+            "cluster_id": "user_enumeration",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "app/routers/tickets.py",
+      "check_id": "kolega.claude-adaptation.mass-assignment",
+      "start": {
+        "line": 300,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Unvalidated escalation owner assignment (mass assignment) \u2014 A staff user can set an escalation owner to an arbitrary user id (including out-of-team/non-staff), bypassing the ownership validation enforced elsewhere. [verified: request_escalation in tickets.py sets owner_id=payload.owner_id directly from EscalationCreate with no existence/role/team validation, whereas update_escalation validates owner.role in {team_lead,support_admin} and team scope; a staff user can assign an arbitrary/out-of-scope/non-staff owner_id. Impact is limited to the escalation owner field and requires authenticated staff, with no direct access]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "kolega": {
+            "cluster_id": "mass_assignment",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    }
+  ]
+}

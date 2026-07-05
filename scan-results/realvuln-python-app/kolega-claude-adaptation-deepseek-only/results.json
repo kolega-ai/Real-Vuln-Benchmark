@@ -1,0 +1,1202 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "target/project/models/Dashboard.py",
+      "start": {
+        "line": 7
+      },
+      "end": {
+        "line": 7
+      },
+      "extra": {
+        "message": "SQL Injection in page retrieval",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "cur = db.execute('SELECT pageId, title, content FROM pages WHERE pageId='+pageId)",
+          "proof": "The /dashboard/<pageId> route in controllers/Dashboard.py (line 7) captures user-supplied input from the URL path as pageId. This value is passed directly to Dashboard.getPage(pageId) at line 12, which concatenates it into a SQL query string at models/Dashboard.py line 7 using string concatenation. No parameterization or sanitization is applied. An attacker can supply pageId=1 UNION SELECT ... to exfiltrate all database contents."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-502",
+      "path": "target/project/controllers/Information.py",
+      "start": {
+        "line": 18
+      },
+      "end": {
+        "line": 18
+      },
+      "extra": {
+        "message": "Insecure YAML deserialization leading to RCE",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "citation": "content = yaml.load(yaml_file)",
+          "proof": "The /information/<input> route (line 12) accepts a URL path parameter that is base64-decoded at line 17 then passed to yaml.load() at line 18. requirements.txt pins pyyaml==3.13, a version where yaml.load() is known to allow arbitrary code execution via !!python/object payloads. An attacker can craft a base64-encoded YAML payload (e.g., !!python/object/apply:os.system [\"id\"]) that executes arbitrary commands when deserialized."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-502",
+      "path": "target/project/controllers/About.py",
+      "start": {
+        "line": 24
+      },
+      "end": {
+        "line": 24
+      },
+      "extra": {
+        "message": "Insecure Pickle deserialization leading to RCE",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "citation": "a = pickle.load(handle)",
+          "proof": "The /about/sync POST endpoint (line 16) takes user input from request.form['data_obj'] at line 19, decodes it from hex at line 20, writes it to a file at line 21, then unpickles that file at line 24. pickle.load() on attacker-controlled bytes executes arbitrary Python code. An attacker sends a hex-encoded malicious pickle payload that gives full remote code execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1336",
+      "path": "target/project/controllers/404.py",
+      "start": {
+        "line": 76
+      },
+      "end": {
+        "line": 76
+      },
+      "extra": {
+        "message": "Server-Side Template Injection via request.url",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "citation": "\"\"\".format(request.url)\n    return render_template_string(template), 404",
+          "proof": "The 404 error handler takes request.url (which contains user-controlled URL path fragments) and interpolates it into a template string via Python str.format() at line 76 ('{0}' placeholder replaced with request.url), then renders it with render_template_string() at line 77. Old Jinja2==2.5.5 (per requirements.txt) evaluates template expressions. Visiting /{{config}} injects {{config}} into the rendered template, exposing Flask's app.config including SECRET_KEY. An attacker can escalate to RCE via Jinja2 sandbox escape."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "target/project/controllers/Search.py",
+      "start": {
+        "line": 9
+      },
+      "end": {
+        "line": 9
+      },
+      "extra": {
+        "message": "Reflected Cross-Site Scripting (XSS)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "search = request.form.get('search')",
+          "proof": "The /search POST endpoint takes the search parameter from the form at line 9 and passes it to the template at line 10. The template search/index.html explicitly disables autoescaping with '{% autoescape false %}{{search}}{% endautoescape %}'. Additionally, line 11 sets X-XSS-Protection: 0, removing browser XSS filters. An attacker can submit <script>alert(document.cookie)</script> as the search value and steal session cookies."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-78",
+      "path": "target/project/controllers/Monitoring.py",
+      "start": {
+        "line": 13
+      },
+      "end": {
+        "line": 13
+      },
+      "extra": {
+        "message": "OS Command Injection via template context processor",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-78"
+          ],
+          "citation": "output = os.popen(command).read()",
+          "proof": "The @app.context_processor at line 10 registers a system_call function into ALL Jinja2 template contexts that executes arbitrary OS commands via os.popen() at line 13. While the monitoring template calls it with hardcoded strings, the SSTI vulnerability in 404.py allows an attacker to call {{system_call('rm -rf /')}} or similar payloads through any template processed by render_template_string, achieving Remote Code Execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-611",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 15
+      },
+      "end": {
+        "line": 15
+      },
+      "extra": {
+        "message": "XML External Entity (XXE) Injection",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-611"
+          ],
+          "citation": "doc = parseString(request.form['customers'])",
+          "proof": "The /validator/upload endpoint takes raw XML from request.form['customers'] at line 15 and parses it with xml.dom.pulldom.parseString(). Python's default XML parser does not disable DTD processing or external entity resolution. An attacker can submit XML like <?xml version=\"1.0\"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]><customers>&xxe;</customers> to read arbitrary server files or perform SSRF."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 29
+      },
+      "end": {
+        "line": 29
+      },
+      "extra": {
+        "message": "Path Traversal in file download",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "fileName = request.form['example_file']\n    file = open(fileName, \"r\")",
+          "proof": "The /validator/getXML endpoint takes a filename from request.form['example_file'] at line 29 and opens it with open() at line 30, then serves it via send_file() at line 31. No path sanitization is applied. The form's hidden input defaults to customers.xml but an attacker can POST example_file=../../etc/passwd to read arbitrary files on the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-942",
+      "path": "target/runserver.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "CORS misconfiguration allowing credential theft",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "citation": "cors = CORS(app, resources={r\"/*\": {\"origins\": \"*\"}})",
+          "proof": "runserver.py line 8 sets Access-Control-Allow-Origin: * for all routes. Simultaneously, Confidential.py line 10 sets Access-Control-Allow-Credentials: true on the /confidential response. When a wildcard origin is combined with credentials, any external website can make authenticated cross-origin requests and read the confidential salary data from authenticated user sessions, violating the Fetch spec's requirement that credentialed requests cannot use wildcard origins."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "target/project/controllers/Webmaster.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "Missing Authorization - session set without authentication",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "session['loggedin'] = random",
+          "proof": "The /webmaster route (line 7) sets session['loggedin'] at line 12 to a random UUID without requiring any credentials. The /confidential route (Confidential.py line 8) checks only 'if(session[\"loggedin\"])' to grant access. An attacker can simply visit /webmaster first, which silently grants them a logged-in session, then access /confidential to view sensitive salary data - completely bypassing the login page."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "target/project/__init__.py",
+      "start": {
+        "line": 4
+      },
+      "end": {
+        "line": 4
+      },
+      "extra": {
+        "message": "Hardcoded weak Flask secret key",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "app.config['SECRET_KEY'] = 'random'",
+          "proof": "The Flask application's SECRET_KEY is hardcoded to the guessable value 'random' at __init__.py line 4. This key is used to sign session cookies. An attacker who knows the secret key can forge arbitrary session cookies (e.g., setting session['loggedin'] to any truthy value) to impersonate any user or bypass authentication entirely. The key is trivially guessable."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "target/project/controllers/404.py",
+      "start": {
+        "line": 94
+      },
+      "end": {
+        "line": 94
+      },
+      "extra": {
+        "message": "Reflected XSS in 404 Error Handler via request.url interpolation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "    \"\"\".format(request.url)",
+          "proof": "Untrusted SOURCE: request.url at line 94 \u2014 the full attacker-controlled URL path including query string. SINK: The URL is interpolated into a raw HTML template string via Python's .format() BEFORE render_template_string() processes it, so Jinja2 autoescaping never sees the injected value. An attacker can request a path like /<script>alert(document.cookie)</script> which will be embedded verbatim into the HTML response and executed in the victim's browser."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "target/project/templates/search/index.html",
+      "start": {
+        "line": 13
+      },
+      "end": {
+        "line": 13
+      },
+      "extra": {
+        "message": "Reflected XSS in Search Results via disabled autoescape",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "{% autoescape false %}{{search}}{% endautoescape %}",
+          "proof": "Untrusted SOURCE: User-supplied 'search' form parameter via POST to /search (Search.py line 9, request.form.get('search')). SINK: Rendered in search/index.html line 13 with {% autoescape false %}, which explicitly disables Jinja2 HTML escaping. Combined with X-XSS-Protection: 0 header at Search.py line 11 disabling the browser's XSS auditor. An attacker can POST <script>alert(1)</script> as the search value and execute arbitrary JavaScript in the victim's browser."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 48
+      },
+      "end": {
+        "line": 48
+      },
+      "extra": {
+        "message": "Path Traversal in File Upload via unsanitized filename",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "            file.save('uploads/'+filename)",
+          "proof": "Untrusted SOURCE: Uploaded file's filename from request.files['file'].filename at line 46. SINK: Concatenated directly into the save path at line 48. allowed_file() at lines 36-38 only validates the file extension (txt, pdf, png, jpg, jpeg, html), not the path component. An attacker can supply filename=../../app.py to overwrite application source code, or filename=../../templates/layout/layout.html to inject persistent XSS into every page."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-113",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "HTTP Header Injection via filename in Content-Disposition header",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-113"
+          ],
+          "citation": "    response.headers.set(\"Content-Disposition\", \"attachment; filename=\"+fileName)",
+          "proof": "Untrusted SOURCE: request.form['example_file'] at line 29. SINK: String concatenation into the Content-Disposition HTTP response header value at line 33 with no sanitization. An attacker can supply fileName=test\r\nSet-Cookie: session=attacker to inject arbitrary HTTP response headers (HTTP response splitting), potentially hijacking sessions or redirecting users. Note: Exploitability depends on the Werkzeug version's CRLF protection in Headers.set()."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "target/project/__init__.py",
+      "start": {
+        "line": 6
+      },
+      "end": {
+        "line": 6
+      },
+      "extra": {
+        "message": "Flask Debug Mode Enabled in Production",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "app.debug = True",
+          "proof": "Flask debug mode is activated at __init__.py line 6 with app.debug = True. This enables the Werkzeug interactive debugger which allows arbitrary Python code execution via the debug console when any unhandled exception occurs. It also exposes full stack traces, source code, environment variables, and application internals to any user who triggers an error. Combined with the hardcoded SECRET_KEY, this provides multiple RCE vectors."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "Hardcoded Admin Credentials in Authentication Logic",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "    if(password == \"admin\" and username == \"admin\"):",
+          "proof": "Authentication uses hardcoded string comparison against literal 'admin'/'admin' at Login.py line 12. No database lookup against the users table (stored in initializer.py with MD5 hashes), no password hashing, no rate limiting, no brute-force protection. With source code exposed via debug mode (__init__.py line 6), these credentials are trivially discoverable by any attacker."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "target/project/controllers/Webmaster.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "Missing Authentication \u2014 /webmaster Injects Privileged Session for Any Visitor",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "    session['loggedin'] = random",
+          "proof": "Untrusted SOURCE: Any HTTP request (GET or POST) to /webmaster. SINK: session['loggedin'] is unconditionally set at line 12 without any authentication check. This endpoint effectively serves as a backdoor \u2014 any unauthenticated attacker can visit /webmaster to obtain a valid 'loggedin' session, then access /confidential (sensitive salary data), /validator (path traversal/file upload), and /monitoring (command execution). The legitimate /login route is rendered entirely irrelevant."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "target/project/controllers/Confidential.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "Broken Access Control \u2014 /confidential Relies on Forgeable Session Check",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "    if(session['loggedin']):",
+          "proof": "Untrusted SOURCE: Session cookie sent by any visitor. SINK: Sensitive data (CEO salary, CIO salary, stockholder data) rendered at confidential/index.html. The sole access control check at line 8 is trivially bypassed by visiting /webmaster first to obtain session['loggedin']. Additionally, if no session exists, the check throws a KeyError (no try/except) causing the 'response' variable to be undefined, triggering an exception \u2014 but with debug mode enabled (__init__.py:6), this crash exposes the Werkzeug interactive debugger (RCE). Combined with hardcoded SECRET_KEY, the session cookie can also be forged directly."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "target/project/templates/messaging/index.html",
+      "start": {
+        "line": 56
+      },
+      "end": {
+        "line": 56
+      },
+      "extra": {
+        "message": "Stored XSS via javascript: URL in messaging link href",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "                        <a target=\"_blank\" href=\"{{item[3]}}\">Check Source</a>",
+          "proof": "Untrusted SOURCE: User-supplied 'link' form field via POST to /messaging/new (Messaging.py), stored in database via parameterized INSERT. SINK: Rendered into href attribute at messaging/index.html line 56. While Jinja2 HTML-escapes HTML special characters (preventing <script> tags), it does not validate URL schemes. An attacker can store link=javascript:alert(document.cookie) as a message link. When a victim clicks 'Check Source', the JavaScript executes in their browser context, enabling session theft."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-916",
+      "path": "target/project/config/initializer.py",
+      "start": {
+        "line": 15
+      },
+      "end": {
+        "line": 15
+      },
+      "extra": {
+        "message": "Passwords Stored as Unsalted MD5 Hashes",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-916"
+          ],
+          "citation": "    cur.execute(\"INSERT INTO users VALUES(1,'Admin','0cef1fb10f60529028a71f58e54ed07b')\")",
+          "proof": "SOURCE: User passwords during database initialization. SINK: Stored as unsalted MD5 hashes in Database.db (lines 15-18). MD5 is cryptographically broken and trivially reversible via rainbow tables (e.g., '0cef1fb10f60529028a71f58e54ed07b' = MD5('admin')). No salt means identical passwords produce identical hashes, enabling precomputed attacks. The users table is accessible via the SQL injection in Dashboard.getPage() (models/Dashboard.py line 7), allowing an attacker to extract and reverse all password hashes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "target/project/controllers/Dashboard.py",
+      "start": {
+        "line": 7
+      },
+      "end": {
+        "line": 7
+      },
+      "extra": {
+        "message": "IDOR \u2014 Unauthenticated Page Enumeration via /dashboard/<pageId>",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "def inject(pageId):",
+          "proof": "Untrusted SOURCE: URL path parameter pageId at line 7, controlled entirely by the attacker. SINK: Database page lookup in models/Dashboard.py (getPage method). No session, authentication, role, or ownership check is performed before fetching and rendering arbitrary page content. Any unauthenticated user can enumerate pages by iterating pageId (/dashboard/1, /dashboard/2, ...) and read all stored page content from the pages table. Combined with the SQL injection at the model layer, this also enables data exfiltration."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "target/project/templates/about/index.html",
+      "start": {
+        "line": 20
+      },
+      "end": {
+        "line": 20
+      },
+      "extra": {
+        "message": "Reflected XSS via Disabled Autoescaping on Pickle Deserialization Output in About Template",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "            <br> {% autoescape false %} {{content}} {% endautoescape %}</p>",
+          "proof": "Untrusted SOURCE: request.form['data_obj'] POST parameter to /about/sync (About.py:19). The value is hex-decoded and deserialized by pickle.load(). SINK: The deserialized object `a` is rendered as `content` in about/index.html with Jinja2 autoescaping explicitly disabled via {% autoescape false %}. An attacker can POST a hex-encoded pickle of a simple Python string containing JavaScript (e.g. pickle.dumps('<script>alert(document.cookie)</script>')), which is deserialized back to that string and rendered unsanitized. The RCE via pickle (About.py:24, CWE-502) is a separate issue, but this template-layer XSS is an independent reachable sink \u2014 disabling autoescape for attacker-controlled data enables script execution in the victim's browser."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "target/project/templates/webmaster/index.html",
+      "start": {
+        "line": 27
+      },
+      "end": {
+        "line": 27
+      },
+      "extra": {
+        "message": "Hardcoded Plaintext Credentials Exposed in Webmaster Template",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "<td>Thisismysecretpass</td>",
+          "proof": "SOURCE: The template source file hardcodes plaintext credentials for three users in HTML table rows (Mark:Thisismysecretpass line 27, Jacob:BirdLover1 line 33, Larry:Letmein123 line 39). SINK: Webmaster.py renders this template at /webmaster with no authentication check (CWE-306). Any unauthenticated visitor receives the full HTML including the credentials table. These are real, re-usable passwords exposed to every client that hits /webmaster."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "target/project/templates/layout/layout.html",
+      "start": {
+        "line": 59
+      },
+      "end": {
+        "line": 59
+      },
+      "extra": {
+        "message": "No Logout Route \u2014 Sessions Cannot Be Terminated",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "<li><a href=\"/login/endsession\"><i class=\"fa fa-sign-out fa-fw\"></i> Logout</a>",
+          "proof": "SOURCE: The navigation UI offers a Logout link pointing to /login/endsession (line 59). SINK: Login.py only defines routes for /login with GET/POST \u2014 no Flask route exists for /login/endsession anywhere in the controllers directory. The request falls through to the 404 handler, leaving session['loggedin'] intact. Since the SECRET_KEY is the hardcoded string 'random' (project/__init__.py:6), an attacker who learns it can forge permanent session cookies with no revocation mechanism."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "target/project/controllers/About.py",
+      "start": {
+        "line": 27
+      },
+      "end": {
+        "line": 27
+      },
+      "extra": {
+        "message": "Cross-Site Request Forgery on /about/sync Enables Remote Pickle RCE via Cross-Origin POST",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "a = pickle.load(handle)",
+          "proof": "SOURCE: A malicious webpage can craft a cross-origin form POST to /about/sync containing a 'data_obj' field with a hex-encoded pickle payload. SINK: About.py:22 reads request.form['data_obj'], hex-decodes it, writes it to ../pickle.hacker, then executes pickle.load(handle) on line 27 \u2014 achieving Remote Code Execution. No CSRF protection exists anywhere in the app (Flask-WTF is never initialized, no @csrf.exempt, no CSRFProtect setup in __init__.py). The endpoint requires no authentication. Any origin can POST (CORS not restrictive), triggering pickle RCE without any user interaction beyond visiting a malicious page."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "target/project/controllers/Messaging.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on /messaging/new \u2014 Unbounded Database Insert Leading to Storage Exhaustion",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@app.route(\"/messaging/new\", methods=['GET', 'POST'])",
+          "proof": "SOURCE: Repeated HTTP POST requests to /messaging/new from any client. SINK: Each request calls storeMessages() at line 13 which executes INSERT INTO messages(...) (Messaging.py model:storeMessages) with no throttling, CAPTCHA, authentication check, or request-size limit. The SQLite database file grows unboundedly. Additionally, the /messaging GET endpoint at line 9 fetches ALL messages in a single query with no pagination, so database bloat also causes denial of service for legitimate users."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "Jenkinsfile",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "Hardcoded SonarQube Authentication Token in Jenkins Pipeline",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "sh '/sonar/sonar-scanner-3.0.3.778-linux/bin/sonar-scanner -Dsonar.projectKey=python -Dsonar.sources=./python-app -Dsonar.host.url=http://sonarqube:9000 -Dsonar.login=9ba67e580e0b13f75b07404f028732945c66a219 -Dsonar.bandit.reportPath=./report.json'",
+          "proof": "SOURCE: The Jenkinsfile is committed to the git repository, accessible to anyone with repo access. SINK: The SonarQube authentication token '9ba67e580e0b13f75b07404f028732945c66a219' is hardcoded directly in the pipeline step at line 25, executed via an active 'sh' command. Anyone with repository access can extract this credential and authenticate to the SonarQube server at http://sonarqube:9000, potentially reading scan results, modifying quality gates, or accessing project configurations."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "target/project/controllers/Messaging.py",
+      "start": {
+        "line": 9
+      },
+      "end": {
+        "line": 9
+      },
+      "extra": {
+        "message": "Missing Authorization \u2014 /messaging GET Exposes All Messages Without Authentication",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "messages = sqli.getMessages()",
+          "proof": "SOURCE: Any unauthenticated HTTP GET request to /messaging. SINK: The messaging() function at line 7 calls sqli.getMessages() at line 9 which fetches ALL rows from the messages table (name, message, link, timestamp) and renders them to the browser. No session check, authentication decorator, or authorization logic exists anywhere in this handler. Unlike /confidential which at least checks session['loggedin'], /messaging is completely open."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "target/project/controllers/Messaging.py",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "Cross-Site Request Forgery on /messaging/new \u2014 No Anti-Forgery Token on State-Changing POST",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "messages = sqli.storeMessages(name, message, link)",
+          "proof": "SOURCE: Attacker-controlled form submission from arbitrary origin. SINK: POST /messaging/new calls storeMessages() at line 19 which executes INSERT INTO messages (model/Messaging.py:storeMessages). Flask-WTF is listed in requirements.txt but CSRFProtect is never initialized (__init__.py has no CSRF setup), so no CSRF token is validated. An attacker can craft a cross-origin form that silently inserts arbitrary messages into the database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 48
+      },
+      "end": {
+        "line": 48
+      },
+      "extra": {
+        "message": "Cross-Site Request Forgery on /validator/uploads \u2014 No Anti-Forgery Token on File Upload POST",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "file.save('uploads/'+filename)",
+          "proof": "SOURCE: Attacker-controlled cross-origin form submission. SINK: POST /validator/uploads at Validator.py:41-48 calls file.save('uploads/'+filename) on line 48 without any CSRF token verification. No CSRFProtect is initialized anywhere in the app (__init__.py). An attacker can trick a logged-in user into uploading an arbitrary file (e.g., a malicious .html or .py file) to the uploads/ directory on the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "target/project/controllers/Webmaster.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "Cross-Site Request Forgery on /webmaster \u2014 No Anti-Forgery Token on Session-Escalation POST",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "session['loggedin'] = random",
+          "proof": "SOURCE: Cross-origin POST request from attacker-controlled site. SINK: /webmaster at Webmaster.py:7 accepts POST with no auth check, generates uuid.uuid1() on line 10, and sets session['loggedin'] = random on line 12 \u2014 elevating any visitor's session to a privileged level. Without CSRF protection, an attacker can force any victim into a privileged session via a simple hidden form submission, bypassing the need for login credentials."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 13
+      },
+      "end": {
+        "line": 13
+      },
+      "extra": {
+        "message": "Cross-Site Request Forgery on /login \u2014 Login CSRF Enables Session Fixation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "random = uuid.uuid1()",
+          "proof": "SOURCE: Cross-origin form submission to POST /login. SINK: Login.py successfully authenticates (password=admin, username=admin) at line 12 and sets session['loggedin'] = random at line 15. No CSRF token is validated anywhere. An attacker can log the victim into the 'admin' account via a hidden cross-origin form, causing the victim's actions to be attributed to the attacker's controlled admin session and potentially leaking the victim's private data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-338",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 13
+      },
+      "end": {
+        "line": 13
+      },
+      "extra": {
+        "message": "Predictable Session Token Generated with uuid.uuid1()",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-338"
+          ],
+          "citation": "random = uuid.uuid1()",
+          "proof": "SOURCE: uuid.uuid1() generates time-based UUIDs derived from the host's MAC address and current timestamp at microsecond precision. SINK: Stored in session['loggedin'] at Login.py:15. uuid1 is deterministic \u2014 an attacker who observes one or two session tokens can recover the MAC address and clock sequence, then predict future tokens. Combined with the hardcoded SECRET_KEY='random' (__init__.py:6), the attacker can forge valid session cookies."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-338",
+      "path": "target/project/controllers/Webmaster.py",
+      "start": {
+        "line": 10
+      },
+      "end": {
+        "line": 10
+      },
+      "extra": {
+        "message": "Predictable Session Token Generated with uuid.uuid1() for Privileged Session",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-338"
+          ],
+          "citation": "random = uuid.uuid1()",
+          "proof": "SOURCE: uuid.uuid1() at Webmaster.py:10 uses MAC address and timestamp to generate a predictable session token -> SINK: session['loggedin'] = random at line 12. Any visitor to /webmaster (no auth required) gets a privileged session. An attacker who observes one uuid1 value or knows the server's MAC address and approximate request time can predict the token assigned to other victims' sessions and hijack them."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 9
+      },
+      "end": {
+        "line": 9
+      },
+      "extra": {
+        "message": "Missing Authorization on /validator Routes",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "@app.route(\"/validator\", methods=['GET'])",
+          "proof": "SOURCE: Any unauthenticated visitor who knows the /validator URL -> SINK: Route at Validator.py:9, /validator/upload at line 15, /validator/getXML at line 29, and /validator/uploads at line 46. None have @login_required or any session['loggedin'] check. The sidebar in layout.html hides these links unless logged in, but the routes themselves have zero authorization, granting unauthenticated users access to XML parsing (potential XXE), path-traversal file downloads, and file upload functionality."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "target/project/controllers/Monitoring.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "Missing Authorization on /monitoring with OS Command Injection Access",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "@app.route(\"/monitoring\", methods=['GET'])",
+          "proof": "SOURCE: Any unauthenticated visitor who knows /monitoring URL -> SINK: Route at Monitoring.py:8 has no auth check, and the template at monitoring/index.html calls system_call('ps aux | grep 8081') and system_call('cat /etc/passwd') via the context processor at line 13 which runs os.popen(command).read(). An unauthenticated attacker can read arbitrary host system command output. The sidebar hides the link when logged out, but the route has zero access control and exposes sensitive system information."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on /login Allows Resource Exhaustion via Brute-Force",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@app.route(\"/login\", methods=['GET', 'POST'])",
+          "proof": "SOURCE: Attacker sends unlimited POST requests to /login with different passwords -> SINK: Login.py:8-24 validates credentials against the hardcoded string 'admin'/'admin' with no throttling, lockout, CAPTCHA, or delay. An attacker can brute-force the password at wire speed, since every attempt is processed without any rate-limiting mechanism, potentially exhausting server resources."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "target/project/__init__.py",
+      "start": {
+        "line": 5
+      },
+      "end": {
+        "line": 5
+      },
+      "extra": {
+        "message": "Session Cookie Missing Secure Flag",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "app.config['SECRET_KEY'] = 'random'",
+          "proof": "SOURCE: Flask default configuration for SESSION_COOKIE_SECURE is False -> SINK: The session cookie is transmitted over unencrypted HTTP. No configuration in __init__.py sets SESSION_COOKIE_SECURE=True. An attacker on the same network can intercept the session cookie via packet sniffing (MitM) because the cookie is sent in cleartext over HTTP on port 8081."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "target/project/controllers/Confidential.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "Unhandled KeyError on session['loggedin'] Leaks Debug Traceback",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "if(session['loggedin']):",
+          "proof": "SOURCE: Unauthenticated request to /confidential -> SINK: session['loggedin'] at Confidential.py:8 raises KeyError when the 'loggedin' key does not exist (uses bracket access instead of session.get()). With app.debug = True (__init__.py:6), Flask returns a full Werkzeug debugger traceback with source code snippets, local variable values, and file paths. An attacker who visits /confidential without logging in receives sensitive application internals instead of a redirect."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "target/project/controllers/About.py",
+      "start": {
+        "line": 28
+      },
+      "end": {
+        "line": 28
+      },
+      "extra": {
+        "message": "Sensitive Deserialization Data Written to Stdout via print()",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print(attack)",
+          "proof": "SOURCE: User-controlled 'data_obj' field at About.py:21 hex-decoded into bytes at line 22 -> SINK: print(attack) at line 28 writes the full raw pickle bytes to stdout/stderr. If application logs are collected (e.g., Docker, syslog, or cloud log services), attacker-controlled deserialization payloads \u2014 which may include commands, file contents, or internal data \u2014 are persisted in logs, exposing sensitive information and providing forensic evidence to attackers."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 49
+      },
+      "end": {
+        "line": 49
+      },
+      "extra": {
+        "message": "Uploaded File Metadata Leaked via print() to Logs",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print(file)",
+          "proof": "SOURCE: User-uploaded file object at Validator.py:48 -> SINK: print(file) at line 49 prints the file object (including filename, content-type, size, and stream details) to stdout. If stdout is captured in server logs, the uploaded filename (which may contain sensitive user data or path traversal sequences) is exposed in logs, aiding attackers in reconnaissance against the file upload feature."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "Jenkinsfile",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "Second Hardcoded SonarQube Authentication Token in Jenkins Pipeline",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "// sh './sonar/sonar-scanner-3.0.3.778-linux/bin/sonar-scanner -Dsonar.projectKey=testproject -Dsonar.sources=/root/examples/ -Dsonar.host.url=http://localhost:9000 -Dsonar.login=b6029f0cfea17d68ee8aa0607b7b2aea6683dfb5 -Dsonar.bandit.reportPath=/root/banditReport.json -Dson'",
+          "proof": "SOURCE: Hardcoded literal in Jenkinsfile version control at line 14 -> SINK: SonarQube authentication. The token 'b6029f0cfea17d68ee8aa0607b7b2aea6683dfb5' is embedded in the Jenkins pipeline DSL on line 14 within a commented-out shell command. Although commented, it remains in source control history and is a separate token from the active token on line 25. Anyone with repository access can extract this token and authenticate to SonarQube."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "User Enumeration via Differential Error Messages on Login",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "if(password == \"admin\" or username != \"admin\"):\n            return render_template(\"login/index.html\", error = \"invalid username\")\n        if(password != \"admin\" or username == \"admin\"):\n            return render_template(\"login/index.html\", error = \"invalid password for username\")",
+          "proof": "SOURCE: User-supplied username and password via POST form -> SINK: Different error messages returned to the browser at Login.py:19-22. When username is wrong (regardless of password), the response says 'invalid username'. When username is correct but password is wrong, the response says 'invalid password for username'. An attacker can enumerate valid usernames by observing which error message is returned, then focus brute-force efforts on known-good accounts."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "Missing Brute-Force Protection on Login Endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.route(\"/login\", methods=['GET', 'POST'])",
+          "proof": "SOURCE: Repeated automated POST requests to /login -> SINK: Authentication logic at Login.py:8-24 with hardcoded credentials evaluated per request. There is no rate limiting, account lockout, CAPTCHA, or progressive delay. An attacker can send thousands of login attempts per second to brute-force the hardcoded 'admin'/'admin' credentials or any credential pair. No middleware or application-level throttling (e.g., Flask-Limiter) is installed or configured anywhere in the application."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-330",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "Predictable Session Token Generated via uuid1() on Login",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-330"
+          ],
+          "citation": "random = uuid.uuid1()",
+          "proof": "SOURCE: uuid.uuid1() call at Login.py:14 on successful login -> SINK: session['loggedin'] token signed into Flask session cookie at line 16. uuid1() generates values from the host MAC address and current timestamp, making tokens predictable to an attacker who can discover the MAC (e.g., via /monitoring system_call output) and approximate login time. Combined with the hardcoded SECRET_KEY='random' (__init__.py:5), an attacker can forge valid session cookies for any user at any time, achieving complete authentication bypass."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-330",
+      "path": "target/project/controllers/Webmaster.py",
+      "start": {
+        "line": 11
+      },
+      "end": {
+        "line": 11
+      },
+      "extra": {
+        "message": "Predictable Session Token Generated via uuid1()",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-330"
+          ],
+          "citation": "random = uuid.uuid1()",
+          "proof": "SOURCE: uuid.uuid1() generates a predictable time-based+MAC UUID on every visit to /webmaster. SINK: session['loggedin'] = random stores the predictable token into the Flask session cookie. uuid1() uses host MAC address and timestamp, making values predictable. Combined with the hardcoded SECRET_KEY='random' (__init__.py:5), an attacker who observes one session token can forge valid session cookies by predicting future uuid1 values or replaying observed ones. The /webmaster route grants a logged-in session to ANY visitor without authentication, amplifying this issue."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "target/project/templates/login/index.html",
+      "start": {
+        "line": 41
+      },
+      "end": {
+        "line": 41
+      },
+      "extra": {
+        "message": "Missing CSRF Protection on Login Form",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "<form role=\"form\" method=\"post\" action=\"/login\">\n<fieldset>\n<div class=\"form-group\">\n<input class=\"form-control\" placeholder=\"Username\" name=\"username\" type=\"username\" autofocus>\n</div>\n<div class=\"form-group\">\n<input class=\"form-control\" placeholder=\"Password\" name=\"password\" type=\"password\">",
+          "proof": "SOURCE: Cross-origin POST to /login from attacker-controlled page. SINK: Server sets session['loggedin'] via Login.py:14-15 and redirects to /confidential on successful authentication. The login form contains no CSRF token, no hidden field. An attacker can craft a page that auto-submits the hardcoded admin/admin credentials, forcing the victim's browser to authenticate as admin. The victim's subsequent actions occur under the attacker-chosen session. Additionally, login CSRF can be combined with session-fixation-style attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "target/project/templates/messaging/index.html",
+      "start": {
+        "line": 47
+      },
+      "end": {
+        "line": 47
+      },
+      "extra": {
+        "message": "Missing CSRF Protection on /messaging/new \u2014 Unauthenticated Message Creation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "<form method=\"post\" action=\"/messaging/new\">\n<input id=\"btn-input\" type=\"text\" class=\"form-control input-sm\" placeholder=\"Name\" name=\"name\" />\n<input id=\"btn-input\" type=\"text\" class=\"form-control input-sm\" placeholder=\"Source\" name=\"link\" />\n<textarea class=\"form-control input-sm\" name=\"message\">Type your message here....</textarea>",
+          "proof": "SOURCE: Cross-origin POST to /messaging/new from attacker-controlled page. SINK: Database INSERT into messages table via Messaging.storeMessages() (models/Messaging.py:12-15). The form has no CSRF token. No CSRF middleware or SameSite cookie protection exists. An attacker can craft a page that silently POSTs to /messaging/new, injecting arbitrary messages including javascript: links into the database. Combined with the stored XSS (item[3] rendered unsafely in href), this enables one-click stored XSS against any victim who subsequently visits /messaging."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "target/project/templates/validator/index.html",
+      "start": {
+        "line": 21
+      },
+      "end": {
+        "line": 21
+      },
+      "extra": {
+        "message": "Missing CSRF Protection on /validator/upload \u2014 Cross-Origin XXE Trigger",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "<form method=\"post\" action=\"/validator/upload\">\n<textarea name=\"customers\" class=\"form-control input-lg\"></textarea>\n<br/>\n<button type=\"submit\" class=\"btn btn-info btn-md\" id=\"btn-chat\">\nValidate XML\n</button>\n</form>",
+          "proof": "SOURCE: Cross-origin POST to /validator/upload with attacker-crafted XML payload. SINK: parseString(request.form['customers']) at Validator.py:15 processes the XML via xml.dom.pulldom (vulnerable to XXE). No CSRF token or origin validation exists. An attacker can host a page that auto-submits an XML payload containing XXE entities referencing file:///etc/passwd, causing the victim's browser to exfiltrate server files. The XXE vulnerability amplifies CSRF impact from simple state-change to data theft."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "target/project/templates/validator/index.html",
+      "start": {
+        "line": 78
+      },
+      "end": {
+        "line": 78
+      },
+      "extra": {
+        "message": "Missing CSRF Protection on /validator/uploads \u2014 Cross-Origin File Upload",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "<form method=\"post\" action=\"/validator/uploads\" enctype=\"multipart/form-data\">\n<input type=\"file\" name=\"file\"/><br/>\n<button class=\"btn btn-primary\" type=\"submit\">Submit Button</button>",
+          "proof": "SOURCE: Cross-origin multipart POST to /validator/uploads with malicious file. SINK: file.save('uploads/'+filename) at Validator.py:47 writes the uploaded file to the server filesystem. No CSRF token protects this form. While browser same-origin policy blocks reading responses, the upload succeeds. Combined with the unchecked filename allowing path traversal, an attacker can trick a victim into uploading a file to an arbitrary server path via a single click."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-117",
+      "path": "target/project/controllers/About.py",
+      "start": {
+        "line": 28
+      },
+      "end": {
+        "line": 28
+      },
+      "extra": {
+        "message": "Untrusted Attacker-Controlled Data Written to Application Logs via print()",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-117"
+          ],
+          "citation": "print(attack)",
+          "proof": "SOURCE: request.form['data_obj'] (line 22) -> bytes.fromhex() -> attack variable (line 23) contains attacker-controlled binary payload. SINK: print(attack) (line 28) writes the raw bytes to stdout (Python standard output stream). If stdout is captured as application logs (Docker container logs, systemd journal, or log aggregation), attacker-controlled data enters the log stream without sanitization. An attacker can inject control characters, ANSI escape sequences, or log-forging payloads into the application log, corrupting log integrity or exploiting vulnerabilities in downstream log processors."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1104",
+      "path": "target/requirements.txt",
+      "start": {
+        "line": 3
+      },
+      "end": {
+        "line": 3
+      },
+      "extra": {
+        "message": "Jinja2 2.5.5 \u2014 Severely Outdated Templating Engine with Known Sandbox Escapes",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1104"
+          ],
+          "citation": "Jinja2==2.5.5",
+          "proof": "SOURCE: Pinned dependency in requirements.txt. SINK: Jinja2 2.5.5 was released in 2011 and is over 15 years out of date (current is 3.x). This ancient version predates numerous sandbox escape fixes and security patches. While the app uses render_template() (auto-escaped by default), the very outdated version lacks security hardening in modern releases, significantly increasing the blast radius of any template injection vulnerability."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 28
+      },
+      "end": {
+        "line": 28
+      },
+      "extra": {
+        "message": "Missing Authorization on /validator/getXML \u2014 Unauthenticated Arbitrary File Read",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "@app.route(\"/validator/getXML\", methods=['GET', 'POST'])\ndef XML_download():\n    fileName = request.form['example_file']\n    file = open(fileName, \"r\")",
+          "proof": "SOURCE: Direct POST to /validator/getXML with attacker-controlled 'example_file' parameter (line 29). SINK: open(fileName, 'r') followed by send_file() (lines 30-34) returns arbitrary server files to the attacker. The route has ZERO authentication or authorization checks. Although the UI shows the link behind {% if session['loggedin'] %}, the handler never validates the session. Any unauthenticated remote attacker can read /etc/passwd, application source code, Database.db, or any file readable by the Python process."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 40
+      },
+      "end": {
+        "line": 40
+      },
+      "extra": {
+        "message": "Missing Authorization on /validator/uploads \u2014 Unauthenticated Arbitrary File Upload",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "@app.route(\"/validator/uploads\", methods=['GET', 'POST'])\ndef XML_upload():\n    if request.method == 'POST':\n        file = request.files['file']",
+          "proof": "SOURCE: Direct multipart POST to /validator/uploads with a malicious file (line 42). SINK: file.save('uploads/'+filename) (line 47) writes attacker-controlled file to the server filesystem. No session validation exists in the handler. Though UI-gated behind {% if session['loggedin'] %}, a direct POST bypasses this. Combined with the unchecked filename, an unauthenticated attacker can write files to the server filesystem without ever logging in."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1275",
+      "path": "target/project/__init__.py",
+      "start": {
+        "line": 4
+      },
+      "end": {
+        "line": 4
+      },
+      "extra": {
+        "message": "Session Cookies Missing SameSite Attribute \u2014 Amplifies CSRF Attack Surface",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1275"
+          ],
+          "citation": "app = Flask('project')\napp.config['SECRET_KEY'] = 'random'",
+          "proof": "SOURCE: Flask default session cookie configuration in __init__.py. SINK: Session cookie attached to cross-origin requests. No SESSION_COOKIE_SAMESITE configuration is set (confirmed by searching the codebase). By default, older Flask versions omit the SameSite attribute or set it to None, allowing session cookies to be sent with cross-origin requests. This directly amplifies every CSRF finding in the application (/messaging/new, /validator/upload, /validator/uploads, /login) because the browser will attach the victim's session cookie to attacker-initiated cross-origin POST requests."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 36
+      },
+      "end": {
+        "line": 36
+      },
+      "extra": {
+        "message": "Unrestricted File Upload \u2014 Extension-Only Validation Allows Malicious Content",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "def allowed_file(filename):\n    ALLOWED_EXTENSIONS  = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'html'])\n    return '.' in filename and filename.rsplit('.', 1)[1] in ALLOWED_EXTENSIONS",
+          "proof": "SOURCE: Multipart file upload POST to /validator/uploads. SINK: allowed_file() at lines 36-38 only checks the file extension after the last dot, with no MIME-type inspection, no magic-byte/content sniffing, and no file-size limit. An attacker can upload a file named 'shell.php.png' or 'evil.js.html' \u2014 both pass the extension check since the suffix is in the allowlist. Critically, 'html' is in ALLOWED_EXTENSIONS, so a file named 'phish.html' passes validation and is saved to uploads/. Combined with the /validator/getXML endpoint (which serves files with Content-Type: text/html), this enables stored-XSS and phishing payloads."
+        }
+      }
+    }
+  ]
+}

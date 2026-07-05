@@ -1,0 +1,394 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.security.injection.sql-injection",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 72,
+        "col": 13,
+        "offset": 2414
+      },
+      "end": {
+        "line": 73,
+        "col": 57,
+        "offset": 2536
+      },
+      "extra": {
+        "message": "In get_user(), the username argument (sourced from the /users/v1/{username} path parameter via api_views/users.py:46) is interpolated directly into a raw SQL string with an f-string: f\"SELECT * FROM users WHERE username = '{username}'\". The resulting string is passed to db.session.execute(text(user_query)) without parameterization, allowing classic SQL injection (e.g. username=' UNION SELECT ...--).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.weak-jwt-secret",
+      "path": "config.py",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 455
+      },
+      "end": {
+        "line": 13,
+        "col": 45,
+        "offset": 499
+      },
+      "extra": {
+        "message": "The Flask/JWT SECRET_KEY is hardcoded as the literal string 'random'. This key is used by User.encode_auth_token (models/user_model.py:37-41) and User.decode_auth_token (models/user_model.py:48) to sign and verify HS256 JWTs. Because the key is publicly known, an attacker can forge valid JWTs for any user (including admin), bypassing authentication entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.credentials.hardcoded-credentials",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 99,
+        "col": 1,
+        "offset": 3433
+      },
+      "end": {
+        "line": 101,
+        "col": 69,
+        "offset": 3641
+      },
+      "extra": {
+        "message": "init_db_users() seeds the database with hardcoded credentials, including an admin account User.register_user(\"admin\", \"pass1\", \"admin@mail.com\", True). Anyone who knows these defaults can log in as admin (and admins can delete users via delete_user).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.mass-assignment",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 60,
+        "col": 1,
+        "offset": 1804
+      },
+      "end": {
+        "line": 66,
+        "col": 70,
+        "offset": 2215
+      },
+      "extra": {
+        "message": "In register_user(), when 'admin' is present in the request JSON, the server trusts the client-supplied admin flag and creates the account with admin=admin. This allows any unauthenticated user to self-register as an administrator (privilege escalation via mass assignment).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.broken-object-level-authorization",
+      "path": "api_views/books.py",
+      "start": {
+        "line": 50,
+        "col": 1,
+        "offset": 1857
+      },
+      "end": {
+        "line": 51,
+        "col": 76,
+        "offset": 1986
+      },
+      "extra": {
+        "message": "In get_by_title(), the vulnerable branch looks up the book solely by book_title (Book.query.filter_by(book_title=str(book_title)).first()) and returns its secret_content without verifying that the authenticated user (resp['sub']) owns the book. Any authenticated user can read any other user's book secret (Broken Object Level Authorization / IDOR).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.insecure-direct-object-reference",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 186,
+        "col": 1,
+        "offset": 7493
+      },
+      "end": {
+        "line": 190,
+        "col": 40,
+        "offset": 7765
+      },
+      "extra": {
+        "message": "In update_password(), the vulnerable branch resolves the target user from the URL path parameter (User.query.filter_by(username=username).first()) instead of from the authenticated token (resp['sub']), then sets user.password = request_data.get('password'). This lets any authenticated user change any other user's password, resulting in account takeover (IDOR / broken access control).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.data-exposure.debug-endpoint",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 533
+      },
+      "end": {
+        "line": 26,
+        "col": 24,
+        "offset": 635
+      },
+      "extra": {
+        "message": "The /users/v1/_debug endpoint (debug()) calls User.get_all_users_debug(), which returns json_debug() output including the plaintext password and admin flag for every user (models/user_model.py:58-59, 66-67). The endpoint has no authentication or authorization check (no security scheme in openapi3.yml), exposing all users' credentials to anyone.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor",
+            "CWE-306: Missing Authentication for a Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.information-disclosure.user-enumeration",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 101,
+        "col": 1,
+        "offset": 3710
+      },
+      "end": {
+        "line": 106,
+        "col": 115,
+        "offset": 4154
+      },
+      "extra": {
+        "message": "In login_user(), the vulnerable branch returns distinct messages: 'Password is not correct for the given username.' when the user exists but the password is wrong, and 'Username does not exist' when the user does not exist. These observable response discrepancies let an attacker enumerate valid usernames and confirm passwords, enabling credential stuffing.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-204: Observable Response Discrepancy",
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.dos.regex-dos",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 143,
+        "col": 1,
+        "offset": 5607
+      },
+      "end": {
+        "line": 146,
+        "col": 48,
+        "offset": 5822
+      },
+      "extra": {
+        "message": "In update_email(), the vulnerable branch validates the email with re.search using the pattern r\"^([0-9a-zA-Z]([-.\\w]*[0-9a-zA-Z])*@{1}([0-9a-zA-Z][-\\w]*[0-9a-zA-Z]\\.)+[a-zA-Z]{2,9})$\". The nested quantifiers ([-.\\w]*[0-9a-zA-Z])* and ([-\\w]*[0-9a-zA-Z]\\.)+ cause catastrophic backtracking on crafted inputs, allowing a single request to hang the worker (Regular Expression Denial of Service).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption",
+            "CWE-1333: Inefficient Regular Expression Complexity"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authentication.missing-authentication-critical",
+      "path": "api_views/main.py",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 82
+      },
+      "end": {
+        "line": 9,
+        "col": 25,
+        "offset": 163
+      },
+      "extra": {
+        "message": "The /createdb endpoint (populate_db()) calls db.drop_all() then db.create_all() and re-seeds the database. It has no authentication or authorization (no security scheme in openapi3.yml), so any anonymous client can wipe and reset the entire database at will, causing data loss and denial of service.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for a Critical Function",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authentication.missing-authentication",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 426
+      },
+      "end": {
+        "line": 21,
+        "col": 24,
+        "offset": 530
+      },
+      "extra": {
+        "message": "The /users/v1 endpoint (get_all_users()) returns User.get_all_users() (every user's username and email) with no authentication or authorization check (no security scheme in openapi3.yml). This exposes all registered users' personal information to anonymous callers.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for a Critical Function",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authentication.missing-authentication",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 45,
+        "col": 1,
+        "offset": 1216
+      },
+      "end": {
+        "line": 47,
+        "col": 88,
+        "offset": 1366
+      },
+      "extra": {
+        "message": "The /users/v1/{username} GET endpoint (get_by_username()) retrieves and returns user data with no authentication or authorization check (no security scheme in openapi3.yml). Any anonymous client can look up arbitrary users' usernames and emails; combined with the SQL injection in User.get_user(), this also enables unauthenticated SQL injection against the database.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for a Critical Function",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authentication.missing-authentication",
+      "path": "api_views/books.py",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 289
+      },
+      "end": {
+        "line": 14,
+        "col": 24,
+        "offset": 393
+      },
+      "extra": {
+        "message": "The /books/v1 GET endpoint (get_all_books()) returns Book.get_all_books() (every book title and its owner's username) with no authentication or authorization check (no security scheme in openapi3.yml). This leaks the mapping of books to owners to anonymous callers and aids exploitation of the BOLA in get_by_title.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for a Critical Function",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.misconfiguration.debug-mode-enabled",
+      "path": "app.py",
+      "start": {
+        "line": 17,
+        "col": 1,
+        "offset": 480
+      },
+      "end": {
+        "line": 17,
+        "col": 56,
+        "offset": 535
+      },
+      "extra": {
+        "message": "The application is started with vuln_app.run(host='0.0.0.0', port=5000, debug=True). Flask debug mode is enabled and the server binds to all interfaces, exposing the Werkzeug interactive debugger publicly. The debugger permits arbitrary code execution (e.g. via crafted console access) and leaks detailed stack traces, leading to remote code execution and information disclosure.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code",
+            "CWE-215: Insertion of Sensitive Information Into Debugging Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.plaintext-password-storage",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 804
+      },
+      "end": {
+        "line": 24,
+        "col": 33,
+        "offset": 836
+      },
+      "extra": {
+        "message": "User passwords are stored in plaintext: the password column is a plain db.String (models/user_model.py:15) and __init__ assigns self.password = password directly. Passwords are later compared with a direct equality check (request_data.get('password') == user.password in api_views/users.py:93). Any database read (e.g. via SQL injection or the unauthenticated /users/v1/_debug endpoint) immediately discloses every user's password, and plaintext comparison is also vulnerable to timing analysis.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password",
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}
