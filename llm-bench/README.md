@@ -85,8 +85,19 @@ python3 llm-bench/scripts/generate_llm_dashboard.py
 | **Pilot** | `run_pilot.py` | Single API call — all repo files sent in one prompt | Fast iteration, cheapest per run |
 | **Agentic** | `run_agentic.py` | LLM uses tools (read, grep, bash) to explore the repo via [OpenCode CLI](https://github.com/opencode-ai/opencode) | Realistic agent evaluation |
 | **Eval** | `run_eval.py` | OpenHands Docker sandbox with CodeActAgent | Isolated, reproducible runs |
+| **Claude Code** | `run_ca_claude_code.py` | Runs the Kolega Scan OSS claude-adaptation pipeline (threat-model → discovery → adversarial verify → variant hunt → triage) with headless **Claude Code** (`claude -p`) as the repo-navigating agent for each phase | Evaluating the structured find-and-fix method on Claude models |
 
 All runners produce the same output format: `scan-results/{repo}/{scanner-slug}/run-N.json`.
+
+The Claude Code runner reuses the shipping agentic pipeline from the public
+`kolega-security-scanner`, swapping only the agent backend to `claude -p
+--output-format json`. It captures each call's `total_cost_usd` and emits a
+`run-1.metrics.json` (cost + tokens + latency) so results score and cost-attribute on the
+dashboard like any other LLM scanner:
+
+```bash
+CC_MODEL=sonnet python3 llm-bench/scripts/run_ca_claude_code.py realvuln-pygoat
+```
 
 ### Common flags
 
