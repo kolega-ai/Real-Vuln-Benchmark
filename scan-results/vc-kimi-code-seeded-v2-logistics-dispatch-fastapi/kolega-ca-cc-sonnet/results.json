@@ -1,0 +1,532 @@
+{
+  "results": [
+    {
+      "path": "backend/app/routers/auth.py",
+      "check_id": "kolega.claude-adaptation.privilege-escalation",
+      "start": {
+        "line": 40,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Self-assigned role at registration \u2014 Unauthenticated attacker can create an ops_admin account and gain full administrative control over the system [verified: RegisterRequest.role (auth.py:20) is user-supplied and written directly to User.role (auth.py:33) with no server-side restriction, letting an anonymous caller register as ops_admin.]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-269"
+          ],
+          "kolega": {
+            "cluster_id": "privilege_escalation",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/auth.py",
+      "check_id": "kolega.claude-adaptation.broken-authentication",
+      "start": {
+        "line": 58,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Password-reset token usable as full session token \u2014 A leaked or intercepted password-reset token (e.g. from email logs, referrer headers, browser history) grants full account access for up to 1 hour without ever needing to reset the password. [verified: get_current_user (auth.py:86-101) only reads 'sub' and never checks payload['type'], while password-reset-request issues type:reset JWTs signed identically with 1h expiry (routers/auth.py:100); a leaked reset token thus authenticates as a full session token.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-287"
+          ],
+          "kolega": {
+            "cluster_id": "broken_authentication",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/config.py",
+      "check_id": "kolega.claude-adaptation.hardcoded-secret",
+      "start": {
+        "line": 7,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Hardcoded fallback JWT signing secret \u2014 Attacker with knowledge of the default key can forge valid JWTs for any user/role if the env var is not overridden in deployment [verified: config.py:7 hardcodes a known default SECRET_KEY used for HS256 JWT signing; any deployment omitting the env var is fully compromised via forged tokens.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "kolega": {
+            "cluster_id": "hardcoded_secret",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/config.py",
+      "check_id": "kolega.claude-adaptation.hardcoded-credentials",
+      "start": {
+        "line": 7,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Hardcoded fallback JWT signing secret \u2014 If SECRET_KEY env var is unset, an attacker who obtains the source (or guesses the well-known default) can forge JWTs impersonating any user, including ops_admin, achieving full privilege escalation. [verified: Same root cause as idx 0 \u2014 os.getenv fallback to a public string used as JWT signing key enables full auth bypass/privilege escalation if unset.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "kolega": {
+            "cluster_id": "hardcoded_credentials",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.broken-access-control",
+      "start": {
+        "line": 57,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Proof files served unauthenticated via static mount, bypassing ownership/visibility checks \u2014 Anyone who learns or guesses a proof's stored file_path can download another customer's proof-of-delivery photo/signature or an internal-only document with no authentication or authorization. [verified: main.py:57 mounts UPLOAD_DIR as a public StaticFiles route with no auth dependency, so anyone with a filename (e.g. leaked via logs, referer, or enumeration) can fetch it directly, fully bypassing download_proof's ownership/can_access_job and customer_visible checks in routers/proofs.py.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "broken_access_control",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/main.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 58,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Static file mount bypasses proof visibility/ownership access control \u2014 Unauthenticated or unauthorized users can read any uploaded proof-of-delivery file (signatures, photos, internal-only documents) by requesting /uploads/<filename> directly, bypassing the job-ownership and customer/internal visibility checks implemented in the proofs API \u2014 full disclosure of sensitive customer and internal files. [verified: Same root cause: app.mount('/uploads', StaticFiles(...)) at main.py:58 serves every file with zero authorization, while file_path is just uuid4+ext stored directly under UPLOAD_DIR with no per-request secret binding it to the download endpoint's access checks, so the static route is a full bypass of the ownership/visibility logic in proofs.py.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/jobs.py",
+      "check_id": "kolega.claude-adaptation.mass-assignment",
+      "start": {
+        "line": 163,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Mass assignment on job update allows privilege escalation / region bypass \u2014 Field workers or dispatchers can escalate privileges by reassigning jobs, altering internal-only fields, or bypassing dispatcher region scoping [verified: update_job (jobs.py:163-164) applies every JobUpdate field via setattr with only object-level can_modify_job check; a field_worker owning the job can set assigned_worker_id/region_id/internal_notes, and a dispatcher can change region_id to escape their permitted regions, since JobUpdate has no field-level allowlist.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "kolega": {
+            "cluster_id": "mass_assignment",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/messages.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 24,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Dispatcher message listing unscoped \u2014 cross-region/internal message disclosure \u2014 A dispatcher can read every message in the system, including internal-only messages and messages tied to jobs/regions they are not assigned to. [verified: list_messages only filters for customer and field_worker roles; dispatchers (and any other role) fall through with no filter, returning every Message row including is_internal=True ones outside their assigned jobs/region.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/reports.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 36,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Dispatcher region-scoping bypass on report export endpoints \u2014 A dispatcher scoped to one region can download a CSV export of ALL jobs/customers/workers across every region in the system, bypassing the region-based access boundary enforced elsewhere [verified: export_jobs only gates on require_roles(ops_admin, dispatcher) and applies region_id solely as an optional filter with no restriction to the dispatcher's DispatcherRegion set, unlike list_jobs in jobs.py which scopes dispatchers to permitted_regions.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/reports.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 69,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Dispatcher region-scoping bypass on route export endpoint \u2014 Dispatcher can export route/schedule data for regions outside their assignment [verified: export_routes has the identical gap: no DispatcherRegion-based filter is applied for dispatcher role, so a dispatcher can omit region_id or pass any region_id to pull route/stop data outside their assignment.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/reports.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 106,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Dispatcher region-scoping bypass on incident export endpoint \u2014 Dispatcher can export incident records (including sensitive descriptions/resolutions) for jobs in regions they are not authorized for [verified: export_incidents likewise lacks any dispatcher region scoping and includes the sensitive 'resolution' field, whereas list_incidents in incidents.py restricts dispatcher visibility to permitted regions.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/workers.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 58,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing authorization on worker job listing endpoint \u2014 Any authenticated user (including customer role) can enumerate worker_id values and retrieve job details, customer info, and status for jobs assigned to any field worker, bypassing the intended customer/worker/dispatcher scoping boundaries. [verified: list_worker_jobs only enforces ownership when role==field_worker; any other authenticated role (e.g. customer) hits get_current_user with no ownership/region check and can query any worker_id, exposing job and customer data across the ownership boundary.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/audit_log.py",
+      "check_id": "kolega.claude-adaptation.idor",
+      "start": {
+        "line": 39,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "IDOR on per-job audit log endpoint \u2014 Any dispatcher or field_worker can read the full audit trail (status changes, actor identities, IP addresses, internal actions) of any job in the system by supplying an arbitrary job_id, regardless of assignment or region. [verified: Same code confirms no ownership/region check ties caller to job_id, unlike job-scoped endpoints elsewhere that call can_access_job, allowing cross-tenant disclosure of audit trail data.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "idor",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/auth.py",
+      "check_id": "kolega.claude-adaptation.insecure-cookie",
+      "start": {
+        "line": 56,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Session cookie missing Secure flag \u2014 On any deployment reachable over HTTP, or under a network MITM downgrade, the session cookie can be captured in transit and replayed to hijack the victim's session. [verified: login() explicitly sets secure=False on the access_token cookie (auth.py:57), allowing it to be sent over plaintext HTTP and captured by a network attacker.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_cookie",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/auth.py",
+      "check_id": "kolega.claude-adaptation.weak-password-reset",
+      "start": {
+        "line": 95,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Password reset token not single-use; no rate limiting on reset requests \u2014 An attacker who captures a reset token can reuse it repeatedly before expiry (e.g. after the legitimate user already used it), and can spam password-reset emails to any address to enumerate accounts or harass users. [verified: password_reset_confirm never invalidates tokens after use (replay within the 1-hour window) and password_reset_request (auth.py:95-102) has no rate limiting or throttling on reset-email issuance.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-640"
+          ],
+          "kolega": {
+            "cluster_id": "weak_password_reset",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/auth.py",
+      "check_id": "kolega.claude-adaptation.weak-password-reset",
+      "start": {
+        "line": 110,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Password reset tokens not invalidated after use \u2014 A leaked/intercepted reset token can be replayed to repeatedly reset a victim's password within the token's validity window [verified: password_reset_confirm (auth.py:106-117) only checks JWT signature/exp/type and never consults or updates PasswordResetToken to mark it used, so the same token can be replayed until it expires.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-640"
+          ],
+          "kolega": {
+            "cluster_id": "weak_password_reset",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/imports.py",
+      "check_id": "kolega.claude-adaptation.hardcoded-credentials",
+      "start": {
+        "line": 43,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Hardcoded default password for CSV-imported customer accounts \u2014 Account takeover of any freshly-imported customer account via a well-known default password [verified: import_customers (imports.py:43) sets every CSV-imported customer's password to the static string 'changeme123' via get_password_hash, with no forced-reset flag, expiry, or randomization, and the account email is attacker/importer-controlled \u2014 anyone knowing an imported email can log in immediately.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "kolega": {
+            "cluster_id": "hardcoded_credentials",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/imports.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 120,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Region-scoping bypass via CSV import \u2014 Dispatcher can create/modify jobs in regions they are not authorized to manage, bypassing region-based access control [verified: import_jobs (imports.py:105-136) is accessible to UserRole.dispatcher and only validates that customer_id/region_id/service_type_id exist in the DB, unlike create_job in jobs.py:103-108 which enforces DispatcherRegion scoping for dispatchers \u2014 a region-restricted dispatcher can create jobs in unauthorized regions via CSV import.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/incidents.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-exposure",
+      "start": {
+        "line": 130,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Internal incident notes leaked to customers \u2014 Customers can read internal-only incident notes never meant for their visibility, exposing internal operational/security details [verified: IncidentOut always serializes internal_notes/resolution and the customer-branch in get_incident is a no-op pass, so authorized customers viewing their own job's incident receive internal-only fields.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_exposure",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/incidents.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-exposure",
+      "start": {
+        "line": 143,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Internal incident notes leaked to customers \u2014 A customer viewing an incident tied to their own job receives internal-only notes and resolution details never meant to be customer-visible, potentially exposing internal assessments, blame, or sensitive operational details. [verified: Same root cause confirmed at line 143-150: the stub explicitly does nothing to strip internal_notes/resolution before returning to customers, and no separate customer-facing schema exists.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_exposure",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/reports.py",
+      "check_id": "kolega.claude-adaptation.csv-injection",
+      "start": {
+        "line": 20,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in report exports \u2014 Formula/command execution on the machine of any staff member who opens the exported CSV, via a booked customer name or job description [verified: csv_response writes rows (including customer.full_name, job descriptions) via DictWriter with no sanitization of leading =/+/-/@ characters, and full_name is attacker-controlled via self-registration.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/routers/jobs.py",
+      "check_id": "kolega.claude-adaptation.broken-access-control",
+      "start": {
+        "line": 264,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Dashboard stats endpoint leaks global job counts to scoped roles \u2014 Customers and field workers can enumerate aggregate job counts (by status/priority) across the entire system, leaking business volume/operational data outside their tenant/assignment scope [verified: by_status and by_priority (jobs.py:264-269) issue fresh db.query(Job...) calls ignoring the role-scoped `query` variable built above, so any authenticated customer or field_worker gets global job-count aggregates instead of their own scope.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "kolega": {
+            "cluster_id": "broken_access_control",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,316 @@
+{
+  "results": [
+    {
+      "path": "backend/app/api/auth.py",
+      "check_id": "kolega.claude-adaptation.privilege-escalation",
+      "start": {
+        "line": 21,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Privilege escalation via self-assigned marketplace_admin role at registration \u2014 Unauthenticated attacker registers a new account with role=marketplace_admin, gaining full platform admin access (user management, payouts, moderation, audit logs, exports) with zero authorization checks. [verified: auth.py:20-21 accepts any client-supplied role string matching UserRole enum, including marketplace_admin, with no restriction to a safe subset; the frontend dropdown is not an enforced control.]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-269"
+          ],
+          "kolega": {
+            "cluster_id": "privilege_escalation",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/seller_operations.py",
+      "check_id": "kolega.claude-adaptation.mass-assignment",
+      "start": {
+        "line": 32,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Mass assignment of privileged fields via ops workset endpoint \u2014 An attacker holding (or having leaked) the internal ops token can set arbitrary keys including is_admin=true/role/credit_limit, effectively achieving privilege escalation via a poorly-scoped internal endpoint. [verified: seller_flags_munge_113 merges arbitrary client JSON into a privileged workset containing is_admin/role/credit_limit with no allow-list; this exact case is called out in the threat model's priority vuln classes despite the ops token gate.]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "kolega": {
+            "cluster_id": "mass_assignment",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/api/payouts.py",
+      "check_id": "kolega.claude-adaptation.idor",
+      "start": {
+        "line": 91,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "IDOR on payout retrieval for non-vendor-manager roles \u2014 Any authenticated buyer account can enumerate payout IDs and read any vendor's financial payout data, including bank destination and amount, with no ownership check. [verified: get_payout only checks ownership when current_user.role == VENDOR_MANAGER (payouts.py:87-89); any other authenticated role (e.g. BUYER) falls through with no check and reaches _enrich_payout, exposing another vendor's payout amount, status, and destination_bank/masked account details.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "kolega": {
+            "cluster_id": "idor",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/core/config.py",
+      "check_id": "kolega.claude-adaptation.hardcoded-secret",
+      "start": {
+        "line": 6,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Hardcoded/default JWT signing secret \u2014 Attacker who knows or brute-forces the default secret can forge valid JWTs for any user/role [verified: SECRET_KEY defaults to a publicly known string and .env.example ships the same value with no runtime check forcing an override, so a deployment that forgets to set env vars signs JWTs with a guessable key.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "kolega": {
+            "cluster_id": "hardcoded_secret",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/api/orders.py",
+      "check_id": "kolega.claude-adaptation.sensitive-data-exposure",
+      "start": {
+        "line": 144,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Internal order notes exposed to buyer/vendor \u2014 Buyers or vendors viewing their own order can read internal staff-only notes (e.g. fraud flags, investigation comments) not intended for their visibility. [verified: get_order (orders.py:131-144) authorizes buyer/vendor to view their own order but calls _enrich_order_detail unconditionally, which sets internal_notes=order.internal_notes for any authorized viewer with no role check, unlike disputes.py which gates internal_notes to admin/support.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_exposure",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/api/products.py",
+      "check_id": "kolega.claude-adaptation.mass-assignment",
+      "start": {
+        "line": 110,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Mass assignment of product status bypassing moderation workflow \u2014 A vendor can self-approve or otherwise manipulate a product's moderation status without admin review, undermining the platform's content moderation controls. [verified: ProductUpdate schema includes `status: ProductStatus | None`, and update_product applies all fields via setattr(exclude_unset) with only ownership checks (vendor owns product or admin) \u2014 no restriction on the status field, so any vendor can set status (e.g. PUBLISHED) themselves, bypassing the dedicated admin-only /moderate endpoint.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-915"
+          ],
+          "kolega": {
+            "cluster_id": "mass_assignment",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "frontend/src/contexts/AuthContext.jsx",
+      "check_id": "kolega.claude-adaptation.sensitive-data-exposure",
+      "start": {
+        "line": 35,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "JWT access token stored in localStorage (XSS-exfiltratable) \u2014 Any XSS vulnerability found elsewhere in the SPA lets an attacker read the token from localStorage and fully hijack the victim's session/API access, including admin sessions. [verified: AuthContext.jsx stores the JWT in localStorage and reads it for Authorization headers, while the backend already issues an httpOnly cookie in parallel that the frontend ignores; any XSS elsewhere in the SPA can read localStorage and exfiltrate the token. This is a genuine missing-control (no httpOnly protection used) rather than a false alarm since the safer mechanism exists but is unused.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-922"
+          ],
+          "kolega": {
+            "cluster_id": "sensitive_data_exposure",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/api/exports.py",
+      "check_id": "kolega.claude-adaptation.csv-injection",
+      "start": {
+        "line": 1,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in export files \u2014 A malicious vendor/buyer can plant a formula payload in a name/address/reason field; when an admin opens the exported CSV in Excel/Sheets it auto-executes, potentially exfiltrating data or running further attacks (DDE/formula abuse). [verified: csv.writer writes user-controlled fields (shipping_name, shipping_address, vendor business_name, dispute reason/resolution) with no leading-character escaping, so a payload like =cmd()| in these fields would be exported verbatim and could auto-execute when opened in Excel/Sheets by an admin.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "low"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/api/exports.py",
+      "check_id": "kolega.claude-adaptation.csv-injection",
+      "start": {
+        "line": 38,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in orders export \u2014 A buyer can set shipping_name/address starting with '=' to inject a spreadsheet formula that executes when an admin opens the exported orders CSV. [verified: buyer-supplied shipping_name/shipping_address written unescaped at exports.py:29-41 with no sanitization before CSV write.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/api/exports.py",
+      "check_id": "kolega.claude-adaptation.csv-injection",
+      "start": {
+        "line": 64,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in payouts export \u2014 A vendor can set a malicious business_name/bank field starting with '=' to achieve formula injection / code execution when an admin opens the exported CSV in Excel. [verified: business_name/destination_bank written unescaped via csv.writer at exports.py:64-74; no leading =/+/-/@ neutralization exists anywhere in this file.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/api/exports.py",
+      "check_id": "kolega.claude-adaptation.csv-injection",
+      "start": {
+        "line": 103,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in disputes export \u2014 A buyer/vendor can craft a dispute reason starting with '=' to trigger formula injection when an admin opens the exported CSV. [verified: dispute.reason is free text set by buyer/vendor and written unescaped to CSV at exports.py:97-108 with no sanitization.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "backend/app/api/exports.py",
+      "check_id": "kolega.claude-adaptation.csv-injection",
+      "start": {
+        "line": 139,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSV formula injection in inventory export \u2014 A vendor can name a product starting with '=' to inject a formula that executes when an admin/vendor-manager opens the exported inventory CSV. [verified: vendor-supplied p.name/sku/category written unescaped at exports.py:137-147 with no formula-injection guard.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "kolega": {
+            "cluster_id": "csv_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "frontend/src/App.jsx",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 48,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing client-side route authorization allows navigation to privileged admin pages \u2014 A low-privileged authenticated user can reach admin-only UI (UserManagement, Payouts, AuditLogs, Moderation, Exports) directly by URL; if any corresponding backend endpoint has a matching authorization gap, this becomes full IDOR/data exposure with no additional client-side friction to bypass. [verified: App.jsx confirms no client-side route guards exist for admin routes like /users, /payouts, /audit-logs \u2014 any authenticated user can mount these components. However, all corresponding backend endpoints (users.py, payouts.py, exports.py, audit_logs.py) enforce require_role([MARKETPLACE_ADMIN]) checks, so API calls from these pages will be rejected server-side with no data exposure.]",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    }
+  ]
+}
