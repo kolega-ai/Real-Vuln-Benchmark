@@ -76,7 +76,7 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
         "Bespoke Adaptation",
     ),
     "kolega-ca-cc-sonnet": (
-        "Claude Method - Sonnet 4.6",
+        "Anthropic Method - Sonnet 4.6",
         "sec",
         "Claude Code",
     ),
