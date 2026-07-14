@@ -1,0 +1,740 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 22
+      },
+      "end": {
+        "line": 22
+      },
+      "extra": {
+        "message": "SQL Injection in User Registration via f-string INSERT",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "insert_query = f\"INSERT INTO user (username, password_hash, balance) VALUES ('{username}', '{password_hash}', 0000.00)\"",
+          "proof": "SOURCE: username = data.get('username') at line 15 from unvalidated JSON POST body. SINK: The f-string at line 22 interpolates username directly into an INSERT statement with no parameterization. An attacker can inject SQL commands via the username field, e.g. username=\"admin', 'fakehash', 99999.99); --\" to create an admin account with arbitrary balance."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 36
+      },
+      "end": {
+        "line": 36
+      },
+      "extra": {
+        "message": "SQL Injection in Login Authentication Bypass via f-string SELECT",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "query = f\"SELECT * FROM user WHERE username = '{username}'\"",
+          "proof": "SOURCE: username = data.get('username') at line 32 from unvalidated JSON POST body. SINK: The f-string at line 36 interpolates username directly into a SELECT statement. An attacker logs in with username=\"' OR '1'='1' --\" to bypass authentication entirely, returning the first user row without needing a valid password."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "backend/routes/transaction_routes.py",
+      "start": {
+        "line": 49
+      },
+      "end": {
+        "line": 49
+      },
+      "extra": {
+        "message": "SQL Injection in Transaction Listing via user_id Query Parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "query = f'SELECT * FROM \"Transaction\" WHERE sender_id = {user_id} OR receiver_id = {user_id} ORDER BY created_at DESC'",
+          "proof": "SOURCE: user_id = request.args.get('user_id', current_user.id) at line 47 reads user_id from the query string, attacker-controlled. SINK: The f-string at line 49 interpolates user_id directly into SQL. An attacker sends GET /api/transactions?user_id=1 UNION SELECT 1,2,3,4,5,6,7,8 FROM user-- to dump all users' password hashes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "backend/routes/transaction_routes.py",
+      "start": {
+        "line": 93
+      },
+      "end": {
+        "line": 93
+      },
+      "extra": {
+        "message": "SQL Injection in Transaction Search via description Parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "query = f\"SELECT * FROM \\\"transaction\\\" WHERE (sender_id = {current_user.id} OR receiver_id = {current_user.id}) AND description LIKE '%{search_term}%'\"",
+          "proof": "SOURCE: search_term = request.args.get('description', '') at line 89 from the query string, attacker-controlled. SINK: The f-string at line 93 interpolates search_term directly into a LIKE clause with no escaping. Deliberately marked vulnerable in source code comment on line 92. An attacker can inject UNION SELECT to dump all user credentials."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-502",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 157
+      },
+      "end": {
+        "line": 157
+      },
+      "extra": {
+        "message": "YAML Deserialization RCE via Unsafe yaml.Loader",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "citation": "profile_data = yaml.load(profile_yaml, Loader=yaml.Loader)",
+          "proof": "SOURCE: profile_yaml = request.get_json().get('profile_yaml', '') at line 155 takes untrusted YAML string from authenticated user's POST body. SINK: yaml.load(profile_yaml, Loader=yaml.Loader) at line 157 deserializes with unsafe yaml.Loader (not SafeLoader), which can instantiate arbitrary Python objects via YAML tags like !!python/object/apply:os.system, achieving server-side RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 141
+      },
+      "end": {
+        "line": 141
+      },
+      "extra": {
+        "message": "Missing Authorization in Password Update (IDOR) - Change Any User's Password",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "user_id = data.get('user_id')",
+          "proof": "SOURCE: user_id = data.get('user_id') at line 141 from the JSON POST body, attacker-controlled with no validation against current_user. SINK: User.query.get(user_id).set_password(new_password) at lines 143-144. The @token_required decorator only ensures a valid token is present, but there is NO check that current_user.id matches the supplied user_id. Any authenticated user can POST {\"user_id\": 1, \"new_password\": \"pwned\"} to change any other user's password."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-321",
+      "path": "backend/auth.py",
+      "start": {
+        "line": 23
+      },
+      "end": {
+        "line": 23
+      },
+      "extra": {
+        "message": "Hardcoded Weak JWT Signing Secret Enables Token Forgery",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-321"
+          ],
+          "citation": "data = jwt.decode(token, 'secret', algorithms=['HS256'])",
+          "proof": "SOURCE: The literal string 'secret' hardcoded at line 23 of auth.py for token verification (and also in auth_routes.py line 48 for token creation). SINK: jwt.decode(token, 'secret', algorithms=['HS256']) validates tokens using this trivially guessable key. Anyone who reads the source code can forge valid JWTs for any user_id, impersonating any user."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "backend/routes/transaction_routes.py",
+      "start": {
+        "line": 47
+      },
+      "end": {
+        "line": 47
+      },
+      "extra": {
+        "message": "IDOR in Transaction Listing - View Any User's Financial Transactions",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "user_id = request.args.get('user_id', current_user.id)",
+          "proof": "SOURCE: request.args.get('user_id', current_user.id) at line 47 reads user_id from query string. The default is current_user.id but there is NO authorization check that the supplied user_id belongs to the authenticated user. SINK: The SQL query at line 49 uses this attacker-controlled user_id to filter transactions. An attacker sends GET /api/transactions?user_id=2 to view all of user 2's financial transactions."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-328",
+      "path": "backend/models.py",
+      "start": {
+        "line": 24
+      },
+      "end": {
+        "line": 24
+      },
+      "extra": {
+        "message": "Weak Unsalted MD5 Password Hashing Enables Credential Cracking",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-328"
+          ],
+          "citation": "self.password_hash = hashlib.md5(password.encode()).hexdigest()",
+          "proof": "SOURCE: password passed by the application on registration or password-change. SINK: hashlib.md5(password.encode()).hexdigest() at line 24 hashes it with the broken MD5 algorithm with no salt. MD5 can be cracked at billions of hashes per second. If an attacker exploits any SQL injection to dump password_hash values, they can trivially reverse all user passwords. Same weakness exists in check_password() at line 27."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "backend/app.py",
+      "start": {
+        "line": 93
+      },
+      "end": {
+        "line": 93
+      },
+      "extra": {
+        "message": "Cleartext Storage of Social Security Numbers and PII in User Profiles",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "'ssn': '123-45-6789'  # Intentionally exposed sensitive data",
+          "proof": "SOURCE: Hardcoded profile dictionaries at lines 88-152 in app.py contain 'ssn', 'dob', 'phone', and 'address' fields for all six test users. SINK: user.set_profile(profile_data) calls json.dumps() (models.py:39) and stores the entire profile JSON in the SQLite TEXT column. The get_profile() endpoint returns all profile fields including SSN. Any attacker who exploits SQL injection, IDOR, or weak JWT secret can read PII for every user."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-942",
+      "path": "backend/app.py",
+      "start": {
+        "line": 50
+      },
+      "end": {
+        "line": 50
+      },
+      "extra": {
+        "message": "Permissive CORS Reflecting Arbitrary Origins with Credentials Enables Cross-Origin Data Theft",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "citation": "origin = request.headers.get('Origin')\n    if origin:\n        response.headers.add('Access-Control-Allow-Origin', origin)\n        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')\n        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')\n        response.headers.add('Access-Control-Allow-Credentials', 'true')",
+          "proof": "SOURCE: request.headers.get('Origin') at line 50 reflects any attacker-supplied Origin back in the response. SINK: response.headers.add() at lines 52-55 injects it into CORS headers with Access-Control-Allow-Credentials: true. An attacker hosting evil.com can craft a page that makes authenticated fetch() requests to the API; the browser will include credentials since the CORS policy trusts any origin with credentials."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-20",
+      "path": "backend/routes/transaction_routes.py",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "Missing Validation of Transfer Amount Allows Negative Values (Theft)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-20"
+          ],
+          "citation": "amount = Decimal(str(data.get('amount', 0)))",
+          "proof": "SOURCE: amount = Decimal(str(data.get('amount', 0))) at line 14 from user-controlled JSON body without checking that value > 0. SINK: The balance check 'if current_user.balance < amount' at line 31 passes for negative amounts (a positive balance is not less than a negative number, so the check is False). Then 'current_user.balance -= amount' at line 34 adds to the sender's balance (subtracting a negative = addition), while 'receiver.balance += amount' at line 35 subtracts from the receiver's balance. By specifying the victim's ID as to_user_id and a negative amount, an attacker drains the victim's account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-362",
+      "path": "backend/routes/transaction_routes.py",
+      "start": {
+        "line": 30
+      },
+      "end": {
+        "line": 30
+      },
+      "extra": {
+        "message": "Race Condition in Balance Check and Deduction Enables Double-Spending",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-362"
+          ],
+          "citation": "if current_user.balance < amount:\n        return jsonify({'error': 'Insufficient balance'}), 400\n\ncurrent_user.balance -= amount\nreceiver.balance += amount",
+          "proof": "SOURCE: amount and to_user_id from request.get_json() (line 12-14). SINK: Balance check (line 30) and balance updates (lines 33-34) are not wrapped in an atomic transaction. With SQLAlchemy isolation_level=None (autocommit, app.py:25) and WAL mode, each ORM flush issues individual UPDATE statements. Concurrent transfer requests can all read the same balance before any UPDATE commits, allowing an attacker to spend the same funds multiple times."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "backend/app.py",
+      "start": {
+        "line": 228
+      },
+      "end": {
+        "line": 228
+      },
+      "extra": {
+        "message": "Active Flask Debug Mode Enables Remote Code Execution via Werkzeug Console",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "app.run(host='0.0.0.0', debug=True, port=5000)",
+          "proof": "SOURCE: Any malformed request body/header triggers an unhandled exception. SINK: debug=True (line 228) enables the Werkzeug interactive debugger. When an exception occurs, the debugger presents a Python console in the browser. An attacker can use this console to execute arbitrary Python code, achieving full server-side RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 31
+      },
+      "end": {
+        "line": 31
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Login Endpoint Enables Brute-Force Attacks",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def login():",
+          "proof": "SOURCE: username and password from request.get_json() (untrusted). SINK: The login handler (line 31) attempts authentication without any rate limiting, CAPTCHA, or account lockout mechanism. An attacker can submit unlimited authentication requests to brute-force passwords for any user account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-525",
+      "path": "frontend/src/App.js",
+      "start": {
+        "line": 52
+      },
+      "end": {
+        "line": 52
+      },
+      "extra": {
+        "message": "JWT Token Stored in Browser localStorage Exposes Session to XSS Theft",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-525"
+          ],
+          "citation": "localStorage.setItem('token', data.token);",
+          "proof": "SOURCE: The JWT returned by the login API response. SINK: Stored in window.localStorage (line 52), making it accessible to any JavaScript executing on the same origin. Unlike HTTP-only cookies, localStorage has no protection against script access. If an XSS vulnerability exists anywhere in the application, an attacker can read localStorage.getItem('token') and exfiltrate the JWT to perform session hijacking."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "backend/app.py",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "Hardcoded Flask SECRET_KEY Enables Session Forgery",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "app.config['SECRET_KEY'] = 'supersecret'",
+          "proof": "SOURCE: Literal string 'supersecret' hardcoded at line 16. SINK: Flask uses this key to sign session cookies and cryptographic tokens via itsdangerous. An attacker who knows this key (exposed in source) can forge valid Flask session cookies to bypass server-side session-based auth, tamper with flash messages, or exploit any Flask feature relying on signed payloads."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "backend/app.py",
+      "start": {
+        "line": 67
+      },
+      "end": {
+        "line": 67
+      },
+      "extra": {
+        "message": "Error Handlers Leak Internal Exception Details to Users",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "def not_found_error(error):\n    return jsonify({'error': str(error)}), 404\n\n@app.errorhandler(500)\ndef internal_error(error):\n    db.session.rollback()\n    return jsonify({'error': str(error)}), 500",
+          "proof": "SOURCE: Flask's internal exception objects from any unhandled error. SINK: str(error) at lines 68 and 72 converts the entire exception (including SQLAlchemy internals, file paths, and query fragments) into a string returned verbatim in the JSON response. An attacker who triggers database errors, type errors, or assertion failures receives raw exception messages, aiding further exploitation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "backend/app.py",
+      "start": {
+        "line": 84
+      },
+      "end": {
+        "line": 84
+      },
+      "extra": {
+        "message": "All Six Test Users Share the Same Hardcoded Weak Password",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "'username': 'alice',\n'password': 'password123'",
+          "proof": "SOURCE: Hardcoded user dictionaries in init_db() (lines 82-150) set 'password': 'password123' for all six users. SINK: init_db() calls user.set_password(user_data['password']) which hashes with MD5 and stores the hash. Any attacker who compromises one account (e.g., via SQL injection, weak JWT, or YAML RCE) instantly knows every other user's password is also 'password123'."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 48
+      },
+      "end": {
+        "line": 48
+      },
+      "extra": {
+        "message": "Hardcoded Weak JWT Signing Secret in Token Creation Endpoint",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "'secret',",
+          "proof": "SOURCE: Literal string 'secret' hardcoded at line 48 as the jwt.encode() signing key. SINK: This secret signs all JWT tokens issued at login (lines 42-51). An attacker with read access to the source code can forge arbitrary JWTs for any user_id, impersonate any user, and perform all operations as that user."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 139
+      },
+      "end": {
+        "line": 139
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Password Update Endpoint Enables Abuse",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "def update_password(current_user):",
+          "proof": "SOURCE: The update_password handler (line 139) accepts arbitrary POST requests from any authenticated user with no throttling. The user_id is taken from the request body (line 141, also an IDOR). SINK: The endpoint calls user.set_password(new_password) and db.session.commit() (lines 144-145). An attacker can issue hundreds of password-change requests per second, exhausting database write capacity or rapidly cycling passwords."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 13
+      },
+      "end": {
+        "line": 13
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on User Registration Endpoint Enables Mass Account Creation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "def register():",
+          "proof": "SOURCE: The register handler (line 13) accepts POST requests with no throttling or CAPTCHA. SINK: Each request creates a new user record via db.session.execute(insert_query) and db.session.commit(). An attacker can automate mass account creation, exhausting database storage and filling the user table with spam accounts."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "backend/routes/transaction_routes.py",
+      "start": {
+        "line": 11
+      },
+      "end": {
+        "line": 11
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Transfer Endpoint Enables Automated Financial Attack",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "def transfer(current_user):",
+          "proof": "SOURCE: The transfer handler (line 11) accepts POST requests with no throttling. SINK: Each request deducts from sender balance and credits receiver balance (lines 33-34). An attacker can automate hundreds of transfers per second, amplifying the race condition (CWE-362) by making concurrent requests more likely to produce double-spending, or rapidly draining accounts."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "docker-compose.yml",
+      "start": {
+        "line": 15
+      },
+      "end": {
+        "line": 15
+      },
+      "extra": {
+        "message": "Hardcoded Flask SECRET_KEY Exposed in Docker Compose Configuration",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "      - SECRET_KEY=supersecret",
+          "proof": "SOURCE: The string 'supersecret' is hardcoded at docker-compose.yml:15 in the environment block. SINK: This SECRET_KEY is passed as an environment variable to the Flask container and used as app.config['SECRET_KEY'] (app.py:16). The docker-compose file is typically committed to version control, making the secret visible to anyone with repository access. Any attacker who clones the repo can use this key to forge Flask session cookies and decrypt session data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-359",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 95
+      },
+      "end": {
+        "line": 95
+      },
+      "extra": {
+        "message": "Sensitive PII (SSN / DOB) Exposed in /api/me API Response",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-359"
+          ],
+          "citation": "        'profile': current_user.get_profile()",
+          "proof": "SOURCE: User.profile column stores full JSON including 'ssn' and 'dob' fields (seeded at app.py:84-140). SINK: auth_routes.py:95 returns current_user.get_profile() in the GET /api/me JSON response. get_profile() (models.py:33-34) calls json.loads() on the raw profile TEXT column, deserializing ALL fields including SSN (e.g. '123-45-6789') and DOB. The frontend calls /api/me on every page load to populate the dashboard but never uses SSN or DOB. Any bearer of a valid JWT receives their full PII in plaintext over the wire."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 164
+      },
+      "end": {
+        "line": 164
+      },
+      "extra": {
+        "message": "YAML Parse Error Details Leaked via str(e) in Profile Import Handler",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "        return jsonify({'error': str(e)}), 400",
+          "proof": "SOURCE: Any Exception raised during yaml.load() or set_profile() in the POST /api/profile/import endpoint (auth_routes.py:152-164). SINK: auth_routes.py:164 returns str(e) in the JSON response. PyYAML parse errors frequently include internal data representations and Python object type information. An attacker sending malformed YAML can probe the server's internal state through error messages."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on User Registration Endpoint Enables Mass Account Creation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@auth_bp.route('/api/register', methods=['POST'])",
+          "proof": "SOURCE: Unauthenticated POST requests to /api/register (auth_routes.py:12-28). SINK: The register() function has no rate-limiting decorator, no IP-based throttling, no CAPTCHA, and no per-IP cooldown. An attacker can script thousands of account registrations per second, exhausting database resources, polluting the user table, and bypassing any downstream abuse detection. The LoginAttempt model tracks login attempts but the register endpoint creates no similar audit trail or throttle."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 133
+      },
+      "end": {
+        "line": 133
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Password Update Endpoint Enables Brute-Force Password Changes",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@auth_bp.route('/api/update-password', methods=['POST'])",
+          "proof": "SOURCE: Authenticated POST requests to /api/update-password (auth_routes.py:133-142) from any bearer of a valid JWT. SINK: The update_password() function has no rate limiting. Combined with the IDOR (already-found CWE-862 at the same endpoint), an attacker with any valid token can brute-force password changes against arbitrary user_id values at unlimited speed. An attacker can also use this for denial-of-service by rapidly cycling passwords on target accounts."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-693",
+      "path": "backend/app.py",
+      "start": {
+        "line": 47
+      },
+      "end": {
+        "line": 47
+      },
+      "extra": {
+        "message": "Missing Security Headers on All HTTP Responses (No CSP, HSTS, X-Frame-Options, X-Content-Type-Options)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-693"
+          ],
+          "citation": "@app.after_request",
+          "proof": "SOURCE: The after_request handler at app.py:47-56 is the only response-modification hook. It sets permissive CORS headers but omits ALL standard defensive security headers. SINK: Every HTTP response from the Flask application lacks: (1) Content-Security-Policy \u2014 no XSS mitigation; (2) X-Content-Type-Options: nosniff \u2014 browsers may MIME-sniff and execute malicious content; (3) X-Frame-Options \u2014 application is clickjackable; (4) Strict-Transport-Security \u2014 no HTTPS enforcement; (5) X-XSS-Protection \u2014 no browser XSS filter. The absence of these headers increases the attack surface for every client-side vulnerability."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "User Enumeration via Registration Response \u2014 Reveals Whether Username Exists",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "        return jsonify({'error': 'Username already exists'}), 400",
+          "proof": "SOURCE: data.get('username') at line 14 reads attacker-controlled username from unauthenticated POST body. SINK: line 18 checks User.query.filter_by(username=username).first() and line 19 returns a distinct HTTP 400 error 'Username already exists' when the username is taken, versus HTTP 201 'User registered successfully' for a new username. An unauthenticated attacker can brute-force usernames/emails and map the entire user directory with no rate limiting on this endpoint."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "backend/routes/transaction_routes.py",
+      "start": {
+        "line": 20
+      },
+      "end": {
+        "line": 20
+      },
+      "extra": {
+        "message": "User Enumeration via Transfer Endpoint \u2014 Reveals Valid User IDs",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "        return jsonify({'error': 'Receiver not found'}), 404",
+          "proof": "SOURCE: data.get('to_user_id') at line 13 reads attacker-controlled user ID from authenticated POST body. SINK: lines 17-20 perform User.query.get(to_user_id) and return distinct HTTP 404 'Receiver not found' for nonexistent IDs versus 'Insufficient balance' (400) or success for valid existing users. An authenticated attacker can iterate user IDs to enumerate all valid accounts on the platform."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "backend/routes/transaction_routes.py",
+      "start": {
+        "line": 41
+      },
+      "end": {
+        "line": 41
+      },
+      "extra": {
+        "message": "Unbounded Transaction Listing \u2014 No Pagination or Result Limit Enables Memory Exhaustion",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "    transactions = result.fetchall()",
+          "proof": "SINK: line 41 calls result.fetchall() with no LIMIT clause in the SQL query at line 39 and no pagination parameters accepted. The endpoint loads every matching row into a Python list in memory and serializes it all to JSON. An attacker who creates thousands of transactions (the transfer endpoint at line 9 has no rate limiting) can cause server memory exhaustion and OOM termination on every request to /api/transactions."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "backend/routes/transaction_routes.py",
+      "start": {
+        "line": 95
+      },
+      "end": {
+        "line": 95
+      },
+      "extra": {
+        "message": "Unbounded Transaction Search \u2014 No Pagination or Result Limit Enables Memory Exhaustion",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "    transactions = result.fetchall()",
+          "proof": "SINK: line 95 calls result.fetchall() with no LIMIT clause in the SQL query at line 92 and no pagination parameters. The LIKE '%...%' search can match broad result sets. Even without exploiting the SQL injection (already found at line 92), an attacker can search with an empty or single-character term to force retrieval of every transaction for the current user, loading all rows into memory and exhausting server resources."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 86
+      },
+      "end": {
+        "line": 86
+      },
+      "extra": {
+        "message": "Insufficient Session Expiration \u2014 Logout Does Not Revoke JWT Tokens Server-Side",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "    return jsonify({'message': 'Logged out successfully'})",
+          "proof": "SINK: lines 84-86 explicitly admit JWT tokens cannot be invalidated server-side and perform no revocation (no token blacklist, no version counter, no Redis revocation set). The @token_required decorator in auth.py line 16 only validates the JWT signature and expiry \u2014 it has no mechanism to check if the token was revoked. A stolen JWT (e.g., exfiltrated from localStorage via XSS) remains valid for up to 24 hours even after the victim clicks 'Logout.' For a banking application, the inability to terminate sessions is critical."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "backend/routes/auth_routes.py",
+      "start": {
+        "line": 146
+      },
+      "end": {
+        "line": 146
+      },
+      "extra": {
+        "message": "Password Change Does Not Revoke Existing JWT Tokens",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "user.set_password(new_password)\ndb.session.commit()",
+          "proof": "SOURCE: data.get('new_password') at line 142 from authenticated POST body. SINK: lines 146-147 call user.set_password(new_password) and commit the credential change, but no mechanism exists to invalidate existing JWTs. The JWT (created at /api/login lines 42-49) contains only user_id, username, and exp claims \u2014 no iat, jti, or token_version. The token_required decorator (auth.py:16-19) only decodes the token and looks up the user by id; it never checks a password-change timestamp or revocation set. An attacker who previously stole a victim's token retains full access indefinitely after the victim rotates their password."
+        }
+      }
+    }
+  ]
+}

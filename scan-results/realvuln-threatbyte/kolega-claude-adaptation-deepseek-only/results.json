@@ -1,0 +1,782 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "server/routes.py",
+      "start": {
+        "line": 137
+      },
+      "end": {
+        "line": 137
+      },
+      "extra": {
+        "message": "SQL Injection in file search query parameter",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "s_query = f\"SELECT filename FROM files WHERE user_id = {user_id} AND filename LIKE '%{search_query}%'\"",
+          "proof": "SOURCE: search_query = request.args.get('search', '') at line 125 is attacker-controlled via URL query string. SINK: The f-string on line 137 directly interpolates search_query into the SQL statement without parameterization. An attacker can craft ?search=' UNION SELECT sqlite_version()-- to extract database metadata, or exfiltrate data via blind boolean-based injection since the result set (file list) is rendered on the dashboard."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "client/templates/dashboard.html",
+      "start": {
+        "line": 64
+      },
+      "end": {
+        "line": 64
+      },
+      "extra": {
+        "message": "Reflected XSS via search query parameter with safe filter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "<input type=\"text\" name=\"search\" placeholder=\"Search files...\" value=\"{{ search_query | safe }}\">",
+          "proof": "SOURCE: search_query originates from request.args.get('search', '') in routes.py line 125. SINK: It is rendered with the Jinja2 | safe filter at dashboard.html line 64, which bypasses auto-escaping. An attacker sends a victim ?search=<script>alert(document.cookie)</script> to execute arbitrary JS in the victim's session."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "client/templates/profile.html",
+      "start": {
+        "line": 41
+      },
+      "end": {
+        "line": 41
+      },
+      "extra": {
+        "message": "Stored XSS via user-controlled country field with safe filter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "<p><strong>Country:</strong> {{ user.country | safe}}</p>",
+          "proof": "SOURCE: country = request.form.get('country') at routes.py line 86 is user-controlled at signup. SINK: Stored in DB, then rendered with | safe filter at profile.html line 41, bypassing auto-escaping. An attacker registers with country=<img src=x onerror=alert(1)> and every visitor to that user's profile executes the payload."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-269",
+      "path": "server/routes.py",
+      "start": {
+        "line": 190
+      },
+      "end": {
+        "line": 190
+      },
+      "extra": {
+        "message": "Privilege escalation via unprotected role/permissions fields in profile update",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-269"
+          ],
+          "citation": "if 'role' not in request.form:\n        role = current_user['role']\n    else:\n        role = request.form['role'] or current_user['role']\n...\nif 'permissions' not in request.form:\n        permissions = current_user['permissions']\n    else:\n        permissions = request.form['permissions']",
+          "proof": "SOURCE: request.form['role'] and request.form['permissions'] (lines 190, 196) are attacker-controlled POST body fields. SINK: These values are directly used in the UPDATE query (line 205) with no authorization check. A low-privilege user can escalate to admin by sending POST /update_profile with role=admin&permissions=all."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-918",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 254
+      },
+      "end": {
+        "line": 254
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery in profile picture update endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "citation": "response = requests.get(picture_url)",
+          "proof": "SOURCE: picture_url = data['picture_url'] at api_v1.py line 252 is attacker-controlled JSON payload. SINK: requests.get(picture_url) at line 254 fetches the URL server-side with no allowlist/validation. Attacker can probe internal services (http://169.254.169.254/latest/meta-data/ on cloud, http://localhost:5000/ etc.) or use the server as a proxy."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 223
+      },
+      "end": {
+        "line": 223
+      },
+      "extra": {
+        "message": "Missing authorization on user delete API endpoint",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "#@token_required\n    #def delete(self, current_user, user_id):\n    def delete(self, user_id):",
+          "proof": "SOURCE: The @token_required decorator is commented out (lines 221-222); user_id path parameter is fully attacker-controlled. SINK: def delete(self, user_id) at line 223 executes DELETE FROM users WHERE id = ? with zero authentication. Any unauthenticated attacker can delete any user by sending DELETE /api/v1/delete-user/1."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 154
+      },
+      "end": {
+        "line": 154
+      },
+      "extra": {
+        "message": "IDOR on user profile API with no authentication",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "#@token_required\n    #def get(self, current_user):\n    def get(self):",
+          "proof": "SOURCE: The @token_required decorator is commented out (lines 152-153); user_id = args.get('user_id') is attacker-controlled via query string. SINK: def get(self) at line 154 returns any user's profile including sensitive fields role and permissions. An attacker can enumerate all users by iterating user_id values."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "server/routes.py",
+      "start": {
+        "line": 264
+      },
+      "end": {
+        "line": 264
+      },
+      "extra": {
+        "message": "Unrestricted file upload with no type validation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "filename = file.filename\n            filepath = os.path.join(UPLOAD_FOLDER, filename)\n            file.save(filepath)",
+          "proof": "SOURCE: file.filename (line 262) and request.files['file'] are attacker-controlled. SINK: file.save(filepath) at line 264 writes arbitrary file content to disk with no content-type or extension check. An attacker can upload a .html file with JavaScript payload, then access it at /uploads/payload.html to achieve XSS, or overwrite application files if path traversal is present in filename."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-327",
+      "path": "server/routes.py",
+      "start": {
+        "line": 403
+      },
+      "end": {
+        "line": 403
+      },
+      "extra": {
+        "message": "Weak password hashing with MD5",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-327"
+          ],
+          "citation": "return hashlib.md5(password.encode()).hexdigest()",
+          "proof": "SOURCE: custom_hash(password) is called on signup (line 91) and login (line 53) for all users. SINK: hashlib.md5(password.encode()).hexdigest() at line 403 produces an MD5 hash. MD5 is trivially brute-forced; an attacker who obtains the database can crack all user passwords instantly with rainbow tables or GPU-based cracking."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "server/config.py",
+      "start": {
+        "line": 7
+      },
+      "end": {
+        "line": 7
+      },
+      "extra": {
+        "message": "Hardcoded weak secret key used for session signing and JWT",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "SECRET_KEY = \"just_another_secret\" # application secret",
+          "proof": "SOURCE: Secret key is a hardcoded weak string in source control (config.py line 7). SINK: Used by Flask session signing and JWT encoding/decoding (api_v1.py lines 94, 133). An attacker who knows this key can forge arbitrary session cookies and JWT tokens, impersonate any user, and escalate to admin."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1004",
+      "path": "server/config.py",
+      "start": {
+        "line": 6
+      },
+      "end": {
+        "line": 6
+      },
+      "extra": {
+        "message": "Session cookie missing HttpOnly flag",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1004"
+          ],
+          "citation": "SESSION_COOKIE_HTTPONLY = False",
+          "proof": "SOURCE: Config explicitly disables HttpOnly at config.py line 6. SINK: Applied in run.py line 9 via app.config['SESSION_COOKIE_HTTPONLY'] = Config.SESSION_COOKIE_HTTPONLY. Since the cookie is accessible via document.cookie, any XSS vulnerability (findings 2 and 3) can trivially exfiltrate the session cookie, leading to account takeover."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-732",
+      "path": "server/config.py",
+      "start": {
+        "line": 5
+      },
+      "end": {
+        "line": 5
+      },
+      "extra": {
+        "message": "Debug mode enabled in production",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-732"
+          ],
+          "citation": "DEBUG = True",
+          "proof": "SOURCE: Config.DEBUG = True at config.py line 5. SINK: app.run(debug=debug_mode) at run.py line 10 runs Flask in debug mode. This enables the Werkzeug debugger which allows arbitrary code execution via the debugger console, and leaks detailed stack traces on errors including environment variables and source code snippets."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "server/routes.py",
+      "start": {
+        "line": 188
+      },
+      "end": {
+        "line": 188
+      },
+      "extra": {
+        "message": "Mass Assignment / Privilege Escalation via role and permissions form fields",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "role = request.form['role'] or current_user['role']",
+          "proof": "SOURCE: request.form['role'] at line 188 and request.form['permissions'] at line 194, taken directly from the POST form body with no authorization check on whether the user is allowed to set these fields. SINK: The UPDATE query at line 234 writes these values to the users table. Any authenticated user can include role=admin in their profile update POST and escalate to administrator privileges. The API equivalent at api_v1.py correctly restricts role/permissions to admin users only, but this web form route does not."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 223
+      },
+      "end": {
+        "line": 223
+      },
+      "extra": {
+        "message": "Missing authentication on user deletion endpoint",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "def delete(self, user_id):",
+          "proof": "The @token_required decorator is commented out at line 221-222, and the method has no session check or any other authentication. SOURCE: user_id from the URL path parameter. SINK: cursor.execute(\"DELETE FROM users WHERE id = ?\", (user_id,)) at line 234. Any unauthenticated attacker can send a DELETE request to /api/v1/delete-user/<id> and delete any user from the database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-319",
+      "path": "run.py",
+      "start": {
+        "line": 10
+      },
+      "end": {
+        "line": 10
+      },
+      "extra": {
+        "message": "Cleartext transmission of sensitive information \u2014 Flask app runs without SSL/TLS",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-319"
+          ],
+          "citation": "app.run(debug=debug_mode)",
+          "proof": "SOURCE: The Flask application is started at run.py line 10 with app.run(debug=debug_mode) - no ssl_context argument, meaning the development server binds only to HTTP (no HTTPS). The login form at routes.py sends username and password via POST over this unencrypted channel. The session cookie is transmitted in cleartext on every request. SINK: Any network intermediary (compromised router, ARP-spoofed WiFi, ISP) can intercept credentials and session tokens passively."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-434",
+      "path": "server/routes.py",
+      "start": {
+        "line": 214
+      },
+      "end": {
+        "line": 214
+      },
+      "extra": {
+        "message": "Unrestricted file upload in profile picture endpoint \u2014 no content-type validation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-434"
+          ],
+          "citation": "file.save(os.path.join(PROFILE_PICTURES_UPLOAD_FOLDER, filename))",
+          "proof": "SOURCE: The file object comes from request.files['profile_picture'] at line 200, which is fully attacker-controlled via the multipart form submission to /update_profile. SINK: At line 214, file.save() writes the raw bytes to disk without any content-type validation, magic-byte verification, or file signature check. The filename extension is forced to .png (line 213), but this is cosmetic \u2014 the file contents can be arbitrary (HTML with JavaScript, PHP webshell, polyglot malware). Flask's send_from_directory serves these files statically, and browsers may MIME-sniff and render HTML content."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "server/routes.py",
+      "start": {
+        "line": 21
+      },
+      "end": {
+        "line": 21
+      },
+      "extra": {
+        "message": "No CSRF protection on any state-changing endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route('/login', methods=['GET', 'POST'])",
+          "proof": "The application never imports or enables Flask-WTF CSRF protection, nor does it include any custom CSRF token validation. Every POST endpoint \u2014 login (line 21), signup (line 65), update_profile (line 168), upload_file (line 248), delete_file (line 340) \u2014 accepts requests without requiring a CSRF token. An attacker can craft an HTML form that auto-submits to /update_profile and change the victim's email, country, role, or permissions if the victim visits a malicious page while logged in."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "run.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "Session cookie missing Secure flag",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "app.config['SESSION_COOKIE_NAME'] = 'session_token'",
+          "proof": "run.py configures SESSION_COOKIE_NAME and SESSION_COOKIE_HTTPONLY but never sets SESSION_COOKIE_SECURE; Flask defaults this to False. The session cookie is transmitted over unencrypted HTTP, allowing network attackers to capture the session token via passive eavesdropping (session hijacking). Even if HTTPS were added later, this cookie would still be sent over HTTP."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1275",
+      "path": "run.py",
+      "start": {
+        "line": 8
+      },
+      "end": {
+        "line": 8
+      },
+      "extra": {
+        "message": "Session cookie missing SameSite attribute",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1275"
+          ],
+          "citation": "app.config['SESSION_COOKIE_NAME'] = 'session_token'",
+          "proof": "run.py never sets SESSION_COOKIE_SAMESITE; Flask defaults to None, producing no SameSite attribute on the Set-Cookie header. This makes cross-site request forgery substantially easier because the cookie is sent on all cross-origin requests, including simple POST forms from an attacker's page."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "server/routes.py",
+      "start": {
+        "line": 308
+      },
+      "end": {
+        "line": 308
+      },
+      "extra": {
+        "message": "Profile pictures endpoint missing any authentication or authorization check",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def profile_pictures(filename):\\n    return send_from_directory(PROFILE_PICTURES_UPLOAD_FOLDER, filename)",
+          "proof": "The /uploads/profile_pictures/<filename> route at line 308 serves all profile picture files with zero authentication \u2014 no session check, no token, no user ownership validation. Any unauthenticated attacker can enumerate and download every user's profile picture by guessing numeric IDs (filenames are incremental integers like '1.png', '2.png')."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 298
+      },
+      "end": {
+        "line": 298
+      },
+      "extra": {
+        "message": "Exception stack trace and internal details leaked to API client",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "return {'message': str(e)}, 500",
+          "proof": "In the ProfilePicture.post() handler, the entire try/except block passes the raw exception message str(e) directly to the HTTP response. If requests.get(picture_url) fails \u2014 e.g., DNS resolution failure, socket timeout, server error \u2014 the underlying Python exception message (which may include file paths, network topology, or DB connection URIs) is returned verbatim to the attacker in the 500 response body."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 182
+      },
+      "end": {
+        "line": 182
+      },
+      "extra": {
+        "message": "Session object printed to server logs exposing session data",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print(session)",
+          "proof": "In UserProfileUpdate.post() at api_v1.py line 182, the entire Flask session dictionary is written to stdout via print(session) on every request. The session object contains the username and user_id of the currently logged-in user. In containerised or shared-server deployments where logs are aggregated (e.g., Docker, ELK, CloudWatch), any team member with log access can see every user's session data, enabling session hijacking and user enumeration."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "server/routes.py",
+      "start": {
+        "line": 100
+      },
+      "end": {
+        "line": 100
+      },
+      "extra": {
+        "message": "Database exception details printed to stdout",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print(\"Error inserting user:\", e)",
+          "proof": "In the signup() POST handler at routes.py line 100, the raw database exception 'e' is printed to stdout. The same pattern occurs at routes.py line 243 (print(\"SQLite error:\", e)). These messages can leak table schemas, constraint names, and tuple data to console logs. An attacker triggering unique constraint violations (e.g., duplicate username) causes the DB driver to emit details that a log miner could use for schema fingerprinting."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "server/routes.py",
+      "start": {
+        "line": 21
+      },
+      "end": {
+        "line": 21
+      },
+      "extra": {
+        "message": "No rate limiting or brute-force protection on login or signup",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.route('/login', methods=['GET', 'POST'])",
+          "proof": "The login endpoint (routes.py line 21 POST path), signup endpoint (routes.py line 65 POST path), and API login endpoint (api_v1.py line 110 POST) all lack any throttling, account lockout, CAPTCHA, or progressive delay. An attacker can script thousands of password guesses per minute against arbitrary usernames. The login code compares the password hash with MD5, compounding the brute-force risk because MD5 hashes are trivially fast to compute."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 132
+      },
+      "end": {
+        "line": 132
+      },
+      "extra": {
+        "message": "JWT token with excessive 24-hour expiry and no refresh/revocation mechanism",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)  # Token expires in 24 hours",
+          "proof": "The JWT issued at api_v1.py line 130-133 sets a 24-hour expiration window (line 132). The code provides no token-refresh endpoint, no blacklist, and no revocation mechanism. Combined with the weak HS256 secret key (Config.SECRET_KEY = 'just_another_secret'), a stolen or forged JWT enables persistent authenticated API access for up to 24 hours with no way to revoke it."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "server/routes.py",
+      "start": {
+        "line": 65
+      },
+      "end": {
+        "line": 65
+      },
+      "extra": {
+        "message": "CSRF on /signup \u2014 account creation without anti-forgery token",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route('/signup', methods=['GET', 'POST'])\ndef signup():",
+          "proof": "SOURCE: The signup form POSTs to /signup with no CSRF token. SINK: Route handler at routes.py:66 processes form data and inserts into the database (line 100). No CSRF token check, no Origin/Referer validation, and no SameSite cookie enforcement (SameSite defaults to None). An attacker can craft a cross-origin form to mass-create accounts, polluting the user database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "server/routes.py",
+      "start": {
+        "line": 170
+      },
+      "end": {
+        "line": 170
+      },
+      "extra": {
+        "message": "CSRF on /update_profile \u2014 profile mutation including role/permissions without anti-forgery token",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route('/update_profile', methods=['POST'])\ndef update_profile():",
+          "proof": "SOURCE: edit_profile form POSTs to /update_profile with no CSRF token. SINK: Route handler at routes.py:172 accepts form fields including username, email, country, role, and permissions (lines 183-192). No CSRF validation exists. An attacker can craft a cross-origin POST that, if the victim is authenticated, modifies the victim's profile including escalating role to 'admin' by including hidden role/permissions fields."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "server/routes.py",
+      "start": {
+        "line": 247
+      },
+      "end": {
+        "line": 247
+      },
+      "extra": {
+        "message": "CSRF on /upload \u2014 arbitrary file upload under victim's identity without anti-forgery token",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route('/upload', methods=['GET', 'POST'])\ndef upload_file():",
+          "proof": "SOURCE: upload form POSTs to /upload with no CSRF token. SINK: Route handler at routes.py:249 saves the uploaded file to disk and inserts a database record linked to the victim's user_id (lines 254-275). No CSRF check, no Origin header validation. An attacker can craft a cross-origin form that uploads arbitrary files under the victim's account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "server/routes.py",
+      "start": {
+        "line": 339
+      },
+      "end": {
+        "line": 339
+      },
+      "extra": {
+        "message": "CSRF on /delete/<filename> \u2014 file deletion without anti-forgery token",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route('/delete/<filename>', methods=['POST'])\ndef delete_file(filename):",
+          "proof": "SOURCE: Dashboard AJAX POSTs to /delete/<filename> with no CSRF token. SINK: Route handler at routes.py:341 deletes the file from disk and database for the authenticated victim. The endpoint accepts any POST with no CSRF token, no X-Requested-With header check. An attacker can craft a cross-origin POST to force-delete all files belonging to an authenticated victim."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "db/create_dummy_data.py",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "Hardcoded plaintext passwords in seed data script",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "users = [\n    ('john_doe', 'john@example.com', hash_password('super-secret'), 'USA', 'admin', 'all', 'Team A', now, now),",
+          "proof": "SOURCE: Plaintext passwords ('super-secret', 'password123', 'my-secret', 'password', 'password1') are hardcoded in db/create_dummy_data.py lines 19-27. SINK: These passwords are hashed with MD5 and inserted into the database. Any attacker with access to the source repository knows the plaintext credentials for all seeded accounts, including admin accounts john_doe/super-secret and dave_black/password."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "server/routes.py",
+      "start": {
+        "line": 65
+      },
+      "end": {
+        "line": 65
+      },
+      "extra": {
+        "message": "Missing rate limiting on /signup POST \u2014 mass account creation",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.route('/signup', methods=['GET', 'POST'])\ndef signup():",
+          "proof": "SOURCE: The /signup POST endpoint at routes.py:66 accepts registration form data. SINK: The route handler inserts new users into the database (line 100) with no rate limiting, no CAPTCHA, and no per-IP or per-session throttling. An attacker can script unlimited account creations to flood the user database, exhaust resources, or create sock-puppet accounts for abuse."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "server/routes.py",
+      "start": {
+        "line": 307
+      },
+      "end": {
+        "line": 307
+      },
+      "extra": {
+        "message": "Missing authentication on /uploads/profile_pictures/<filename> \u2014 unauthenticated access to user profile pictures",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "@app.route('/uploads/profile_pictures/<filename>')\ndef profile_pictures(filename):\n    return send_from_directory(PROFILE_PICTURES_UPLOAD_FOLDER, filename)",
+          "proof": "SOURCE: The /uploads/profile_pictures/<filename> route at routes.py:307 accepts any filename path parameter from unauthenticated users \u2014 no 'username' in session check. SINK: send_from_directory serves the file with no authentication (line 309). By contrast, the sibling /uploads/<filename> route (line 297) requires authentication. Any external party can enumerate and view all users' profile images without authentication."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 240
+      },
+      "end": {
+        "line": 240
+      },
+      "extra": {
+        "message": "Missing authentication on /api/v1/update_picture \u2014 unauthenticated profile picture modification with SSRF",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "@ns.route('/update_picture')\nclass ProfilePicture(Resource):\n    @api.expect(profile_pic_model)\n    def post(self):",
+          "proof": "SOURCE: The /api/v1/update_picture endpoint at api_v1.py:240 has no @token_required decorator and no session check \u2014 any unauthenticated caller can POST with any username and picture_url. SINK: The handler at line 252 fetches the attacker-supplied picture_url (SSRF via requests.get) and at line 278 writes the response content as the profile picture for the attacker-supplied username. An unauthenticated attacker can overwrite any user's profile picture and trigger SSRF against internal services."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "server/routes.py",
+      "start": {
+        "line": 241
+      },
+      "end": {
+        "line": 241
+      },
+      "extra": {
+        "message": "SQLite error details leaked to stdout on profile update failure",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "print(\"SQLite error:\", e)",
+          "proof": "SOURCE: The except conn.Error block at routes.py:240 catches SQLite errors during profile updates. SINK: Line 241 prints the raw SQLite error (e) to stdout via print(). The error object may contain the UPDATE query, column names, constraint violations, or database schema details, leaking sensitive information to log consumers in production environments."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "server/routes.py",
+      "start": {
+        "line": 141
+      },
+      "end": {
+        "line": 141
+      },
+      "extra": {
+        "message": "Unbounded file listing on /dashboard enables memory-exhaustion denial of service",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "files = [row['filename'] for row in cursor.fetchall()]",
+          "proof": "SOURCE: The /dashboard handler (line 129) runs a SELECT query on the files table filtered by user_id with no LIMIT/OFFSET clause. SINK: Line 141 materializes every row into a Python list via fetchall() in a single allocation. Combined with the unrestricted file upload at routes.py:247-264 (no MAX_CONTENT_LENGTH, no per-user upload cap, no rate limiting), an attacker can script mass uploads to inflate their file count, then request GET /dashboard to cause fetchall() to buffer all filenames \u2014 each a Python string object \u2014 into memory until OOM kills the process. No pagination, no server-side LIMIT, and no cursor iteration using fetchone() bounds the per-request memory consumption."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 228
+      },
+      "end": {
+        "line": 228
+      },
+      "extra": {
+        "message": "User enumeration via DELETE API status code discrepancy (200 vs 404) revealing which user IDs exist",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "if user:\n                cursor.execute(\"DELETE FROM users WHERE id = ?\", (user_id,))\n                conn.commit()\n                response = make_response(jsonify({'message': 'User deleted successfully'}), 200)\n                return response\n            else:\n                response = make_response(jsonify({'error': 'User not found'}), 404)\n                return response",
+          "proof": "SOURCE: The `user_id` path parameter from `DELETE /api/v1/delete-user/<int:user_id>` is attacker-controlled. SINK: The endpoint returns HTTP 200 with 'User deleted successfully' when the user exists and HTTP 404 with 'User not found' when it does not. Authentication is commented out (lines 222-223), so any unauthenticated attacker can iterate integer user_id values and observe the status code/body to map all valid user IDs in the system. Even if authentication were later added, the divergent responses would still leak user existence to any authenticated caller."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 154
+      },
+      "end": {
+        "line": 154
+      },
+      "extra": {
+        "message": "Missing rate limiting on unauthenticated /api/v1/profile endpoint enabling high-velocity user enumeration",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "#@token_required\n    #def get(self, current_user):\n    def get(self):\n        \"\"\"\n        Retrieves the profile information of a user based on the provided user ID.\n        \"\"\"\n        args = profile_query.parse_args()\n        user_id = args.get('user_id')",
+          "proof": "SOURCE: The `/api/v1/profile` GET endpoint accepts a `user_id` query parameter with no authentication (the `@token_required` decorator at lines 152-153 is commented out) and no rate limiting. SINK: No throttling, progressive delay, CAPTCHA, or IP-based quota is applied anywhere in the handler. An unauthenticated attacker can script unlimited requests iterating user_id=1,2,...,N at line speed to enumerate all users and harvest sensitive profile data (email, role, permissions, team) returned on line 168. Every other API endpoint with missing rate limiting has a dedicated CWE-307 finding, but this endpoint was omitted."
+        }
+      }
+    }
+  ]
+}

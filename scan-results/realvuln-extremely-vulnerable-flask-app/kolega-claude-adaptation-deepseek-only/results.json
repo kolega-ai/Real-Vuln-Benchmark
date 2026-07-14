@@ -1,0 +1,803 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-1336",
+      "path": "app.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "Server-Side Template Injection via request.path in 404 handler",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "citation": "detailed_message = render_template_string(\n        f\"{error}. Requested URL was {request.path}\"\n    )",
+          "proof": "SOURCE: request.path is fully attacker-controlled via the URL (e.g., /{{config}}). SINK: render_template_string() interprets the entire f-string as a Jinja2 template. Visiting /{{config}} causes the path to contain {{config}}, which render_template_string evaluates, exfiltrating Flask app config including SECRET_KEY."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "routes/account.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "SQL Injection in search functionality",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "text(f\"text like '%{search_param}%'\")",
+          "proof": "SOURCE: search_param = request.args.get('search', '') (line 27) is raw user input from the query string. SINK: Directly interpolated into a raw SQL fragment via f-string passed to sqlalchemy.text(). An attacker can send /search?search=' UNION SELECT... to execute arbitrary SQL against the SQLite database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-918",
+      "path": "utils/profile_image.py",
+      "start": {
+        "line": 6
+      },
+      "end": {
+        "line": 6
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery in profile image download",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-918"
+          ],
+          "citation": "with urlopen(url) as response:\n        return response.read()",
+          "proof": "SOURCE: form.url.data (routes/account.py line 61) comes from attacker-controlled POST body to /account/image. SINK: Passed through get_base64_image_blob() to download() which calls urlopen(url) (line 6). No URL validation. Attacker can supply file:///etc/passwd, http://169.254.169.254/ (cloud metadata), or internal service URLs to read files or probe networks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-269",
+      "path": "routes/account.py",
+      "start": {
+        "line": 81
+      },
+      "end": {
+        "line": 81
+      },
+      "extra": {
+        "message": "Privilege Escalation via mass assignment of is_admin field",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-269"
+          ],
+          "citation": "current_user.__dict__.update(filtered_values)",
+          "proof": "SOURCE: AccountForm includes is_admin=BooleanField('Is Admin') (forms/account_form.py:7). Any user can POST /account with is_admin=True. SINK: update_account() merges all non-None form data into current_user.__dict__ (line 81) with no admin check. Also missing @login_required, so unauthenticated users could also exploit this. Lets a regular user elevate to admin."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "routes/account.py",
+      "start": {
+        "line": 46
+      },
+      "end": {
+        "line": 46
+      },
+      "extra": {
+        "message": "IDOR - Any authenticated user can view any user's private notes",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "personal_notes = session.query(Note).filter(\n            Note.user_id == user_id).all()",
+          "proof": "SOURCE: user_id comes from the URL path /accounts/<user_id>/notes. SINK: Query filters notes by supplied user_id (line 46) without comparing to current_user.id. Any authenticated user can enumerate other users' private notes by changing user_id in the URL."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "routes/notes.py",
+      "start": {
+        "line": 48
+      },
+      "end": {
+        "line": 48
+      },
+      "extra": {
+        "message": "Missing access control on note deletion - any user can delete any note",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "session.delete(note)\n            session.commit()",
+          "proof": "SOURCE: note_id comes from the URL path /notes/<note_id>/delete. SINK: session.delete(note) (line 48) deletes unconditionally after retrieval. No check that note.user_id == current_user.id or current_user.is_admin. Template hides delete button for non-owners but server does not enforce. Any user can delete any note by POSTing directly to the endpoint."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "templates/home.html",
+      "start": {
+        "line": 23
+      },
+      "end": {
+        "line": 23
+      },
+      "extra": {
+        "message": "Stored Cross-Site Scripting via unsanitized note text",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "<p class=\"card-text\">{{ note.text | safe }}</p>",
+          "proof": "SOURCE: Note text submitted by users via CKEditor (templates/partials/create_note_modal.html) stored in database. SINK: home.html line 23 renders note.text with |safe filter, bypassing Jinja2 auto-escaping. Attacker creates a note with <script>alert(document.cookie)</script> which executes in any victim's browser viewing the home page."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "app.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "Hardcoded weak Flask secret key",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "app.secret_key = \"super secret key\"",
+          "proof": "SOURCE: Secret key hardcoded as the guessable string 'super secret key'. SINK: Flask uses this key to cryptographically sign session cookies. Attacker who knows this key can forge arbitrary session cookies, impersonate any user (including admin), leading to complete account takeover."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-502",
+      "path": "routes/account.py",
+      "start": {
+        "line": 118
+      },
+      "end": {
+        "line": 118
+      },
+      "extra": {
+        "message": "Insecure deserialization via pickle.loads on attacker-controlled preferences cookie",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "citation": "preferences = loads(b64decode(preferences))",
+          "proof": "SOURCE: request.cookies.get('preferences') (line 114) is fully attacker-controlled. SINK: base64-decoded then deserialized with pickle.loads() (line 118). Attacker crafts a malicious pickle payload, base64-encodes it, sets it as the preferences cookie, achieving arbitrary code execution on the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "templates/home.html",
+      "start": {
+        "line": 34
+      },
+      "end": {
+        "line": 34
+      },
+      "extra": {
+        "message": "Stored XSS via |safe filter on note text",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "{{ note.text | safe }}",
+          "proof": "Untrusted SOURCE: form.text.data from NoteForm (routes/notes.py:28) submitted via CKEditor or direct POST \u2192 stored in database \u2192 retrieved and rendered with |safe filter. The |safe Jinja2 filter disables HTML escaping entirely. User-supplied note text containing arbitrary HTML/JavaScript is rendered unsanitized to every user viewing the home page, enabling stored XSS against all authenticated users."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "routes/notes.py",
+      "start": {
+        "line": 43
+      },
+      "end": {
+        "line": 43
+      },
+      "extra": {
+        "message": "Missing ownership check on note deletion",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "note = session.get(Note, note_id)",
+          "proof": "Untrusted SOURCE: note_id URL path parameter from /notes/<int:note_id>/delete (line 36) \u2192 SINK: session.get(Note, note_id) at line 43 with no ownership verification. The delete_note route only checks if the note exists (note is None), not if the current user owns it. Any authenticated user can delete any note by enumerating note_id values."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "templates/search.html",
+      "start": {
+        "line": 18
+      },
+      "end": {
+        "line": 18
+      },
+      "extra": {
+        "message": "Stored XSS via safe_columns in search results table",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "{{ render_table(personal_notes, responsive=True, safe_columns=['text']) }}",
+          "proof": "Untrusted SOURCE: Note text is user-supplied via POST /notes (form.text.data at routes/notes.py:28) and stored without sanitization. SINK: templates/search.html:18 uses safe_columns=['text'] in Bootstrap-Flask's render_table, disabling HTML escaping for the text column. An attacker creates a note with a JavaScript payload which executes in the victim's browser when they visit /search and the note matches the search term. This is a distinct XSS sink from home.html, served by routes/account.py at /search."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "templates/personal_notes.html",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "Stored XSS via safe_columns in personal notes table",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "{{ render_table(personal_notes, responsive=True, safe_columns=['text']) }}",
+          "proof": "Untrusted SOURCE: Note text is user-supplied via POST /notes (form.text.data at routes/notes.py:28) and stored unsanitized. SINK: personal_notes.html:16 uses safe_columns=['text'] in render_table. This template is served at /accounts/<user_id>/notes (routes/account.py:44-46). Any viewer of another user's notes will execute HTML/JavaScript payloads embedded in the note text. Combined with the IDOR at routes/account.py:46, an attacker creates a note with a malicious payload and lures the victim to /accounts/<attacker_id>/notes to steal their session."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-620",
+      "path": "routes/account.py",
+      "start": {
+        "line": 85
+      },
+      "end": {
+        "line": 85
+      },
+      "extra": {
+        "message": "Password change without verification of current password",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-620"
+          ],
+          "citation": "new_password = form.password.data\nwas_password_changed = new_password is not None and new_password != filtered_values.get('password_control')",
+          "proof": "SOURCE: POST /account handler at routes/account.py:85-90 accepts new_password from form.password.data and confirmation from form.password_control.data. SINK: Lines 87-88 only verify the two new-password fields match each other. There is no current-password check anywhere in the handler. Combined with missing @login_required (line 66-67) and missing CSRF protection, an attacker who obtains a session cookie via XSS or tricks the victim into submitting a CSRF form can set password=newpass&password_control=newpass&is_admin=True, simultaneously changing the password and escalating privileges."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-524",
+      "path": "routes/account.py",
+      "start": {
+        "line": 123
+      },
+      "end": {
+        "line": 123
+      },
+      "extra": {
+        "message": "Missing Cache-Control headers on sensitive pages enables browser caching",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-524"
+          ],
+          "citation": "@app.after_request\ndef after_request(response: Response) -> Response:\n    if request.cookies.get('preferences') is None:\n        preferences = default_preferences\n        response.set_cookie('preferences',\n                            b64encode(dumps(preferences)).decode())",
+          "proof": "SOURCE: The global after_request handler at routes/account.py:123-128 executes on every response but sets NO Cache-Control, Pragma, or Expires headers (confirmed by searching all .py files \u2014 zero matches for Cache-Control or no-cache). SINK: All responses (/home, /search, /accounts/<id>/notes, /account) are subject to browser default caching. After a victim logs out, an attacker with machine access can use browser history or the Back button to read cached copies of private notes and account details."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "routes/account.py",
+      "start": {
+        "line": 66
+      },
+      "end": {
+        "line": 66
+      },
+      "extra": {
+        "message": "Missing @login_required on POST /account allows unauthenticated modification",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "@app.route('/account', methods=['POST'])\ndef update_account():",
+          "proof": "SOURCE: Any unauthenticated HTTP client can POST arbitrary form fields (email, password, password_control, is_admin) to /account at line 66-67. The GET handler at line 19 has @login_required, proving this omission is unintentional. SINK: update_account() at line 68 reads request.form into AccountForm, applies data via current_user.__dict__.update(filtered_values) (line 74-75), and commits via session.merge(current_user) (line 90-91). While AnonymousUserMixin may error on merge, this missing auth gate combined with the systemic CSRF absence (all forms use wtforms.Form, not FlaskForm) means any XSS victim's session can be hijacked for account takeover."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "models/__init__.py",
+      "start": {
+        "line": 14
+      },
+      "end": {
+        "line": 14
+      },
+      "extra": {
+        "message": "SQLAlchemy echo=True logs all queries including sensitive user data",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "echo=True,",
+          "proof": "SOURCE: config at models/__init__.py:14 sets echo=True on the SQLAlchemy engine. SINK: All SQL queries executed through this engine are logged to stdout in plain text. Every query containing user emails, hashed passwords, registration codes, note titles, note text, and user IDs is written to stdout. In production (containerized deployment), stdout becomes the container log, making all user data persistently stored in log files accessible to anyone with log access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "db_seed.py",
+      "start": {
+        "line": 11
+      },
+      "end": {
+        "line": 11
+      },
+      "extra": {
+        "message": "Hardcoded static registration code bypasses invitation-only signup",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "static_code = 'a36e990b-0024-4d55-b74a-f8d7528e1764'",
+          "proof": "SOURCE: db_seed.py:11 hardcodes the UUID 'a36e990b-0024-4d55-b74a-f8d7528e1764' as a registration code. SINK: routes/signup.py:12-22 validate_token() accepts any code present in the registration_code table. Any attacker who reads this publicly committed source code can register by submitting this static UUID via POST /signup, completely bypassing the intended invitation-only registration gate."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1392",
+      "path": "db_seed.py",
+      "start": {
+        "line": 18
+      },
+      "end": {
+        "line": 18
+      },
+      "extra": {
+        "message": "Default credentials for user and admin accounts seeded in source",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1392"
+          ],
+          "citation": "user = User('user@evfa.com', hashpw(b'user', gensalt()).decode())\nadmin = User('admin@evfa.com', hashpw(b'admin', gensalt()).decode(), True)",
+          "proof": "SOURCE: db_seed.py:18-19 seeds users with email/password pairs 'user@evfa.com'/'user' and 'admin@evfa.com'/'admin', publicly readable in the source repository. SINK: routes/login.py:26-27 queries the users table by email and checkpw-compares the submitted password. Any attacker who reads the source can log in as these users and access all application features."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "routes/notes.py",
+      "start": {
+        "line": 24
+      },
+      "end": {
+        "line": 24
+      },
+      "extra": {
+        "message": "Missing CSRF protection on POST /notes (note creation)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route('/notes', methods=['POST'])\n@login_required\ndef add_note():",
+          "proof": "SOURCE: POST /notes route at line 24 accepts state-changing requests without CSRF protection. Flask-WTF CSRFProtect is never initialized anywhere in app.py, all forms extend wtforms.Form (not FlaskForm, which has built-in CSRF), and no template includes {{ form.hidden_tag() }}. SINK: An attacker can craft a malicious HTML page that auto-submits a form to POST /notes of the victim's authenticated session, creating arbitrary notes containing XSS payloads rendered via the |safe filter (home.html:34) and safe_columns (search.html:18, personal_notes.html:16)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "routes/notes.py",
+      "start": {
+        "line": 38
+      },
+      "end": {
+        "line": 38
+      },
+      "extra": {
+        "message": "Missing CSRF protection on POST /notes/<id>/delete (note deletion)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route('/notes/<int:note_id>/delete', methods=['POST'])\n@login_required\ndef delete_note(note_id: int):",
+          "proof": "SOURCE: POST /notes/<id>/delete route at line 38 deletes notes without CSRF protection (same systemic lack \u2014 no CSRFProtect initialization, wtforms.Form not FlaskForm, no hidden_tag). SINK: An attacker can trick an authenticated victim into submitting a POST to /notes/<id>/delete, causing arbitrary note deletion without the victim's consent. Combined with the missing ownership check (same route, line 43), any note in the system can be deleted cross-origin by any authenticated user."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "routes/account.py",
+      "start": {
+        "line": 70
+      },
+      "end": {
+        "line": 70
+      },
+      "extra": {
+        "message": "Cross-Site Request Forgery on account update via POST /account",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route('/account', methods=['POST'])\ndef update_account():\n    current_user.__dict__.update(filtered_values)",
+          "proof": "No CSRF token is checked. The handler at line 80-83 does current_user.__dict__.update(filtered_values) where filtered_values comes directly from form.data, enabling mass-assignment of fields including is_admin=true. The password can also be changed at lines 89-91. An attacker can craft a cross-origin form submission to change the victim's email, password, and set is_admin=True, yielding full account takeover and privilege escalation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "routes/account.py",
+      "start": {
+        "line": 53
+      },
+      "end": {
+        "line": 53
+      },
+      "extra": {
+        "message": "Cross-Site Request Forgery on profile image change via POST /account/image",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route('/account/image', methods=['POST'])\n@login_required\ndef add_image():\n    current_user.profile_image = get_base64_image_blob(form.url.data).encode()",
+          "proof": "No CSRF token is checked. The handler at line 62 calls get_base64_image_blob(form.url.data) which uses urlopen() (utils/profile_image.py:7) on the user-supplied URL. An attacker can trick a victim into submitting a cross-origin form that triggers an SSRF request to internal network services (127.0.0.1:<port>), leveraging the existing SSRF vulnerability for internal network probing."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "routes/login.py",
+      "start": {
+        "line": 19
+      },
+      "end": {
+        "line": 19
+      },
+      "extra": {
+        "message": "Missing rate limiting on POST /login allows brute-force password attacks",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.route('/login', methods=['POST'])\ndef do_login():\n    user = session.query(User).filter(User.email == form.email.data).first()\n    if user is not None and checkpw(form.password.data.encode('utf-8'), user.password.encode('utf-8')) and login_user(user):",
+          "proof": "The POST /login handler at lines 19-32 accepts credentials and authenticates the user with no rate limiting, account lockout, CAPTCHA, or progressive delay. An attacker can script thousands of login attempts per second against known user emails (e.g., user@evfa.com from default seed data) to brute-force the password. No global or per-IP rate limiter is configured anywhere in the application."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "routes/signup.py",
+      "start": {
+        "line": 31
+      },
+      "end": {
+        "line": 31
+      },
+      "extra": {
+        "message": "Missing rate limiting on POST /signup allows account enumeration and mass registration",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.route('/signup', methods=['POST'])\ndef do_signup():\n    user_already_exists = session.query(session.query(User).where(User.email == form.email.data).exists()).scalar()\n    ...\n    if user_already_exists:\n        flash(\"User already exists\", 'warning')",
+          "proof": "The POST /signup handler (lines 31-61) processes registrations with no rate limiting. The 'User already exists' flash message at line 55 acts as an email enumeration oracle \u2014 an attacker can probe valid email addresses by observing the response. Mass registration can consume all available registration codes. No CAPTCHA, proof-of-work, or IP-based limiting is applied."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "routes/account.py",
+      "start": {
+        "line": 100
+      },
+      "end": {
+        "line": 100
+      },
+      "extra": {
+        "message": "Missing @login_required on POST /darkmode allows unauthenticated cookie writes",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "@app.route('/darkmode', methods=['POST'])\ndef toggle_darkmode():\n    response.set_cookie('preferences', b64encode(dumps(preferences)).decode())",
+          "proof": "The POST /darkmode route at lines 100-108 lacks @login_required. The handler reads g.preferences (deserialized from the pickled cookie in before_request at line 120), toggles the mode field, and re-serializes it as a new cookie. This provides an unauthenticated surface that writes attacker-influenced pickled cookie content, lowering the bar for exploiting the existing CWE-502 pickle deserialization RCE (line 120: loads(b64decode(preferences)))."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "routes/account.py",
+      "start": {
+        "line": 107
+      },
+      "end": {
+        "line": 107
+      },
+      "extra": {
+        "message": "Preferences cookie set without Secure, HttpOnly, or SameSite attributes in toggle_darkmode",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "response.set_cookie('preferences', b64encode(dumps(preferences)).decode())",
+          "proof": "The set_cookie() call at line 107 has no Secure=True, HttpOnly=True, or SameSite='Lax'/'Strict' parameters. The cookie is transmitted over unencrypted HTTP (no Secure flag), accessible to JavaScript via document.cookie (no HttpOnly flag \u2014 amplified by existing XSS at templates/home.html:34), and sent cross-origin on POST requests (no SameSite flag). Combined with the pickle-serialized payload, this enables session-level attacks including cookie theft via XSS and CSRF-assisted pickle deserialization RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "routes/login.py",
+      "start": {
+        "line": 52
+      },
+      "end": {
+        "line": 52
+      },
+      "extra": {
+        "message": "Sensitive user email exposed via /is_logged_in endpoint without authentication",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "current_user.email if current_user.is_authenticated else '-'",
+          "proof": "The GET /is_logged_in route (line 47) returns current_user.email in the JSON response at line 52 without requiring @login_required. A malicious site can make a cross-origin fetch to GET /is_logged_in and, if the victim has an active session, receive the victim's email address. This enables session detection (via is_logged_in boolean) and PII (email) harvesting from any requesting origin."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "routes/notes.py",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "Missing rate limiting on POST /notes enables unrestricted note flood and resource exhaustion",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.route('/notes', methods=['POST'])\n@login_required\ndef add_note():\n    session.add(note)\n    session.commit()",
+          "proof": "The POST /notes handler (lines 16-30) accepts user-supplied title, text, and private flag with no throttling, CAPTCHA, or per-user creation limits. An authenticated attacker can programmatically send thousands of note-creation requests per second. Each request inserts a row into the SQLite database (session.add/commit at lines 27-29), growing database.db without bound. The unbounded note retrieval in utils/notes.py:10 (CWE-770) amplifies this \u2014 every user loading /home buffers ALL public notes into memory."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "routes/account.py",
+      "start": {
+        "line": 53
+      },
+      "end": {
+        "line": 53
+      },
+      "extra": {
+        "message": "Missing rate limiting on POST /account/image enables server-side request flooding",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.route('/account/image', methods=['POST'])\n@login_required\ndef add_image():\n    current_user.profile_image = get_base64_image_blob(form.url.data).encode()",
+          "proof": "The POST /account/image handler accepts a user-supplied URL with no throttling, per-user limits, or CAPTCHA. Each request triggers urlopen() (utils/profile_image.py:7) to an arbitrary URL. An attacker can submit thousands of requests per second, enabling: (1) amplification DDoS attacks against third-party servers; (2) exhaustion of the server's file descriptor/connection pool; (3) rapid filling of the SQLite database with base64 blobs via the profile_image BLOB column. Combined with CWE-918 (SSRF), the missing rate limit turns a targeted SSRF into a high-throughput attack tool."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "routes/registration_codes.py",
+      "start": {
+        "line": 38
+      },
+      "end": {
+        "line": 38
+      },
+      "extra": {
+        "message": "Newly generated registration code value exposed in flash message returned in HTTP response",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "flash(f\"Code added: {code.code}\", 'success')",
+          "proof": "When an admin POSTs to /registration-codes, a new RegistrationCode is generated with a fresh UUID at line 34, and the plaintext code value is interpolated into a flash message at line 38. The flash message is rendered into the next HTTP response (registration_codes.html via bootstrap render_messages). The registration code value appears in the HTML body, where it can be: (1) intercepted over plain HTTP (no HTTPS); (2) cached by intermediate proxies; (3) read by browser extensions or XSS payloads. Registration codes are secret invite tokens \u2014 exposing them in the clear defeats their purpose as access controls."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-614",
+      "path": "routes/account.py",
+      "start": {
+        "line": 129
+      },
+      "end": {
+        "line": 129
+      },
+      "extra": {
+        "message": "Preferences cookie set without Secure, HttpOnly, or SameSite in after_request handler",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "citation": "response.set_cookie('preferences',\n                        b64encode(dumps(preferences)).decode())",
+          "proof": "In the after_request hook at lines 125-131, when a first-time visitor has no preferences cookie, a default preferences dict is serialized via pickle and set as a cookie with no Secure, HttpOnly, or SameSite attributes. This fires on every unauthenticated request, meaning every attacker probing the server receives a pickle-serialized cookie over plain HTTP with no protections. While the content is benign {'mode': 'light'}, the attacker learns: (1) the exact serialization format (pickle + base64); (2) that any manipulated cookie blob will be deserialized on the next request (before_request at line 120). This acts as an oracle confirming the pickle deserialization attack surface (CWE-502) with zero authentication."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "templates/personal_notes.html",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "CSV Formula Injection via exported personal notes table",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "{{ render_table(personal_notes, responsive=True, safe_columns=['text']) }}\n...\nfunction downloadTableAsCSV(separator = \",\") {\n...\n  let data = cols[j].innerText.replace(...);\n  data = data.replace(/\"/g, '\"\"');\n  row.push('\"' + data + '\"');\n...\n}",
+          "proof": "SOURCE: Note text is fully user-controlled (created via POST /notes with CKEditor, stored in DB without sanitization). SINK: The render_table call at line 16 renders note text as raw HTML via safe_columns=['text']. The client-side CSV export JavaScript (lines 29-62) reads cell content via innerText, double-quote-escapes only CSV delimiters (line 37), and wraps in quotes (line 39). When note text starts with =, +, -, or @ (e.g. =cmd|'/c calc'!A0), the resulting CSV cell is \"=cmd|...\", which Excel/Google Sheets interprets as an executable formula upon opening \u2014 the double-quote wrapping alone does not prevent formula interpretation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "routes/account.py",
+      "start": {
+        "line": 87
+      },
+      "end": {
+        "line": 87
+      },
+      "extra": {
+        "message": "Password change does not invalidate existing Flask-Login sessions",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "if was_password_changed:\n    current_user.password = hashpw(new_password.encode(),\n                                   gensalt()).decode()",
+          "proof": "SOURCE: A user or attacker (via CSRF at line 68) changes their password via POST /account. SINK: Only the DB password hash is updated at line 87-89. No call to logout_user() or session-revocation mechanism follows. Flask-Login authenticates via a signed cookie containing the user ID; load_user (routes/login.py:8-10) reloads by ID without checking password currency. A stolen session cookie remains valid indefinitely after password change, allowing continued attacker access even after the victim resets credentials."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "models/registration_code.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "Registration codes (bearer tokens) stored in plaintext in the database",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "code = Column(String, unique=True, nullable=False)",
+          "proof": "SOURCE: Registration codes are generated as random UUIDs via str(uuid4()) at routes/registration_codes.py:40 and function as bearer tokens for account creation. SINK: They are stored in plaintext via String column (line 12) with no hashing, salting, or encryption. The SQL injection vulnerability at routes/account.py:33 allows an authenticated attacker to extract all valid registration codes from the registration_code table (e.g. UNION SELECT code FROM registration_code--), bypassing the invitation-only signup gate entirely. Even without SQLi, any direct DB access (SQLite file read) exposes all codes."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-324",
+      "path": "routes/registration_codes.py",
+      "start": {
+        "line": 40
+      },
+      "end": {
+        "line": 40
+      },
+      "extra": {
+        "message": "Registration codes have no expiration and persist indefinitely until used",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-324"
+          ],
+          "citation": "code = RegistrationCode(str(uuid4()))",
+          "proof": "SOURCE: The add_registration_codes handler at line 40 instantiates a RegistrationCode with no expiry timestamp or TTL parameter. SINK: No expiry duration is set on the RegistrationCode model (models/registration_code.py:12 has only 'code' and inherited 'created_at' fields), and no TTL check exists in validate_token (routes/signup.py:21-28) or do_signup (routes/signup.py:49-62). Codes remain valid forever until explicitly consumed by a successful signup, which deletes the used token (line 62). A code generated on day one is equally valid years later, expanding the window for brute-force guessing or credential-stuffing of code values against POST /signup."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "utils/notes.py",
+      "start": {
+        "line": 11
+      },
+      "end": {
+        "line": 11
+      },
+      "extra": {
+        "message": "Unbounded note query with no pagination enables memory exhaustion",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "return session.query(Note).filter(\n    or_(Note.user_id == user_id,\n        Note.private == False)).options(joinedload(Note.user)).all()",
+          "proof": "SOURCE: get_notes_for_user is called by routes/home.py:15 and routes/notes.py:14 with the current user's ID. SINK: The query at line 9-11 returns ALL matching rows (user's own notes + all non-private notes from every other user) via .all() with no .limit() or pagination. In a populated instance, this can return thousands of Note objects, each eagerly loaded with its User relationship (joinedload). A single HTTP request to /home or /notes forces the server to materialize the entire result set into memory, allowing resource-exhaustion DoS by any authenticated user."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "routes/account.py",
+      "start": {
+        "line": 46
+      },
+      "end": {
+        "line": 46
+      },
+      "extra": {
+        "message": "Unbounded personal-notes query with no pagination enables resource exhaustion",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "personal_notes = session.query(Note).filter(\n    Note.user_id == user_id).all()",
+          "proof": "SOURCE: The user_id from the URL path /accounts/<int:user_id>/notes is used directly in the filter, with no authorization check (IDOR, CWE-639 \u2014 any authenticated user can target any user_id). SINK: The .all() call at line 46 returns every note (private and public) belonging to that user with no LIMIT clause. An attacker can request notes for the user with the most notes, forcing the server to allocate memory for an unbounded result set. No pagination or row cap exists."
+        }
+      }
+    }
+  ]
+}

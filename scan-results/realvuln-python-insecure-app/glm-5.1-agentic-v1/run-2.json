@@ -6,16 +6,16 @@
       "path": "app/main.py",
       "start": {
         "line": 38,
-        "col": 28,
-        "offset": 1200
+        "col": 5,
+        "offset": 0
       },
       "end": {
         "line": 41,
         "col": 41,
-        "offset": 1370
+        "offset": 0
       },
       "extra": {
-        "message": "User input from the 'name' query parameter is interpolated into a Jinja2 template string via f-string on line 38, then rendered with Template(content).render() on line 41. An attacker can inject Jinja2 template expressions such as {{7*7}} or {% import os %}{{os.popen('id').read()}} to achieve remote code execution. The commented-out test at tests/test_main.py:39-41 confirms this is a known issue.",
+        "message": "User input from the 'name' query parameter is interpolated into a Jinja2 template string via f-string on line 38, then evaluated by Template(content).render() on line 41. An attacker can inject Jinja2 template syntax such as {{7*7}} which gets executed server-side, potentially leading to remote code execution via Jinja2 sandbox escape payloads like {{''.__class__.__mro__[1].__subclasses__()}}.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -27,20 +27,20 @@
       }
     },
     {
-      "check_id": "python.security.xss.reflected-name",
+      "check_id": "python.security.injection.xss-reflected",
       "path": "app/main.py",
       "start": {
         "line": 38,
         "col": 28,
-        "offset": 1200
+        "offset": 0
       },
       "end": {
         "line": 38,
-        "col": 35,
-        "offset": 1210
+        "col": 34,
+        "offset": 0
       },
       "extra": {
-        "message": "User input from the 'name' query parameter is directly interpolated into an HTML string via f-string without any escaping or sanitization. Since the response is HTMLResponse, an attacker can inject arbitrary HTML/JavaScript by passing name=<script>alert(1)</script>.",
+        "message": "User input from the 'name' query parameter is directly interpolated into an HTML string via f-string without any escaping or sanitization: f\"<h1>Hello, {name}!</h1>...\". An attacker can inject arbitrary JavaScript by providing name=<script>alert(1)</script>, which is reflected directly in the HTML response.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -52,20 +52,20 @@
       }
     },
     {
-      "check_id": "python.security.xss.reflected-public-ip",
+      "check_id": "python.security.injection.xss-external-data",
       "path": "app/main.py",
       "start": {
         "line": 36,
-        "col": 9,
-        "offset": 1140
+        "col": 13,
+        "offset": 0
       },
       "end": {
         "line": 38,
-        "col": 70,
-        "offset": 1300
+        "col": 72,
+        "offset": 0
       },
       "extra": {
-        "message": "The response body from an external HTTP service (public_ip_response.text on line 36) is directly embedded into HTML on line 38 without sanitization. If the external service is compromised, spoofed, or the PUBLIC_IP_SERVICE_URL is redirected to a malicious endpoint, the response could contain arbitrary HTML/JavaScript that would be rendered in the user's browser.",
+        "message": "The public_ip value obtained from an external HTTP service response (requests.get on line 31) is interpolated into HTML without sanitization on line 38: f\"...<code>{public_ip}</code>...\". If the external service is compromised, returns malicious content, or if the PUBLIC_IP_SERVICE_URL is redirected to an attacker-controlled endpoint, the response content is reflected as-is into the HTML, enabling XSS.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -77,20 +77,20 @@
       }
     },
     {
-      "check_id": "python.security.ssrf.unvalidated-url",
+      "check_id": "python.security.ssrf",
       "path": "app/main.py",
       "start": {
         "line": 31,
         "col": 9,
-        "offset": 980
+        "offset": 0
       },
       "end": {
         "line": 31,
-        "col": 60,
-        "offset": 1035
+        "col": 62,
+        "offset": 0
       },
       "extra": {
-        "message": "requests.get() is called with config.PUBLIC_IP_SERVICE_URL which is read from an environment variable (app/config.py:11) with no URL validation or scheme restrictions. In containerized or shared environments where environment variables may be injectable, an attacker could set this to an internal URL (e.g., http://169.254.169.254/latest/meta-data/ for cloud metadata) or file:///etc/passwd to access internal resources.",
+        "message": "requests.get(config.PUBLIC_IP_SERVICE_URL) makes an outbound HTTP request to a URL sourced from an environment variable with no validation of the URL scheme, domain, or port. If an attacker can influence the PUBLIC_IP_SERVICE_URL environment variable (e.g., via CI/CD injection, container orchestration misconfiguration, or the .env_temp template), the server can be directed to make requests to internal services or arbitrary external hosts. The response from this request is also reflected back to users, enabling chained attacks.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -102,20 +102,20 @@
       }
     },
     {
-      "check_id": "python.security.credentials.hardcoded-name",
+      "check_id": "python.security.hardcoded-credential-name",
       "path": "app/config.py",
       "start": {
         "line": 13,
         "col": 1,
-        "offset": 280
+        "offset": 0
       },
       "end": {
         "line": 13,
-        "col": 57,
-        "offset": 340
+        "col": 53,
+        "offset": 0
       },
       "extra": {
-        "message": "SUPER_SECRET_NAME is hardcoded as 'John Ripper' in source code. Hardcoded secrets in source code cannot be rotated without changing the code and are exposed to anyone with read access to the repository. The FIXME comment indicates this was intended to be moved to an environment variable.",
+        "message": "SUPER_SECRET_NAME is hardcoded as the string \"John Ripper\" in source code. This value is committed to version control and visible to anyone with repository access. The FIXME comment indicates it should be loaded from an environment variable but currently is not, making the credential unrevocable without code changes.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
@@ -127,20 +127,20 @@
       }
     },
     {
-      "check_id": "python.security.credentials.hardcoded-token",
+      "check_id": "python.security.hardcoded-credential-token",
       "path": "app/config.py",
       "start": {
-        "line": 14,
+        "line": 15,
         "col": 1,
-        "offset": 341
+        "offset": 0
       },
       "end": {
-        "line": 14,
-        "col": 63,
-        "offset": 403
+        "line": 15,
+        "col": 58,
+        "offset": 0
       },
       "extra": {
-        "message": "SUPER_SECRET_TOKEN is hardcoded as '5u93R53Cr3tT0k3n' in source code. This secret token is embedded directly in the codebase and visible to anyone with repository access. It cannot be rotated without a code change. The FIXME comment confirms this was intended to be externalized.",
+        "message": "SUPER_SECRET_TOKEN is hardcoded as the string \"5u93R53Cr3tT0k3n\" in source code. This secret token is committed to version control and visible to anyone with repository access. The FIXME comment indicates it should be loaded from an environment variable but currently is not, making the token unrevocable without code changes.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
@@ -156,17 +156,17 @@
       "path": "caddy/Caddyfile",
       "start": {
         "line": 13,
-        "col": 13,
-        "offset": 310
+        "col": 9,
+        "offset": 0
       },
       "end": {
         "line": 13,
-        "col": 31,
-        "offset": 330
+        "col": 28,
+        "offset": 0
       },
       "extra": {
-        "message": "The Coraza WAF rule engine is set to Off (SecRuleEngine Off), which disables all WAF rules including the SSTI, SQL injection, XSS, and path traversal protections defined on lines 17-20. This means the application receives all malicious payloads unfiltered, making the documented WAF rules completely ineffective.",
-        "severity": "ERROR",
+        "message": "The Coraza WAF rule engine is set to SecRuleEngine Off, which puts the WAF in detection-only mode. All subsequent security rules (SSTI blocking rule id:1001, SQL injection blocking rule id:1002, XSS blocking rule id:1003, directory traversal blocking rule id:1004) will only log matches but will NOT block any malicious requests. This effectively renders the entire WAF useless as a security control.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-16: Configuration"
@@ -181,20 +181,20 @@
       "path": "app/main.py",
       "start": {
         "line": 14,
-        "col": 11,
-        "offset": 400
+        "col": 5,
+        "offset": 0
       },
       "end": {
         "line": 14,
-        "col": 26,
-        "offset": 416
+        "col": 25,
+        "offset": 0
       },
       "extra": {
-        "message": "The FastAPI debug flag is set to config.DEBUG, which reads from the DEBUG environment variable (app/config.py:9). When DEBUG=True, FastAPI exposes detailed error tracebacks including source code snippets and local variables, which can leak sensitive information. The .env_temp template file enables debug mode by default (DEBUG=True).",
+        "message": "The FastAPI application is created with debug=config.DEBUG, which enables debug mode when the DEBUG environment variable is set to True. Debug mode exposes detailed error tracebacks, source code snippets, and internal application state in error responses, which can leak sensitive information to attackers. The .env_temp file in the repository sets DEBUG=True, increasing the risk of this being deployed with debug mode enabled.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
-            "CWE-1004: Sensitive Cookie Without 'Secure' Flag"
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
           ],
           "confidence": "MEDIUM",
           "category": "security"

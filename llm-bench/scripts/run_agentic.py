@@ -23,6 +23,7 @@ import argparse
 import json
 import logging
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -48,6 +49,42 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("run_agentic")
+
+
+def run_opencode_command(cmd: list[str], *, cwd: str, env: dict[str, str], timeout: int) -> subprocess.CompletedProcess:
+    """Run OpenCode in its own process group so timeouts clean up child workers."""
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=cwd,
+        env=env,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            stdout, stderr = proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            stdout, stderr = proc.communicate()
+        raise subprocess.TimeoutExpired(
+            cmd=exc.cmd,
+            timeout=exc.timeout,
+            output=stdout,
+            stderr=stderr,
+        ) from exc
+
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
 
 
 def discover_repos(gt_dir: Path) -> list[str]:
@@ -106,6 +143,15 @@ def clone_or_find_repo(repo_slug: str) -> Path | None:
     return repo_path
 
 
+def load_benchmark_manifest() -> dict:
+    """Load benchmark version metadata stamped onto every new run."""
+    manifest_path = PROJECT_ROOT / "benchmark-manifest.json"
+    if not manifest_path.exists():
+        return {}
+    with open(manifest_path) as f:
+        return json.load(f)
+
+
 def run_one_agentic(
     model_config: dict,
     repo_slug: str,
@@ -115,6 +161,7 @@ def run_one_agentic(
     timeout: int,
     prompt_version: str = "",
     prompt_label: str = "",
+    benchmark_metadata: dict | None = None,
 ) -> dict:
     """Run one agentic evaluation using OpenCode CLI."""
     model_id = model_config["model_id"]
@@ -124,10 +171,24 @@ def run_one_agentic(
     result_path = output_dir / f"run-{run_id}.json"
     metrics_path = output_dir / f"run-{run_id}.metrics.json"
 
-    if result_path.exists():
-        return {"skipped": True}
-
     output_dir.mkdir(parents=True, exist_ok=True)
+    benchmark_metadata = benchmark_metadata or {}
+    current_gt_hash = benchmark_metadata.get("ground_truth_content_hash", "")
+
+    if result_path.exists():
+        existing_gt_hash = ""
+        if metrics_path.exists():
+            try:
+                with open(metrics_path) as f:
+                    existing_gt_hash = json.load(f).get("ground_truth_content_hash", "")
+            except (json.JSONDecodeError, OSError):
+                existing_gt_hash = ""
+        if current_gt_hash and existing_gt_hash == current_gt_hash:
+            return {"skipped": True}
+        logger.info(
+            "Re-running %s run-%d because existing output is not stamped with current GT",
+            repo_slug, run_id,
+        )
 
     # OpenCode model format: provider/model_id
     provider = model_config.get("provider", "anthropic")
@@ -149,10 +210,8 @@ def run_one_agentic(
     start = time.time()
 
     try:
-        proc = subprocess.run(
+        proc = run_opencode_command(
             ["opencode", "run", "--format", "json", "-m", opencode_model, task],
-            capture_output=True,
-            text=True,
             timeout=timeout,
             cwd=str(repo_path),
             env={**os.environ, "NO_COLOR": "1"},
@@ -166,6 +225,9 @@ def run_one_agentic(
             wall_clock_seconds=elapsed, exit_status="timeout",
             error_message=f"Timed out after {timeout}s",
             prompt_version=prompt_version, prompt_label=prompt_label,
+            benchmark_version=benchmark_metadata.get("benchmark_version", ""),
+            ground_truth_version=benchmark_metadata.get("ground_truth_version", ""),
+            ground_truth_content_hash=benchmark_metadata.get("ground_truth_content_hash", ""),
         )
         save_metrics(metrics, str(metrics_path))
         return {"success": False, "error": "timeout", "elapsed": elapsed, "cost": 0}
@@ -177,6 +239,9 @@ def run_one_agentic(
             wall_clock_seconds=elapsed, exit_status="error",
             error_message=str(e),
             prompt_version=prompt_version, prompt_label=prompt_label,
+            benchmark_version=benchmark_metadata.get("benchmark_version", ""),
+            ground_truth_version=benchmark_metadata.get("ground_truth_version", ""),
+            ground_truth_content_hash=benchmark_metadata.get("ground_truth_content_hash", ""),
         )
         save_metrics(metrics, str(metrics_path))
         return {"success": False, "error": str(e), "elapsed": elapsed, "cost": 0}
@@ -243,6 +308,9 @@ def run_one_agentic(
             wall_clock_seconds=elapsed, exit_status="validation_failed",
             error_message=str(validation.errors[:3]),
             prompt_version=prompt_version, prompt_label=prompt_label,
+            benchmark_version=benchmark_metadata.get("benchmark_version", ""),
+            ground_truth_version=benchmark_metadata.get("ground_truth_version", ""),
+            ground_truth_content_hash=benchmark_metadata.get("ground_truth_content_hash", ""),
         )
         save_metrics(metrics, str(metrics_path))
         return {
@@ -262,6 +330,9 @@ def run_one_agentic(
         exit_status="success",
         llm_json_repair=validation.llm_json_repair,
         prompt_version=prompt_version, prompt_label=prompt_label,
+        benchmark_version=benchmark_metadata.get("benchmark_version", ""),
+        ground_truth_version=benchmark_metadata.get("ground_truth_version", ""),
+        ground_truth_content_hash=benchmark_metadata.get("ground_truth_content_hash", ""),
     )
     save_metrics(metrics, str(metrics_path))
 
@@ -309,6 +380,7 @@ def main() -> int:
     # Build system prompt
     cwe_families = load_cwe_families()
     prompt_info = build_prompt(cwe_families, template_path=args.prompt_template, label=args.prompt_label)
+    benchmark_metadata = load_benchmark_manifest()
 
     if args.dry_run:
         per_run, total = estimate_total_cost(
@@ -375,6 +447,7 @@ def main() -> int:
             repo_paths[repo_slug], timeout=args.timeout,
             prompt_version=prompt_info.version_hash,
             prompt_label=prompt_info.label,
+            benchmark_metadata=benchmark_metadata,
         )
         return repo_slug, run_id, result
 

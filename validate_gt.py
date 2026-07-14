@@ -24,9 +24,12 @@ VALID_CONFIDENCE = {"high", "medium", "low"}
 VALID_TYPES = {1, 2, 3, 4, 5}
 VALID_EVIDENCE_SOURCES = {"manual_review", "cve_id", "walkthrough"}
 CWE_PATTERN = re.compile(r"^CWE-\d+$")
+SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 
 TOP_LEVEL_REQUIRED = {
     "schema_version": str,
+    "benchmark_version": str,
+    "ground_truth_version": str,
     "repo_id": str,
     "repo_url": str,
     "commit_sha": str,
@@ -121,6 +124,11 @@ def validate_gt(gt_path: Path) -> list[ValidationError]:
 
     if gt.get("schema_version") != "1.0":
         errors.append(ValidationError(path_str, None, f"schema_version must be '1.0', got {gt.get('schema_version')!r}"))
+
+    for version_field in ("benchmark_version", "ground_truth_version"):
+        value = gt.get(version_field)
+        if isinstance(value, str) and not SEMVER_PATTERN.match(value):
+            errors.append(ValidationError(path_str, None, f"{version_field} must be semver, got {value!r}"))
 
     if "commit_sha" in gt and isinstance(gt["commit_sha"], str):
         if len(gt["commit_sha"]) != 40 or not re.match(r"^[0-9a-f]{40}$", gt["commit_sha"]):

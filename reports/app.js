@@ -6,6 +6,7 @@
   'use strict';
   if (!window.RV) return;
   var SC = window.RV.SCANNERS, COL = window.RV.COL;
+  var REPO_TOTAL = (window.RV.DATASET && window.RV.DATASET.repos) || 26;
 
   var state = { metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1 };
 
@@ -14,6 +15,12 @@
   function val(s, base) { return s[mk(base)]; }
   function activeF(s) { return val(s, state.metric); }
   function fmt(v) { return v.toFixed(1); }
+  // explicit vendor-site link on the tag line, labeled with the domain
+  function extLink(s) {
+    if (!s.url) return '';
+    var host = s.url.replace('https://', '').replace('www.', '').split('/')[0];
+    return ' <span class="dim">·</span> <a class="sc-ext" href="' + s.url + '" target="_blank" rel="noopener">' + host + ' ↗</a>';
+  }
 
   var tbody = document.getElementById('lb-body');
 
@@ -22,6 +29,8 @@
     var rows = SC.slice();
     var k = state.sortKey, dir = state.sortDir;
     rows.sort(function (a, b) {
+      // partial-coverage entries always sink below fully-covered ones
+      if (!a.partial !== !b.partial) return a.partial ? 1 : -1;
       if (k === 'name') return dir * a.name.localeCompare(b.name);
       if (k === 'prec') return dir * (a.prec - b.prec);
       if (k === 'repos') return dir * (a.repos - b.repos);
@@ -30,26 +39,32 @@
       return dir * (val(a, k) - val(b, k)); // f2 / f3
     });
 
-    var maxA = Math.max.apply(null, SC.map(activeF));
-    var leadName = SC.reduce(function (m, s) { return activeF(s) > activeF(m) ? s : m; }, SC[0]).name;
+    var ranked = SC.filter(function (s) { return !s.partial; });
+    if (!ranked.length) ranked = SC;
+    var maxA = Math.max.apply(null, ranked.map(activeF));
+    var leadName = ranked.reduce(function (m, s) { return activeF(s) > activeF(m) ? s : m; }, ranked[0]).name;
 
     tbody.innerHTML = '';
-    rows.forEach(function (s, i) {
+    var rankNo = 0;
+    rows.forEach(function (s) {
       var tr = document.createElement('tr');
       var isLead = s.name === leadName && s.ver === SC.filter(function (x) { return x.name === leadName; })[0].ver;
-      if (isLead) tr.className = 'leader';
-      var pct = Math.round((activeF(s) / maxA) * 100);
-      var reposCls = s.repos < 26 ? ' class="repos-bad"' : '';
+      if (isLead && !s.partial) tr.className = 'leader';
+      if (s.partial) tr.classList.add('partial');
+      var pct = Math.min(100, Math.round((activeF(s) / maxA) * 100));
+      var reposCls = s.repos < REPO_TOTAL ? ' class="repos-bad"' : '';
+      var rankCell = s.partial
+        ? '<span class="rank" title="Unranked — scanned fewer than 95% of the corpus; score not comparable">—</span>'
+        : '<span class="rank">' + String(++rankNo).padStart(2, '0') + '</span>';
 
       tr.innerHTML =
-        '<td class="l"><span class="rank">' + String(i + 1).padStart(2, '0') + '</span></td>' +
+        '<td class="l">' + rankCell + '</td>' +
         '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' +
-          (isLead ? ' <span class="crown">▲ leads</span>' : '') +
-          '<div class="cat-tag">' + s.ver + '</div></td>' +
+          '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
-        '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/26</span></td>' +
+        '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/' + REPO_TOTAL + '</span></td>' +
         '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + s.cost.toFixed(0)) + '</td>';
       tbody.appendChild(tr);
     });

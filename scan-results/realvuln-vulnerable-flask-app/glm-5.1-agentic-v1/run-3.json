@@ -6,16 +6,16 @@
       "path": "app/app.py",
       "start": {
         "line": 261,
-        "col": 13,
-        "offset": 9200
+        "col": 20,
+        "offset": 9500
       },
       "end": {
         "line": 261,
-        "col": 88,
-        "offset": 9275
+        "col": 90,
+        "offset": 9570
       },
       "extra": {
-        "message": "User input from content['search'] (request.json) is string-interpolated directly into a SQL query using %s formatting: `\"SELECT first_name, last_name, username FROM customer WHERE username = '%s';\" % search_term`. This allows full SQL injection via the /search endpoint.",
+        "message": "User input from request.json['search'] is concatenated directly into a SQL query string using Python % string formatting, then executed via db.engine.execute(). An attacker can inject arbitrary SQL to read, modify, or delete data from the database.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -27,24 +27,24 @@
       }
     },
     {
-      "check_id": "python.security.xss.render-template-string",
+      "check_id": "python.security.injection.ssti-404",
       "path": "app/app.py",
       "start": {
-        "line": 112,
-        "col": 5,
-        "offset": 3850
+        "line": 109,
+        "col": 9,
+        "offset": 3280
       },
       "end": {
         "line": 114,
-        "col": 78,
-        "offset": 4000
+        "col": 75,
+        "offset": 3470
       },
       "extra": {
-        "message": "The 404 error handler uses Python %s string formatting to insert request.url into an HTML template string, then passes it to render_template_string with dir, help, and locals in context. request.url is user-controlled and not auto-escaped by Jinja2 since it's inserted via %s before template rendering, enabling reflected XSS.",
-        "severity": "WARNING",
+        "message": "request.url (user-controlled) is interpolated into an HTML template string via %s formatting and then passed to render_template_string(). Jinja2 will evaluate any template syntax in the URL (e.g. {{config}}), enabling Server-Side Template Injection. The template context also exposes Python built-ins (dir=dir, help=help, locals=locals), allowing escalation to remote code execution.",
+        "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-79: Cross-Site Scripting (XSS)"
+            "CWE-94: Code Injection"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -52,95 +52,45 @@
       }
     },
     {
-      "check_id": "python.security.xss.render-template-string-error",
+      "check_id": "python.security.injection.ssti-search-error",
       "path": "app/app.py",
       "start": {
-        "line": 271,
-        "col": 13,
-        "offset": 9600
+        "line": 277,
+        "col": 25,
+        "offset": 10020
       },
       "end": {
         "line": 281,
-        "col": 78,
-        "offset": 10000
+        "col": 75,
+        "offset": 10280
       },
       "extra": {
-        "message": "In the /search error handler, the exception string (str(e)) is interpolated into an HTML template via %s, then rendered with render_template_string. Since the exception message can contain user-controlled SQL injection input, this allows reflected XSS through crafted search terms.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-79: Cross-Site Scripting (XSS)"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.authentication.insecure-jwt-verify",
-      "path": "app/app.py",
-      "start": {
-        "line": 97,
-        "col": 5,
-        "offset": 3300
-      },
-      "end": {
-        "line": 99,
-        "col": 20,
-        "offset": 3380
-      },
-      "extra": {
-        "message": "The insecure_verify() function calls jwt.decode(token, verify=False), which decodes the JWT without verifying the signature. This allows an attacker to forge any JWT claims and bypass authentication on any endpoint using this function (e.g., /get/<cust_id>).",
+        "message": "str(e) from a caught exception is interpolated into an HTML template string via %s formatting and passed to render_template_string(). Exception messages may contain user-controlled input from the search term, enabling Server-Side Template Injection. The template context also exposes Python built-ins (dir=dir, help=help, locals=locals), allowing escalation to remote code execution.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-287: Improper Authentication"
+            "CWE-94: Code Injection"
           ],
-          "confidence": "HIGH",
+          "confidence": "MEDIUM",
           "category": "security"
         }
       }
     },
     {
-      "check_id": "python.security.authentication.insecure-verify-used",
-      "path": "app/app.py",
-      "start": {
-        "line": 227,
-        "col": 9,
-        "offset": 8000
-      },
-      "end": {
-        "line": 227,
-        "col": 34,
-        "offset": 8025
-      },
-      "extra": {
-        "message": "The /get/<cust_id> endpoint uses insecure_verify(token) instead of verify_jwt(token), meaning JWT signatures are never checked. Any attacker can craft a token with arbitrary claims and access customer data.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-287: Improper Authentication"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.deserialization.yaml-load",
+      "check_id": "python.security.insecure-deserialization.yaml-load",
       "path": "app/app.py",
       "start": {
         "line": 329,
-        "col": 9,
-        "offset": 11600
+        "col": 15,
+        "offset": 12050
       },
       "end": {
         "line": 329,
         "col": 28,
-        "offset": 11619
+        "offset": 12063
       },
       "extra": {
-        "message": "yaml.load(y) is called without specifying Loader=yaml.SafeLoader, allowing arbitrary Python object deserialization. An attacker can upload a malicious YAML file to achieve remote code execution via YAML deserialization gadgets.",
+        "message": "yaml.load(y) is called without specifying a safe Loader (PyYAML 3.12 defaults to the full Loader class that supports arbitrary Python object constructors). An attacker can upload a crafted YAML file containing !!python/object/apply: directives to execute arbitrary code on the server.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -152,21 +102,96 @@
       }
     },
     {
-      "check_id": "python.security.hardcoded-credentials.secret-key",
+      "check_id": "python.security.authentication.insecure-jwt-verify",
       "path": "app/app.py",
       "start": {
-        "line": 28,
+        "line": 97,
+        "col": 15,
+        "offset": 3500
+      },
+      "end": {
+        "line": 97,
+        "col": 50,
+        "offset": 3535
+      },
+      "extra": {
+        "message": "jwt.decode(token, verify=False) disables all JWT signature and claim verification. This function is used in the /get/<cust_id> route to authenticate requests (line 227), allowing an attacker to forge any JWT token and bypass authentication entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.404-handler",
+      "path": "app/app.py",
+      "start": {
+        "line": 109,
+        "col": 9,
+        "offset": 3280
+      },
+      "end": {
+        "line": 112,
+        "col": 30,
+        "offset": 3400
+      },
+      "extra": {
+        "message": "request.url (user-controlled) is interpolated into an HTML template via %s string formatting before being rendered. Since the value is inserted into the template string before Jinja2 processing, auto-escaping does not apply, enabling Cross-Site Scripting.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.search-error-handler",
+      "path": "app/app.py",
+      "start": {
+        "line": 277,
+        "col": 25,
+        "offset": 10020
+      },
+      "end": {
+        "line": 280,
+        "col": 25,
+        "offset": 10220
+      },
+      "extra": {
+        "message": "str(e) is interpolated into an HTML template via %s string formatting before being rendered. Exception messages may contain user input from the search term, enabling Cross-Site Scripting since auto-escaping does not apply to values embedded before Jinja2 processing.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.hardcoded-credentials.secret-keys",
+      "path": "app/app.py",
+      "start": {
+        "line": 26,
         "col": 1,
         "offset": 850
       },
       "end": {
         "line": 28,
-        "col": 58,
-        "offset": 907
+        "col": 56,
+        "offset": 1020
       },
       "extra": {
-        "message": "Flask secret_key is hardcoded as 'F12Zr47j\\3yX R~X@H!jmM]Lwf/,?KT'. This key is used for session signing and cryptographic operations. An attacker with source access can forge session cookies.",
-        "severity": "INFO",
+        "message": "Three hardcoded secret keys are used: SECRET_KEY_HMAC='secret' (used for JWT signing), SECRET_KEY_HMAC_2='am0r3C0mpl3xK3y', and Flask secret_key='F12Zr47j\\3yX R~X@H!jmM]Lwf/,?KT' (used for session signing). These are embedded in source code and can be used to forge JWT tokens and session cookies.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-798: Use of Hard-coded Credentials"
@@ -177,32 +202,7 @@
       }
     },
     {
-      "check_id": "python.security.hardcoded-credentials.jwt-key",
-      "path": "app/app.py",
-      "start": {
-        "line": 26,
-        "col": 1,
-        "offset": 780
-      },
-      "end": {
-        "line": 27,
-        "col": 55,
-        "offset": 849
-      },
-      "extra": {
-        "message": "JWT signing keys are hardcoded: SECRET_KEY_HMAC='secret' and SECRET_KEY_HMAC_2='am0r3C0mpl3xK3y'. An attacker with source access can forge valid JWT tokens for any user.",
-        "severity": "INFO",
-        "metadata": {
-          "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.hardcoded-credentials.admin",
+      "check_id": "python.security.hardcoded-credentials.admin-account",
       "path": "app/app.py",
       "start": {
         "line": 62,
@@ -211,11 +211,11 @@
       },
       "end": {
         "line": 63,
-        "col": 32,
-        "offset": 2100
+        "col": 30,
+        "offset": 2090
       },
       "extra": {
-        "message": "Hardcoded admin credentials (username='admin', password='admin123') are created in setup_users(). These are trivially guessable and hardcoded in source code.",
+        "message": "A default admin account is created with hardcoded credentials: username='admin', password='admin123'. These are embedded in source code and provide privileged access to the application.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
@@ -227,24 +227,24 @@
       }
     },
     {
-      "check_id": "python.security.crypto.weak-hash-md5",
+      "check_id": "python.security.weak-crypto.md5-password-hashing",
       "path": "app/app.py",
       "start": {
         "line": 141,
-        "col": 13,
-        "offset": 4900
+        "col": 24,
+        "offset": 4700
       },
       "end": {
         "line": 141,
         "col": 52,
-        "offset": 4939
+        "offset": 4728
       },
       "extra": {
-        "message": "MD5 is used to hash passwords: hashlib.md5(password).hexdigest(). MD5 is cryptographically broken and unsuitable for password hashing \u2014 it lacks salting and is vulnerable to collision and rainbow table attacks.",
+        "message": "MD5 (hashlib.md5) is used to hash passwords during registration. MD5 is cryptographically broken and unsuitable for password hashing due to collision vulnerabilities and fast computation enabling brute-force attacks. No salt is used, making the hashes vulnerable to rainbow table attacks.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-328: Use of Weak Hash"
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -252,45 +252,20 @@
       }
     },
     {
-      "check_id": "python.security.crypto.plaintext-password-storage",
-      "path": "app/app.py",
-      "start": {
-        "line": 161,
-        "col": 9,
-        "offset": 5600
-      },
-      "end": {
-        "line": 161,
-        "col": 65,
-        "offset": 5656
-      },
-      "extra": {
-        "message": "Customer passwords are stored in plaintext when creating Customer objects: Customer(first_name, last_name, email, username, password, ccn). Unlike the User model which hashes with MD5, the Customer model stores the raw password.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-256: Plaintext Storage of a Password"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.exposure.credit-card-data",
+      "check_id": "python.security.sensitive-data-exposure.ccn-fetch",
       "path": "app/app.py",
       "start": {
         "line": 209,
         "col": 17,
-        "offset": 7400
+        "offset": 7550
       },
       "end": {
         "line": 212,
         "col": 50,
-        "offset": 7600
+        "offset": 7750
       },
       "extra": {
-        "message": "The /fetch/customer endpoint returns full credit card numbers (ccn field) in the API response without masking. Sensitive financial data should never be returned in full to clients.",
+        "message": "The /fetch/customer endpoint returns the customer's credit card number (ccn) in the API response without masking. Sensitive financial data should never be returned in full to clients.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -302,20 +277,20 @@
       }
     },
     {
-      "check_id": "python.security.exposure.credit-card-data-get",
+      "check_id": "python.security.sensitive-data-exposure.ccn-get",
       "path": "app/app.py",
       "start": {
         "line": 233,
         "col": 17,
-        "offset": 8150
+        "offset": 8450
       },
       "end": {
         "line": 236,
         "col": 50,
-        "offset": 8350
+        "offset": 8650
       },
       "extra": {
-        "message": "The /get/<cust_id> endpoint returns full credit card numbers (ccn field) in the API response without masking, exposing sensitive financial data.",
+        "message": "The /get/<cust_id> endpoint returns the customer's credit card number (ccn) in the API response without masking. Sensitive financial data should never be returned in full to clients.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -332,16 +307,16 @@
       "start": {
         "line": 208,
         "col": 17,
-        "offset": 7350
+        "offset": 7480
       },
       "end": {
         "line": 208,
         "col": 50,
-        "offset": 7383
+        "offset": 7513
       },
       "extra": {
-        "message": "The /fetch/customer endpoint retrieves a customer by ID (Customer.query.get(customer_id)) without checking that the authenticated user is authorized to access that specific customer's data. Any authenticated user can access any customer record by ID (Insecure Direct Object Reference).",
-        "severity": "ERROR",
+        "message": "The /fetch/customer endpoint retrieves a customer record by ID (Customer.query.get(customer_id)) without verifying that the authenticated user is authorized to access that specific record. Any authenticated user can access any customer's data by changing the ID.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-639: Authorization Bypass Through User-Controlled Key"
@@ -357,16 +332,16 @@
       "start": {
         "line": 231,
         "col": 17,
-        "offset": 8100
+        "offset": 8380
       },
       "end": {
         "line": 231,
-        "col": 45,
-        "offset": 8128
+        "col": 46,
+        "offset": 8409
       },
       "extra": {
-        "message": "The /get/<cust_id> endpoint retrieves a customer by ID from the URL path (Customer.query.get(cust_id)) without authorization checks. Combined with the insecure_verify function that doesn't validate JWT signatures, any user (even unauthenticated) can access any customer's data.",
-        "severity": "ERROR",
+        "message": "The /get/<cust_id> endpoint retrieves a customer record by ID (Customer.query.get(cust_id)) without verifying that the authenticated user is authorized to access that specific record. Any authenticated user can access any customer's data by changing the ID in the URL.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-639: Authorization Bypass Through User-Controlled Key"
@@ -377,24 +352,24 @@
       }
     },
     {
-      "check_id": "python.security.information-disclosure.exception-details",
+      "check_id": "python.security.missing-auth.xxe-uploader",
       "path": "app/app.py",
       "start": {
-        "line": 148,
-        "col": 13,
-        "offset": 5150
+        "line": 291,
+        "col": 1,
+        "offset": 10520
       },
       "end": {
-        "line": 148,
+        "line": 308,
         "col": 55,
-        "offset": 5192
+        "offset": 11300
       },
       "extra": {
-        "message": "Internal exception details are exposed to users via str(e.message) in error responses at /register/user and /register/customer. This can reveal stack traces, database schema, or internal implementation details.",
-        "severity": "WARNING",
+        "message": "The /xxe_uploader endpoint accepts file uploads without any authentication or authorization check. Any unauthenticated user can upload files to the server, which are then saved to disk and processed.",
+        "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-209: Generation of Error Message Containing Sensitive Information"
+            "CWE-306: Missing Authentication for Critical Function"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -402,24 +377,24 @@
       }
     },
     {
-      "check_id": "python.security.information-disclosure.exception-details-register-customer",
+      "check_id": "python.security.missing-auth.yaml-hammer",
       "path": "app/app.py",
       "start": {
-        "line": 167,
-        "col": 13,
-        "offset": 5800
+        "line": 316,
+        "col": 1,
+        "offset": 11380
       },
       "end": {
-        "line": 167,
+        "line": 331,
         "col": 55,
-        "offset": 5842
+        "offset": 12130
       },
       "extra": {
-        "message": "Internal exception details are exposed to users via str(e.message) in the /register/customer error response, potentially revealing sensitive internal information.",
-        "severity": "WARNING",
+        "message": "The /yaml_hammer endpoint accepts file uploads without any authentication or authorization check. Any unauthenticated user can upload files to the server, which are then saved to disk and deserialized, enabling remote code execution via YAML deserialization.",
+        "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-209: Generation of Error Message Containing Sensitive Information"
+            "CWE-306: Missing Authentication for Critical Function"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -427,26 +402,76 @@
       }
     },
     {
-      "check_id": "python.security.misconfiguration.jwt-print-token",
+      "check_id": "python.security.plaintext-storage.customer-password",
+      "path": "app/app.py",
+      "start": {
+        "line": 161,
+        "col": 13,
+        "offset": 5450
+      },
+      "end": {
+        "line": 161,
+        "col": 67,
+        "offset": 5504
+      },
+      "extra": {
+        "message": "Customer passwords are stored in plaintext in the database (passed directly as Customer(..., password, ...)). Unlike the User model which uses MD5 hashing, Customer passwords are stored without any hashing, exposing them if the database is compromised.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authentication.broken-login-comparison",
+      "path": "app/app.py",
+      "start": {
+        "line": 182,
+        "col": 17,
+        "offset": 6250
+      },
+      "end": {
+        "line": 182,
+        "col": 80,
+        "offset": 6313
+      },
+      "extra": {
+        "message": "The login endpoint compares the raw password from the request against the database value using filter_by(password=password). However, User passwords are stored as MD5 hashes (line 141), so this comparison will never match for legitimate users. An attacker who knows the MD5 hash (e.g., from a database leak) could use it directly as the password to authenticate.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.info-leak.logging-sensitive-data",
       "path": "app/app.py",
       "start": {
         "line": 87,
         "col": 9,
-        "offset": 3200
+        "offset": 3150
       },
       "end": {
         "line": 87,
-        "col": 60,
-        "offset": 3251
+        "col": 58,
+        "offset": 3199
       },
       "extra": {
-        "message": "Decoded JWT token contents are printed to server logs (print('JWT Token from API: {0}'.format(decoded))), potentially exposing sensitive claims like usernames and token metadata in log files.",
+        "message": "Sensitive data is printed to logs: decoded JWT token contents (line 87), full request JSON including passwords (line 179), search terms (line 260), and uploaded file contents (line 305). This exposes sensitive information in application logs.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
             "CWE-532: Insertion of Sensitive Information into Log File"
           ],
-          "confidence": "MEDIUM",
+          "confidence": "HIGH",
           "category": "security"
         }
       }

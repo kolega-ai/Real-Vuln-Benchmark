@@ -7,19 +7,19 @@
       "start": {
         "line": 320,
         "col": 7,
-        "offset": 12500
+        "offset": 10200
       },
       "end": {
         "line": 320,
-        "col": 74,
-        "offset": 12567
+        "col": 70,
+        "offset": 10263
       },
       "extra": {
-        "message": "User input from the GraphQL `filter` argument is interpolated directly into a raw SQL string passed to SQLAlchemy's `text()`: `text(\"title = '%s' or content = '%s'\" % (filter, filter))`. This allows SQL injection since `filter` is not parameterized.",
+        "message": "User-controlled 'filter' argument from GraphQL query is interpolated directly into a raw SQL expression passed to SQLAlchemy's text() filter. An attacker can inject arbitrary SQL (e.g., filter=\"aaa' OR 1=1--\") to bypass filters and read all data.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-89: SQL Injection"
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -27,24 +27,74 @@
       }
     },
     {
-      "check_id": "python.security.injection.command-injection-system-debug",
+      "check_id": "python.security.injection.command-injection-importpaste",
+      "path": "core/views.py",
+      "start": {
+        "line": 211,
+        "col": 5,
+        "offset": 6800
+      },
+      "end": {
+        "line": 211,
+        "col": 45,
+        "offset": 6840
+      },
+      "extra": {
+        "message": "The ImportPaste mutation constructs a shell command with user-controlled host, port, path, and scheme arguments and passes it to helpers.run_cmd() which calls os.popen(). The strip_dangerous_characters() function only removes ';' and '&' in hard mode and does nothing in easy mode, leaving '|', '$()', backticks, and newlines as injection vectors. An attacker can execute arbitrary OS commands via e.g. path='/ || id'.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.command-injection-diagnostics",
+      "path": "core/views.py",
+      "start": {
+        "line": 344,
+        "col": 7,
+        "offset": 11000
+      },
+      "end": {
+        "line": 346,
+        "col": 22,
+        "offset": 11050
+      },
+      "extra": {
+        "message": "The resolve_system_diagnostics resolver executes user-supplied 'cmd' argument via helpers.run_cmd(). In easy mode, allowed_cmds() returns True for any command. Even in hard mode, the allowed_cmds check has a bug: 'ps' 'whoami' is Python string concatenation resulting in 'pswhoami', so the check does not match 'ps' or 'whoami' individually. This allows arbitrary command execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.command-injection-debug",
       "path": "core/views.py",
       "start": {
         "line": 352,
         "col": 7,
-        "offset": 13700
+        "offset": 11200
       },
       "end": {
         "line": 352,
-        "col": 52,
-        "offset": 13745
+        "col": 43,
+        "offset": 11236
       },
       "extra": {
-        "message": "User input from the GraphQL `arg` argument is concatenated directly into a shell command: `helpers.run_cmd('ps {}'.format(arg))`. Since `run_cmd` uses `os.popen`, this allows arbitrary command injection with no sanitization or authentication required.",
+        "message": "The resolve_system_debug resolver passes user-controlled 'arg' argument directly into a shell command string: 'ps {}'.format(arg). An attacker can inject arbitrary commands via e.g. arg='; id' or arg='|| whoami'. No sanitization is applied to the arg parameter.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-78: OS Command Injection"
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -52,24 +102,24 @@
       }
     },
     {
-      "check_id": "python.security.injection.command-injection-system-diagnostics",
-      "path": "core/views.py",
+      "check_id": "python.security.injection.command-injection-popen",
+      "path": "core/helpers.py",
       "start": {
-        "line": 344,
-        "col": 8,
-        "offset": 13450
+        "line": 8,
+        "col": 1,
+        "offset": 200
       },
       "end": {
-        "line": 345,
-        "col": 38,
-        "offset": 13488
+        "line": 9,
+        "col": 30,
+        "offset": 250
       },
       "extra": {
-        "message": "In easy mode, `security.allowed_cmds(cmd)` returns True for any command (core/security.py:34-35), allowing `helpers.run_cmd(cmd)` to execute arbitrary user-supplied commands. Even in hard mode, the allowed_cmds whitelist is buggy due to Python string literal concatenation of 'ps' 'whoami' becoming 'pswhoami'.",
+        "message": "The run_cmd() function uses os.popen() to execute arbitrary shell commands. os.popen() spawns a shell, making any caller that passes user-controlled input vulnerable to command injection. This is the underlying sink for multiple command injection vulnerabilities in the application.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-78: OS Command Injection"
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -77,49 +127,24 @@
       }
     },
     {
-      "check_id": "python.security.injection.command-injection-import-paste",
-      "path": "core/views.py",
-      "start": {
-        "line": 210,
-        "col": 5,
-        "offset": 8200
-      },
-      "end": {
-        "line": 211,
-        "col": 50,
-        "offset": 8250
-      },
-      "extra": {
-        "message": "User-supplied host, port, path, and scheme arguments are used to construct a URL that is passed unsanitized to a curl command via `helpers.run_cmd(f'curl --insecure {url}')`. The `strip_dangerous_characters` function only removes `;` and `&` in hard mode, leaving backticks, `$()`, pipes, and newlines as injection vectors.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-78: OS Command Injection"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.injection.ssrf-import-paste",
+      "check_id": "python.security.ssrf.importpaste",
       "path": "core/views.py",
       "start": {
         "line": 210,
         "col": 5,
-        "offset": 8200
+        "offset": 6700
       },
       "end": {
         "line": 211,
-        "col": 50,
-        "offset": 8250
+        "col": 45,
+        "offset": 6840
       },
       "extra": {
-        "message": "The ImportPaste mutation constructs a URL from user-supplied scheme, host, port, and path arguments and fetches it server-side using curl. This allows Server-Side Request Forgery to access internal services, cloud metadata endpoints, and other restricted resources. The `strip_dangerous_characters` function does not validate the URL target.",
+        "message": "The ImportPaste mutation makes an HTTP request to a user-specified URL (scheme, host, port, path) using curl. An attacker can make the server issue requests to internal services (e.g., http://169.254.169.254/latest/meta-data/ for cloud metadata or http://localhost:8080/admin for internal services), enabling Server-Side Request Forgery.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-918: Server-Side Request Forgery"
+            "CWE-918: Server-Side Request Forgery (SSRF)"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -127,24 +152,24 @@
       }
     },
     {
-      "check_id": "python.security.injection.path-traversal-upload",
+      "check_id": "python.security.path-traversal.save-file",
       "path": "core/helpers.py",
       "start": {
         "line": 25,
         "col": 5,
-        "offset": 650
+        "offset": 680
       },
       "end": {
         "line": 25,
-        "col": 40,
-        "offset": 685
+        "col": 38,
+        "offset": 713
       },
       "extra": {
-        "message": "The `save_file` function concatenates user-supplied `filename` directly with the upload directory: `open(WEB_UPLOADDIR + filename, 'w')`. There is no path traversal validation, allowing an attacker to write files to arbitrary locations (e.g., `../../etc/cron.d/malicious` as a filename). The filename originates from the `UploadPaste` GraphQL mutation.",
+        "message": "The save_file() function concatenates user-supplied 'filename' directly with the upload directory path (WEB_UPLOADDIR + filename) without path sanitization. An attacker can use path traversal sequences like '../../../etc/cron.d/malicious' to write files to arbitrary locations on the filesystem.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -152,20 +177,20 @@
       }
     },
     {
-      "check_id": "python.security.auth.jwt-verification-disabled",
+      "check_id": "python.security.authentication.jwt-signature-bypass",
       "path": "core/helpers.py",
       "start": {
         "line": 21,
         "col": 3,
-        "offset": 530
+        "offset": 560
       },
       "end": {
         "line": 21,
         "col": 80,
-        "offset": 607
+        "offset": 637
       },
       "extra": {
-        "message": "JWT tokens are decoded with signature and expiration verification disabled: `decode(token, options={\"verify_signature\":False, \"verify_exp\":False})`. This allows an attacker to forge arbitrary JWT tokens and impersonate any user, including admin, bypassing all JWT-based authentication.",
+        "message": "The get_identity() function decodes JWT tokens with verify_signature=False and verify_exp=False. This means the signature is never validated and tokens never expire. An attacker can forge a JWT with any identity claim (e.g., identity='admin') to impersonate any user, including administrators.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -177,7 +202,33 @@
       }
     },
     {
-      "check_id": "python.security.auth.hardcoded-secret-key",
+      "check_id": "python.security.authentication.plaintext-password",
+      "path": "core/views.py",
+      "start": {
+        "line": 234,
+        "col": 9,
+        "offset": 7500
+      },
+      "end": {
+        "line": 234,
+        "col": 70,
+        "offset": 7561
+      },
+      "extra": {
+        "message": "The Login mutation queries the database with plaintext password comparison (filter_by(username=username, password=password)). Passwords are stored in plaintext in the database (no hashing), allowing anyone with database access to read all passwords. This also enables timing-based enumeration.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password",
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.hardcoded-credentials.secret-key",
       "path": "app.py",
       "start": {
         "line": 14,
@@ -186,11 +237,11 @@
       },
       "end": {
         "line": 14,
-        "col": 34,
-        "offset": 433
+        "col": 31,
+        "offset": 430
       },
       "extra": {
-        "message": "The Flask SECRET_KEY is hardcoded as 'dvga': `app.config['SECRET_KEY'] = 'dvga'`. This key is used for session signing and cryptographic operations. An attacker who knows this key can forge session cookies and other signed data.",
+        "message": "Flask SECRET_KEY is hardcoded as 'dvga'. This key is used for session signing and CSRF protection. An attacker who knows this key can forge session cookies and bypass CSRF protections.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
@@ -202,21 +253,21 @@
       }
     },
     {
-      "check_id": "python.security.auth.hardcoded-jwt-secret",
+      "check_id": "python.security.hardcoded-credentials.jwt-secret",
       "path": "app.py",
       "start": {
         "line": 15,
         "col": 1,
-        "offset": 434
+        "offset": 431
       },
       "end": {
         "line": 15,
-        "col": 40,
-        "offset": 473
+        "col": 37,
+        "offset": 467
       },
       "extra": {
-        "message": "The JWT secret key is hardcoded as 'dvga': `app.config[\"JWT_SECRET_KEY\"] = 'dvga'`. Combined with the disabled JWT signature verification, this allows complete token forgery.",
-        "severity": "INFO",
+        "message": "JWT_SECRET_KEY is hardcoded as 'dvga'. This key is used for signing JWT access and refresh tokens. An attacker who knows this key can forge valid JWT tokens for any user, granting full authentication bypass. Combined with the JWT signature bypass in get_identity(), this compounds the authentication failure.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-798: Use of Hard-coded Credentials"
@@ -227,20 +278,176 @@
       }
     },
     {
-      "check_id": "python.security.disclosure.stack-trace",
-      "path": "core/view_override.py",
+      "check_id": "python.security.hardcoded-credentials.passwords",
+      "path": "setup.py",
       "start": {
-        "line": 53,
-        "col": 13,
+        "line": 63,
+        "col": 5,
         "offset": 1900
       },
       "end": {
-        "line": 55,
-        "col": 74,
-        "offset": 2100
+        "line": 64,
+        "col": 76,
+        "offset": 2000
       },
       "extra": {
-        "message": "Stack traces, exception details, and server file paths are included in GraphQL error responses: `traceback.format_stack(frame)`, `traceback.format_exc()`, and `caller_filename_full` are added to the error extensions. This leaks internal implementation details to clients.",
+        "message": "Admin and operator accounts are created with hardcoded weak passwords: admin password is 'changeme' and operator password is 'password123'. These are trivially guessable credentials for privileged accounts.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.missing-auth-diagnostics",
+      "path": "core/views.py",
+      "start": {
+        "line": 337,
+        "col": 3,
+        "offset": 10800
+      },
+      "end": {
+        "line": 347,
+        "col": 14,
+        "offset": 10950
+      },
+      "extra": {
+        "message": "The resolve_system_diagnostics resolver allows executing OS commands without any authentication check. Any unauthenticated user can invoke this endpoint. Combined with command injection, this gives unauthenticated remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.missing-auth-debug",
+      "path": "core/views.py",
+      "start": {
+        "line": 349,
+        "col": 3,
+        "offset": 11000
+      },
+      "end": {
+        "line": 355,
+        "col": 12,
+        "offset": 11100
+      },
+      "extra": {
+        "message": "The resolve_system_debug resolver executes shell commands based on user input without any authentication or authorization check. Any unauthenticated user can invoke this endpoint to execute commands on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.missing-auth-delete-all",
+      "path": "core/views.py",
+      "start": {
+        "line": 385,
+        "col": 3,
+        "offset": 12000
+      },
+      "end": {
+        "line": 389,
+        "col": 40,
+        "offset": 12100
+      },
+      "extra": {
+        "message": "The resolve_delete_all_pastes resolver deletes ALL pastes from the database without any authentication or authorization check. Any unauthenticated user can wipe all data via a simple GraphQL query.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.idor-edit-paste",
+      "path": "core/views.py",
+      "start": {
+        "line": 140,
+        "col": 3,
+        "offset": 4500
+      },
+      "end": {
+        "line": 155,
+        "col": 30,
+        "offset": 4700
+      },
+      "extra": {
+        "message": "The EditPaste mutation allows editing any paste by ID without checking that the requesting user owns the paste. An attacker can modify any paste in the system by simply providing its ID, leading to Insecure Direct Object Reference (IDOR).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.idor-delete-paste",
+      "path": "core/views.py",
+      "start": {
+        "line": 164,
+        "col": 3,
+        "offset": 4900
+      },
+      "end": {
+        "line": 173,
+        "col": 30,
+        "offset": 5100
+      },
+      "extra": {
+        "message": "The DeletePaste mutation allows deleting any paste by ID without checking ownership. An attacker can delete any paste in the system by providing its ID, leading to Insecure Direct Object Reference (IDOR).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.information-disclosure.stack-traces",
+      "path": "core/view_override.py",
+      "start": {
+        "line": 52,
+        "col": 13,
+        "offset": 1700
+      },
+      "end": {
+        "line": 55,
+        "col": 66,
+        "offset": 1900
+      },
+      "extra": {
+        "message": "The format_custom_error function exposes full Python stack traces, exception debug information, and source file paths in GraphQL error responses via the 'extensions.exception' field. This leaks internal application structure, file paths, and code details to attackers, aiding further exploitation.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -252,20 +459,95 @@
       }
     },
     {
+      "check_id": "python.security.information-disclosure.password-exposure",
+      "path": "core/views.py",
+      "start": {
+        "line": 61,
+        "col": 5,
+        "offset": 1700
+      },
+      "end": {
+        "line": 65,
+        "col": 18,
+        "offset": 1850
+      },
+      "extra": {
+        "message": "The resolve_password method returns the actual plaintext password when the identity in the request context is 'admin'. Since JWT signature verification is disabled (get_identity uses verify_signature=False), an attacker can forge a token with identity='admin' to retrieve all user passwords from the GraphQL API.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.stored-xss-paste",
+      "path": "templates/paste.html",
+      "start": {
+        "line": 65,
+        "col": 19,
+        "offset": 2300
+      },
+      "end": {
+        "line": 74,
+        "col": 18,
+        "offset": 2900
+      },
+      "extra": {
+        "message": "Paste data (title, content, owner name, IP address, user agent) is rendered into HTML using JavaScript template literals (${paste.title}, ${paste.content}, etc.) without sanitization. Since pastes can contain arbitrary content (e.g., <script>alert(1)</script>), this results in stored Cross-Site Scripting (XSS) when paste content is displayed in the browser.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.stored-xss-paste-list",
+      "path": "templates/paste.html",
+      "start": {
+        "line": 132,
+        "col": 17,
+        "offset": 5200
+      },
+      "end": {
+        "line": 143,
+        "col": 18,
+        "offset": 5900
+      },
+      "extra": {
+        "message": "Paste data is rendered into HTML via template literals in the get_pastes() function without sanitization (e.g., ${title}, ${content}). A stored XSS payload in a paste title or content will execute when the public or private paste lists are loaded.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
       "check_id": "python.security.dos.simulate-load",
       "path": "core/security.py",
       "start": {
-        "line": 12,
-        "col": 5,
-        "offset": 280
+        "line": 8,
+        "col": 1,
+        "offset": 150
       },
       "end": {
-        "line": 15,
-        "col": 14,
-        "offset": 360
+        "line": 16,
+        "col": 12,
+        "offset": 330
       },
       "extra": {
-        "message": "The `simulate_load` function executes a blocking loop with `time.sleep(0.1)` for 200-500 iterations (20-50 seconds), called from the `resolve_system_update` GraphQL query. This allows an unauthenticated attacker to cause Denial of Service by repeatedly invoking this query, tying up server resources.",
+        "message": "The simulate_load() function blocks the server thread for up to 50 seconds (limit up to 500 iterations * 0.1s sleep). This is triggered by the resolve_system_update query. An attacker can repeatedly call this query to exhaust server threads and cause Denial of Service.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -277,74 +559,76 @@
       }
     },
     {
-      "check_id": "python.security.auth.missing-authorization-edit-paste",
+      "check_id": "python.security.dos.batch-queries",
       "path": "core/views.py",
       "start": {
-        "line": 140,
-        "col": 5,
-        "offset": 5450
+        "line": 508,
+        "col": 1,
+        "offset": 15500
       },
       "end": {
-        "line": 148,
-        "col": 68,
-        "offset": 5700
-      },
-      "extra": {
-        "message": "The `EditPaste` mutation allows editing any paste by ID without checking if the requesting user owns the paste. Any authenticated or unauthenticated user can modify any paste in the system, including private pastes.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-862: Missing Authorization"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.auth.missing-authorization-delete-paste",
-      "path": "core/views.py",
-      "start": {
-        "line": 164,
-        "col": 5,
-        "offset": 6400
-      },
-      "end": {
-        "line": 167,
-        "col": 50,
-        "offset": 6550
-      },
-      "extra": {
-        "message": "The `DeletePaste` mutation allows deleting any paste by ID without checking ownership. Any user can delete any paste in the system.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-862: Missing Authorization"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.auth.missing-authentication-system-debug",
-      "path": "core/views.py",
-      "start": {
-        "line": 349,
+        "line": 514,
         "col": 3,
-        "offset": 13550
-      },
-      "end": {
-        "line": 352,
-        "col": 52,
-        "offset": 13745
+        "offset": 15700
       },
       "extra": {
-        "message": "The `resolve_system_debug` resolver executes shell commands via `helpers.run_cmd('ps {}'.format(arg))` without any authentication or authorization check. Any client can invoke this endpoint to execute commands on the server.",
+        "message": "The /graphql endpoint is configured with batch=True, allowing multiple GraphQL operations in a single HTTP request without any limit on the number of operations. An attacker can send a batch of thousands of expensive queries in a single request, causing Denial of Service.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption",
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.dos.high-recursion-limit",
+      "path": "app.py",
+      "start": {
+        "line": 26,
+        "col": 3,
+        "offset": 700
+      },
+      "end": {
+        "line": 26,
+        "col": 30,
+        "offset": 727
+      },
+      "extra": {
+        "message": "The application sets sys.setrecursionlimit(100000), allowing deeply nested or circular GraphQL fragments to consume massive amounts of memory and CPU before being caught. Combined with the circular Paste->Owner->Paste relationship in the schema, this enables Denial of Service through deeply nested queries.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption",
+            "CWE-789: Memory Allocation with Excessive Size Value"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.misconfiguration.insufficient-sanitization",
+      "path": "core/security.py",
+      "start": {
+        "line": 41,
+        "col": 1,
+        "offset": 900
+      },
+      "end": {
+        "line": 46,
+        "col": 13,
+        "offset": 1050
+      },
+      "extra": {
+        "message": "The strip_dangerous_characters() function only removes ';' and '&' in hard mode, and does nothing in easy mode. It does not filter '|', '$()', backticks, newlines, or other shell metacharacters, making it trivially bypassable for command injection.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-306: Missing Authentication for Critical Function"
+            "CWE-20: Improper Input Validation"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -352,223 +636,75 @@
       }
     },
     {
-      "check_id": "python.security.auth.missing-authentication-delete-all-pastes",
-      "path": "core/views.py",
-      "start": {
-        "line": 385,
-        "col": 3,
-        "offset": 15000
-      },
-      "end": {
-        "line": 388,
-        "col": 46,
-        "offset": 15100
-      },
-      "extra": {
-        "message": "The `resolve_delete_all_pastes` resolver deletes all pastes from the database without any authentication or authorization check. Any client can invoke this to destroy all data.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-306: Missing Authentication for Critical Function"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.auth.security-mode-bypass",
-      "path": "core/views.py",
-      "start": {
-        "line": 470,
-        "col": 5,
-        "offset": 18200
-      },
-      "end": {
-        "line": 475,
-        "col": 32,
-        "offset": 18350
-      },
-      "extra": {
-        "message": "The `@app.before_request` handler reads the `X-DVGA-MODE` header and sets the security mode accordingly. Any client can send `X-DVGA-MODE: Beginner` (or any non-'Expert' value) to disable all security middleware (depth protection, cost protection, introspection protection, operation name protection, and query denylist), effectively bypassing all hardening controls.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-614: Sensitive Cookie Without 'Secure' Flag"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.auth.password-exposure-graphql",
-      "path": "core/views.py",
-      "start": {
-        "line": 50,
-        "col": 5,
-        "offset": 1700
-      },
-      "end": {
-        "line": 65,
-        "col": 20,
-        "offset": 2250
-      },
-      "extra": {
-        "message": "The `UserObject` GraphQL type excludes `email` but exposes the `password` field. The `resolve_password` method checks `info.context.json.get('identity') == 'admin'` but this can be bypassed by including `\"identity\": \"admin\"` in the request JSON body directly, or by forging a JWT (due to disabled signature verification). This exposes plaintext user passwords through the API.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.crypto.plaintext-password-storage",
-      "path": "core/models.py",
-      "start": {
-        "line": 17,
-        "col": 4,
-        "offset": 500
-      },
-      "end": {
-        "line": 21,
-        "col": 18,
-        "offset": 640
-      },
-      "extra": {
-        "message": "The `User.create_user` method stores passwords in plaintext without hashing: `obj = cls(**kw)` followed by `db.session.add(obj)`. Passwords like 'changeme' and 'password123' (seen in setup.py:49-64) are stored as-is, making them trivially extractible if the database is compromised.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-256: Plaintext Storage of a Password"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.xss.dom-xss-subscription",
-      "path": "templates/paste.html",
-      "start": {
-        "line": 65,
-        "col": 11,
-        "offset": 2200
-      },
-      "end": {
-        "line": 74,
-        "col": 30,
-        "offset": 2600
-      },
-      "extra": {
-        "message": "User-controlled data from GraphQL (paste.title, paste.content, paste.owner.name, paste.ipAddr, paste.userAgent) is inserted into HTML via JavaScript template literals and rendered using jQuery's `.prependTo()` without sanitization. Since paste content is user-supplied, an attacker can inject arbitrary HTML/JavaScript (e.g., `<img src=x onerror=alert(1)>` as a paste title) that executes in other users' browsers.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-79: Cross-site Scripting"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.xss.dom-xss-paste-list",
-      "path": "templates/paste.html",
-      "start": {
-        "line": 132,
-        "col": 17,
-        "offset": 4600
-      },
-      "end": {
-        "line": 142,
-        "col": 30,
-        "offset": 5100
-      },
-      "extra": {
-        "message": "User-controlled data from the GraphQL pastes query (title, content, owner, ip_addr, userAgent) is inserted into HTML via JavaScript template literals and appended to the DOM using jQuery's `.append()` without sanitization. This allows XSS through malicious paste content.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-79: Cross-site Scripting"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.auth.idor-resolve-paste",
-      "path": "core/views.py",
-      "start": {
-        "line": 324,
-        "col": 3,
-        "offset": 12650
-      },
-      "end": {
-        "line": 330,
-        "col": 50,
-        "offset": 12900
-      },
-      "extra": {
-        "message": "The `resolve_paste` query allows accessing any non-burned paste by ID or title without filtering by `public` status. This means private pastes belonging to other users can be accessed by any client, constituting an Insecure Direct Object Reference vulnerability.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-639: Authorization Bypass Through User-Controlled Key"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.auth.missing-auth-users",
-      "path": "core/views.py",
-      "start": {
-        "line": 370,
-        "col": 3,
-        "offset": 14400
-      },
-      "end": {
-        "line": 378,
-        "col": 18,
-        "offset": 14600
-      },
-      "extra": {
-        "message": "The `resolve_users` query returns all users (including password hashes) without any authentication or authorization check. Any client can enumerate all user accounts in the system.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-306: Missing Authentication for Critical Function"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.auth.broken-allowed-cmds-whitelist",
+      "check_id": "python.security.misconfiguration.allowed-cmds-bug",
       "path": "core/security.py",
       "start": {
         "line": 37,
-        "col": 10,
-        "offset": 1100
+        "col": 6,
+        "offset": 850
       },
       "end": {
-        "line": 38,
-        "col": 22,
-        "offset": 1150
+        "line": 37,
+        "col": 52,
+        "offset": 896
       },
       "extra": {
-        "message": "In `allowed_cmds`, the tuple `('echo', 'ps' 'whoami', 'tail')` contains a Python string literal concatenation bug: `'ps' 'whoami'` evaluates to `'pswhoami'` at compile time, not two separate strings. This means `whoami` is never allowed in hard mode (contrary to intent), and the nonsensical `pswhoami` is allowed. The intended whitelist of `ps` and `whoami` as separate allowed prefixes is broken.",
+        "message": "In allowed_cmds(), the string 'ps' 'whoami' is Python implicit string concatenation, resulting in 'pswhoami'. This means the check cmd.startswith(('echo', 'pswhoami', 'tail')) never matches 'ps' or 'whoami' commands as intended. The missing comma between 'ps' and 'whoami' is a bug that weakens the command whitelist in hard mode.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
+            "CWE-20: Improper Input Validation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.misconfiguration.debug-mode",
+      "path": "config.py",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 270
+      },
+      "end": {
+        "line": 11,
+        "col": 45,
+        "offset": 314
+      },
+      "extra": {
+        "message": "Flask debug mode is enabled by default (WEB_DEBUG defaults to True). In production, debug mode exposes an interactive debugger that allows arbitrary code execution, and leaks detailed error information.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.dos.deny-list-bypass",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 94,
+        "col": 5,
+        "offset": 2800
+      },
+      "end": {
+        "line": 103,
+        "col": 25,
+        "offset": 3200
+      },
+      "extra": {
+        "message": "The processMiddleware (deny list) only checks queries when info.context.json is a dict, but does not iterate over list (batch) payloads. An attacker can bypass the deny list by sending the forbidden query as part of a batch request (JSON array payload). Additionally, the deny list only checks exact normalized strings, which can be bypassed by adding a valid operation name.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-284: Improper Access Control",
             "CWE-863: Incorrect Authorization"
           ],
           "confidence": "HIGH",
@@ -577,24 +713,24 @@
       }
     },
     {
-      "check_id": "python.security.injection.inadequate-input-sanitization",
-      "path": "core/security.py",
+      "check_id": "python.security.dos.depth-protection-bypass",
+      "path": "core/middleware.py",
       "start": {
-        "line": 41,
-        "col": 3,
-        "offset": 1180
+        "line": 34,
+        "col": 9,
+        "offset": 1000
       },
       "end": {
-        "line": 46,
-        "col": 18,
-        "offset": 1370
+        "line": 35,
+        "col": 37,
+        "offset": 1050
       },
       "extra": {
-        "message": "The `strip_dangerous_characters` function only removes `;` and `&` characters in hard mode, and does nothing in easy mode. This is insufficient to prevent command injection \u2014 backticks (`` ` ``), `$()`, pipes (`|`), newlines, and other shell metacharacters are not stripped, allowing command injection bypass in the ImportPaste mutation and other endpoints.",
+        "message": "In DepthProtectionMiddleware.resolve(), the mutation branch calls parser.get_depth(query) instead of parser.get_depth(mutation). Since 'query' is None when a mutation is present, the depth will always be 0 for mutations, completely bypassing depth protection for mutation operations.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-20: Improper Input Validation"
+            "CWE-400: Uncontrolled Resource Consumption"
           ],
           "confidence": "HIGH",
           "category": "security"

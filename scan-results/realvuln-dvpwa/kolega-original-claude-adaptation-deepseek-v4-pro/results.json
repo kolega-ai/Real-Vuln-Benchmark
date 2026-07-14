@@ -1,0 +1,364 @@
+{
+  "results": [
+    {
+      "path": "sqli/dao/student.py",
+      "check_id": "kolega.claude-adaptation.sql-injection",
+      "start": {
+        "line": 42,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "SQL Injection in Student Creation via String Formatting \u2014 Attacker can inject arbitrary SQL, enabling full database compromise \u2014 read/modify/delete all tables including user credentials, student records, marks, and reviews; potential for privilege escalation by modifying is_admin flag. [verified: Unauthenticated POST /students/ passes attacker-controlled data['name'] (sqli/views.py:57) directly to Student.create() (sqli/dao/student.py:42), which uses % string formatting to interpolate it into the SQL INSERT with no parameterization, validation, auth check, or CSRF protection \u2014 all other DAOs in the project correctly use cur.execute(q, params).]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "kolega": {
+            "cluster_id": "sql_injection",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/views.py",
+      "check_id": "kolega.claude-adaptation.missing-authentication",
+      "start": {
+        "line": 54,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing authentication on student creation endpoint \u2014 Unauthenticated attackers can create arbitrary student records and, through the SQL injection in Student.create(), execute arbitrary SQL against the database. Enables the critical SQLi to be exploited without credentials. [verified: The students POST handler (views.py:54) has no @authorize() or get_auth_user() call, and Student.create() in student.py:38-42 uses unsafe % string formatting on attacker-supplied name input, enabling unauthenticated SQL injection against the database.]",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authentication",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/app.py",
+      "check_id": "kolega.claude-adaptation.csrf-disabled",
+      "start": {
+        "line": 26,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "CSRF Protection Disabled \u2014 All State-Changing Endpoints Vulnerable \u2014 Attacker can forge requests from a malicious site that perform authenticated actions on behalf of a victim \u2014 create courses/students, submit reviews, evaluate students, or log the victim out \u2014 by exploiting the victim's active session cookie. [verified: The csrf_middleware defined in sqli/middlewares.py:29-40 is commented out in app.py:26 (`# csrf_middleware,`), and no view performs its own CSRF token validation \u2014 all state-changing POST endpoints lack server-side token verification despite templates embedding _csrf_token fields.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-352"
+          ],
+          "kolega": {
+            "cluster_id": "csrf_disabled",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/dao/user.py",
+      "check_id": "kolega.claude-adaptation.weak-cryptographic-hash",
+      "start": {
+        "line": 37,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Weak MD5 Password Hashing Without Salt \u2014 All user passwords can be cracked near-instantly via precomputed rainbow tables or brute-force, giving attackers full access to every account including admin. [verified: check_password() at sqli/dao/user.py:41 uses unsalted md5().hexdigest() with no salt or key-stretching; database fixtures (001-fixtures.sql) store passwords as PostgreSQL md5() with no salt, and the method is called on every login at sqli/views.py:41.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-327"
+          ],
+          "kolega": {
+            "cluster_id": "weak_cryptographic_hash",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/dao/user.py",
+      "check_id": "kolega.claude-adaptation.weak-password-hash",
+      "start": {
+        "line": 41,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Weak password hashing \u2014 unsalted MD5 \u2014 All user passwords can be cracked near-instantly if the database is compromised (e.g., via the SQL injection). Account takeover for every user. Identical passwords produce identical hashes, enabling bulk password recovery. [verified: Same unsalted MD5 in check_password() at line 41 \u2014 no salt, no bcrypt/PBKDF2/argon2, two users share identical hash 5f4dcc\u2026; reachable via login POST /, enabling instant rainbow-table cracking if the hash DB is exposed.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-327"
+          ],
+          "kolega": {
+            "cluster_id": "weak_password_hash",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/middlewares.py",
+      "check_id": "kolega.claude-adaptation.insecure-cookie-configuration",
+      "start": {
+        "line": 17,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Session Cookie Missing HttpOnly Flag \u2014 Enables session token theft via XSS, leading to complete account takeover of any user whose browser renders a malicious course review. [verified: RedisStorage is explicitly initialized with httponly=False in sqli/middlewares.py:20, making the AIOHTTP_SESSION cookie readable by JavaScript. Combined with confirmed stored XSS (autoescape=False, review_text rendered raw in course.jinja2:21), this enables session theft and account takeover with no compensating control.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1004"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_cookie_configuration",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/middlewares.py",
+      "check_id": "kolega.claude-adaptation.missing-samesite-cookie",
+      "start": {
+        "line": 17,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Session Cookie Missing SameSite Attribute \u2014 Enables CSRF \u2014 Browsers send the session cookie with cross-site requests, directly facilitating the CSRF vulnerability; combined with httponly=False and autoescape=False stored XSS, attackers can both steal cookies via script and perform authenticated CSRF actions. [verified: RedisStorage at sqli/middlewares.py:20 is constructed without samesite param (defaults to None, no SameSite attribute set), and the CSRF middleware is commented out at sqli/app.py:27 \u2014 templates render CSRF tokens but they are never server-side validated, leaving all POST endpoints (login, add student/course, evaluate, submit review, logout) with zero CSRF protection.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1275"
+          ],
+          "kolega": {
+            "cluster_id": "missing_samesite_cookie",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "medium"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/middlewares.py",
+      "check_id": "kolega.claude-adaptation.insecure-cookie-flags",
+      "start": {
+        "line": 21,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Session cookie missing HttpOnly flag \u2014 accessible to JavaScript \u2014 Increases the severity of any XSS vulnerability \u2014 session hijacking becomes trivial when JavaScript can read the session cookie. An XSS payload can exfiltrate the AIOHTTP_SESSION cookie and allow full account takeover. [verified: Same httponly=False configuration at sqli/middlewares.py:20; the session cookie is accessible to document.cookie on every request. With autoescape=False and unsanitized review_text stored and rendered raw in templates, stored XSS can trivially exfiltrate session tokens for full account compromise.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-614"
+          ],
+          "kolega": {
+            "cluster_id": "insecure_cookie_flags",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/views.py",
+      "check_id": "kolega.claude-adaptation.missing-authentication",
+      "start": {
+        "line": 130,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing Authentication on Student Evaluation Endpoint \u2014 Anonymous attackers can modify academic records by assigning arbitrary points to any student for any course, compromising grade integrity. [verified: The evaluate view (views.py:130-141) has no @authorize() decorator and no get_auth_user() call; no global auth middleware exists (csrf_middleware is commented out in app.py:27), and the course.jinja2 template's {% if auth_user.is_admin %} is purely client-side \u2014 a direct POST to /students/{id}/evaluate/{id} bypasses it entirely, allowing anyone to insert arbitrary marks.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authentication",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/views.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 132,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing authentication and authorization on student evaluation endpoint \u2014 Unauthenticated attackers can modify any student's marks/evaluations in any course. Academic record integrity is completely compromised. Privilege escalation \u2014 non-admin users can perform admin-only evaluation actions. [verified: Duplicate of finding 0: the evaluate() view at views.py:132 has no @authorize() decorator and no get_auth_user() call, so any direct POST request bypasses the template's client-side {% if auth_user.is_admin %} check entirely.]",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/app.py",
+      "check_id": "kolega.claude-adaptation.debug-enabled",
+      "start": {
+        "line": 24,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Debug Mode Enabled in Production \u2014 Sensitive Error Information Disclosure \u2014 Attacker can trigger exceptions to obtain stack traces, file paths, variable dumps, and internal application details, significantly aiding reconnaissance for further targeted attacks. [verified: debug=True is hardcoded at app.py:24 with no config override, and the 50x error handler at sqli/templates/errors/50x.jinja2:7 renders `error.__dict__` via Jinja2 with autoescape=False (app.py:33), leaking full exception internals including stack traces and file paths to any client that triggers an error.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "kolega": {
+            "cluster_id": "debug_enabled",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/views.py",
+      "check_id": "kolega.claude-adaptation.missing-rate-limiting",
+      "start": {
+        "line": 33,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "No rate limiting on login endpoint \u2014 brute-force enabled \u2014 Attackers can perform unlimited brute-force password guessing against all user accounts. Combined with weak MD5 hashing and weak default passwords (e.g., password, spidey), account compromise is fast and reliable. [verified: Duplicate of finding 4: the login handler at views.py:33 has zero rate-limiting, account-lockout, or CAPTCHA mechanisms, permitting unlimited password-guessing attacks against MD5-hashed credentials.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "kolega": {
+            "cluster_id": "missing_rate_limiting",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/views.py",
+      "check_id": "kolega.claude-adaptation.session-fixation",
+      "start": {
+        "line": 39,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Session Fixation \u2014 No Session Rotation on Login \u2014 An attacker can pre-set a known session ID in a victim's browser, wait for the victim to authenticate, then use the same session ID to access the victim's authenticated session. [verified: On successful login (views.py:39), only session['user_id'] is set \u2014 there is no session.invalidate() or new session creation, and the RedisStorage is configured with httponly=False (middlewares.py:18), leaving the session ID unchanged across the authentication boundary.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-384"
+          ],
+          "kolega": {
+            "cluster_id": "session_fixation",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/views.py",
+      "check_id": "kolega.claude-adaptation.missing-authorization",
+      "start": {
+        "line": 74,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing Authorization on Course Creation \u2014 Unauthenticated or non-admin users can create arbitrary courses, polluting the course catalog and potentially using course titles/descriptions for XSS (autoescape=False renders them unescaped in templates). [verified: The courses POST handler (views.py:74-78) has no @authorize() decorator or get_auth_user() call; the courses.jinja2 template's {% if auth_user and auth_user.is_admin %} guard is client-side only, making course creation accessible to anyone via direct POST to /courses/.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authorization",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    },
+    {
+      "path": "sqli/views.py",
+      "check_id": "kolega.claude-adaptation.missing-authentication",
+      "start": {
+        "line": 107,
+        "col": null
+      },
+      "end": null,
+      "extra": {
+        "message": "Missing Authentication on Review Submission \u2014 Anonymous attackers can inject stored XSS payloads into course reviews without needing any account, lowering the barrier for the XSS attack significantly. [verified: The review view (views.py:107-127) handles both GET and POST without any auth check \u2014 no @authorize() decorator, no get_auth_user() call; the review.jinja2 template also has no {% if auth_user %} guard, so unauthenticated users can submit reviews containing arbitrary HTML.]",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "kolega": {
+            "cluster_id": "missing_authentication",
+            "root_key": null,
+            "detector_slug": null,
+            "confidence": "high"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,971 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-79",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 32
+      },
+      "end": {
+        "line": 32
+      },
+      "extra": {
+        "message": "Reflected XSS via unsanitized 'copyline' GET parameter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-79"
+          ],
+          "citation": "body = \"<section><h2>\" + copyline + \"</h2><p>Preview generated for operations.</p></section>\"\nreturn HttpResponse(body, content_type=\"text/html\")",
+          "proof": "SOURCE: request.GET.get('copyline') at line 31 returns attacker-controlled string from query string. SINK: concatenated directly into an HTML string at line 32 and returned as text/html at line 33 without any escaping. An attacker can inject arbitrary JavaScript via ?copyline=<script>alert(1)</script>."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-502",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 73
+      },
+      "end": {
+        "line": 73
+      },
+      "extra": {
+        "message": "Pickle deserialization RCE",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-502"
+          ],
+          "citation": "bundle = pickle.loads(raw)",
+          "proof": "SOURCE: request.body (HTTP body) or request.GET.get('blob') at line 68, optionally base64-decoded at line 70 \u2014 fully attacker-controlled. SINK: pickle.loads(raw) at line 73 deserializes the payload. pickle is inherently unsafe; __reduce__ callbacks execute arbitrary Python code during deserialization, yielding full RCE on the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-94",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 87
+      },
+      "end": {
+        "line": 87
+      },
+      "extra": {
+        "message": "Arbitrary code execution via eval()",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-94"
+          ],
+          "citation": "result = eval(expr, {\"__builtins__\": {}}, {\"amount\": 42, \"fee\": 7})",
+          "proof": "SOURCE: request.GET.get('expr') at line 86 \u2014 attacker-controlled expression string. SINK: Python eval() at line 87 directly executes the expression. Although __builtins__ is restricted to {}, well-known sandbox escapes via class hierarchies (e.g., ().__class__.__base__.__subclasses__()) bypass the restriction and achieve full RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1336",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 136
+      },
+      "end": {
+        "line": 136
+      },
+      "extra": {
+        "message": "Server-Side Template Injection via Jinja2",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-1336"
+          ],
+          "citation": "body = Template(\"Result: \" + fragment).render()",
+          "proof": "SOURCE: request.GET.get('fragment') at line 135 \u2014 attacker-controlled template fragment. SINK: Jinja2 Template().render() at line 136 evaluates user input as template code. Jinja2 SSTI allows access to Python builtins via {{ ''.__class__.__mro__[2].__subclasses__() }}, leading to arbitrary code execution on the server."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-22",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 145
+      },
+      "end": {
+        "line": 145
+      },
+      "extra": {
+        "message": "Path traversal leading to arbitrary file write",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-22"
+          ],
+          "citation": "name = request.GET.get(\"name\", \"packet.bin\")\ntarget = BASE_EXPORT_DIR / name\ntarget.parent.mkdir(parents=True, exist_ok=True)\ntarget.write_bytes(request.body)",
+          "proof": "SOURCE: request.GET.get('name') at line 142 \u2014 attacker-controlled filename, and request.body \u2014 attacker-controlled file content. SINK: Path.write_bytes(request.body) at line 145 writes to a path constructed via concatenation with user input at line 143. An attacker supplies name=../../app/views.py to write arbitrary Python files outside the intended directory, achieving RCE."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-943",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 164
+      },
+      "end": {
+        "line": 164
+      },
+      "extra": {
+        "message": "NoSQL injection via unsanitized MongoDB query filter",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "citation": "query = payload.get(\"filter\", payload)\ndoc = MongoClient(os.environ.get(\"MONGO_URL\", \"mongodb://localhost:27017\")).ops.records.find_one(query)",
+          "proof": "SOURCE: request.body decoded as JSON at line 162 \u2014 attacker controls the entire MongoDB query filter. SINK: find_one(query) at line 164 passes the attacker-controlled filter directly to MongoDB. Attackers can inject operators like $ne, $regex, $where to bypass query logic, enumerate data, or execute arbitrary JavaScript via $where."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-611",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 199
+      },
+      "end": {
+        "line": 199
+      },
+      "extra": {
+        "message": "XML External Entity (XXE) injection",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-611"
+          ],
+          "citation": "parser = etree.XMLParser(load_dtd=True, resolve_entities=True, no_network=False)\ndoc = etree.fromstring(request.body, parser)",
+          "proof": "SOURCE: request.body \u2014 attacker-controlled XML payload. SINK: lxml parser at lines 198-199 with load_dtd=True, resolve_entities=True, no_network=False. Attackers can define external entities referencing file:///etc/passwd for local file disclosure, or http:// targets for SSRF. Classic XXE leading to data exfiltration and server-side request forgery."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-942",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 127
+      },
+      "end": {
+        "line": 127
+      },
+      "extra": {
+        "message": "CORS misconfiguration with credential reflection",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-942"
+          ],
+          "citation": "response[\"Access-Control-Allow-Origin\"] = origin\nresponse[\"Access-Control-Allow-Credentials\"] = \"true\"",
+          "proof": "SOURCE: request.headers.get('origin') at line 125 \u2014 attacker-controlled Origin header from any domain. SINK: reflected directly into Access-Control-Allow-Origin at line 127 with Access-Control-Allow-Credentials: true at line 128. Any malicious website can make authenticated cross-origin requests and read responses, enabling session hijacking and data theft."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-532",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 80
+      },
+      "end": {
+        "line": 80
+      },
+      "extra": {
+        "message": "Sensitive Authorization header written to application logs",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-532"
+          ],
+          "citation": "logger.warning(\"ops tally body=%s bearer=%s\", body, request.headers.get(\"authorization\"))",
+          "proof": "SOURCE: request.headers.get('authorization') at line 80 \u2014 Bearer token or API key from the HTTP Authorization header. SINK: logger.warning() at line 80 writes the full header value to application logs. Bearer tokens/API keys exposed in plaintext logs enable credential theft and account compromise by anyone with log access."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "legal_firm/settings.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "Hardcoded fallback Django SECRET_KEY",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "SECRET_KEY = os.environ.get(\n    \"DJANGO_SECRET_KEY\",\n    \"dev-only-secret-key-replace-in-production-please-please-please\",\n)",
+          "proof": "SOURCE: Static string literal \"dev-only-secret-key-replace-in-production-please-please-please\" at line 14, used as fallback when DJANGO_SECRET_KEY environment variable is not set. SINK: Django uses this as SECRET_KEY for session signing, CSRF tokens, password reset tokens, and all cryptographic signatures. Anyone who knows this key can forge session cookies and take over any user account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "legal_firm/settings.py",
+      "start": {
+        "line": 15
+      },
+      "end": {
+        "line": 15
+      },
+      "extra": {
+        "message": "DEBUG mode defaults to True in production",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "DEBUG = os.environ.get(\"DJANGO_DEBUG\", \"true\").lower() in {\"1\", \"true\", \"yes\"}",
+          "proof": "SOURCE: Environment variable DJANGO_DEBUG defaults to 'true' when not explicitly set. SINK: DEBUG=True at line 15 enables Django's debug error pages which expose full stack traces, local variables, SECRET_KEY, database credentials, and source code to any visitor when any unhandled exception occurs."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-208",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 22
+      },
+      "end": {
+        "line": 22
+      },
+      "extra": {
+        "message": "Non-constant-time string comparison in internal auth gate",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-208"
+          ],
+          "citation": "return bool(gate_value and request.headers.get(\"x-internal-token\") == gate_value)",
+          "proof": "SOURCE: request.headers.get('x-internal-token') \u2014 attacker-controlled token guess. SINK: Python's == operator short-circuits on first non-matching byte. An attacker measuring response-time differences can brute-force the INTERNAL_OPS_TOKEN character by character, eventually gaining access to all 20 ops endpoints including eval, pickle, and SSTI RCE sinks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-203",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 111
+      },
+      "end": {
+        "line": 111
+      },
+      "extra": {
+        "message": "User enumeration via distinct error messages for unknown vs wrong credentials",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-203"
+          ],
+          "citation": "if handle not in known:\n    return JsonResponse({\"detail\": \"unknown handle\"}, status=404)\nif verifier != known[handle]:\n    return JsonResponse({\"detail\": \"bad verifier\"}, status=403)",
+          "proof": "SOURCE: request.GET.get('handle') and request.GET.get('verifier') \u2014 attacker-controlled. SINK: Two distinct error messages: 'unknown handle' (404) when handle doesn't exist vs 'bad verifier' (403) when handle exists but verifier is wrong. An attacker can enumerate valid handles by observing the response difference."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-338",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 151
+      },
+      "end": {
+        "line": 151
+      },
+      "extra": {
+        "message": "Weak pseudo-random number generator used for token/code generation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-338"
+          ],
+          "citation": "import random\nalphabet = \"abcdefghijklmnopqrstuvwxyz0123456789\"\nlength = int(request.GET.get(\"length\", \"24\"))\ncode = \"\".join(random.choice(alphabet) for _ in range(length))",
+          "proof": "SOURCE: request.GET.get('length') controls output size. SINK: random.choice() uses the Mersenne Twister PRNG, which is not cryptographically secure. An attacker who observes enough outputs can recover the PRNG state and predict future generated codes, defeating any security mechanism relying on unpredictability."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 48
+      },
+      "end": {
+        "line": 48
+      },
+      "extra": {
+        "message": "Hardcoded API sync credential exposed in source code and API response",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "return JsonResponse({\"case_id\": request.GET.get(\"case_id\", \"1001\"), \"sync_key\": \"tok_live_partner_sync\", \"tax_ref\": \"739-44-1982\", \"ops_memo\": \"matter file exception queue\"})",
+          "proof": "SOURCE: Static string literal 'tok_live_partner_sync' embedded in source code. SINK: Returned in the JSON API response body. This appears to be a production partner sync credential, and it is also committed to version control, exposing it to anyone with repository access or who can call this endpoint."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-693",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 165
+      },
+      "end": {
+        "line": 165
+      },
+      "extra": {
+        "message": "Critical security headers disabled (X-XSS-Protection: 0, empty Content-Security-Policy)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-693"
+          ],
+          "citation": "response[\"X-XSS-Protection\"] = \"0\"\nresponse[\"Content-Security-Policy\"] = \"\"",
+          "proof": "SOURCE: Deliberate misconfiguration in application code. SINK: Sets X-XSS-Protection to '0' (disabling browser XSS filter) and Content-Security-Policy to empty string (removing all CSP protections). This removes browser-based XSS defenses, increasing exploitability of any XSS vulnerabilities in the application."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "cases/views_admin.py",
+      "start": {
+        "line": 242
+      },
+      "end": {
+        "line": 242
+      },
+      "extra": {
+        "message": "CSV formula injection in matter_export via unsanitized user-controlled title field",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "m.title,",
+          "proof": "SOURCE: m.title \u2014 Matter title field is user-controlled (attorneys/admins set it via forms, CSV import). SINK: Written directly to CSV via csv.writer without sanitizing cells that start with =, +, -, or @. When the exported CSV is opened in Excel or Google Sheets, injected formulas execute, potentially exfiltrating data or executing commands on the analyst's machine."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "cases/views_admin.py",
+      "start": {
+        "line": 307
+      },
+      "end": {
+        "line": 307
+      },
+      "extra": {
+        "message": "CSV formula injection in document_export via unsanitized user-controlled title and tags",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "d.title,\nd.category,\nd.visibility,\nd.versions.count(),\nlatest.version_number if latest else 0,\nd.tags,",
+          "proof": "SOURCE: d.title and d.tags \u2014 user-controlled document metadata fields. SINK: Written to CSV via csv.writer without sanitization. Tags especially are free-form user input; an attacker with document creation access can inject =WEBSERVICE() or =HYPERLINK() formulas that execute when the CSV is opened in a spreadsheet application."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "auditlog/views.py",
+      "start": {
+        "line": 69
+      },
+      "end": {
+        "line": 69
+      },
+      "extra": {
+        "message": "CSV formula injection in audit_log_export via user-influenced description field",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "ev.description.replace(\"\\n\", \" \"),",
+          "proof": "SOURCE: ev.description \u2014 audit log descriptions are populated from user actions (profile updates, matter creation, etc.) and can contain user-supplied data. SINK: Written to CSV via csv.writer without sanitizing formula-prefix characters (=, +, -, @). Formula injection triggers when the exported CSV is opened in a spreadsheet."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-601",
+      "path": "accounts/views.py",
+      "start": {
+        "line": 79
+      },
+      "end": {
+        "line": 79
+      },
+      "extra": {
+        "message": "Open redirect via unvalidated 'next' POST parameter in notification_read",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-601"
+          ],
+          "citation": "return redirect(request.POST.get(\"next\") or reverse(\"accounts:notifications\"))",
+          "proof": "SOURCE: request.POST.get('next') \u2014 attacker-controlled redirect target. SINK: Django's redirect() with an unvalidated user-supplied URL. An attacker can craft a POST form that redirects authenticated users to attacker-controlled phishing sites, enabling credential theft. CSRF protection provides some mitigation but does not eliminate the open redirect."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-203",
+      "path": "accounts/forms.py",
+      "start": {
+        "line": 46
+      },
+      "end": {
+        "line": 46
+      },
+      "extra": {
+        "message": "User email enumeration via invitation creation form distinct error message",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-203"
+          ],
+          "citation": "if User.objects.filter(email__iexact=email).exists():\n    raise ValidationError(\"A user with this email already exists.\")",
+          "proof": "SOURCE: form.cleaned_data['email'] \u2014 user-supplied email during invitation creation. SINK: Distinct ValidationError 'A user with this email already exists.' reveals whether an email is registered in the system. An attacker can enumerate valid user emails for targeted phishing or credential stuffing attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1004",
+      "path": "legal_firm/settings.py",
+      "start": {
+        "line": 122
+      },
+      "end": {
+        "line": 122
+      },
+      "extra": {
+        "message": "CSRF cookie not set with HttpOnly flag allowing JavaScript access",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1004"
+          ],
+          "citation": "SESSION_COOKIE_HTTPONLY = True\nSESSION_COOKIE_SAMESITE = \"Lax\"\nCSRF_COOKIE_SAMESITE = \"Lax\"\nSESSION_COOKIE_SECURE = not DEBUG\nCSRF_COOKIE_SECURE = not DEBUG",
+          "proof": "SOURCE: Settings file explicitly sets SESSION_COOKIE_HTTPONLY=True but omits CSRF_COOKIE_HTTPONLY. SINK: The CSRF token cookie defaults to HttpOnly=False, making it readable by JavaScript via document.cookie. If any XSS vulnerability exists in the application, an attacker can read the CSRF token and forge authenticated requests on behalf of the victim."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "legal_firm/settings.py",
+      "start": {
+        "line": 131
+      },
+      "end": {
+        "line": 131
+      },
+      "extra": {
+        "message": "Session persists across browser close enabling prolonged hijacking window",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "SESSION_EXPIRE_AT_BROWSER_CLOSE = False\nSESSION_COOKIE_AGE = 60 * 60 * 8  # 8 hour sessions",
+          "proof": "SOURCE: SESSION_EXPIRE_AT_BROWSER_CLOSE=False configuration at line 131. SINK: Session cookies persist to disk even after browser close and remain valid for 8 hours (line 132). An attacker who gains physical access to a logged-in workstation can reopen the browser and reuse the session without re-authentication."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "accounts/urls.py",
+      "start": {
+        "line": 12
+      },
+      "end": {
+        "line": 12
+      },
+      "extra": {
+        "message": "Missing rate limiting on login endpoint enables brute-force password attacks",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "path(\n    \"login/\",\n    auth_views.LoginView.as_view(\n        template_name=\"accounts/login.html\",\n        authentication_form=HardenedAuthenticationForm,\n        redirect_authenticated_user=True,\n    ),\n    name=\"login\",\n),",
+          "proof": "SOURCE: Unauthenticated HTTP POST requests to /accounts/login/. SINK: Django's LoginView processes credentials with no rate-limiting decorator, middleware, or account-lockout. An attacker can submit unlimited login attempts, enabling automated brute-force password guessing against any user account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1236",
+      "path": "cases/views_admin.py",
+      "start": {
+        "line": 272
+      },
+      "end": {
+        "line": 272
+      },
+      "extra": {
+        "message": "CSV Formula Injection in deadline_export via unsanitized deadline title",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-1236"
+          ],
+          "citation": "d.title,",
+          "proof": "SOURCE: Deadline.title field (user-influenced via matter/deadline creation interfaces, stored in DB) -> SINK: csv.writer writes d.title directly into CSV output at line 272 without prefix sanitization. A user who creates a deadline with a title starting with '=', '+', '-', or '@' (e.g. '=CMD|...') will have that payload written raw into the CSV downloaded by staff. Excel/Calc will interpret the cell as a formula when opened, achieving arbitrary code execution on the analyst's workstation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-682",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 57
+      },
+      "end": {
+        "line": 57
+      },
+      "extra": {
+        "message": "Unvalidated financial amount enables ledger balance manipulation",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-682"
+          ],
+          "citation": "amount = int(payload.get(\"amount\", request.GET.get(\"amount\", \"-250\")))\nledger[\"balance\"] -= amount",
+          "proof": "SOURCE: request body (JSON payload) or GET query parameter 'amount' -> SINK: int() parse at line 57, then subtracted from ledger balance at line 59. No bounds or sign validation is performed. An attacker sending amount=1000000 causes ledger balance to decrease by 1000000, going negative. Conversely amount=-1000000 inflates the balance. This bypasses any notional credit_limit and achieves arbitrary financial inflation."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-209",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 101
+      },
+      "end": {
+        "line": 101
+      },
+      "extra": {
+        "message": "Information exposure via error message containing user-controlled input and internal path",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-209"
+          ],
+          "citation": "ref = request.GET.get(\"ref\", \"daily\")\nraise RuntimeError(f\"pack {ref} failed under {BASE_EXPORT_DIR}\")\nreturn JsonResponse({\"detail\": str(exc), \"kind\": exc.__class__.__name__}, status=500)",
+          "proof": "SOURCE: GET parameter 'ref' (unvalidated string) -> SINK: interpolated into RuntimeError at line 103, then str(exc) returned in JSON response at line 105. The error message also includes BASE_EXPORT_DIR, revealing the server-side private export path. An attacker can probe for path disclosure by varying 'ref', and the reflected content in the error message can be used for reconnaissance."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 184
+      },
+      "end": {
+        "line": 184
+      },
+      "extra": {
+        "message": "Internal configuration (settings module, filesystem path) exposed via API response",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "payload = {\"trace\": trace_on, \"module\": os.environ.get(\"DJANGO_SETTINGS_MODULE\"), \"base\": str(BASE_EXPORT_DIR)}",
+          "proof": "SOURCE: os.environ.get('DJANGO_SETTINGS_MODULE') and str(BASE_EXPORT_DIR) \u2014 internal runtime state -> SINK: returned as JSON at line 185 via JsonResponse(payload). The endpoint reveals which settings module is active (e.g. 'legal_firm.settings') and the private filesystem export directory path. This aids attackers in mapping the application's internal layout and understanding deployment structure."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-248",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 40
+      },
+      "end": {
+        "line": 40
+      },
+      "extra": {
+        "message": "Uncaught JSONDecodeError in case_pref_munge_017 via user-supplied request body",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-248"
+          ],
+          "citation": "change_set = json.loads(request.body.decode(\"utf-8\") or \"{}\") if request.body else {}",
+          "proof": "The endpoint at /ops/workset/case-pref-munge-017/ (lines 36-42) passes request.body directly to json.loads() without a try/except block. If request.body is non-empty but contains malformed JSON, json.loads() raises json.JSONDecodeError uncaught, causing a 500 Internal Server Error."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-248",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 57
+      },
+      "end": {
+        "line": 57
+      },
+      "extra": {
+        "message": "Uncaught ValueError in case_delta_125 via non-numeric 'amount' parameter",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-248"
+          ],
+          "citation": "amount = int(payload.get(\"amount\", request.GET.get(\"amount\", \"-250\")))",
+          "proof": "The endpoint at /ops/delta/case-nudge-125/ (lines 50-62) converts the user-supplied 'amount' parameter to int() without try/except. If an attacker provides a non-numeric string (e.g., 'abc'), int() raises ValueError, crashing the endpoint with an unhandled 500 error."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "accounts/urls.py",
+      "start": {
+        "line": 26
+      },
+      "end": {
+        "line": 26
+      },
+      "extra": {
+        "message": "Missing rate limiting on password reset endpoint enables email bombing and user enumeration",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "path(\n    \"password/reset/\",\n    auth_views.PasswordResetView.as_view(\n        template_name=\"accounts/password_reset.html\",\n        email_template_name=\"accounts/password_reset_email.txt\",\n        subject_template_name=\"accounts/password_reset_subject.txt\",\n        form_class=HardenedPasswordResetForm,\n        success_url=reverse_lazy(\"accounts:password_reset_done\"),\n    ),\n    name=\"password_reset\",\n),",
+          "proof": "SOURCE: Unauthenticated HTTP POST to /accounts/password/reset/ with an email address. SINK: PasswordResetView sends email with no throttling or rate limiting. An attacker can (1) bombard a target email with password-reset emails, (2) enumerate registered emails \u2014 the HardenedPasswordResetForm.get_users() at accounts/forms.py:96 performs a DB filter query whose timing differs between existent vs. non-existent emails, and (3) repeatedly trigger token generation to overwhelm the email backend."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "accounts/views.py",
+      "start": {
+        "line": 29
+      },
+      "end": {
+        "line": 29
+      },
+      "extra": {
+        "message": "Missing rate limiting on password change view enables post-authentication brute-force",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@any_authenticated\ndef password_change_view(request):\n    if request.method == \"POST\":\n        form = HardenedPasswordChangeForm(user=request.user, data=request.POST)\n        if form.is_valid():\n            user = form.save()\n            update_session_auth_hash(request, user)",
+          "proof": "SOURCE: Authenticated user submits old+new password via HTTP POST to /accounts/password/change/. SINK: HardenedPasswordChangeForm validates by checking old_password against the stored hash \u2014 an attacker who has stolen a session cookie can fire thousands of rapid guesses for the current password. There is NO rate limiting on this view. If successful, the attacker changes the password and locks out the legitimate user."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "integrations/api_views.py",
+      "start": {
+        "line": 55
+      },
+      "end": {
+        "line": 55
+      },
+      "extra": {
+        "message": "Missing rate limiting on all API-key-authenticated endpoints enables credential brute-force",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "@require_GET\n@api_key_required\ndef whoami(request):\n    u = request.api_user\n    return JsonResponse({\"username\": u.username, \"role\": u.role, \"email\": u.email})\n\n\n@require_GET\n@api_key_required\ndef matter_list(request):\n    qs = matters_visible_to(request.api_user).select_related(\"client\", \"practice_area\", \"lead_attorney\")",
+          "proof": "SOURCE: Unauthenticated HTTP GET to /api/v1/whoami/ with guessed API key. SINK: The api_key_required decorator calls APIKey.authenticate(token) which queries the database on every request. With NO rate limiting on any of the four API endpoints, an attacker can brute-force API keys at high speed and cause resource-exhaustion attacks against the DB."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-916",
+      "path": "integrations/models.py",
+      "start": {
+        "line": 31
+      },
+      "end": {
+        "line": 31
+      },
+      "extra": {
+        "message": "API key hashed with unsalted SHA-256 \u2014 no key-stretching, enabling offline brute-force on DB leak",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-916"
+          ],
+          "citation": "key_hash = hashlib.sha256(token.encode(\"utf-8\")).hexdigest()",
+          "proof": "SOURCE: APIKey.generate() hashes a secrets.token_urlsafe(32) token using raw SHA-256 without salt or key-derivation function (PBKDF2/bcrypt/Argon2). SINK: The hex digest is stored in the 'key_hash' column. If the database is compromised, an attacker can brute-force the token at ASIC/GPU speeds (billions of guesses/second) unslowed by any KDF cost factor."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "accounts/views.py",
+      "start": {
+        "line": 136
+      },
+      "end": {
+        "line": 136
+      },
+      "extra": {
+        "message": "Missing rate limiting on invitation accept endpoint enables account registration abuse",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def invitation_accept(request, token: str):\n    try:\n        inv = Invitation.objects.get(token=token)\n    except Invitation.DoesNotExist:\n        raise Http404(\"Invitation not found.\")\n    if not inv.is_valid:\n        return render(request, \"accounts/invitation_invalid.html\", status=410)\n    if request.method == \"POST\":\n        form = InvitationAcceptForm(request.POST)\n        if form.is_valid():\n            with transaction.atomic():\n                user = User.objects.create_user(...)",
+          "proof": "Untrusted SOURCE: Unauthenticated HTTP POST to /accounts/invitations/accept/<token>/ \u2014 no authentication required. SINK: InvitationAcceptForm validates and creates a new User with role=inv.role (could be FIRM_ADMIN, ATTORNEY, PARALEGAL, or CLIENT) at the View function body. There is NO rate limiting on this endpoint. The validity check (inv.is_valid) and account creation race against each other: two concurrent POST requests can both pass is_valid and create two users from the same invitation (TOCTOU). Once a valid token is obtained, an attacker can mass-register accounts without throttling, and brute-force the 43-char token with unlimited guesses."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "cases/forms.py",
+      "start": {
+        "line": 284
+      },
+      "end": {
+        "line": 284
+      },
+      "extra": {
+        "message": "TaskSearchForm assignee field exposes all User records enabling staff-side user enumeration",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "assignee = forms.ModelChoiceField(\n        required=False, queryset=User.objects.all(), empty_label=\"Any assignee\"\n    )",
+          "proof": "Untrusted SOURCE: Any staff user (paralegal, attorney, firm admin) visiting /tasks/ with @firm_staff_required can access this field. SINK: queryset=User.objects.all() renders every User record \u2014 including clients, disabled accounts, and support users \u2014 as HTML <select> options. A paralegal assigned to one matter can enumerate ALL usernames in the system, exposing user existence, account names, and by extension email addresses. While behind staff auth, this violates least-privilege."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-311",
+      "path": "legal_firm/settings.py",
+      "start": {
+        "line": 89
+      },
+      "end": {
+        "line": 89
+      },
+      "extra": {
+        "message": "MEDIA_ROOT configured without production access-control \u2014 user-uploaded documents served directly without authorization",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-311"
+          ],
+          "citation": "MEDIA_URL = \"/media/\"\nMEDIA_ROOT = BASE_DIR / \"media\"",
+          "proof": "SOURCE: Document files are stored under MEDIA_ROOT (BASE_DIR / 'media') via FileSystemStorage in document creation views. SINK: In production, a web server (nginx/apache) typically serves /media/ directly \u2014 bypassing the authorization-gated document download views entirely. The urls.py comment confirms this gap: 'In production this should be served by a real web server with auth checks; ... This handler is intentionally not configured.' No production web server config is provided in settings to block or auth-gate /media/. All DocumentVersion files contain sensitive legal case data (pleadings, evidence, discovery) that require authorization per can_view_document() but are freely accessible via direct /media/ URL."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-523",
+      "path": "legal_firm/settings.py",
+      "start": {
+        "line": 108
+      },
+      "end": {
+        "line": 108
+      },
+      "extra": {
+        "message": "SECURE_SSL_REDIRECT and SECURE_HSTS_SECONDS not configured \u2014 plaintext HTTP traffic allowed",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-523"
+          ],
+          "citation": "# Security hardening that is safe for local development too.\nSESSION_COOKIE_HTTPONLY = True\nSESSION_COOKIE_SAMESITE = \"Lax\"\nCSRF_COOKIE_SAMESITE = \"Lax\"\nSESSION_COOKIE_SECURE = not DEBUG\nCSRF_COOKIE_SECURE = not DEBUG\nSECURE_BROWSER_XSS_FILTER = True\nSECURE_CONTENT_TYPE_NOSNIFF = True\nX_FRAME_OPTIONS = \"DENY\"\nSECURE_REFERRER_POLICY = \"same-origin\"",
+          "proof": "SOURCE: Settings.py 'Security hardening' block configures SESSION_COOKIE_SECURE, CSRF_COOKIE_SECURE, X_FRAME_OPTIONS, SECURE_REFERRER_POLICY \u2014 but OMITS SECURE_SSL_REDIRECT (defaults to False) and SECURE_HSTS_SECONDS (defaults to 0 / no HSTS). SINK: When DEBUG=False in production, the app serves over HTTP without redirecting to HTTPS. Session and CSRF cookies have SECURE=True (not DEBUG), so they are not sent over HTTP \u2014 causing all authenticated requests to fail or silently downgrade. Without HSTS, a man-in-the-middle can trivially strip HTTPS on the first visit (sslstrip attack) and capture session tokens in plaintext. All form data (passwords, case details) are sent in cleartext."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-798",
+      "path": "legal_firm/settings.py",
+      "start": {
+        "line": 78
+      },
+      "end": {
+        "line": 78
+      },
+      "extra": {
+        "message": "Hardcoded default database password enables unauthorized database access",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-798"
+          ],
+          "citation": "\"PASSWORD\": os.environ.get(\"DATABASE_PASSWORD\", \"legal_firm\")",
+          "proof": "SOURCE: Static string literal 'legal_firm' embedded as the default fallback for DATABASE_PASSWORD in settings.py. SINK: When the DATABASE_PASSWORD environment variable is not set (common in development and accidental production deployments), the database connection uses the well-known password 'legal_firm'. An attacker who can reach the database port can authenticate with these default credentials and read/modify all legal case data, client PII, and audit records. The database is PostgreSQL by default (port 5432), accessible from any host reaching the network."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-359",
+      "path": "legal_firm/case_operations.py",
+      "start": {
+        "line": 46
+      },
+      "end": {
+        "line": 46
+      },
+      "extra": {
+        "message": "Exposure of personally identifiable information (SSN/tax identifier) in API response body",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-359"
+          ],
+          "citation": "return JsonResponse({\"case_id\": request.GET.get(\"case_id\", \"1001\"), \"sync_key\": \"tok_live_partner_sync\", \"tax_ref\": \"739-44-1982\", \"ops_memo\": \"matter file exception queue\"})",
+          "proof": "SOURCE: Static string literal '739-44-1982' (matching U.S. Social Security Number format XXX-XX-XXXX) is hardcoded in case_matter_fold_018 source code. SINK: The tax_ref value is returned in the JSON response body to any client that passes the _wrk_gate internal-token check. Even behind the internal token gate, any operator or compromised token holder receives sensitive PII in the clear. The PII is also exposed in the source code itself, which would leak if the repository is compromised."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-319",
+      "path": "legal_firm/settings.py",
+      "start": {
+        "line": 121
+      },
+      "end": {
+        "line": 121
+      },
+      "extra": {
+        "message": "SECURE_SSL_REDIRECT not configured \u2014 no automatic HTTPS enforcement",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-319"
+          ],
+          "citation": "# Security hardening that is safe for local development too.\nSESSION_COOKIE_HTTPONLY = True\nSESSION_COOKIE_SAMESITE = \"Lax\"\nCSRF_COOKIE_SAMESITE = \"Lax\"\nSESSION_COOKIE_SECURE = not DEBUG\nCSRF_COOKIE_SECURE = not DEBUG\nSECURE_BROWSER_XSS_FILTER = True\nSECURE_CONTENT_TYPE_NOSNIFF = True\nX_FRAME_OPTIONS = \"DENY\"\nSECURE_REFERRER_POLICY = \"same-origin\"",
+          "proof": "SOURCE: The security hardening block at settings.py configures several security headers but omits SECURE_SSL_REDIRECT entirely. SINK: Django will never issue a 301/302 redirect from HTTP to HTTPS. In any production deployment, users accessing the site over plain HTTP will transmit login credentials, CSRF tokens, and all legal case data in cleartext over the network. Combined with SESSION_COOKIE_SECURE = not DEBUG (line 125), when DEBUG=True the session cookie is also sent over HTTP, enabling trivial network sniffing of authenticated sessions. This is cleartext transmission of sensitive information (CWE-319)."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-523",
+      "path": "legal_firm/settings.py",
+      "start": {
+        "line": 121
+      },
+      "end": {
+        "line": 121
+      },
+      "extra": {
+        "message": "HTTP Strict Transport Security (HSTS) headers not configured \u2014 no HSTS enforcement",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-523"
+          ],
+          "citation": "# Security hardening that is safe for local development too.\nSESSION_COOKIE_HTTPONLY = True\nSESSION_COOKIE_SAMESITE = \"Lax\"\nCSRF_COOKIE_SAMESITE = \"Lax\"\nSESSION_COOKIE_SECURE = not DEBUG\nCSRF_COOKIE_SECURE = not DEBUG\nSECURE_BROWSER_XSS_FILTER = True\nSECURE_CONTENT_TYPE_NOSNIFF = True\nX_FRAME_OPTIONS = \"DENY\"\nSECURE_REFERRER_POLICY = \"same-origin\"",
+          "proof": "SOURCE: The security hardening block at lines 121-130 conspicuously omits SECURE_HSTS_SECONDS, SECURE_HSTS_INCLUDE_SUBDOMAINS, and SECURE_HSTS_PRELOAD. SINK: Browsers will not receive an HSTS header instructing them to always use HTTPS for this domain. Even if HTTPS were configured at the load balancer, an attacker performing a man-in-the-middle downgrade attack on a first visit could intercept traffic. After the first successful HTTPS visit, browsers have no HSTS pinning and remain vulnerable to SSL stripping on subsequent sessions or subdomain connections."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "cases/views_clients.py",
+      "start": {
+        "line": 92
+      },
+      "end": {
+        "line": 92
+      },
+      "extra": {
+        "message": "BOLA/IDOR: client_edit loads client by PK without verifying attorney has matter-linked access to it",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "    client = get_object_or_404(Client, pk=client_id)\n    if request.user.role not in {Role.FIRM_ADMIN, Role.ATTORNEY}:\n        raise PermissionDenied(\"Only attorneys or firm admins can edit clients.\")",
+          "proof": "Untrusted SOURCE: URL path parameter client_id at line 91. SINK: get_object_or_404(Client, pk=client_id) on line 92 loads ANY client by attacker-supplied PK with only a coarse role gate (FIRM_ADMIN or ATTORNEY). No check that the attorney has matters linked to this client. Compare client_detail (lines 77-79) which correctly checks matters_visible_to(request.user).filter(client=client).exists() before granting access. An attorney can edit any client in the firm \u2014 name, email, phone, address, conflict_notes, status, portal_user \u2014 regardless of whether they have a single matter relationship with that client."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-646",
+      "path": "cases/forms.py",
+      "start": {
+        "line": 42
+      },
+      "end": {
+        "line": 42
+      },
+      "extra": {
+        "message": "File upload validated by extension only; no MIME type or content inspection",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-646"
+          ],
+          "citation": "    ext = Path(file_obj.name or \"\").suffix.lower()\n    if ext not in settings.ALLOWED_UPLOAD_EXTENSIONS:\n        raise ValidationError(\n            f\"File type '{ext}' is not allowed. Allowed types: \"\n            + \", \".join(sorted(settings.ALLOWED_UPLOAD_EXTENSIONS))\n        )",
+          "proof": "Untrusted SOURCE: Uploaded file via request.FILES in DocumentForm, DocumentVersionUploadForm, and ClientUploadForm. SINK: _validate_upload (lines 37-50) only checks file size against MAX_UPLOAD_BYTES and file extension against ALLOWED_UPLOAD_EXTENSIONS. The function does not inspect magic bytes, verify MIME type, or scan content. ALLOWED_UPLOAD_EXTENSIONS includes .zip, .docx, .xlsx, .eml, .msg \u2014 all container formats that can embed malicious payloads. An attacker can upload a file with a whitelisted extension (e.g., .pdf) containing executable code, HTML/JS, or macro-laden content. The stored content_type field is set from upload.content_type \u2014 the client-supplied Content-Type header \u2014 with no server-side verification."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-312",
+      "path": "integrations/models.py",
+      "start": {
+        "line": 51
+      },
+      "end": {
+        "line": 51
+      },
+      "extra": {
+        "message": "Webhook signing secret stored in plaintext",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-312"
+          ],
+          "citation": "secret = models.CharField(max_length=64, default=secrets.token_hex)",
+          "proof": "SOURCE: `secrets.token_hex` generates a 32-byte random HMAC signing key. SINK: `Webhook.secret` is a plain `CharField` with no encryption at rest \u2014 unlike `APIKey.key_hash` which uses SHA-256 hashing. On database compromise (SQL injection, backup exposure, unauthorized access), all webhook secrets are immediately readable. An attacker with these secrets can forge valid webhook deliveries to external systems, triggering actions (matter status changes, document events) or using the webhook as a pivot point."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "cases/views_admin.py",
+      "start": {
+        "line": 228
+      },
+      "end": {
+        "line": 228
+      },
+      "extra": {
+        "message": "Unbounded queryset iteration in export views enables memory exhaustion",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "for m in matters.order_by(\"reference\"):",
+          "proof": "SOURCE: `matters_visible_to(request.user)` returns ALL matters for firm_admin users. SINK: The `for m in matters.order_by(\"reference\")` loop iterates the full QuerySet without `.iterator()` or a row limit. Django's default QuerySet evaluation caches every result object in memory before streaming CSV rows. With thousands of matters (and similar patterns for deadlines at line 254 and documents at line 283), this can exhaust server memory. Although gated by firm_staff_required, a malicious or careless staff user can trigger unbounded allocation."
+        }
+      }
+    }
+  ]
+}

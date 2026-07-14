@@ -1,0 +1,425 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "main.py",
+      "start": {
+        "line": 182
+      },
+      "end": {
+        "line": 182
+      },
+      "extra": {
+        "message": "SQL Injection in GET /select endpoint",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "resp = await run_sql_query(f'SELECT * FROM users WHERE username = \"{username}\";')",
+          "proof": "The `username` query parameter comes directly from the FastAPI request (untrusted SOURCE). It is interpolated via f-string into the SQL query on line 182, then executed by `aiosqlite` in `run_sql_query` (SINK). An attacker can send `?username=\" OR 1=1;--` to dump all users, or `\" UNION SELECT ...` to extract arbitrary data. No parameterization or escaping is used."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "main.py",
+      "start": {
+        "line": 205
+      },
+      "end": {
+        "line": 205
+      },
+      "extra": {
+        "message": "SQL Injection in PUT /user endpoint",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "await run_sql_query(query, commit=True)",
+          "proof": "The `query` variable is built using an f-string at lines 188-204 that directly interpolates `user.name`, `user.username`, `user.password`, `user.address`, `user.email`, and `user.contact` \u2014 all sourced from the JSON request body via Pydantic's `User` model (untrusted SOURCE). Pydantic validates types as strings but performs no SQL sanitization. The unsanitized query is executed at line 205 (SINK) with `commit=True`. An attacker can embed SQL in any field to execute arbitrary INSERT/DELETE/UPDATE statements."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "main.py",
+      "start": {
+        "line": 231
+      },
+      "end": {
+        "line": 231
+      },
+      "extra": {
+        "message": "SQL Injection in DELETE /user endpoint (username path)",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "await run_sql_query(f'DELETE FROM users WHERE username = \"{username}\";', commit=True)",
+          "proof": "The `username` parameter comes from the HTTP query string (untrusted SOURCE) and is interpolated directly into a DELETE SQL statement via f-string at line 231 (SINK). An attacker can send `?username=\" OR 1=1 --` to delete all users in the database. The `commit=True` flag immediately persists the destruction."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-943",
+      "path": "main.py",
+      "start": {
+        "line": 225
+      },
+      "end": {
+        "line": 225
+      },
+      "extra": {
+        "message": "NoSQL Injection in POST /find endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-943"
+          ],
+          "citation": "return get_nosql_users(query)",
+          "proof": "The entire JSON request body at line 224 (`query = await request.json()`) is passed directly into `get_nosql_users(query)` at line 225, which forwards it to MontyDB's `users.find(query)` at line 171 (SINK). MontyDB supports MongoDB-style query operators. An attacker can send `{\"id\": {\"$ne\": 0}}`, `{\"$where\": \"1==1\"}`, or `{\"username\": {\"$regex\": \".*\"}}` to bypass logic and extract arbitrary user records without knowing credentials."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-327",
+      "path": "main.py",
+      "start": {
+        "line": 113
+      },
+      "end": {
+        "line": 113
+      },
+      "extra": {
+        "message": "Use of Broken Cryptographic Algorithm MD5 for Password Hashing (seed data)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-327"
+          ],
+          "citation": "\"{md5(fake.password().encode()).hexdigest()}\"",
+          "proof": "MD5 (imported from `hashlib` at line 13) is used for hashing passwords during seed data generation at line 113 and during registration at line 187. MD5 is a broken cryptographic hash \u2014 collision attacks are practical and it can be cracked at billions of hashes/second using commodity hardware. An attacker who gains access to the SQLite database file can trivially reverse password hashes offline."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-327",
+      "path": "main.py",
+      "start": {
+        "line": 187
+      },
+      "end": {
+        "line": 187
+      },
+      "extra": {
+        "message": "Use of Broken Cryptographic Algorithm MD5 for Password Hashing (user registration)",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-327"
+          ],
+          "citation": "user.password = md5(user.password.encode()).hexdigest()",
+          "proof": "User passwords from registration (untrusted SOURCE) are hashed with MD5 at line 187, which is cryptographically broken (fast brute-force via GPU, collision attacks). No salt is applied, making all stored hashes trivially reversible via precomputed rainbow tables. Also used at line 113 for seed data generation. (Original candidate cited line 170; corrected to line 187 where the code actually resides.)"
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "main.py",
+      "start": {
+        "line": 243
+      },
+      "end": {
+        "line": 243
+      },
+      "extra": {
+        "message": "Missing Authentication on POST /reset Database Reset Endpoint",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "@app.post('/reset')\nasync def reset_database():\n    remove(f'{DB_FILENAME}.sql.db')\n    rmtree(f'{DB_FILENAME}.nosql.db')\n    await init_db()\n    return {'resp': 'done'}",
+          "proof": "Any unauthenticated HTTP POST request to /reset reaches this endpoint with no authentication or authorization check (SINK at lines 244-246). The function calls `remove()` on the SQLite database file and `rmtree()` on the NoSQL database directory, permanently destroying all application data, then repopulates with randomly-generated fake data via init_db(). An attacker can repeatedly call this endpoint to cause persistent denial of service and data loss."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "main.py",
+      "start": {
+        "line": 162
+      },
+      "end": {
+        "line": 162
+      },
+      "extra": {
+        "message": "Sensitive Data Exposure: MD5 password hashes leaked in API responses via multi-row SQL path",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "return {'users': _data}",
+          "proof": "The `run_sql_query` function at line 162 returns `cursor.fetchall()` raw tuples to callers when multiple rows match. When GET /select (line 182) matches multiple rows, the raw tuples include the `password` column (index 3) containing the MD5 hash. The single-row path (lines 154-161) strips it by building a dict without the password key, but the multi-row path (line 162) does not. Combined with the SQL injection at line 182, an attacker can extract all password hashes via `?username=\" OR 1=1;--`."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "main.py",
+      "start": {
+        "line": 180
+      },
+      "end": {
+        "line": 180
+      },
+      "extra": {
+        "message": "Missing Authentication on GET /select endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "@app.get('/select')\nasync def sql_return_users_from_username(username: str):\n    resp = await run_sql_query(f'SELECT * FROM users WHERE username = \"{username}\";')\n    return resp",
+          "proof": "No authentication decorator, middleware, or token check is applied before reaching the SQL query at line 182. Any unauthenticated client can call this endpoint to retrieve user data from the database without any access control."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-306",
+      "path": "main.py",
+      "start": {
+        "line": 219
+      },
+      "end": {
+        "line": 219
+      },
+      "extra": {
+        "message": "Missing Authentication on GET /find endpoint (NoSQL query by username)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-306"
+          ],
+          "citation": "@app.get('/find')\nasync def nosql_return_users_from_username(username: str):\n    return get_nosql_users({'username': username})",
+          "proof": "No authentication check before querying the NoSQL user store at line 220 via MontyDB. Any unauthenticated client can look up users by username via GET /find?username=foo. The `get_nosql_users` function directly executes a `find` operation on the MontyDB users collection."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "main.py",
+      "start": {
+        "line": 186
+      },
+      "end": {
+        "line": 186
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on PUT /user endpoint enables brute-force user creation",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@app.put('/user')\nasync def put_user(user: User):",
+          "proof": "No rate-limiting middleware (e.g. slowapi) is installed and no throttling logic is implemented on the endpoint. An attacker can send unlimited PUT /user requests to flood the database with fake users, exhaust storage, or brute-force. SOURCE: untrusted client -> unlimited requests -> SINK: database insertion at lines 205-215."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "main.py",
+      "start": {
+        "line": 225
+      },
+      "end": {
+        "line": 225
+      },
+      "extra": {
+        "message": "Missing rate limiting on POST /find enables brute-force NoSQL injection",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@app.post('/find')\nasync def nosql_return_users(request: Request):\n    query = await request.json()\n    return get_nosql_users(query)",
+          "proof": "SOURCE: untrusted client calls POST /find with arbitrary JSON body -> SINK: get_nosql_users(query) at line 225 passes user-controlled query to MontyDB users.find(). No rate limiting means an attacker can send rapid-fire NoSQL injection payloads to brute-force data extraction without throttling."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "main.py",
+      "start": {
+        "line": 244
+      },
+      "end": {
+        "line": 244
+      },
+      "extra": {
+        "message": "Missing rate limiting on POST /reset enables denial-of-service via repeated database destruction",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "@app.post('/reset')\nasync def reset_database():\n    remove(f'{DB_FILENAME}.sql.db')\n    rmtree(f'{DB_FILENAME}.nosql.db')\n    await init_db()\n    return {'resp': 'done'}",
+          "proof": "SOURCE: unauthenticated attacker calls POST /reset repeatedly -> SINK: filesystem operations remove() and rmtree() at lines 244-245 destroy both SQL and NoSQL database files, then init_db() recreates them. No rate limiting allows unlimited database destruction/recreation cycles, causing availability denial-of-service."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-359",
+      "path": "main.py",
+      "start": {
+        "line": 162
+      },
+      "end": {
+        "line": 162
+      },
+      "extra": {
+        "message": "Password hashes exposed in multi-user SQL query responses",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-359"
+          ],
+          "citation": "return {'users': _data}",
+          "proof": "SOURCE: run_sql_query() returns raw cursor tuples via `return {'users': _data}` at line 162 when len(_data) != 1 (multi-user/no-match paths). These raw tuples contain password at index 3. The single-user path (lines 151-161) correctly skips password, but the multi-user path does not. Combined with SQLi in GET /select (line 182), an attacker extracts all user password hashes via `username=\" OR 1=1 --`."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "main.py",
+      "start": {
+        "line": 228
+      },
+      "end": {
+        "line": 228
+      },
+      "extra": {
+        "message": "IDOR - Username-controlled user deletion without ownership verification",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "async def delete_user(username: Optional[str] = '', user: Optional[User] = None):\n    if username:\n        db_client.vfapi.users.delete_one({'username': username})\n        await run_sql_query(f'DELETE FROM users WHERE username = \"{username}\";', commit=True)",
+          "proof": "SOURCE: username query parameter or user.address body field at line 228 -> SINK: delete_one() at line 230 and SQL DELETE at line 231. No ownership check compares the requesting identity against the target username. Even if authentication were later added, no authorization guard exists \u2014 any user can delete any other user's account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "main.py",
+      "start": {
+        "line": 182
+      },
+      "end": {
+        "line": 182
+      },
+      "extra": {
+        "message": "BOLA/IDOR - GET /select reads any user's PII by username without ownership check",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "@app.get('/select')\nasync def sql_return_users_from_username(username: str):\n    resp = await run_sql_query(f'SELECT * FROM users WHERE username = \"{username}\";')\n    return resp",
+          "proof": "SOURCE: username query parameter from any unauthenticated client -> SINK: raw f-string interpolation into SQL SELECT at line 182 -> RESPONSE: full user record (id, name, username, address, email, contact) returned at line 183. No authentication, no session, no ownership verification. Any client reads any user's PII simply by knowing their username."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "main.py",
+      "start": {
+        "line": 162
+      },
+      "end": {
+        "line": 162
+      },
+      "extra": {
+        "message": "User enumeration via GET /select response discrepancy confirms account existence",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "return {'users': _data}",
+          "proof": "SOURCE: username query parameter (line 180-181) -> SINK: run_sql_query returns different shapes for existing vs non-existing users. When user exists as single match (lines 151-161): returns dict {id, name, username, address, email, contact}. When no match (line 162): returns {'users': []}. Distinct response types allow an attacker to confirm any username's existence."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-204",
+      "path": "main.py",
+      "start": {
+        "line": 174
+      },
+      "end": {
+        "line": 174
+      },
+      "extra": {
+        "message": "User enumeration via GET /find response discrepancy confirms account existence",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-204"
+          ],
+          "citation": "def get_nosql_users(query):\n    users = db_client.vfapi.users\n    user_data = tuple(users.find(query))\n    for data in user_data: data.pop('_id'); data.pop('password')\n    if len(user_data) == 1: return user_data[0]\n    return tuple(user_data)",
+          "proof": "SOURCE: username query parameter at line 219 -> SINK: get_nosql_users at line 220 returns a dict for existing username (line 173: return user_data[0]) but an empty tuple () for non-existing username (line 174: return tuple(user_data)). Distinct response types allow confirming any username's existence via the NoSQL path."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-770",
+      "path": "main.py",
+      "start": {
+        "line": 171
+      },
+      "end": {
+        "line": 171
+      },
+      "extra": {
+        "message": "DoS via unbounded memory allocation - POST /find returns all documents with empty query",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-770"
+          ],
+          "citation": "user_data = tuple(users.find(query))",
+          "proof": "SOURCE: attacker sends POST /find with body {} (match-all) at line 224 -> SINK: get_nosql_users({}) at line 225 calls tuple(users.find({})) at line 171, loading ALL matching documents into a Python tuple in memory. No limit, no pagination, no cursor-based iteration. With a large NoSQL collection, this causes memory exhaustion."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-400",
+      "path": "main.py",
+      "start": {
+        "line": 147
+      },
+      "end": {
+        "line": 147
+      },
+      "extra": {
+        "message": "Unbounded memory consumption - fetchall() without LIMIT or pagination",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-400"
+          ],
+          "citation": "_data, data = await cursor.fetchall(), {}",
+          "proof": "SOURCE: user-supplied username via GET /select determines which rows are fetched -> SINK: cursor.fetchall() at line 147 loads ALL matching rows into memory. No UNIQUE constraint on username in the schema (lines 92-99), so an attacker can create many users sharing one username via PUT /user and then query them, causing memory exhaustion."
+        }
+      }
+    }
+  ]
+}

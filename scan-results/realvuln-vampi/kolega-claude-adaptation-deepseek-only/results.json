@@ -1,0 +1,614 @@
+{
+  "version": "twin-distill-flash-dsonly",
+  "results": [
+    {
+      "check_id": "twin-round/CWE-89",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 72
+      },
+      "end": {
+        "line": 72
+      },
+      "extra": {
+        "message": "SQL Injection in get_user() via f-string query construction",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-89"
+          ],
+          "citation": "user_query = f\"SELECT * FROM users WHERE username = '{username}'\"",
+          "proof": "SOURCE: `username` arrives as an untrusted URL path parameter in `api_views/users.py:45` (get_by_username(username)). SINK: It is interpolated directly into a raw SQL query via f-string at `models/user_model.py:72` and executed via `db.session.execute(text(user_query))` at line 73. An attacker sending `GET /users/v1/admin' OR '1'='1` can dump all user records including password hashes. There is no parameterized query or input sanitization."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-116",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 28
+      },
+      "end": {
+        "line": 28
+      },
+      "extra": {
+        "message": "Stored JSON Injection via User.__repr__() string interpolation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-116"
+          ],
+          "citation": "return f'{{\"username\": \"{self.username}\", \"email\": \"{self.email}\"}}'",
+          "proof": "SOURCE: `username` and `email` are user-controlled strings accepted during registration (`api_views/users.py:52-68`) with no pattern/escaping constraints beyond `{\"type\": \"string\"}`. SINK: `api_views/users.py:47` calls `str(User.get_user(username))`, which invokes `__repr__()`. If an attacker registers with `username` containing a double-quote (e.g. `foo\", \"admin\": true, \"x\": \"`), the resulting f-string output produces malformed JSON, allowing injection of arbitrary JSON keys into the API response."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-321",
+      "path": "config.py",
+      "start": {
+        "line": 13
+      },
+      "end": {
+        "line": 13
+      },
+      "extra": {
+        "message": "Hardcoded Weak JWT Signing Secret Key",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-321"
+          ],
+          "citation": "vuln_app.app.config['SECRET_KEY'] = 'random'",
+          "proof": "SOURCE: The value `'random'` is hardcoded in source at `config.py:13`. SINK: It is used as the HMAC secret for all JWT tokens in `models/user_model.py:39` (`jwt.encode(payload, vuln_app.app.config.get('SECRET_KEY'), algorithm='HS256')`) and verified at line 48. An attacker who knows this well-known weak secret can forge arbitrary JWTs (e.g. setting `sub` to `admin`), granting any protected endpoint access without legitimate authentication."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-489",
+      "path": "app.py",
+      "start": {
+        "line": 17
+      },
+      "end": {
+        "line": 17
+      },
+      "extra": {
+        "message": "Flask Werkzeug Debugger Enabled in Production (RCE)",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-489"
+          ],
+          "citation": "vuln_app.run(host='0.0.0.0', port=5000, debug=True)",
+          "proof": "SOURCE: `debug=True` is hardcoded at `app.py:17`. SINK: Flask's Werkzeug debugger exposes an interactive Python console at the `/console` endpoint when an exception is triggered. An unauthenticated attacker can trigger any exception and then use the debugger console to execute arbitrary Python code on the server, achieving full remote code execution."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-200",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 25
+      },
+      "end": {
+        "line": 25
+      },
+      "extra": {
+        "message": "Unauthenticated Debug Endpoint Leaks All User Passwords",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-200"
+          ],
+          "citation": "return_value = jsonify({'users': User.get_all_users_debug()})",
+          "proof": "SOURCE: The `/users/v1/_debug` endpoint at `api_views/users.py:24-26` calls `User.get_all_users_debug()`, which at `models/user_model.py:68-69` invokes `json_debug()` returning `{'username': self.username, 'password': self.password, 'email': self.email, 'admin': self.admin}`. SINK: The response is returned without any token validation or authentication check. Any unauthenticated attacker can `GET /users/v1/_debug` and immediately obtain every user's plaintext password."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 187
+      },
+      "end": {
+        "line": 187
+      },
+      "extra": {
+        "message": "IDOR: Authenticated User Can Change Any User's Password",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "user = User.query.filter_by(username=username).first()",
+          "proof": "SOURCE: `username` comes from the untrusted URL path `{username}` in `update_password(username)` at line 179. The function validates the JWT at lines 180-182 but then ignores the token's identity (`resp['sub']`) in the vulnerable branch. SINK: Line 187 executes `User.query.filter_by(username=username).first()` using the path parameter, then line 188 assigns `user.password = request_data.get('password')` and commits. An attacker authenticated as any user can send `PUT /users/v1/admin/password` with `{\"password\":\"newpass\"}` to hijack the admin account."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-269",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 60
+      },
+      "end": {
+        "line": 60
+      },
+      "extra": {
+        "message": "Privilege Escalation via Self-Assigned Admin Role During Registration",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-269"
+          ],
+          "citation": "if vuln and 'admin' in request_data:",
+          "proof": "SOURCE: The registration request body is user-controlled JSON at line 52. SINK: At line 60, if the request body contains an `admin` key, its value is directly used to set `User.admin` at lines 64-65 (`admin=admin`). There is no server-side override rejecting the field. An attacker registers with `{\"username\":\"hacker\",\"password\":\"x\",\"email\":\"x@x.com\",\"admin\":true}` and immediately creates an admin account, gaining access to admin-only operations such as `delete_user()` at line 205."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-639",
+      "path": "api_views/books.py",
+      "start": {
+        "line": 51
+      },
+      "end": {
+        "line": 51
+      },
+      "extra": {
+        "message": "BOLA: Any Authenticated User Can Read Any Book's Secret Content",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-639"
+          ],
+          "citation": "book = Book.query.filter_by(book_title=str(book_title)).first()",
+          "proof": "SOURCE: `book_title` arrives as an untrusted URL path parameter at `get_by_title(book_title)` in line 45. SINK: In the vulnerable branch at line 51, the query filters only by `book_title` without scoping to the authenticated user from the JWT token. An attacker authenticated as any user can enumerate book titles and read any book's `secret_content` data intended to be private per-owner. Compare with the non-vuln path at line 62-63 that correctly filters by `user=user`."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-116",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 16
+      },
+      "end": {
+        "line": 16
+      },
+      "extra": {
+        "message": "JSON Injection via Manual String Concatenation in error_message_helper()",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-116"
+          ],
+          "citation": "return '{ \"status\": \"fail\", \"message\": \"' + msg + '\"}'",
+          "proof": "SOURCE: `msg` is user-influenced data from jsonschema validation errors at line 79 (`exc.message`), which can include tokens from the attacker's request body. SINK: Line 16 concatenates `msg` directly into a JSON string without any escaping of control characters. If `exc.message` contains a double-quote (e.g. the string `test\"} , \"extra\" : \"injected`), the resulting response becomes `{\"status\":\"fail\",\"message\":\"test\"}, \"extra\": \"injected\"}` injecting arbitrary JSON keys into the API response."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-1333",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 145
+      },
+      "end": {
+        "line": 145
+      },
+      "extra": {
+        "message": "ReDoS: Catastrophic Backtracking in Email Regex Validation",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-1333"
+          ],
+          "citation": "r\"^([0-9a-zA-Z]([-.\\w]*[0-9a-zA-Z])*@{1}([0-9a-zA-Z][-\\w]*[0-9a-zA-Z]\\.)+[a-zA-Z]{2,9})$\"",
+          "proof": "SOURCE: `request_data.get('email')` at line 146 comes from the user-controlled JSON body. SINK: `re.search(regex, str(request_data.get('email')))` at lines 145-146 processes the email against a regex containing nested quantifiers `([-.\\w]*[0-9a-zA-Z])*`. An attacker sending a crafted email string (e.g. many repetitions of `a-` before the `@`) causes catastrophic backtracking in the Python `re` engine, blocking the server thread and enabling a denial-of-service condition."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-257",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 93
+      },
+      "end": {
+        "line": 93
+      },
+      "extra": {
+        "message": "Plaintext Password Storage and Direct String Comparison",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-257"
+          ],
+          "citation": "if user and request_data.get('password') == user.password:",
+          "proof": "SOURCE: Passwords are stored as-is in the `User.password` column at `models/user_model.py:17` (`password = db.Column(db.String(128), nullable=False)`), assigned directly from the registration request body at lines 64-67 without hashing. SINK: Login at line 93 compares the incoming password with the stored value using `==` a direct string comparison. An attacker who gains read access to the database (e.g. via SQLi at `models/user_model.py:72` or the debug endpoint at `api_views/users.py:25`) immediately obtains all plaintext credentials with no cracking required."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 45
+      },
+      "end": {
+        "line": 45
+      },
+      "extra": {
+        "message": "Missing Authorization on User Detail Lookup Endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "def get_by_username(username):",
+          "proof": "SOURCE: The `username` path parameter arrives from the untrusted URL. SINK: The function at line 45 calls `User.get_user(username)` at line 46 and returns the result without any token validation or authentication check. Any unauthenticated attacker can `GET /users/v1/admin` to enumerate usernames and email addresses, or exploit the SQL injection (CWE-89) reachable through this endpoint to extract all credentials from the database."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-203",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 103
+      },
+      "end": {
+        "line": 103
+      },
+      "extra": {
+        "message": "User/Password Enumeration via Distinct Error Messages",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-203"
+          ],
+          "citation": "return Response(error_message_helper(\"Password is not correct for the given username.\"), 200, mimetype=\"application/json\")",
+          "proof": "SOURCE: The login request body supplies `username` and `password` from user-controlled input. SINK: Lines 103-107 return different error messages \u2014 `\"Password is not correct for the given username.\"` (line 104) when a user exists but the password is wrong, and `\"Username does not exist\"` (line 107) when the user does not exist. An attacker can brute-force valid usernames by observing which requests return the password-specific error vs the non-existent-user error, enabling targeted credential attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-74",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 28
+      },
+      "end": {
+        "line": 28
+      },
+      "extra": {
+        "message": "JSON Injection via Unescaped User Input in User.__repr__",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-74"
+          ],
+          "citation": "return f'{{\"username\": \"{self.username}\", \"email\": \"{self.email}\"}}'",
+          "proof": "SOURCE: The `username` and `email` fields are stored during user registration (api_views/users.py:57-73), which accept arbitrary string values from unauthenticated POST /users/v1/register with no JSON-special-character sanitization. SINK: User.__repr__ at models/user_model.py:28 manually constructs a JSON string via f-string interpolation without escaping double-quotes, backslashes, or other JSON control characters. When GET /users/v1/{username} calls `str(User.get_user(username))` (in the vuln=0 path), the response body contains manually-crafted JSON. An attacker who registers a username like `admin\", \"admin\": true, \"x\": \"` will cause the response to become `{\"username\": \"admin\", \"admin\": true, \"x\": \"\", \"email\": \"...\"}`, injecting arbitrary JSON fields that downstream parsers will interpret as genuine."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-74",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 76
+      },
+      "end": {
+        "line": 76
+      },
+      "extra": {
+        "message": "JSON Injection via Unescaped Database Values in User.get_user Vulnerable Path",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-74"
+          ],
+          "citation": "fin_query = '{\"username\": \"%s\", \"email\": \"%s\"}' % (ret[1], ret[3])",
+          "proof": "SOURCE: In the vuln=1 path of User.get_user at models/user_model.py:71-77, the raw column values ret[1] (username) and ret[3] (email) originate from unsanitized user registration input stored in the database. SINK: Line 76 interpolates these values into a JSON string using Python's `%` string formatting with no JSON-escaping. An attacker who registers a user with a crafted username containing JSON control characters can cause get_by_username to return broken or injected JSON. This is a distinct vulnerability class from the SQLi on line 72 \u2014 even if the SQLi were fixed, the JSON injection would persist."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-476",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 164
+      },
+      "end": {
+        "line": 164
+      },
+      "extra": {
+        "message": "Unhandled NoneType Access in update_email Non-Vulnerable Path on Deleted-User Token",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-476"
+          ],
+          "citation": "user.email = request_data.get('email')",
+          "proof": "SOURCE: In the non-vulnerable code path of update_email (vuln=0, lines 161-166), `user` is resolved via `User.query.filter_by(username=resp['sub']).first()` at line 149. SINK: The result can be None when the JWT's subject references a user that has been deleted from the database. At line 164, `user.email = request_data.get('email')` dereferences the None object, raising an unhandled AttributeError. With DEBUG=True (app.py:19), Werkzeug returns the full interactive debug traceback including local variables and config keys."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-862",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 20
+      },
+      "end": {
+        "line": 20
+      },
+      "extra": {
+        "message": "Missing Authorization on get_all_users Endpoint",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-862"
+          ],
+          "citation": "return_value = jsonify({'users': User.get_all_users()})",
+          "proof": "SOURCE: Unauthenticated HTTP GET request to /users/v1. SINK: get_all_users() at line 20 calls User.get_all_users() which queries the database for all User records and returns them with no authentication check. No security scheme is configured on this route. Anyone can enumerate all registered usernames and email addresses."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 52
+      },
+      "end": {
+        "line": 52
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on register_user Endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def register_user():",
+          "proof": "SOURCE: Unlimited POST requests to /users/v1/register from any client. SINK: register_user() at line 52 accepts and processes every request, creating a new user account each time. No rate-limiting middleware (e.g., Flask-Limiter) is configured anywhere in the project. An attacker can mass-register thousands of accounts to exhaust storage, spam the database, or create accounts used for subsequent attacks."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 179
+      },
+      "end": {
+        "line": 179
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on update_password Endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def update_password(username):",
+          "proof": "SOURCE: Unlimited PUT requests to /users/v1/{username}/password from any authenticated client. SINK: update_password() at line 179 processes every password-change request with no throttling. Combined with the existing IDOR bug (CWE-639 already found), an attacker can script automated password-reset attempts against any user's account without any rate limiting, enabling large-scale account takeover."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-319",
+      "path": "app.py",
+      "start": {
+        "line": 17
+      },
+      "end": {
+        "line": 17
+      },
+      "extra": {
+        "message": "Cleartext HTTP with No TLS Encryption",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-319"
+          ],
+          "citation": "vuln_app.run(host='0.0.0.0', port=5000, debug=True)",
+          "proof": "SOURCE: The Flask/Connexion application is started on port 5000 using plain HTTP with no TLS configuration. SINK: All API traffic \u2014 including login credentials (plaintext passwords in POST /users/v1/login), JWT bearer tokens (used in every authenticated request), user email addresses, and book secrets \u2014 is transmitted in cleartext over the network. An attacker with Man-in-the-Middle position on the local network can trivially intercept all sensitive data."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-476",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 33
+      },
+      "end": {
+        "line": 33
+      },
+      "extra": {
+        "message": "Unhandled NoneType in me() Endpoint on Deleted-User Token",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-476"
+          ],
+          "citation": "user = User.query.filter_by(username=resp['sub']).first()",
+          "proof": "SOURCE: A JWT token issued to a user who is subsequently deleted (via DELETE /users/v1/{username} by an admin) remains valid until its 60-second TTL expires. When that token is presented at GET /me, token_validator (line 29) returns the decoded payload, resp['sub'] contains the deleted username, and User.query.filter_by(username=resp['sub']).first() returns None at line 33. SINK: At line 37 the code accesses `user.username` on the None object, raising AttributeError and causing a 500 Internal Server Error."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-476",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 211
+      },
+      "end": {
+        "line": 211
+      },
+      "extra": {
+        "message": "Unhandled NoneType in delete_user() on Deleted-Admin Token",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-476"
+          ],
+          "citation": "user = User.query.filter_by(username=resp['sub']).first()",
+          "proof": "SOURCE: If an admin user is deleted by another admin but their JWT token has not yet expired, the admin can still call DELETE /users/v1/{username} with their old token. token_validator returns the decoded payload, User.query.filter_by(username=resp['sub']).first() returns None at line 211 because the admin no longer exists in the database. SINK: At line 212 the code checks `if user.admin` on the None result, raising AttributeError and causing a 500 response."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-391",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 113
+      },
+      "end": {
+        "line": 113
+      },
+      "extra": {
+        "message": "Bare except Clause Swallows All Exceptions in login_user",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-391"
+          ],
+          "citation": "except:\n        return Response(error_message_helper(\"An error occurred!\"), 200, mimetype=\"application/json\")",
+          "proof": "SOURCE: Any exception raised during login_user() processing (lines 86-110) that is not a jsonschema.exceptions.ValidationError falls through to the bare `except:` at line 113. SINK: The bare except catches ALL exception types including SystemExit, KeyboardInterrupt, and GeneratorExit, then returns a generic 200 response masking the root cause. This prevents operators from detecting and debugging actual failures and could be used by an attacker to hide probing attempts that trigger unexpected error paths."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-307",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 85
+      },
+      "end": {
+        "line": 85
+      },
+      "extra": {
+        "message": "Missing Rate Limiting on Login Endpoint",
+        "severity": "critical",
+        "metadata": {
+          "cwe": [
+            "CWE-307"
+          ],
+          "citation": "def login_user():\n    request_data = request.get_json()",
+          "proof": "Unrestricted POST /users/v1/login accepts username/password credentials with NO rate limiting, throttling, or account lockout. An attacker can brute-force credentials at unlimited speed, enabling automated password guessing."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-203",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 82
+      },
+      "end": {
+        "line": 82
+      },
+      "extra": {
+        "message": "User Enumeration via Registration Endpoint",
+        "severity": "medium",
+        "metadata": {
+          "cwe": [
+            "CWE-203"
+          ],
+          "citation": "return Response(error_message_helper(\"User already exists. Please Log in.\"), 200, mimetype=\"application/json\")",
+          "proof": "SOURCE: request_data.get('username') from POST /users/v1/register -> SINK: distinct error response at line 82. The registration endpoint returns 'User already exists. Please Log in.' when a username is taken versus a success message for new accounts. This reveals whether an account exists, enabling user enumeration."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 188
+      },
+      "end": {
+        "line": 188
+      },
+      "extra": {
+        "message": "JWT Tokens Remain Valid After Password Change",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "user.password = request_data.get('password')\n                    db.session.commit()",
+          "proof": "SOURCE: update_password() persists a new password via db.session.commit() at line 188. SINK: encode_auth_token() at models/user_model.py:30 creates JWTs with only exp/iat/sub claims \u2014 no jti (JWT ID) for blacklisting \u2014 and decode_auth_token() (line 46) performs no revocation check. After a password change, all previously issued tokens remain valid until natural expiry. A stolen token survives a password reset."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-613",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 94
+      },
+      "end": {
+        "line": 94
+      },
+      "extra": {
+        "message": "JWT Tokens Remain Valid After Account Deletion",
+        "severity": "high",
+        "metadata": {
+          "cwe": [
+            "CWE-613"
+          ],
+          "citation": "db.session.commit()",
+          "proof": "SOURCE: User.delete_user() at line 92 issues DELETE and commits at line 94 without invalidating any tokens. SINK: decode_auth_token() at line 46 has no token blacklist or revocation check. The deleted user's JWT (issued with only exp/iat/sub at lines 32-36, no jti) remains valid for up to alive seconds (default 60). A deleted user's token still authenticates requests."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-391",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 136
+      },
+      "end": {
+        "line": 136
+      },
+      "extra": {
+        "message": "Unchecked Exception in update_email JSON Schema Validation",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-391"
+          ],
+          "citation": "except:",
+          "proof": "SOURCE: request_data from POST /users/v1/{username}/email (line 133). The try/except at lines 134-136 catches ALL exceptions including KeyboardInterrupt and SystemExit with a bare 'except:', silently converting any schema validation failure (including non-ValidationError exceptions like TypeErrors from malformed input) into a generic 400 response."
+        }
+      }
+    },
+    {
+      "check_id": "twin-round/CWE-391",
+      "path": "api_views/books.py",
+      "start": {
+        "line": 21
+      },
+      "end": {
+        "line": 21
+      },
+      "extra": {
+        "message": "Unchecked Exception in add_new_book JSON Schema Validation",
+        "severity": "low",
+        "metadata": {
+          "cwe": [
+            "CWE-391"
+          ],
+          "citation": "except:",
+          "proof": "SOURCE: request_data from POST /books/v1 (line 18). The try/except at lines 19-21 catches ALL exceptions with a bare 'except:', silently swallowing non-ValidationError exceptions (TypeError, KeyboardInterrupt, etc.) during jsonschema.validate() and returning a generic 400 response."
+        }
+      }
+    }
+  ]
+}

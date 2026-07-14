@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-BD1PYVN294"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-BD1PYVN294');
+</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Claude Fable 5 — RealVuln</title>
+<meta name="description" content="RealVuln scanner deep-dive for Claude Fable 5: F3/F2, recall, precision, cost, per-repository detection, severity, CWE families, and operational metrics." />
+<link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+<!-- RV-ARCHIVE-BANNER -->
+<div style="background:#3a2e12;color:#f0e6d2;border-bottom:1px solid #cfa45c;font:500 13px/1.5 system-ui,sans-serif;padding:8px 16px;text-align:center">You are viewing an <strong>archived release</strong> — RealVuln <strong>v1.0</strong>, the version described in the paper. <a href="https://realvuln.com" style="color:#cfa45c;font-weight:700;text-decoration:underline">View the latest benchmark &rarr;</a></div>
+
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="../index.html"><span class="mark">▚</span> real<span style="color:var(--accent)">vuln</span> <span class="v">v1.0</span></a>
+    <nav class="topnav">
+      <span class="navlinks" style="display:contents">
+        <a href="../dashboard.html" style="color:var(--fg)">Dashboard</a>
+        <a href="../methodology.html">Methodology</a>
+        <a href="../dataset.html">Dataset</a>
+        <a href="../findings.html">Findings</a>
+        <a href="../roadmap.html">Roadmap</a>
+      </span>
+      <a class="gh" href="https://github.com/kolega-ai/Real-Vuln-Benchmark" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+      <button class="nav-toggle" aria-label="Menu">≡</button>
+    </nav>
+  </div>
+</header>
+
+<div class="mobile-menu" id="mobile-menu">
+  <a href="../dashboard.html">Dashboard</a>
+  <a href="../methodology.html">Methodology</a>
+  <a href="../dataset.html">Dataset</a>
+  <a href="../findings.html">Findings</a>
+  <a href="../roadmap.html">Roadmap</a>
+  <a href="https://github.com/kolega-ai/Real-Vuln-Benchmark" target="_blank" rel="noopener">GitHub ↗</a>
+</div>
+
+<main>
+
+<section class="wrap page-hero">
+  <div class="breadcrumb"><a href="../index.html">RealVuln</a><span class="sep">/</span><a href="../dashboard.html">Dashboard</a><span class="sep">/</span><span>Claude Fable 5</span></div>
+  <div class="ph-num">Scanner deep-dive</div>
+  <h1>Claude Fable 5 <a href="https://www.anthropic.com/news/claude-fable-5-mythos-5" target="_blank" rel="noopener" style="font-family:var(--mono);font-size:clamp(13px,1.4vw,15px);font-weight:400;letter-spacing:0;color:var(--accent);text-decoration:none;white-space:nowrap;vertical-align:middle">by Anthropic ↗</a></h1>
+  <p class="lede">General-Purpose LLM · <span class="mono">claude-code-v1</span> · scored on 26/26 repositories. Strict scoring (unfinished repos counted as misses).</p>
+</section>
+<section class="wrap" style="padding-top:0">
+  <div style="border:1px solid var(--accent);border-left-width:3px;border-radius:8px;padding:18px 20px;background:rgba(212,160,23,0.06);font-size:15px;line-height:1.6;color:var(--fg-2)"><div class="mono" style="color:var(--accent);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Methodology note</div><strong>Different harness.</strong> Every other LLM scanner here runs agentically through the <span class="mono">OpenCode</span> CLI (version label <span class="mono">agentic-v1</span>). Fable 5 could not be benchmarked that way: the OpenCode→Anthropic API path was consistently blocked by provider content filtering on the intentionally-vulnerable source, returning refusals instead of findings. <br><br>Instead, each of the 26 repositories was scanned by a dedicated <span class="mono">Claude Code</span> subagent (version label <span class="mono">claude-code-v1</span>) using the <em>identical</em> system prompt as the agentic runner (prompt hash <span class="mono">sha256:14ccb06a286c</span>), so findings remain comparable. The same prompt ran cleanly through Claude Code, which confirms the block was specific to the OpenCode delivery path — not the prompt or the model. <br><br><strong>Caveats.</strong> These runs were interactive rather than metered, so token and latency figures were not recorded. The cost shown is an <em>estimate</em>: Fable 5's API price is exactly 2× Claude Opus 4.8 ($10/$50 vs $5/$25 per 1M input/output tokens), so we project its cost as 2× Opus 4.8's measured cost on the same benchmark. One repository (<span class="mono">python-app</span>) nests its source under a <span class="mono">target/</span> directory; the agent reported paths without that prefix, which were normalized to align with ground truth before scoring.</div>
+</section>
+<section class="wrap" style="padding-bottom:8px"><div class="hero-kpis sd-kpis">
+<div class="hk"><div class="hk-n">50.5</div><div class="hk-l">F3 (strict)</div></div>
+<div class="hk"><div class="hk-n">52.5</div><div class="hk-l">F2 (strict)</div></div>
+<div class="hk"><div class="hk-n">48.6%</div><div class="hk-l">Recall (strict)</div></div>
+<div class="hk"><div class="hk-n">76.5%</div><div class="hk-l">Precision</div></div>
+<div class="hk"><div class="hk-n">26<span style="color:var(--fg-3)">/26</span></div><div class="hk-l">Repos scored</div></div>
+<div class="hk"><div class="hk-n"><span style="font-size:.5em">—</span></div><div class="hk-l">Model</div></div>
+<div class="hk"><div class="hk-n">~$71 <span style="font-size:.5em;color:var(--fg-3)">est.</span></div><div class="hk-l">Total cost</div></div>
+<div class="hk"><div class="hk-n">—</div><div class="hk-l">Avg latency</div></div>
+</div></section>
+<section class="section"><div class="wrap">
+  <div class="subhead"><span class="sn">§</span><h2 style="font-size:clamp(22px,3vw,30px);letter-spacing:-0.02em">Per-repository breakdown</h2></div>
+  <p class="section-intro">Each bar shows true positives, false positives, and misses on one repository; bar length is proportional to that repo's labeled vulnerabilities. Ranked by F2.</p>
+  <div class="barlegend" style="margin-top:18px"><span><span class="sw tp"></span>True positive</span><span><span class="sw fp"></span>False positive</span><span><span class="sw fn"></span>Missed (FN)</span></div>
+  <div class="repobars">
+    <div class="rb"><span class="rb-name">vfapi</span><span class="rb-bar"><span class="rb-seg tp" style="width:9.20%"></span><span class="rb-seg fp" style="width:4.60%"></span><span class="rb-seg fn" style="width:1.15%"></span></span><span class="rb-meta"><b>83</b> F2 · 89%</span></div>
+    <div class="rb"><span class="rb-name">insecure-web</span><span class="rb-bar"><span class="rb-seg tp" style="width:8.05%"></span><span class="rb-seg fn" style="width:2.30%"></span></span><span class="rb-meta"><b>81</b> F2 · 78%</span></div>
+    <div class="rb"><span class="rb-name">dsvw</span><span class="rb-bar"><span class="rb-seg tp" style="width:22.99%"></span><span class="rb-seg fp" style="width:2.30%"></span><span class="rb-seg fn" style="width:8.05%"></span></span><span class="rb-meta"><b>77</b> F2 · 74%</span></div>
+    <div class="rb"><span class="rb-name">intentionally-vulnerable-python-application</span><span class="rb-bar"><span class="rb-seg tp" style="width:5.75%"></span><span class="rb-seg fp" style="width:1.15%"></span><span class="rb-seg fn" style="width:2.30%"></span></span><span class="rb-meta"><b>74</b> F2 · 71%</span></div>
+    <div class="rb"><span class="rb-name">dvblab</span><span class="rb-bar"><span class="rb-seg tp" style="width:17.24%"></span><span class="rb-seg fp" style="width:2.30%"></span><span class="rb-seg fn" style="width:8.05%"></span></span><span class="rb-meta"><b>71</b> F2 · 68%</span></div>
+    <div class="rb"><span class="rb-name">vulnerable-python-apps</span><span class="rb-bar"><span class="rb-seg tp" style="width:18.39%"></span><span class="rb-seg fp" style="width:10.34%"></span><span class="rb-seg fn" style="width:6.90%"></span></span><span class="rb-meta"><b>71</b> F2 · 73%</span></div>
+    <div class="rb"><span class="rb-name">vulnerable-tornado-app</span><span class="rb-bar"><span class="rb-seg tp" style="width:10.34%"></span><span class="rb-seg fp" style="width:1.15%"></span><span class="rb-seg fn" style="width:5.75%"></span></span><span class="rb-meta"><b>68</b> F2 · 64%</span></div>
+    <div class="rb"><span class="rb-name">python-app</span><span class="rb-bar"><span class="rb-seg tp" style="width:14.94%"></span><span class="rb-seg fp" style="width:5.75%"></span><span class="rb-seg fn" style="width:8.05%"></span></span><span class="rb-meta"><b>66</b> F2 · 65%</span></div>
+    <div class="rb"><span class="rb-name">vulnerable-api</span><span class="rb-bar"><span class="rb-seg tp" style="width:10.34%"></span><span class="rb-seg fp" style="width:3.45%"></span><span class="rb-seg fn" style="width:5.75%"></span></span><span class="rb-meta"><b>66</b> F2 · 64%</span></div>
+    <div class="rb"><span class="rb-name">vulnpy</span><span class="rb-bar"><span class="rb-seg tp" style="width:54.02%"></span><span class="rb-seg fn" style="width:35.63%"></span></span><span class="rb-meta"><b>66</b> F2 · 60%</span></div>
+    <div class="rb"><span class="rb-name">vampi</span><span class="rb-bar"><span class="rb-seg tp" style="width:10.34%"></span><span class="rb-seg fp" style="width:9.20%"></span><span class="rb-seg fn" style="width:6.90%"></span></span><span class="rb-meta"><b>58</b> F2 · 60%</span></div>
+    <div class="rb"><span class="rb-name">dsvpwa</span><span class="rb-bar"><span class="rb-seg tp" style="width:19.54%"></span><span class="rb-seg fp" style="width:2.30%"></span><span class="rb-seg fn" style="width:17.24%"></span></span><span class="rb-meta"><b>58</b> F2 · 53%</span></div>
+    <div class="rb"><span class="rb-name">damn-vulnerable-flask-application</span><span class="rb-bar"><span class="rb-seg tp" style="width:9.20%"></span><span class="rb-seg fp" style="width:4.60%"></span><span class="rb-seg fn" style="width:8.05%"></span></span><span class="rb-meta"><b>56</b> F2 · 53%</span></div>
+    <div class="rb"><span class="rb-name">python-insecure-app</span><span class="rb-bar"><span class="rb-seg tp" style="width:4.60%"></span><span class="rb-seg fp" style="width:1.15%"></span><span class="rb-seg fn" style="width:4.60%"></span></span><span class="rb-meta"><b>54</b> F2 · 50%</span></div>
+    <div class="rb"><span class="rb-name">lets-be-bad-guys</span><span class="rb-bar"><span class="rb-seg tp" style="width:13.79%"></span><span class="rb-seg fp" style="width:4.60%"></span><span class="rb-seg fn" style="width:13.79%"></span></span><span class="rb-meta"><b>54</b> F2 · 50%</span></div>
+    <div class="rb"><span class="rb-name">owasp-web-playground</span><span class="rb-bar"><span class="rb-seg tp" style="width:16.09%"></span><span class="rb-seg fp" style="width:11.49%"></span><span class="rb-seg fn" style="width:16.09%"></span></span><span class="rb-meta"><b>52</b> F2 · 50%</span></div>
+    <div class="rb"><span class="rb-name">pythonssti</span><span class="rb-bar"><span class="rb-seg tp" style="width:1.15%"></span><span class="rb-seg fp" style="width:1.15%"></span><span class="rb-seg fn" style="width:1.15%"></span></span><span class="rb-meta"><b>50</b> F2 · 50%</span></div>
+    <div class="rb"><span class="rb-name">vulnerable-flask-app</span><span class="rb-bar"><span class="rb-seg tp" style="width:11.49%"></span><span class="rb-seg fp" style="width:8.05%"></span><span class="rb-seg fn" style="width:12.64%"></span></span><span class="rb-meta"><b>50</b> F2 · 48%</span></div>
+    <div class="rb"><span class="rb-name">pygoat</span><span class="rb-bar"><span class="rb-seg tp" style="width:39.08%"></span><span class="rb-seg fp" style="width:11.49%"></span><span class="rb-seg fn" style="width:49.43%"></span></span><span class="rb-meta"><b>48</b> F2 · 44%</span></div>
+    <div class="rb"><span class="rb-name">threatbyte</span><span class="rb-bar"><span class="rb-seg tp" style="width:12.64%"></span><span class="rb-seg fp" style="width:5.75%"></span><span class="rb-seg fn" style="width:17.24%"></span></span><span class="rb-meta"><b>46</b> F2 · 42%</span></div>
+    <div class="rb"><span class="rb-name">damn-vulnerable-graphql-application</span><span class="rb-bar"><span class="rb-seg tp" style="width:14.94%"></span><span class="rb-seg fp" style="width:5.75%"></span><span class="rb-seg fn" style="width:26.44%"></span></span><span class="rb-meta"><b>40</b> F2 · 36%</span></div>
+    <div class="rb"><span class="rb-name">extremely-vulnerable-flask-app</span><span class="rb-bar"><span class="rb-seg tp" style="width:12.64%"></span><span class="rb-seg fp" style="width:3.45%"></span><span class="rb-seg fn" style="width:24.14%"></span></span><span class="rb-meta"><b>39</b> F2 · 34%</span></div>
+    <div class="rb"><span class="rb-name">dvpwa</span><span class="rb-bar"><span class="rb-seg tp" style="width:8.05%"></span><span class="rb-seg fp" style="width:2.30%"></span><span class="rb-seg fn" style="width:17.24%"></span></span><span class="rb-meta"><b>36</b> F2 · 32%</span></div>
+    <div class="rb"><span class="rb-name">flask-xss</span><span class="rb-bar"><span class="rb-seg tp" style="width:10.34%"></span><span class="rb-seg fp" style="width:5.75%"></span><span class="rb-seg fn" style="width:24.14%"></span></span><span class="rb-meta"><b>34</b> F2 · 30%</span></div>
+    <div class="rb"><span class="rb-name">vulpy</span><span class="rb-bar"><span class="rb-seg tp" style="width:18.39%"></span><span class="rb-seg fp" style="width:4.60%"></span><span class="rb-seg fn" style="width:47.13%"></span></span><span class="rb-meta"><b>32</b> F2 · 28%</span></div>
+    <div class="rb"><span class="rb-name">djangoat</span><span class="rb-bar"><span class="rb-seg tp" style="width:16.09%"></span><span class="rb-seg fp" style="width:6.90%"></span><span class="rb-seg fn" style="width:41.38%"></span></span><span class="rb-meta"><b>32</b> F2 · 28%</span></div>
+  </div>
+<div class="table-scroll" style="margin-top:20px"><table class="simple"><thead><tr><th class="l">Repository</th><th>TP</th><th>FP</th><th>FN</th><th>Recall %</th><th>F2</th></tr></thead><tbody><tr><td class="l">vfapi</td><td>8</td><td>4</td><td>1</td><td>88.9</td><td>83.3</td></tr><tr><td class="l">insecure-web</td><td>7</td><td>0</td><td>2</td><td>77.8</td><td>81.4</td></tr><tr><td class="l">dsvw</td><td>20</td><td>2</td><td>7</td><td>74.1</td><td>76.9</td></tr><tr><td class="l">intentionally-vulnerable-python-application</td><td>5</td><td>1</td><td>2</td><td>71.4</td><td>73.5</td></tr><tr><td class="l">dvblab</td><td>15</td><td>2</td><td>7</td><td>68.2</td><td>71.4</td></tr><tr><td class="l">vulnerable-python-apps</td><td>16</td><td>9</td><td>6</td><td>72.7</td><td>70.8</td></tr><tr><td class="l">vulnerable-tornado-app</td><td>9</td><td>1</td><td>5</td><td>64.3</td><td>68.2</td></tr><tr><td class="l">python-app</td><td>13</td><td>5</td><td>7</td><td>65.0</td><td>66.3</td></tr><tr><td class="l">vulnerable-api</td><td>9</td><td>3</td><td>5</td><td>64.3</td><td>66.2</td></tr><tr><td class="l">vulnpy</td><td>47</td><td>0</td><td>31</td><td>60.3</td><td>65.5</td></tr><tr><td class="l">vampi</td><td>9</td><td>8</td><td>6</td><td>60.0</td><td>58.4</td></tr><tr><td class="l">dsvpwa</td><td>17</td><td>2</td><td>15</td><td>53.1</td><td>57.8</td></tr><tr><td class="l">damn-vulnerable-flask-application</td><td>8</td><td>4</td><td>7</td><td>53.3</td><td>55.6</td></tr><tr><td class="l">python-insecure-app</td><td>4</td><td>1</td><td>4</td><td>50.0</td><td>54.1</td></tr><tr><td class="l">lets-be-bad-guys</td><td>12</td><td>4</td><td>12</td><td>50.0</td><td>53.6</td></tr><tr><td class="l">owasp-web-playground</td><td>14</td><td>10</td><td>14</td><td>50.0</td><td>51.5</td></tr><tr><td class="l">pythonssti</td><td>1</td><td>1</td><td>1</td><td>50.0</td><td>50.0</td></tr><tr><td class="l">vulnerable-flask-app</td><td>10</td><td>7</td><td>11</td><td>47.6</td><td>49.5</td></tr><tr><td class="l">pygoat</td><td>34</td><td>10</td><td>43</td><td>44.2</td><td>48.3</td></tr><tr><td class="l">threatbyte</td><td>11</td><td>5</td><td>15</td><td>42.3</td><td>45.8</td></tr><tr><td class="l">damn-vulnerable-graphql-application</td><td>13</td><td>5</td><td>23</td><td>36.1</td><td>40.1</td></tr><tr><td class="l">extremely-vulnerable-flask-app</td><td>11</td><td>3</td><td>21</td><td>34.4</td><td>38.7</td></tr><tr><td class="l">dvpwa</td><td>7</td><td>2</td><td>15</td><td>31.8</td><td>36.1</td></tr><tr><td class="l">flask-xss</td><td>9</td><td>5</td><td>21</td><td>30.0</td><td>33.6</td></tr><tr><td class="l">vulpy</td><td>16</td><td>4</td><td>41</td><td>28.1</td><td>32.3</td></tr><tr><td class="l">djangoat</td><td>14</td><td>6</td><td>36</td><td>28.0</td><td>31.8</td></tr></tbody></table></div>
+<div class="subhead" style="margin-top:46px"><span class="sn">§</span><h2 style="font-size:clamp(22px,3vw,30px);letter-spacing:-0.02em">Detection by severity</h2></div>
+<div class="table-scroll" style="margin-top:20px"><table class="simple"><thead><tr><th class="l">Severity</th><th>TP</th><th>FP</th><th>FN</th><th>Recall %</th></tr></thead><tbody><tr><td class="l">Critical</td><td>74</td><td>3</td><td>12</td><td>86.0</td></tr><tr><td class="l">High</td><td>142</td><td>5</td><td>122</td><td>53.8</td></tr><tr><td class="l">Medium</td><td>105</td><td>1</td><td>174</td><td>37.6</td></tr><tr><td class="l">Low</td><td>18</td><td>0</td><td>50</td><td>26.5</td></tr></tbody></table></div>
+<div class="subhead" style="margin-top:46px"><span class="sn">§</span><h2 style="font-size:clamp(22px,3vw,30px);letter-spacing:-0.02em">Detection by vulnerability class</h2></div>
+<div class="table-scroll" style="margin-top:20px"><table class="simple"><thead><tr><th class="l">CWE family</th><th>TP</th><th>FP</th><th>FN</th><th>Recall %</th></tr></thead><tbody><tr><td class="l">Code Injection / RFI</td><td>14</td><td>0</td><td>0</td><td>100.0</td></tr><tr><td class="l">XML External Entities</td><td>8</td><td>1</td><td>0</td><td>100.0</td></tr><tr><td class="l">Insecure Deserialization</td><td>19</td><td>0</td><td>0</td><td>100.0</td></tr><tr><td class="l">HTTP Header Injection</td><td>2</td><td>0</td><td>0</td><td>100.0</td></tr><tr><td class="l">XPath Injection</td><td>4</td><td>0</td><td>0</td><td>100.0</td></tr><tr><td class="l">SQL Injection</td><td>43</td><td>2</td><td>4</td><td>91.5</td></tr><tr><td class="l">Path Traversal</td><td>22</td><td>1</td><td>4</td><td>84.6</td></tr><tr><td class="l">Command / OS Injection</td><td>14</td><td>1</td><td>3</td><td>82.4</td></tr><tr><td class="l">Open Redirect</td><td>4</td><td>0</td><td>2</td><td>66.7</td></tr><tr><td class="l">Hardcoded Credentials</td><td>38</td><td>0</td><td>23</td><td>62.3</td></tr><tr><td class="l">Broken Access Control / IDOR</td><td>13</td><td>0</td><td>11</td><td>54.2</td></tr><tr><td class="l">Security Misconfiguration</td><td>17</td><td>0</td><td>16</td><td>51.5</td></tr><tr><td class="l">Server-Side Request Forgery</td><td>12</td><td>0</td><td>12</td><td>50.0</td></tr><tr><td class="l">Other</td><td>75</td><td>3</td><td>131</td><td>36.4</td></tr><tr><td class="l">Missing Authentication / Authorization</td><td>16</td><td>0</td><td>31</td><td>34.0</td></tr><tr><td class="l">Cross-Site Scripting</td><td>25</td><td>1</td><td>57</td><td>30.5</td></tr><tr><td class="l">Sensitive Data Exposure</td><td>10</td><td>0</td><td>47</td><td>17.5</td></tr><tr><td class="l">Denial of Service</td><td>3</td><td>0</td><td>17</td><td>15.0</td></tr></tbody></table></div>
+<div class="subhead" style="margin-top:46px"><span class="sn">§</span><h2 style="font-size:clamp(22px,3vw,30px);letter-spacing:-0.02em">Cost</h2></div>
+  <div class="mgrid" style="margin-top:20px">
+<div class="mg"><div class="v">~$71 <span style="font-size:.5em;color:var(--fg-3)">est.</span></div><div class="l">Total cost</div></div>
+<div class="mg"><div class="v">$0.93</div><div class="l">Cost / run</div></div>
+<div class="mg"><div class="v">$0.355</div><div class="l">Cost / 100 LOC</div></div>
+<div class="mg"><div class="v">20,062</div><div class="l">Python LOC scanned</div></div>
+<div class="mg"><div class="v">77</div><div class="l">Successful runs</div></div>
+  </div>
+  <p class="figure-cap" style="margin-top:30px"><a href="../dashboard.html">← Back to the leaderboard</a></p>
+</div></section>
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-base" style="margin-top:0;padding-top:0;border-top:none">
+      <span>RealVuln · MIT License · arXiv:2604.13764 · v1.0, March 2026</span>
+      <span class="disc">RealVuln is independent research by John Pellew and Faizan Raza, founding members of Kolega.Dev. Kolega.Dev is among the scanners evaluated here — so every ground-truth label, scanner output, and scoring script is released openly for independent reproduction and audit.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="../app.js"></script>
+</body>
+</html>
