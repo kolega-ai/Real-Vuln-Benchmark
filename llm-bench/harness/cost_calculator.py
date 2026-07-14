@@ -44,6 +44,48 @@ def calculate_cost(
     )
 
 
+def calculate_cost_tiered(
+    input_tokens: int,
+    output_tokens: int,
+    pricing: dict,
+    cached_input_tokens: int = 0,
+) -> CostEstimate:
+    """Calculate cost for one call, honoring a `pricing["tiered"]` override.
+
+    `pricing` is a models.yaml pricing dict: flat `input_per_1m`/`output_per_1m`,
+    plus an optional `tiered` block ({threshold_tokens, long_input_per_1m,
+    long_output_per_1m}) applied when THIS call's input_tokens exceeds the
+    threshold. Must be called per-call (not on aggregated totals) since the
+    tier is a property of a single call's context size.
+    """
+    tiered = pricing.get("tiered")
+    if tiered and input_tokens > tiered["threshold_tokens"]:
+        input_price = tiered["long_input_per_1m"]
+        output_price = tiered["long_output_per_1m"]
+        cached_input_price = tiered.get("long_cached_input_per_1m", input_price)
+    else:
+        input_price = pricing["input_per_1m"]
+        output_price = pricing["output_per_1m"]
+        cached_input_price = pricing.get("cached_input_per_1m", input_price)
+
+    # OpenAI usage reports input_tokens inclusive of cached_input_tokens.
+    # Charge only the uncached remainder at the regular input rate.
+    cached_input_tokens = min(max(cached_input_tokens, 0), input_tokens)
+    uncached_input_tokens = input_tokens - cached_input_tokens
+    input_cost = (
+        (uncached_input_tokens / 1_000_000) * input_price
+        + (cached_input_tokens / 1_000_000) * cached_input_price
+    )
+    output_cost = (output_tokens / 1_000_000) * output_price
+    return CostEstimate(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        input_cost_usd=round(input_cost, 6),
+        output_cost_usd=round(output_cost, 6),
+        total_cost_usd=round(input_cost + output_cost, 6),
+    )
+
+
 def estimate_run_cost(
     input_price_per_1m: float,
     output_price_per_1m: float,

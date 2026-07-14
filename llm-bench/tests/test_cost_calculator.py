@@ -9,7 +9,12 @@ PROJECT_ROOT = LLM_BENCH_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(LLM_BENCH_DIR))
 
-from harness.cost_calculator import calculate_cost, estimate_run_cost, estimate_total_cost
+from harness.cost_calculator import (
+    calculate_cost,
+    calculate_cost_tiered,
+    estimate_run_cost,
+    estimate_total_cost,
+)
 
 
 class TestCalculateCost:
@@ -32,6 +37,40 @@ class TestCalculateCost:
         # 100K input + 20K output at Haiku prices
         result = calculate_cost(100_000, 20_000, 0.80, 4.00)
         assert abs(result.total_cost_usd - 0.16) < 0.01
+
+    def test_tiered_cached_short_context(self):
+        pricing = {
+            "input_per_1m": 1.0,
+            "cached_input_per_1m": 0.1,
+            "output_per_1m": 6.0,
+            "tiered": {
+                "threshold_tokens": 272_000,
+                "long_input_per_1m": 2.0,
+                "long_cached_input_per_1m": 0.2,
+                "long_output_per_1m": 9.0,
+            },
+        }
+        result = calculate_cost_tiered(200_000, 10_000, pricing, 150_000)
+        assert result.input_cost_usd == 0.065
+        assert result.output_cost_usd == 0.06
+        assert result.total_cost_usd == 0.125
+
+    def test_tiered_cached_long_context_charges_full_request(self):
+        pricing = {
+            "input_per_1m": 1.0,
+            "cached_input_per_1m": 0.1,
+            "output_per_1m": 6.0,
+            "tiered": {
+                "threshold_tokens": 272_000,
+                "long_input_per_1m": 2.0,
+                "long_cached_input_per_1m": 0.2,
+                "long_output_per_1m": 9.0,
+            },
+        }
+        result = calculate_cost_tiered(300_000, 10_000, pricing, 200_000)
+        assert result.input_cost_usd == 0.24
+        assert result.output_cost_usd == 0.09
+        assert result.total_cost_usd == 0.33
 
 
 class TestEstimateRunCost:
