@@ -22,9 +22,12 @@
     { name: "Claude Opus 4.6", slug: "claude-opus-4-6-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 19, f2: 61.4, f2s: 49.4, f3: 59.7, f3s: 47.2, rec: 0.58, recs: 0.451, prec: 0.799, cost: 22.41, est: false, sd: 13.6 },
     { name: "Kimi K2.5", slug: "kimi-k2.5-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 24, f2: 50.9, f2s: 47.8, f3: 49.3, f3s: 46.0, rec: 0.478, recs: 0.443, prec: 0.693, cost: 2.17, est: false, sd: 13.0 },
     { name: "GLM-5", slug: "glm-5-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 22, f2: 53.8, f2s: 47.2, f3: 51.9, f3s: 45.1, rec: 0.501, recs: 0.431, prec: 0.767, cost: 6.55, est: false, sd: 13.8 },
+    { name: "Qwen 3.6 35B", slug: "qwen3.6-35b-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 25, f2: 44.8, f2s: 42.8, f3: 43.0, f3s: 40.9, rec: 0.413, recs: 0.392, prec: 0.676, cost: null, est: false, sd: null },
     { name: "Minimax M2.7", slug: "minimax-m2.7-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 22, f2: 46.7, f2s: 40.2, f3: 44.8, f3s: 38.2, rec: 0.43, recs: 0.363, prec: 0.713, cost: 1.11, est: false, sd: 10.7 },
     { name: "Qwen 3.5 397B", slug: "qwen-3.5-397b-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 24, f2: 42.6, f2s: 39.9, f3: 40.9, f3s: 38.2, rec: 0.394, recs: 0.365, prec: 0.636, cost: 3.18, est: false, sd: 12.9 },
     { name: "Claude Haiku 4.5", slug: "claude-haiku-4-5-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 24, f2: 41.3, f2s: 38.6, f3: 39.1, f3s: 36.4, rec: 0.371, recs: 0.344, prec: 0.752, cost: 5.24, est: false, sd: 12.9 },
+    { name: "Ornith 1.0 35B", slug: "ornith-q3-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 22, f2: 36.5, f2s: 30.5, f3: 35.0, f3s: 28.8, rec: 0.336, recs: 0.274, prec: 0.549, cost: null, est: false, sd: null },
+    { name: "Gemma 4 31B", slug: "gemma4-31b-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 26, f2: 30.9, f2s: 30.9, f3: 28.5, f3s: 28.5, rec: 0.265, recs: 0.265, prec: 0.894, cost: null, est: false, sd: null },
     { name: "Grok 4.20 Reasoning", slug: "grok-4.20-reasoning-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 24, f2: 32.2, f2s: 30.0, f3: 29.8, f3s: 27.7, rec: 0.277, recs: 0.257, prec: 0.932, cost: 16.82, est: false, sd: 16.0 },
     { name: "Claude Haiku 4.5", slug: "claude-haiku-4-5-v1", cat: "llm", ver: "direct-v1", repos: 23, f2: 29.4, f2s: 26.8, f3: 28.1, f3s: 25.4, rec: 0.268, recs: 0.241, prec: 0.487, cost: 4.94, est: false, sd: 17.8 },
     { name: "Grok 3", slug: "grok-3-agentic-v1", cat: "llm", ver: "agentic-v1", repos: 21, f2: 27.5, f2s: 22.9, f3: 25.4, f3s: 21.0, rec: 0.236, recs: 0.193, prec: 0.844, cost: 4.9, est: false, sd: 21.3 },
@@ -47,6 +50,6 @@
     CAT_LABEL: { sec: 'Security-Specialized', llm: 'General-Purpose LLM', rule: 'Rule-Based SAST' },
     CAT_SHORT: { sec: 'Sec.-spec.', llm: 'GP-LLM', rule: 'Rule SAST' },
     COL: { sec: '#cfa45c', llm: '#7e9fc4', rule: '#8c8478' },
-    DATASET: { repos: 26, vulns: 697, traps: 120, loc: 20062, scanners: 25, families: 18 }
+    DATASET: { repos: 26, vulns: 697, traps: 120, loc: 20062, scanners: 28, families: 18 }
   };
 })();

@@ -69,6 +69,9 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
     "grok-3-agentic-v1":              ("Grok 3",             "llm",  "agentic-v1"),
     "minimax-m2.7-agentic-v1":        ("Minimax M2.7",       "llm",  "agentic-v1"),
     "qwen-3.5-397b-agentic-v1":       ("Qwen 3.5 397B",      "llm",  "agentic-v1"),
+    "qwen3.6-35b-agentic-v1":         ("Qwen 3.6 35B",       "llm",  "agentic-v1"),
+    "gemma4-31b-agentic-v1":          ("Gemma 4 31B",        "llm",  "agentic-v1"),
+    "ornith-q3-agentic-v1":           ("Ornith 1.0 35B",     "llm",  "agentic-v1"),
     "semgrep":                        ("Semgrep",            "rule", "rule-based"),
     "snyk":                           ("Snyk Code",          "rule", "pattern+flow"),
     "sonarqube":                      ("SonarQube",          "rule", "community"),
@@ -79,6 +82,20 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
 # (OpenCode) harness, so the difference is transparent rather than implicit in
 # the version label. HTML allowed.
 SCANNER_NOTES: dict[str, str] = {
+    "ornith-q3-agentic-v1": (
+        "<strong>Locally hosted; template fix.</strong> Open-weight GGUF (Q4_K_M) via "
+        "Ollama through the standard agentic-v1 harness. Ornith's shipped GGUF template is "
+        "broken for tool-calling; replaced at load with the canonical Qwen3 template (Ornith "
+        "is Qwen3.5-35B-A3B based). Completed 58/66 (clears the coverage threshold). Cost $0."
+    ),
+    "qwen3.6-35b-agentic-v1": (
+        "<strong>Locally hosted.</strong> Open-weight GGUF (Q4_K_M) via Ollama on one "
+        "RTX PRO 6000, standard agentic-v1 harness. Cost $0 (self-hosted)."
+    ),
+    "gemma4-31b-agentic-v1": (
+        "<strong>Locally hosted.</strong> Open-weight GGUF (Q4_K_M) via Ollama, standard "
+        "agentic-v1 harness. High precision, conservative recall. Cost $0 (self-hosted)."
+    ),
     "claude-fable-5-cc-v1": (
         "<strong>Different harness.</strong> Every other LLM scanner here runs "
         "agentically through the <span class=\"mono\">OpenCode</span> CLI "
