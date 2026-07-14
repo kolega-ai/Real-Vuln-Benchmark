@@ -102,6 +102,9 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
     "grok-3-agentic-v1": ("Grok 3", "llm", "agentic-v1"),
     "minimax-m2.7-agentic-v1": ("Minimax M2.7", "llm", "agentic-v1"),
     "qwen-3.5-397b-agentic-v1": ("Qwen 3.5 397B", "llm", "agentic-v1"),
+    "qwen3.6-35b-agentic-v1": ("Qwen 3.6 35B", "llm", "agentic-v1"),
+    "gemma4-31b-agentic-v1": ("Gemma 4 31B", "llm", "agentic-v1"),
+    "ornith-q3-agentic-v1": ("Ornith 1.0 35B", "llm", "agentic-v1"),
     "semgrep": ("Semgrep", "rule", "rule-based"),
     "snyk": ("Snyk Code", "rule", "pattern+flow"),
     "sonarqube": ("SonarQube", "rule", "community"),
@@ -140,6 +143,9 @@ SCANNER_URLS: dict[str, str] = {
     "grok-3-agentic-v1": "https://x.ai/news/grok-3",
     "minimax-m2.7-agentic-v1": "https://www.minimax.io/models/text/m27",
     "qwen-3.5-397b-agentic-v1": "https://qwen.ai/blog?id=qwen3.5",
+    "qwen3.6-35b-agentic-v1": "https://qwen.ai/",
+    "gemma4-31b-agentic-v1": "https://ai.google.dev/gemma",
+    "ornith-q3-agentic-v1": "https://huggingface.co/OrnithAI",
     "semgrep": "https://semgrep.dev/products/semgrep-code",
     "snyk": "https://snyk.io/product/snyk-code/",
     "sonarqube": "https://www.sonarsource.com/products/sonarqube/",
@@ -176,6 +182,9 @@ SCANNER_PROVIDERS: dict[str, str] = {
     "grok-3-agentic-v1": "xAI",
     "minimax-m2.7-agentic-v1": "MiniMax",
     "qwen-3.5-397b-agentic-v1": "Alibaba Qwen",
+    "qwen3.6-35b-agentic-v1": "Alibaba Qwen",
+    "gemma4-31b-agentic-v1": "Google",
+    "ornith-q3-agentic-v1": "OrnithAI",
     "semgrep": "Semgrep",
     "snyk": "Snyk",
     "sonarqube": "SonarSource",
@@ -186,6 +195,19 @@ SCANNER_PROVIDERS: dict[str, str] = {
 # (OpenCode) harness, so the difference is transparent rather than implicit in
 # the version label. HTML allowed.
 SCANNER_NOTES: dict[str, str] = {
+    "ornith-q3-agentic-v1": (
+        "<strong>Locally hosted; template fix.</strong> Open-weight GGUF (Q4_K_M) via "
+        "Ollama through the standard agentic-v1 harness. Ornith's shipped GGUF template was "
+        "replaced with the canonical Qwen3 template for tool calling. Completed 58/66. Cost $0."
+    ),
+    "qwen3.6-35b-agentic-v1": (
+        "<strong>Locally hosted.</strong> Open-weight GGUF (Q4_K_M) via Ollama on one "
+        "RTX PRO 6000, standard agentic-v1 harness. Cost $0 (self-hosted)."
+    ),
+    "gemma4-31b-agentic-v1": (
+        "<strong>Locally hosted.</strong> Open-weight GGUF (Q4_K_M) via Ollama, standard "
+        "agentic-v1 harness. Cost $0 (self-hosted)."
+    ),
     "claude-fable-5-cc-v1": (
         "<strong>Different harness.</strong> Every other LLM scanner here runs "
         'agentically through the <span class="mono">OpenCode</span> CLI '

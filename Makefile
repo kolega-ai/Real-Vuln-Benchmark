@@ -31,9 +31,9 @@ score: ## Score all scanners on all repos
 	python3 score.py --repo realvuln-pygoat --all-scanners
 
 dashboard: ## Regenerate data (dashboard.json), then build the public site
-	# --min-repos 60: only scanners run on (nearly) the full v2.0 corpus (66 repos)
+	# --min-repos 58: only scanners run on (nearly) the full v2.0 corpus (66 repos)
 	# appear on the leaderboard — old-benchmark-only and partial/slice runs are excluded.
-	python3 dashboard.py --scanner-group all --min-repos 60
+	python3 dashboard.py --scanner-group all --min-repos 58
 	python3 build_site.py
 
 site: ## Rebuild the public site from existing dashboard.json (no re-scoring)
