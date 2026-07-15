@@ -21,7 +21,9 @@ class RunMetrics:
 
     # Token usage
     input_tokens: int = 0
+    cached_input_tokens: int = 0
     output_tokens: int = 0
+    reasoning_output_tokens: int = 0
     total_tokens: int = 0
 
     # Cost (USD)
