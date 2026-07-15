@@ -183,8 +183,9 @@ def compute_scanner_costs(
 ) -> dict[str, dict]:
     """Collect cost data from .metrics.json files per scanner.
 
-    Returns {scanner: {"total_cost", "successful_runs", "cost_per_run",
-                        "total_loc_scanned", "cost_per_100_loc"}}.
+    Comparative costs are normalized to one complete benchmark pass so scanners
+    with repeated runs remain comparable.  The raw spend is retained separately
+    as ``campaign_total_cost``.
     """
     from collections import defaultdict
     costs: dict[str, dict] = defaultdict(
@@ -220,14 +221,24 @@ def compute_scanner_costs(
         runs = c["successful_runs"]
         # distinct LOC of the corpus this scanner covered (reported for reference)
         total_loc = sum(repo_loc.get(r, 0) for r in c["repos_scanned"])
-        # LOC summed across every successful run — the denominator that matches the
-        # all-runs total_cost numerator (a 3-run scanner scans the corpus ~3x)
+        # LOC summed across every successful run.  Dividing this by distinct LOC
+        # gives the effective number of complete benchmark passes, including
+        # partial passes when individual repositories failed.
         loc_passes = c["loc_passes"]
-        cost_per_100_loc = round(c["total_cost"] / (loc_passes / 100), 4) if loc_passes > 0 else 0
+        campaign_total = c["total_cost"]
+        benchmark_runs = loc_passes / total_loc if total_loc > 0 else 0
+        per_benchmark_run = campaign_total / benchmark_runs if benchmark_runs > 0 else 0
+        cost_per_100_loc = round(per_benchmark_run / (total_loc / 100), 4) if total_loc > 0 else 0
         result[scanner] = {
-            "total_cost": round(c["total_cost"], 4),
+            # ``total_cost`` is intentionally the normalized one-pass cost used
+            # by dashboards and rankings. Never mix all-runs campaign spend with
+            # a single aggregate score.
+            "total_cost": round(per_benchmark_run, 4),
+            "campaign_total_cost": round(campaign_total, 4),
+            "benchmark_runs": round(benchmark_runs, 4),
             "successful_runs": runs,
-            "cost_per_run": round(c["total_cost"] / runs, 4) if runs > 0 else 0,
+            "cost_per_run": round(per_benchmark_run, 4),
+            "cost_per_repo": round(campaign_total / runs, 4) if runs > 0 else 0,
             "total_loc_scanned": total_loc,
             "cost_per_100_loc": cost_per_100_loc,
         }
@@ -966,7 +977,7 @@ def build_html(
         micro = sa.get("micro", {})
         strict = sa.get("strict_micro", {})
         cost_info = sa.get("cost", {})
-        cost_per_run = cost_info.get("cost_per_run", 0)
+        cost_per_repo = cost_info.get("cost_per_repo", 0)
         chart_data.append({
             "slug": scanner,
             "label": display_name(scanner),
@@ -991,7 +1002,7 @@ def build_html(
             "strict_f3": strict.get("f3_score", 0),
             "strict_recall": round(strict.get("recall", 0) * 100, 1),
             "strict_precision": round(strict.get("precision", 0) * 100, 1),
-            "cost_per_run": cost_per_run,
+            "cost_per_repo": cost_per_repo,
             "cost_per_100_loc": cost_info.get("cost_per_100_loc", 0),
             "total_cost": cost_info.get("total_cost", 0),
             "avg_latency": sa.get("metadata", {}).get("avg_wall_clock_seconds", 0),
@@ -1097,8 +1108,8 @@ def build_html(
         else:
             w(f'  <div class="lb-score" style="color:{score_color}">{d["f3"]:.1f}</div>')
         cost_parts = []
-        if d["cost_per_run"] > 0:
-            cost_parts.append(f'<span title="Average API cost to scan one repository" style="cursor:help">${d["cost_per_run"]:.2f}/repo</span>')
+        if d["cost_per_repo"] > 0:
+            cost_parts.append(f'<span title="Average API cost to scan one repository" style="cursor:help">${d["cost_per_repo"]:.2f}/repo</span>')
         if d["cost_per_100_loc"] > 0:
             est_per_100k = round(d["cost_per_100_loc"] * 1000)
             cost_parts.append(f'<span title="Estimated cost to scan 100,000 lines of code" style="cursor:help">~${est_per_100k:,}/100k LOC</span>')
@@ -1320,7 +1331,7 @@ def build_html(
     w("</script>")
 
     # ── Cost Efficiency scatter (LLM scanners only) ──
-    llm_data = [d for d in chart_data if d["cost_per_run"] > 0]
+    llm_data = [d for d in chart_data if d["cost_per_repo"] > 0]
     if llm_data:
         w('<div class="section-title">Cost Efficiency <span class="dim">F2 Score vs Cost per Repo &middot; LLM scanners only</span></div>')
         w('<div class="chart-card">')
@@ -1335,7 +1346,7 @@ def build_html(
   const traces = [];
   cd.forEach((d, i) => {{
     traces.push({{
-      x: [d.cost_per_run], y: [d.f2], mode: 'markers+text',
+      x: [d.cost_per_repo], y: [d.f2], mode: 'markers+text',
       marker: {{size: Math.max(12, Math.min(30, d.avg_latency / 3)), color: colors[i % colors.length],
         line: {{color: darkBg, width: 2}}}},
       text: [d.label], textposition: 'top center',
@@ -1503,7 +1514,7 @@ def build_scanner_detail_html(
         avg_lat = meta.get("avg_wall_clock_seconds", 0)
         model_short = meta.get("model", "").split("/")[-1]  # strip provider prefix
         w(f'<div class="stat-card" title="The LLM model used for this scanner — this is the model ID sent to the API."><div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6">&#9881;</div><div><div class="stat-value" style="color:#3b82f6;font-size:16px">{model_short}</div><div class="stat-label">Model</div></div></div>')
-        w(f'<div class="stat-card" title="Total API cost across all runs and all repositories for this scanner."><div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308">$</div><div><div class="stat-value" style="color:#eab308">${total_cost:.2f}</div><div class="stat-label">Total Cost</div></div></div>')
+        w(f'<div class="stat-card" title="API cost normalized to one complete benchmark pass."><div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308">$</div><div><div class="stat-value" style="color:#eab308">${total_cost:.2f}</div><div class="stat-label">Cost / Benchmark Run</div></div></div>')
         w(f'<div class="stat-card" title="Average wall-clock time to scan one repository, including API calls and agent reasoning."><div class="stat-icon" style="background:rgba(249,115,22,0.1);color:#f97316">&#9202;</div><div><div class="stat-value" style="color:#f97316">{avg_lat:.0f}s</div><div class="stat-label">Avg Latency</div></div></div>')
     w('</div>')
 
@@ -1611,8 +1622,9 @@ def build_scanner_detail_html(
         # Card 3: Cost
         w(f'<div style="{card_style}">')
         w(f'<div style="{label_style}">Cost</div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Total API cost across all runs and all repositories">Total</span><span style="{val_style}">${cost_info.get("total_cost", 0):.2f}</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average API cost to scan one repository (total cost / number of successful runs)">Per Repo</span><span style="{val_style}">${cost_info.get("cost_per_run", 0):.2f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="API cost normalized to one complete benchmark pass">Per Benchmark Run</span><span style="{val_style}">${cost_info.get("total_cost", 0):.2f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average API cost to scan one repository">Per Repo</span><span style="{val_style}">${cost_info.get("cost_per_repo", 0):.2f}</span></div>')
+        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Actual spend across every stored benchmark pass">Campaign Total ({cost_info.get("benchmark_runs", 0):.2f} runs)</span><span style="{val_style}">${cost_info.get("campaign_total_cost", 0):.2f}</span></div>')
         w(f'<div style="{row_style}"><span style="{lbl_style}" title="Cost normalized by codebase size — divide total cost by (total lines of code / 100)">Per 100 LOC</span><span style="{val_style}">${cost_info.get("cost_per_100_loc", 0):.4f}</span></div>')
         w('</div>')
 
@@ -1965,6 +1977,9 @@ def main() -> int:
         _tgt["cost"] = {
             "total_cost": round(_base_cost.get("total_cost", 0) * 2, 4),
             "cost_per_run": round(_base_cost.get("cost_per_run", 0) * 2, 4),
+            "cost_per_repo": round(_base_cost.get("cost_per_repo", 0) * 2, 4),
+            "campaign_total_cost": round(_base_cost.get("campaign_total_cost", 0) * 2, 4),
+            "benchmark_runs": _base_cost.get("benchmark_runs", 0),
             "cost_per_100_loc": round(_base_cost.get("cost_per_100_loc", 0) * 2, 4),
             "total_loc_scanned": _base_cost.get("total_loc_scanned", 0),
             "successful_runs": _base_cost.get("successful_runs", 0),
