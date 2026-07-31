@@ -1,0 +1,655 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "security.deserialization.pickle-loads-request-body",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 85,
+        "col": 14,
+        "offset": 0
+      },
+      "end": {
+        "line": 85,
+        "col": 31,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`pickle.loads()` is called directly on attacker-supplied bytes taken from the HTTP request body (or the base64-decoded `blob` query parameter, lines 80-82). Unpickling untrusted data executes arbitrary constructors/`__reduce__` payloads, giving remote code execution on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.eval-user-input",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 100,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 101,
+        "col": 64,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `expr` query parameter is passed straight to `eval()`. Emptying `__builtins__` is not a security boundary \u2014 attacker-supplied expressions can still walk the object graph (e.g. via subclasses of built-in types reachable from the supplied locals) to reach `os`/`subprocess`, and can trivially exhaust CPU/memory. This is remote code injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-95: Eval Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.path-traversal.external-control-of-file-path",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 159,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 162,
+        "col": 35,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `name` query parameter is joined onto `BASE_EXPORT_DIR` with no canonicalisation, traversal filtering, or containment check, then `target.write_bytes(request.body)` writes the raw request body there. `pathlib` join with a value like `../../legalcase/settings.py` (or an absolute path, which replaces the base entirely) lets an attacker write arbitrary files anywhere the process can write \u2014 including overwriting Python source for code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xxe.lxml-resolve-entities",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 195,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 196,
+        "col": 47,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The XML parser is explicitly constructed with `load_dtd=True, resolve_entities=True, no_network=False` and then used to parse the raw request body. An attacker can declare an external entity to read arbitrary local files (`file:///etc/passwd`) or force outbound requests (SSRF), and can mount billion-laughs style expansion.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.nosql-query-from-request",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 182,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 186,
+        "col": 25,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The JSON request body is used verbatim as the MongoDB filter document passed to `find_one()`. Because the attacker controls the dictionary structure, they can inject query operators such as `{\"$ne\": null}`, `{\"$gt\": \"\"}`, or `{\"$where\": \"...\"}` to bypass intended filtering and read arbitrary records from the `ops.records` collection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.client-asserted-role",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 203,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 205,
+        "col": 82,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The elevated access decision is made purely from the `ops_badge` cookie or the `x-ops-badge` request header. Both are fully attacker-controlled, so anyone who can reach this endpoint can send `ops_badge=lead` and receive the elevated (`payroll: full`, `casework: open`) response. Authorization must be derived from authenticated server-side identity and policy state, not from client-supplied values.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.mass-assignment.privileged-fields",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 36,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 43,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The attacker-controlled JSON body is merged wholesale into the workset dictionary via `workset.update(change_set)` with no field allowlist. A request body of `{\"is_admin\": true, \"role\": \"firm_admin\", \"credit_limit\": 99999999}` overwrites the privileged `role`, `is_admin`, and `credit_limit` entries that the server had authoritatively set, and the tampered values are returned as the workset state.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.client-controlled-approval-state",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 67,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 70,
+        "col": 78,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The ledger's approval `state` is taken directly from the request body/query string, and `amount` is accepted as an unvalidated signed integer that is subtracted from the balance (a negative `amount` increases the balance, and there is no check against the `limit` of 900). The client therefore both moves value and asserts its own approval decision.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-api-token",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 53,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 53,
+        "col": 47,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A live-looking partner synchronisation token (`tok_live_partner_sync`) is hardcoded in source and returned in the HTTP response body to any caller of this endpoint. Hardcoded credentials cannot be rotated without a code deploy, and echoing the secret to clients discloses it outright.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.data-exposure.pii-in-response",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 54,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 54,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The response discloses a tax identification number (`tax_ref: 739-44-1982`) \u2014 sensitive personal data \u2014 to the caller. The endpoint performs no per-record authorization: `case_id` is echoed from the query string and is not used to scope the returned data to the requester.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.sensitive-data-in-logs",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 92,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 93,
+        "col": 97,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The full request body and the raw `Authorization` header (bearer token) are written to the application log at WARNING level. Bearer credentials and any sensitive payload contents are persisted in plaintext log files, exposing them to anyone with log access and to log-aggregation pipelines.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.error-handling.internal-details-in-response",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 119,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 121,
+        "col": 95,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The exception message and class name are returned to the client, and the message embeds `BASE_EXPORT_DIR` \u2014 the absolute server filesystem path. This leaks internal deployment layout that assists path-traversal and local-file targeting attacks (see the arbitrary-write issue at line 160).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.user-enumeration-response-discrepancy",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 129,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 133,
+        "col": 66,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The endpoint returns a distinguishable 404 `unknown handle` for a non-existent identity but 403 `bad verifier` when the handle exists and only the verifier is wrong. An attacker can enumerate valid handles from the differing status codes and bodies. The accepted verifiers are also hardcoded in source (`{\"north\": \"4812\", \"south\": \"5930\"}`).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-204: Observable Response Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-brute-force-protection-verifier",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 132,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 134,
+        "col": 49,
+        "offset": 0
+      },
+      "extra": {
+        "message": "This verifier (short numeric secret) check has no attempt counter, lockout, backoff, or rate limiting, and no such control exists in the request path \u2014 `legalcase/settings.py` MIDDLEWARE (lines 30-38) contains only Django's stock middleware and there is no throttling helper anywhere in the project. A 4-digit verifier can be exhausted in at most 10,000 unthrottled requests.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.cors.reflected-origin-with-credentials",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 140,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 143,
+        "col": 54,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The request's `Origin` header is reflected verbatim into `Access-Control-Allow-Origin` while `Access-Control-Allow-Credentials` is set to `true`. This makes every origin a trusted origin: any attacker-controlled site can issue credentialed cross-origin requests to this endpoint and read the responses, defeating the same-origin policy.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.headers.disabled-browser-protections",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 151,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 152,
+        "col": 47,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The response explicitly disables browser-side protection mechanisms: `X-XSS-Protection: 0` turns off the legacy XSS auditor and an empty `Content-Security-Policy` header supplies a policy with no directives, removing any script/frame restrictions for this response. This intentionally weakens defence-in-depth against injection and framing attacks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-693: Protection Mechanism Failure"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.cookie.missing-secure-httponly-flags",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 110,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 110,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`response.set_cookie(\"portal_crumb\", marker)` sets a cookie with an attacker-controlled value and no `httponly`, `secure`, or `samesite` flags. The cookie is therefore readable by any injected JavaScript, transmitted over plaintext HTTP, and attached to cross-site requests.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.crypto.insecure-randomness-for-token",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 172,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 173,
+        "col": 65,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A nonce/one-time code is generated with `random.choice()`, which is backed by the Mersenne Twister \u2014 a non-cryptographic, fully predictable PRNG whose internal state can be recovered from observed output. Security tokens must use `secrets`/`os.urandom` (as `cases/models.py` correctly does for API keys).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.tls.disabled-certificate-validation",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 227,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 228,
+        "col": 62,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`ssl._create_unverified_context()` is used for the outbound HTTPS call to the partner endpoint, disabling certificate chain and hostname verification. Any network-position attacker can transparently intercept or modify this TLS traffic, and the response is trusted by the caller.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-295: Improper Certificate Validation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.config.active-debug-endpoint",
+      "path": "legalcase/case_operations.py",
+      "start": {
+        "line": 212,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 218,
+        "col": 27,
+        "offset": 0
+      },
+      "extra": {
+        "message": "This diagnostic endpoint is unconditionally enabled (`trace_on = True` is hardcoded rather than gated on a configuration flag) and returns internal runtime details \u2014 the active `DJANGO_SETTINGS_MODULE` and the absolute `BASE_EXPORT_DIR` filesystem path \u2014 to callers in production.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.config.debug-enabled-by-default",
+      "path": "legalcase/settings.py",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 78,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`DEBUG` defaults to `True` when `DJANGO_DEBUG` is unset, so a deployment that simply omits the environment variable runs with debug active: unhandled exceptions render full tracebacks with source, local variable values, and settings; the technical 404 page lists all URL patterns. It also silently disables the hardening block at lines 109-116, leaving `SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE` unset. Production defaults should be secure (fail closed).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-django-secret-key-fallback",
+      "path": "legalcase/settings.py",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`SECRET_KEY` silently falls back to the hardcoded literal `insecure-local-dev-key-change-me` when `DJANGO_SECRET_KEY` is absent. Django's SECRET_KEY signs session cookies, password-reset tokens, and CSRF tokens, so a deployment missing the variable uses a publicly known key \u2014 allowing an attacker to forge sessions and password-reset tokens and take over any account. This must raise on a missing value rather than default.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-rate-limit-on-login",
+      "path": "legalcase/urls.py",
+      "start": {
+        "line": 13,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The login and password-reset endpoints use Django's stock `LoginView`/`PasswordResetView` with no throttling, attempt counter, lockout, or CAPTCHA. No rate-limiting control exists anywhere in the request path: `legalcase/settings.py` MIDDLEWARE (lines 30-38) is stock Django only, and no throttling package appears in `requirements.txt`. Credentials for this legal-matter portal can therefore be brute-forced or password-sprayed without limit, and the reset endpoint can be abused for unbounded email enumeration.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.missing-security-event-log-account-creation",
+      "path": "cases/views.py",
+      "start": {
+        "line": 215,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 230,
+        "col": 38,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`accept_invite` creates a user account, assigns its privilege level from the invite (`user.profile.role = invite.role`, line 222), links it to a client record, and logs the user in \u2014 with no call to the project's `audit()` helper, unlike every comparable state change in this module (e.g. `user.invite` at line 852, `user.update` at line 870). There is no compensating middleware or signal handler: `AuditLog` rows are only ever written by explicit `audit()`/`AuditLog.objects.create` calls. Authentication failures and password changes (line 202-206) are likewise never recorded, so account takeover via a leaked invite token leaves no durable audit trail.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-778: Insufficient Logging"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.unauthenticated-media-serving",
+      "path": "legalcase/urls.py",
+      "start": {
+        "line": 38,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 39,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "When `DEBUG` is true \u2014 which is the default (`legalcase/settings.py:12`) \u2014 `static()` serves everything under `MEDIA_ROOT` directly, with no authentication or authorization. Uploaded matter documents live there (`document_upload_to`, `cases/models.py:256-259`), so privileged and internal-only files become retrievable over plain HTTP at `/media/uploads/matter_<id>/document_<id>/<name>`, bypassing the entire `can_download_document` / `document_queryset_for` visibility model enforced by `cases/views.py:562`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.csv-formula-injection",
+      "path": "cases/views.py",
+      "start": {
+        "line": 753,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 755,
+        "col": 27,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`_csv_response` writes model field values into a downloadable CSV without neutralising leading `=`, `+`, `-`, or `@`. Attacker-influenced values reach these exports \u2014 a client portal user can set an arbitrary document `title` via `document_create` (line 486), which `export_documents` (line 824) writes into `document_inventory.csv`. A title like `=cmd|'/c calc'!A1` executes as a formula when a staff member opens the export in Excel or LibreOffice.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1236: Improper Neutralization of Formula Elements in a CSV File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

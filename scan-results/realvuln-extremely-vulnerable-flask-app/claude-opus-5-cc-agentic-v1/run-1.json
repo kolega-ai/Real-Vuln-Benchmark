@@ -1,0 +1,512 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "security.deserialization.pickle-from-cookie",
+      "path": "routes/account.py",
+      "start": {
+        "line": 118,
+        "col": 22,
+        "offset": 0
+      },
+      "end": {
+        "line": 118,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `before_request` hook deserializes the attacker-controlled `preferences` cookie with `pickle.loads(b64decode(...))` on EVERY request. Python pickle deserialization of untrusted data allows arbitrary code execution via a crafted `__reduce__` payload; an unauthenticated attacker only needs to send a cookie to achieve remote code execution as the `www-data` uWSGI worker.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.sql-injection-raw-text-filter",
+      "path": "routes/account.py",
+      "start": {
+        "line": 33,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `search` query parameter is interpolated with an f-string directly into a SQLAlchemy `text()` fragment used as a filter clause: `text(f\"text like '%{search_param}%'\")`. `text()` performs no escaping, so the value is emitted verbatim into the SQL WHERE clause. An attacker can break out of the quoted literal (e.g. `%' OR 1=1 --`) to read all users' private notes, or use `UNION SELECT` to dump the `users` table including bcrypt password hashes.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.sql-injection-registration-code",
+      "path": "routes/signup.py",
+      "start": {
+        "line": 16,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`validate_token()` builds a raw SQL query by f-string interpolation of the unauthenticated, user-supplied `registration_code` form field into a `text()` statement: `... WHERE code = '{code}'`. This is reachable pre-authentication from `POST /signup`. An attacker can supply `' OR '1'='1` to satisfy the invite check and register an account without a valid registration code (authentication/registration bypass), or use a UNION-based payload to exfiltrate arbitrary database contents.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.server-side-template-injection",
+      "path": "app.py",
+      "start": {
+        "line": 31,
+        "col": 24,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 404 error handler passes an f-string containing the attacker-controlled `request.path` into `render_template_string()`. The user input becomes part of the Jinja2 template *source*, so template expressions in the URL are evaluated server-side. Requesting a URL such as `/{{7*7}}` or `/{{config}}` \u2014 or a sandbox-escape payload reaching `os.popen` via `__class__.__mro__` / `lipsum.__globals__` \u2014 yields information disclosure and remote code execution. This handler is unauthenticated.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code (Code Injection)",
+            "CWE-1336: Server-Side Template Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-authentication-on-account-update",
+      "path": "routes/account.py",
+      "start": {
+        "line": 68,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 69,
+        "col": 20,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`POST /account` (`update_account`) has no `@login_required` decorator, unlike every other account route (`/account` GET, `/account/image`). The critical state-changing operation that rewrites the user's email, admin flag and password hash is therefore exposed to unauthenticated requests, relying only on the ambient `current_user` proxy. Combined with the pickle-cookie and mass-assignment issues in this same file, this is a missing authentication check for a critical function.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.client-controlled-admin-flag-mass-assignment",
+      "path": "routes/account.py",
+      "start": {
+        "line": 76,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 81,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`update_account` copies every submitted form field straight onto the user object: `current_user.__dict__.update(filtered_values)`, where `filtered_values` is derived from `AccountForm.data`. `AccountForm` includes an `is_admin` BooleanField with no server-side authorization check, so the privilege decision is asserted entirely by the client. The `is_admin` checkbox is only rendered for admins in `templates/account.html:26-34`, but a normal user can simply POST `is_admin=y` to `/account` and be persisted (`session.merge` + `commit`) as an administrator \u2014 vertical privilege escalation granting access to `/registration-codes` and deletion of any user's notes. Mass-assigning the whole form dict also lets an attacker overwrite unintended model attributes.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision",
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.idor-personal-notes",
+      "path": "routes/account.py",
+      "start": {
+        "line": 41,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`GET /accounts/<int:user_id>/notes` takes the object owner ID straight from the URL and queries `Note.user_id == user_id` with no comparison to `current_user.id` and no role check. `@login_required` only proves the requester is authenticated, not that they own the requested notes. Any logged-in user can enumerate `user_id` values (e.g. `/accounts/2/notes`) to read other users' notes, including notes marked `private=True` that `utils/notes.py:get_notes_for_user` deliberately withholds from the home feed.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.idor-note-delete",
+      "path": "routes/notes.py",
+      "start": {
+        "line": 39,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 49,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`POST /notes/<int:note_id>/delete` loads the note by primary key (`session.get(Note, note_id)`) and deletes it without verifying `note.user_id == current_user.id` or that the caller is an admin. The ownership check exists only in the template that renders the Delete button (`templates/home.html:41`), which is a client-side control an attacker trivially bypasses by POSTing the URL directly. Any authenticated user can destroy any other user's notes, including private admin notes.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.ssrf.profile-image-url-fetch",
+      "path": "utils/profile_image.py",
+      "start": {
+        "line": 7,
+        "col": 10,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 29,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`download()` passes a user-supplied URL directly to `urllib.request.urlopen()` with no scheme allowlist, host validation, redirect restriction, size limit or timeout. It is reached from `POST /account/image` (`routes/account.py:60`) where `ImageForm.url` is only checked for presence (`DataRequired`). An attacker can force the server to request internal addresses (`http://169.254.169.254/latest/meta-data/`, `http://127.0.0.1:.../`) and read the response back out of their own profile image, and because `urlopen` also honours `file://` and `ftp://`, `file:///etc/passwd` or `file:///srv/flask_app/database.db` yields arbitrary local file disclosure. The unbounded `response.read()` additionally allows memory-exhaustion DoS.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-flask-secret-key",
+      "path": "app.py",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 39,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The Flask session signing key is hardcoded in source as `\"super secret key\"`. Because this value is public in the repository, anyone can forge and tamper with the itsdangerous-signed session cookie that Flask-Login uses to store `_user_id`, allowing authentication bypass and impersonation of any user (including `admin@evfa.com`) without knowing a password. It also lets an attacker mint valid `flash`/CSRF tokens.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.csrf.missing-csrf-protection",
+      "path": "routes/account.py",
+      "start": {
+        "line": 68,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 95,
+        "col": 28,
+        "offset": 0
+      },
+      "extra": {
+        "message": "No CSRF protection exists anywhere in the application: `Flask-WTF`'s `CSRFProtect` is never initialised in `app.py`, all forms subclass plain `wtforms.Form` (not `FlaskForm`), and no template emits a CSRF token. State-changing POST endpoints (`/account`, `/account/image`, `/notes`, `/notes/<id>/delete`, `/darkmode`, `/registration-codes`) accept cross-origin form submissions authenticated by the ambient session cookie, which is also set without `SameSite`. A malicious page can silently make a victim change their own email and password (`/account`) \u2014 full account takeover \u2014 or delete their notes.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.stored-xss-note-text-safe-filter",
+      "path": "templates/home.html",
+      "start": {
+        "line": 31,
+        "col": 30,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 57,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Note bodies are rendered with `{{ note.text | safe }}`, explicitly disabling Jinja2 autoescaping for attacker-controlled content. `routes/notes.py:28` stores `form.text.data` (a CKEditor TextAreaField) with no HTML sanitisation. Any user can create a note containing `<img src=x onerror=...>` or `<script>`; because non-private notes are shown to every user by `utils/notes.py:get_notes_for_user`, this is stored XSS that executes in every viewer's session, including the admin's, enabling session/CSRF-chained account takeover.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.stored-xss-safe-columns-search",
+      "path": "templates/search.html",
+      "start": {
+        "line": 18,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 73,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`render_table(..., safe_columns=['text'])` instructs Bootstrap-Flask to render the `text` column of each note as raw, unescaped HTML. The note text is unsanitised user input stored by `routes/notes.py:28`, so malicious markup persisted in a note executes when the note is displayed in search results.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.stored-xss-safe-columns-personal-notes",
+      "path": "templates/personal_notes.html",
+      "start": {
+        "line": 16,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 73,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`render_table(personal_notes, responsive=True, safe_columns=['text'])` renders the unsanitised, user-controlled note `text` as raw HTML with escaping disabled. Combined with the IDOR at `routes/account.py:41` (which lets this page display another user's notes), an attacker's stored script payload executes in the victim's browser.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.cookie.missing-httponly-secure-samesite",
+      "path": "routes/account.py",
+      "start": {
+        "line": 105,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 105,
+        "col": 71,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `preferences` cookie is set without `httponly=True`, `secure=True` or `samesite`. Missing `HttpOnly` makes the cookie readable and writable by JavaScript, so the stored-XSS payloads above can overwrite it with a malicious pickle blob and pivot to the RCE at line 118; missing `Secure` allows transmission over plaintext HTTP (the app is served over HTTP by `conf/nginx.conf`). The same insecure `set_cookie` is repeated in the `after_request` hook at lines 127-128. Flask's session cookie is likewise left with framework defaults (no `SESSION_COOKIE_SECURE`/`SAMESITE` in `app.py`).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.bruteforce.no-rate-limiting-on-login",
+      "path": "routes/login.py",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 22,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`POST /login` performs unlimited credential verification with no rate limiting, no account lockout, no CAPTCHA and no failed-attempt counter. There is no rate-limiting extension registered in `app.py`, no `@app.before_request` throttle (the only `before_request` hook, `routes/account.py:112`, just parses the preferences cookie), and `conf/nginx.conf` defines no `limit_req` zone, so no control exists anywhere in the request path. An attacker can brute-force passwords at will \u2014 the seeded accounts use the one-word passwords `user` and `admin` (`db_seed.py:17-19`). `POST /signup` is equally unthrottled, permitting brute-force enumeration of registration codes.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.missing-security-event-logging",
+      "path": "routes/login.py",
+      "start": {
+        "line": 32,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 38,
+        "col": 18,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Failed authentication attempts produce no durable security audit record \u2014 the handler only calls `flash('Invalid Credentials!')`, which is a per-user UI message, not a log. No logger is configured in `app.py` and no shared hook or middleware records security events, so authorization failures (`routes/registration_codes.py:15`, `:29`), privilege changes (`is_admin` mutation at `routes/account.py:81`), password changes (`routes/account.py:88`) and registration-code lifecycle events (`routes/signup.py:56`) are also unrecorded. Brute-force campaigns and privilege escalation are therefore undetectable and unattributable after the fact.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-778: Insufficient Logging"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.config.sqlalchemy-echo-enabled",
+      "path": "models/__init__.py",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The SQLAlchemy engine is created with `echo=True`, which is a debug/diagnostic setting enabled unconditionally with no environment guard. Every executed statement and its bound parameters are written to stdout, which `conf/nginx.conf` and the Docker `CMD` route to container logs. This leaks sensitive data \u2014 user email addresses, bcrypt password hashes on INSERT/UPDATE, registration codes, and private note contents \u2014 into logs, and echoes the raw injectable SQL from `routes/signup.py` and `routes/account.py`.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File",
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-registration-code-and-credentials",
+      "path": "db_seed.py",
+      "start": {
+        "line": 9,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 56,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The seeding routine hardcodes a static registration/invite code (`a36e990b-0024-4d55-b74a-f8d7528e1764`) and two default accounts with the trivially guessable hardcoded passwords `user` and `admin` (the latter with `is_admin=True`). These values are committed to the repository and documented in `README.md:63-66`, so anyone can self-register with the static invite code and log straight in as an administrator on any deployment that ran the seeder.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.weak-password-requirements",
+      "path": "forms/registration_form.py",
+      "start": {
+        "line": 6,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 6,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The registration password field is validated only with `DataRequired()` \u2014 no minimum length, complexity, or breached-password check (the registration *code* has a `Length(min=5)` check, the password has none). `routes/account.py:83-89` likewise accepts any new password. A single-character password is accepted, which combined with the absent rate limiting at `POST /login` makes accounts trivially brute-forceable.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-521: Weak Password Requirements"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

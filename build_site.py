@@ -93,6 +93,7 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
     "kimi-k2.6-agentic-v1": ("Kimi K2.6", "llm", "agentic-v1"),
     "kimi-k2.5-agentic-v1": ("Kimi K2.5", "llm", "agentic-v1"),
     "claude-fable-5-cc-v1": ("Claude Fable 5", "llm", "claude-code-v1"),
+    "claude-opus-5-cc-agentic-v1": ("Claude Opus 5", "llm", "agentic-v1"),
     "claude-opus-4-8-agentic-v1": ("Claude Opus 4.8", "llm", "agentic-v1"),
     "claude-opus-4-7-agentic-v1": ("Claude Opus 4.7", "llm", "agentic-v1"),
     "claude-opus-4-6-agentic-v1": ("Claude Opus 4.6", "llm", "agentic-v1"),
@@ -137,6 +138,7 @@ SCANNER_URLS: dict[str, str] = {
     "kimi-k2.6-agentic-v1": "https://www.moonshot.ai",
     "kimi-k2.5-agentic-v1": "https://www.moonshot.ai",
     "claude-fable-5-cc-v1": "https://www.anthropic.com/news/claude-fable-5-mythos-5",
+    "claude-opus-5-cc-agentic-v1": "https://www.anthropic.com/claude/opus",
     "claude-opus-4-8-agentic-v1": "https://www.anthropic.com/claude/opus",
     "claude-opus-4-7-agentic-v1": "https://www.anthropic.com/claude/opus",
     "claude-opus-4-6-agentic-v1": "https://www.anthropic.com/claude/opus",
@@ -179,6 +181,7 @@ SCANNER_PROVIDERS: dict[str, str] = {
     "kimi-k2.6-agentic-v1": "Moonshot AI",
     "kimi-k2.5-agentic-v1": "Moonshot AI",
     "claude-fable-5-cc-v1": "Anthropic",
+    "claude-opus-5-cc-agentic-v1": "Anthropic",
     "claude-opus-4-8-agentic-v1": "Anthropic",
     "claude-opus-4-7-agentic-v1": "Anthropic",
     "claude-opus-4-6-agentic-v1": "Anthropic",
@@ -204,6 +207,20 @@ SCANNER_PROVIDERS: dict[str, str] = {
 # (OpenCode) harness, so the difference is transparent rather than implicit in
 # the version label. HTML allowed.
 SCANNER_NOTES: dict[str, str] = {
+    "claude-opus-5-cc-agentic-v1": (
+        "<strong>Claude Code harness; post-hoc v2 scoring.</strong> Claude Opus 5 "
+        "scanned all 66 pinned Python repositories through the "
+        '<span class="mono">Claude Code</span> CLI using the generic agentic-v1 '
+        "prompt (prompt hash "
+        '<span class="mono">sha256:de50937cb83f</span>). This differs from the '
+        "standard OpenCode delivery path used by the original agentic-v1 campaign. "
+        "The raw findings were generated in a separate internal campaign against the "
+        "same pinned Python commit set, then scored post-hoc against the frozen public "
+        "v2 ground truth; ground truth was never supplied to the scanner. The public "
+        "provenance manifest records all 66 commit SHAs, the full prompt/task hashes, "
+        "and the exact CLI/model configuration. Internal dataset stamps are omitted "
+        "from the public metrics. The 66 successful runs cost $90.68 in total."
+    ),
     "ornith-q3-agentic-v1": (
         "<strong>Locally hosted; template fix.</strong> Open-weight GGUF (Q4_K_M) via "
         "Ollama through the standard agentic-v1 harness. Ornith's shipped GGUF template was "

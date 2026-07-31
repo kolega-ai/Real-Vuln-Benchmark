@@ -1,0 +1,657 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "security.injection.sql-injection-login",
+      "path": "python/app.py",
+      "start": {
+        "line": 165,
+        "col": 21,
+        "offset": 5330
+      },
+      "end": {
+        "line": 177,
+        "col": 63,
+        "offset": 5940
+      },
+      "extra": {
+        "message": "The login handler builds the authentication query with an f-string that interpolates the raw `username` and `password` form values (`SELECT * FROM users WHERE username = '{username}' AND password = '{password}'`) and executes it via `conn.execute(query)` at lines 175/177. Any attacker can inject SQL (e.g. `admin' --`) to bypass authentication entirely, or read/modify arbitrary database contents.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.sql-injection-comment-search",
+      "path": "python/app.py",
+      "start": {
+        "line": 247,
+        "col": 25,
+        "offset": 9411
+      },
+      "end": {
+        "line": 249,
+        "col": 38,
+        "offset": 9530
+      },
+      "extra": {
+        "message": "The comment search endpoint concatenates the user-supplied `search` field directly into a LIKE clause (`SELECT * FROM comments WHERE content LIKE '%{search_term}%'`) and executes it with `cursor.execute(query)`. This permits arbitrary SQL injection, including UNION-based extraction of the `users` table (usernames and plaintext passwords).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.sql-injection-blind",
+      "path": "python/app.py",
+      "start": {
+        "line": 492,
+        "col": 25,
+        "offset": 19756
+      },
+      "end": {
+        "line": 494,
+        "col": 55,
+        "offset": 19890
+      },
+      "extra": {
+        "message": "The blind-SQLi endpoint interpolates `user_id` into `SELECT * FROM users WHERE id = {user_id}` and executes it directly. Although the WTForms `IntegerField` coerces the value, the query construction is string interpolation with no parameterisation, and the same pattern is reachable for any non-integer-validated input path; the sink is an unparameterised dynamic SQL statement.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.deserialization.pickle-loads-user-input",
+      "path": "python/app.py",
+      "start": {
+        "line": 435,
+        "col": 13,
+        "offset": 17440
+      },
+      "end": {
+        "line": 436,
+        "col": 40,
+        "offset": 17530
+      },
+      "extra": {
+        "message": "`/deserialize` base64-decodes the attacker-controlled `data` form field and passes it to `pickle.loads()`. Python pickle deserialisation executes arbitrary code via `__reduce__`, so any authenticated request yields remote code execution on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.ssrf.unvalidated-outbound-request",
+      "path": "python/app.py",
+      "start": {
+        "line": 382,
+        "col": 9,
+        "offset": 15390
+      },
+      "end": {
+        "line": 385,
+        "col": 43,
+        "offset": 15520
+      },
+      "extra": {
+        "message": "`/ssrf` takes the user-supplied `url` field and passes it unvalidated to `requests.get(url)`, returning the first 500 bytes of the response body to the caller. There is no scheme allowlist, host allowlist, or blocking of internal/link-local addresses, so an attacker can reach internal services, cloud metadata endpoints (169.254.169.254), or read local resources.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xml.xxe-unsafe-parser",
+      "path": "python/app.py",
+      "start": {
+        "line": 409,
+        "col": 24,
+        "offset": 16455
+      },
+      "end": {
+        "line": 417,
+        "col": 41,
+        "offset": 16855
+      },
+      "extra": {
+        "message": "User-supplied XML from the `xml_data` field is parsed with `xml.etree.ElementTree.fromstring()` (lines 409 and 417) with no parser hardening, no disabling of DTD/entity processing, and no use of `defusedxml`. The application explicitly accepts and processes documents containing `<!ENTITY` declarations, exposing the XML parsing surface to external-entity and entity-expansion attacks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.idor-profile",
+      "path": "python/app.py",
+      "start": {
+        "line": 345,
+        "col": 9,
+        "offset": 13551
+      },
+      "end": {
+        "line": 369,
+        "col": 111,
+        "offset": 14620
+      },
+      "extra": {
+        "message": "`/profile/<int:user_id>` fetches an arbitrary user row (`SELECT * FROM users WHERE id = ?`) using the path-supplied `user_id` with no object-level authorization. The ownership comparison at line 357 does not deny access when `user_id != logged_in_user['id']` \u2014 it instead marks the request as a successful exploit and still renders the other user's record (username, email, role) to the requester. Any authenticated user can enumerate and read every other user's profile.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.bola-api-user",
+      "path": "python/app.py",
+      "start": {
+        "line": 613,
+        "col": 9,
+        "offset": 24571
+      },
+      "end": {
+        "line": 619,
+        "col": 155,
+        "offset": 25150
+      },
+      "extra": {
+        "message": "`/api/user/<int:user_id>` looks up any user by the client-supplied ID and returns id, username, email and role as JSON. The comparison at line 617 confirms the requested ID belongs to a *different* user and then returns that foreign user's data anyway \u2014 there is no owner/tenant constraint on the authoritative read. This is broken object-level authorization allowing full enumeration of the user table over the API.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.upload.unrestricted-file-upload",
+      "path": "python/app.py",
+      "start": {
+        "line": 320,
+        "col": 17,
+        "offset": 12420
+      },
+      "end": {
+        "line": 322,
+        "col": 38,
+        "offset": 12520
+      },
+      "extra": {
+        "message": "`/upload` writes the uploaded file to `static/uploads/` using the attacker-controlled filename with no extension allowlist, no MIME/content validation, no size limit, and no filename randomisation (`werkzeug.utils.secure_filename` is not used). Uploads are then served back by `/uploads/<filename>` and `/static/<path:filename>`. Executable content (e.g. `.php`, as the repo's existing `static/uploads/shell.php` demonstrates) can be planted, and an existing file of the same name is silently overwritten. The endpoint is additionally CSRF-exempt (line 304).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.missing-authorization-file-download",
+      "path": "python/app.py",
+      "start": {
+        "line": 332,
+        "col": 1,
+        "offset": 13118
+      },
+      "end": {
+        "line": 337,
+        "col": 35,
+        "offset": 13290
+      },
+      "extra": {
+        "message": "`/uploads/<filename>` serves any file from the upload folder with no session check and no per-object authorization, unlike the `/upload` handler which requires a session. Combined with `os.listdir` disclosure in the upload view, any unauthenticated visitor can enumerate and download every file uploaded by every user.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-authentication-api-flag",
+      "path": "python/app.py",
+      "start": {
+        "line": 622,
+        "col": 1,
+        "offset": 25217
+      },
+      "end": {
+        "line": 624,
+        "col": 46,
+        "offset": 25300
+      },
+      "extra": {
+        "message": "`/api/flag` has no authentication or authorization check (contrast with every other view, which tests `if 'user' not in session`) and returns protected secret material (`flag{flask_api_vuln}`) to any anonymous requester.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-authentication-comments-log",
+      "path": "python/app.py",
+      "start": {
+        "line": 626,
+        "col": 1,
+        "offset": 25311
+      },
+      "end": {
+        "line": 633,
+        "col": 43,
+        "offset": 25620
+      },
+      "extra": {
+        "message": "`/comments-log` reads `static/comments.txt` and returns its raw contents with no session or authorization check, exposing stored comment/log data to unauthenticated clients. The README notes this endpoint's hint was merely hidden from the dashboard rather than protected.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.unauthenticated-database-reinitialization",
+      "path": "python/app.py",
+      "start": {
+        "line": 154,
+        "col": 5,
+        "offset": 5006
+      },
+      "end": {
+        "line": 154,
+        "col": 15,
+        "offset": 5016
+      },
+      "extra": {
+        "message": "The unauthenticated `/` route calls `init_db()` on every request. `init_db()` (python/database.py:38-42) executes `DROP TABLE IF EXISTS users/progress/logs/reports/comments`, so any anonymous HTTP GET to the site root destroys all user accounts, audit logs, submitted reports, comments and progress data. A destructive administrative operation is reachable with no authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.misconfig.flask-debug-enabled",
+      "path": "python/app.py",
+      "start": {
+        "line": 661,
+        "col": 5,
+        "offset": 26855
+      },
+      "end": {
+        "line": 661,
+        "col": 56,
+        "offset": 26906
+      },
+      "extra": {
+        "message": "The application runs with `debug=True` bound to `0.0.0.0`, enabling the Werkzeug interactive debugger on all network interfaces. The debug console permits arbitrary Python execution on a traceback (only guarded by a derivable PIN) and leaks source code, local variables and configuration in error pages.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-flask-secret-key",
+      "path": "python/app.py",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 772
+      },
+      "end": {
+        "line": 25,
+        "col": 53,
+        "offset": 825
+      },
+      "extra": {
+        "message": "The Flask `SECRET_KEY` is hardcoded in source as `'secure-secret-key-12345'` with no environment-variable override. Because this key signs session cookies and CSRF tokens, anyone with access to the repository can forge arbitrary sessions (including `is_admin`) and valid CSRF tokens.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-account-credentials",
+      "path": "python/database.py",
+      "start": {
+        "line": 96,
+        "col": 9,
+        "offset": 2704
+      },
+      "end": {
+        "line": 99,
+        "col": 78,
+        "offset": 3068
+      },
+      "extra": {
+        "message": "`init_db()` seeds accounts with hardcoded credentials (`admin`/`password`, `user2`/`password2`) stored as cleartext in the `password` column, and the login query at python/app.py:165 compares the submitted password directly against that cleartext column \u2014 no hashing or salting is used anywhere. Anyone who reads the source or dumps the database via the SQL injection obtains usable credentials.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-256: Plaintext Storage of a Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.predictable-session-identifier",
+      "path": "python/app.py",
+      "start": {
+        "line": 186,
+        "col": 25,
+        "offset": 6455
+      },
+      "end": {
+        "line": 191,
+        "col": 55,
+        "offset": 6820
+      },
+      "extra": {
+        "message": "Session material is generated from a fixed, guessable template rather than a CSPRNG: `session['token'] = f\"SESSION_{username.lower()}_12345\"` and `session_id = f\"{username.lower()}_auth_123\"`. Knowing only a victim's username lets an attacker compute their session identifier \u2014 exactly the weakness the `/broken-auth` endpoint (line 472) validates against.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-330: Use of Insufficiently Random Values"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.cookie.missing-httponly-secure-flags",
+      "path": "python/app.py",
+      "start": {
+        "line": 195,
+        "col": 25,
+        "offset": 7078
+      },
+      "end": {
+        "line": 195,
+        "col": 92,
+        "offset": 7145
+      },
+      "extra": {
+        "message": "The session identifier cookie is set via `response.set_cookie('vuln_session_id', predictable_session_id)` with no `httponly=True`, `secure=True`, or `samesite` attribute. The value is therefore readable by any injected JavaScript (the app has multiple XSS sinks) and is transmitted in cleartext over plain HTTP.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.info-disclosure.database-error-message",
+      "path": "python/app.py",
+      "start": {
+        "line": 202,
+        "col": 17,
+        "offset": 7440
+      },
+      "end": {
+        "line": 203,
+        "col": 55,
+        "offset": 7565
+      },
+      "extra": {
+        "message": "The login handler returns raw database exception text to the client (`error = f\"Database error: {str(e)}\"`, rendered at templates/login.html:59). SQLite error messages disclose query structure, table and column names, and turn the injectable login query into an error-based SQL injection oracle. The same pattern appears at lines 256, 413, 420 and 444.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.csrf.state-change-via-get",
+      "path": "python/app.py",
+      "start": {
+        "line": 275,
+        "col": 5,
+        "offset": 10440
+      },
+      "end": {
+        "line": 292,
+        "col": 128,
+        "offset": 11300
+      },
+      "extra": {
+        "message": "`/transfer` accepts the money-transfer `amount` from `request.args` on a GET request and performs the state change using only the ambient session cookie. `CSRFProtect` does not validate tokens on GET, and the `Referer` header is read but never enforced (lines 282-284), so a third-party page containing `<img src=\"http://host:5000/transfer?amount=1000\">` executes the transfer as the victim.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.csrf.protection-explicitly-disabled",
+      "path": "python/app.py",
+      "start": {
+        "line": 304,
+        "col": 1,
+        "offset": 11838
+      },
+      "end": {
+        "line": 305,
+        "col": 51,
+        "offset": 11890
+      },
+      "extra": {
+        "message": "`@csrf.exempt` removes CSRF token validation from the state-changing `/upload` POST handler, so a cross-origin form can make an authenticated victim write attacker-chosen files into `static/uploads/`. The same exemption is applied to the `/csrf` settings handler at line 538.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.csrf.protection-explicitly-disabled-settings",
+      "path": "python/app.py",
+      "start": {
+        "line": 538,
+        "col": 1,
+        "offset": 21712
+      },
+      "end": {
+        "line": 556,
+        "col": 51,
+        "offset": 22400
+      },
+      "extra": {
+        "message": "The `/csrf` settings endpoint is decorated with `@csrf.exempt`, so the POST that updates the account email address and progress state requires no anti-CSRF token. An attacker-hosted auto-submitting form changes a logged-in victim's email \u2014 the exploit the bundled `malicious_csrf_exploit.html` template demonstrates.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-brute-force-protection",
+      "path": "python/app.py",
+      "start": {
+        "line": 152,
+        "col": 1,
+        "offset": 4950
+      },
+      "end": {
+        "line": 201,
+        "col": 55,
+        "offset": 7440
+      },
+      "extra": {
+        "message": "The login endpoint applies no rate limiting, account lockout, CAPTCHA, or progressive delay on repeated authentication failures, and there is no such control in any before_request hook, middleware, or extension registration (the only extension registered is `CSRFProtect`). Credentials \u2014 stored in cleartext with no password policy \u2014 can be brute-forced or credential-stuffed without restriction.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.missing-authentication-failure-logging",
+      "path": "python/app.py",
+      "start": {
+        "line": 200,
+        "col": 21,
+        "offset": 7380
+      },
+      "end": {
+        "line": 204,
+        "col": 41,
+        "offset": 7600
+      },
+      "extra": {
+        "message": "Failed authentication produces no durable security event: the success branch calls `log_action(...)` (line 197) but the failure branches at lines 201 and 202-204 only set a template variable. Likewise, authorization failures at `/profile/<id>` and `/api/user/<id>`, and session termination in `/logout`, write no audit record. There is no before_request/after_request hook or global logger supplying this elsewhere, so credential-guessing and enumeration attacks leave no trace in the `logs` table.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-778: Insufficient Logging"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.dom-based-xss-innerhtml",
+      "path": "python/templates/dom_xss.html",
+      "start": {
+        "line": 139,
+        "col": 13,
+        "offset": 8180
+      },
+      "end": {
+        "line": 143,
+        "col": 63,
+        "offset": 8508
+      },
+      "extra": {
+        "message": "The page reads `window.location.hash`, parses the `message` parameter out of it, and assigns the attacker-controlled value straight to `document.getElementById('message').innerHTML`, with no sanitisation. A crafted URL such as `/dom-xss#message=<img src=x onerror=alert(document.cookie)>` executes attacker JavaScript in the victim's session, enabling theft of the non-HttpOnly `vuln_session_id` cookie.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting (XSS)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.reflected-xss-safe-filter",
+      "path": "python/templates/reflected_xss.html",
+      "start": {
+        "line": 56,
+        "col": 21,
+        "offset": 3580
+      },
+      "end": {
+        "line": 56,
+        "col": 68,
+        "offset": 3627
+      },
+      "extra": {
+        "message": "The reflected-search result block renders the search term with the `| safe` filter (`Search Results for: {{ search | safe }}`), explicitly disabling Jinja2 autoescaping for a value that originates from the `query` request parameter handled at python/app.py:452-461. Any request-supplied value reaching this template variable is emitted into the HTML response unescaped, yielding reflected XSS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting (XSS)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

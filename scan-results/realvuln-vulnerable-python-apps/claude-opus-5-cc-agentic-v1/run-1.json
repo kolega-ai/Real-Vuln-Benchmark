@@ -1,0 +1,558 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "security.injection.sql-injection-string-concat",
+      "path": "SQLI/main.py",
+      "start": {
+        "line": 70,
+        "col": 20,
+        "offset": 2444
+      },
+      "end": {
+        "line": 70,
+        "col": 78,
+        "offset": 2502
+      },
+      "extra": {
+        "message": "The vulnerable override of get_db_connection() concatenates the user-controlled `post_id` (from the URL route) directly into a SQL string: `conn.execute('SELECT * FROM posts WHERE id = '+post_id)`. The only defense is a weak regex `re.compile(r'^\\d+$', re.M)` built with re.M (line 67) and evaluated with re.match, so a payload such as `1\\n1 UNION SELECT ...` satisfies the multiline anchor on its first line while the remaining injected SQL is still concatenated into the query. This allows SQL injection against the SQLite database.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.deserialization.pickle-loads-untrusted-cookie",
+      "path": "Insecure_Deserialization/serialize_server.py",
+      "start": {
+        "line": 12,
+        "col": 9,
+        "offset": 242
+      },
+      "end": {
+        "line": 19,
+        "col": 40,
+        "offset": 337
+      },
+      "extra": {
+        "message": "The request handler reads the attacker-controlled `username` cookie from the HTTP `Cookie` header and unpickles it (`Username.pickle()` / `pickle.loads(base64.b64decode(cookies.get('username').value))`). No signature, HMAC, or integrity check is applied to the serialized blob, so a crafted pickle with a `__reduce__` method (see exploitApickle.py in the same directory) yields arbitrary code execution as the server process.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.path-traversal.arbitrary-file-read",
+      "path": "Directory_Traversal/Dir_Traversal.py",
+      "start": {
+        "line": 14,
+        "col": 9,
+        "offset": 440
+      },
+      "end": {
+        "line": 22,
+        "col": 62,
+        "offset": 700
+      },
+      "extra": {
+        "message": "`self.path` (the raw, un-decoded request URI) is appended to the CWD and the resulting path is opened and returned to the client (`self.wfile.write(open(path).read()...)`). The only filter is `re.match(r'/\\.\\.\\/\\.\\.\\/', self.path)`, which anchors at the start of the path and matches exactly two `../` segments, so requests such as `/x/../../etc/passwd`, `/..%2f..%2fetc/passwd`, or `/../../../etc/passwd` bypass it. This yields arbitrary file read (local file inclusion) on the host, and the server binds 0.0.0.0 with no authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.ssrf.url-prefix-check-bypass",
+      "path": "Other/url_fetch.py",
+      "start": {
+        "line": 14,
+        "col": 5,
+        "offset": 218
+      },
+      "end": {
+        "line": 17,
+        "col": 20,
+        "offset": 349
+      },
+      "extra": {
+        "message": "The `url` query parameter is fetched server-side with `urllib.request.urlopen(url)`. The only validation is `url.startswith(\"https://insecurewebapp.com\")`, which is not a host check: `https://insecurewebapp.com.attacker.tld/`, `https://insecurewebapp.com@169.254.169.254/`, and `https://insecurewebapp.com.attacker.tld/redirect-to-internal` all pass, and redirects are followed by default. An attacker can make the server issue requests to internal hosts and cloud metadata endpoints and have the response body returned to them.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.reflected-cookie-into-html",
+      "path": "Insecure_Frameworks/bad_mvc.py",
+      "start": {
+        "line": 37,
+        "col": 9,
+        "offset": 1233
+      },
+      "end": {
+        "line": 37,
+        "col": 60,
+        "offset": 1284
+      },
+      "extra": {
+        "message": "The value decrypted from the client-supplied `session_id` cookie is interpolated into the HTTP response body with `bytes(\"Hello %s\" % username, \"utf-8\")` and served as `Content-type: text/html` with no HTML encoding or escaping. Any attacker who can set or craft the cookie value (see the missing integrity check on line 19) injects arbitrary HTML/JavaScript that executes in the victim's browser.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.crypto.encrypted-cookie-without-integrity",
+      "path": "Insecure_Frameworks/bad_mvc.py",
+      "start": {
+        "line": 19,
+        "col": 9,
+        "offset": 535
+      },
+      "end": {
+        "line": 20,
+        "col": 62,
+        "offset": 580
+      },
+      "extra": {
+        "message": "The session cookie is decrypted with AES-CBC using an IV taken straight from the attacker-supplied ciphertext and no MAC/authenticated mode: `aes = AES.new(KEY, AES.MODE_CBC, iv); unpad(aes.decrypt(encd), ...)`. Because the security-relevant value (the username/identity) is protected only by unauthenticated encryption, an attacker can flip the first plaintext block by manipulating the IV, and the distinct 500 response on decrypt/unpad failure (line 28) versus 200 on success gives a padding-oracle distinguisher for forging arbitrary session contents.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-649: Reliance on Obfuscation or Encryption of Security-Relevant Inputs without Integrity Checking"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.client-asserted-identity-cookie",
+      "path": "Insecure_Frameworks/bad_mvc.py",
+      "start": {
+        "line": 24,
+        "col": 9,
+        "offset": 789
+      },
+      "end": {
+        "line": 26,
+        "col": 78,
+        "offset": 851
+      },
+      "extra": {
+        "message": "The handler establishes the user's identity solely from the contents of the client-controlled `session_id` cookie (`username = self.decrypt(cookies.get('session_id').value)`). There is no server-side session store, no expiry, and no binding to authoritative state, so the client asserts who it is. Combined with the unauthenticated CBC encryption above (and the `print(encrypt('admin'))` on line 41 leaking a valid admin token), this permits authentication/authorization bypass by presenting a forged cookie.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.missing-authorization-post-edit",
+      "path": "SQLI/main.py",
+      "start": {
+        "line": 112,
+        "col": 1,
+        "offset": 3548
+      },
+      "end": {
+        "line": 131,
+        "col": 47,
+        "offset": 3600
+      },
+      "extra": {
+        "message": "The `/<int:id>/edit` route updates any post selected by the caller-supplied `id` with no authentication and no ownership/authorization check before `UPDATE posts SET title = ?, content = ? WHERE id = ?`. Any anonymous requester can enumerate ids and modify arbitrary users' posts (broken object-level authorization).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-authentication-destructive-route",
+      "path": "SQLI/main.py",
+      "start": {
+        "line": 134,
+        "col": 1,
+        "offset": 4177
+      },
+      "end": {
+        "line": 142,
+        "col": 39,
+        "offset": 4230
+      },
+      "extra": {
+        "message": "The `/<int:id>/delete` route permanently deletes the post identified by the caller-supplied `id` (`DELETE FROM posts WHERE id = ?`) with no authentication, session check, or ownership verification anywhere in the request path. Any unauthenticated client can destroy all content, and the deletion is not audit-logged.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-flask-secret-key",
+      "path": "SQLI/main.py",
+      "start": {
+        "line": 52,
+        "col": 1,
+        "offset": 1785
+      },
+      "end": {
+        "line": 52,
+        "col": 40,
+        "offset": 1824
+      },
+      "extra": {
+        "message": "The Flask session-signing key is hardcoded in source: `app.config['SECRET_KEY'] = 'qwerty12345'`. Anyone with access to the repository (it is committed to version control) can forge signed session cookies and flash messages. The value is also a trivially guessable dictionary password.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-flask-secret-key",
+      "path": "SQLI/main_safe.py",
+      "start": {
+        "line": 26,
+        "col": 1,
+        "offset": 543
+      },
+      "end": {
+        "line": 26,
+        "col": 34,
+        "offset": 577
+      },
+      "extra": {
+        "message": "The 'safe' variant of the application still hardcodes its Flask session-signing key in source: `app.config['SECRET_KEY'] = '55555'`. A committed, guessable secret key lets an attacker forge session cookies.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.crypto.hash-length-extension-no-hmac",
+      "path": "Other/length_extension_attack.py",
+      "start": {
+        "line": 17,
+        "col": 2,
+        "offset": 331
+      },
+      "end": {
+        "line": 18,
+        "col": 53,
+        "offset": 368
+      },
+      "extra": {
+        "message": "The payment signature is computed as `sha256(secret + payment_information)`. Because SHA-256 is a Merkle-Damgard construction, an attacker who knows a valid (message, signature) pair can append data (e.g. `&ammount=0.01`) and compute a valid signature for the extended message without knowing the secret \u2014 a hash length-extension attack that defeats the tamper protection on the payment parameters. A keyed MAC such as `hmac.new(key, msg, sha256)` is required.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.crypto.hash-length-extension-no-hmac",
+      "path": "Other/vuln_payment_code.py",
+      "start": {
+        "line": 12,
+        "col": 5,
+        "offset": 249
+      },
+      "end": {
+        "line": 13,
+        "col": 55,
+        "offset": 289
+      },
+      "extra": {
+        "message": "`sign_for_payment` builds the integrity signature as `hashlib.sha256((secret + payment_information).encode()).hexdigest()`. Prefixing a secret to the message instead of using HMAC leaves the signature vulnerable to a hash length-extension attack, allowing an attacker to append attacker-chosen payment parameters (e.g. a different amount) and produce a valid signature without the secret.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.tls.certificate-hostname-verification-disabled",
+      "path": "Other/host_header_injection.py",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 90
+      },
+      "end": {
+        "line": 6,
+        "col": 30,
+        "offset": 119
+      },
+      "extra": {
+        "message": "`context.check_hostname = False` disables TLS hostname verification on the SSL context used for the outbound HTTPS connection, so any certificate valid for some other host is accepted. This removes the protection against man-in-the-middle interception of the connection and its request/response data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-295: Improper Certificate Validation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.header-injection.raw-request-line-construction",
+      "path": "Other/host_header_injection.py",
+      "start": {
+        "line": 10,
+        "col": 9,
+        "offset": 294
+      },
+      "end": {
+        "line": 10,
+        "col": 84,
+        "offset": 369
+      },
+      "extra": {
+        "message": "The raw HTTP request is assembled by string interpolation into the request line/headers: `\"GET / HTTP/1.1\\r\\nHost: #{hostname}\\r\\n\\r\\n\"` written directly to the TLS socket. No CR/LF neutralisation or validation is applied to the interpolated host value, so any value containing `\\r\\n` injects additional headers or a second smuggled request. (Note the `#{...}` Ruby-style interpolation is also inert in Python, so the literal placeholder is sent as the Host header.)",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Request/Response Splitting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.sql-injection-example-patterns",
+      "path": "SQLI/sqli_example.py",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 514
+      },
+      "end": {
+        "line": 29,
+        "col": 74,
+        "offset": 858
+      },
+      "extra": {
+        "message": "Four `cursor.execute()` calls build SQL by embedding the `username` variable into the query string via `+` concatenation, `.format()`, `%` formatting, and an f-string, instead of passing bind parameters. Each pattern is directly injectable if `username` is attacker-influenced.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.unescaped-response-interpolation",
+      "path": "Insecure_Deserialization/serialize_server.py",
+      "start": {
+        "line": 30,
+        "col": 13,
+        "offset": 1190
+      },
+      "end": {
+        "line": 30,
+        "col": 68,
+        "offset": 1245
+      },
+      "extra": {
+        "message": "The response body is built with `bytes(\"<h1>Hello %s</h1>\" % username, \"utf-8\")` and served as `text/html` with no HTML escaping of `username`, which originates from the request's `username` cookie handling in the same method. Any HTML/script characters in that value are reflected verbatim into the page.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.disclosure.session-token-printed-to-stdout",
+      "path": "Insecure_Frameworks/bad_mvc.py",
+      "start": {
+        "line": 41,
+        "col": 1,
+        "offset": 1361
+      },
+      "end": {
+        "line": 41,
+        "col": 25,
+        "offset": 1385
+      },
+      "extra": {
+        "message": "`print(encrypt('admin'))` runs at import/startup and writes a valid encrypted session cookie for the privileged `admin` identity to stdout, where it lands in console output and container/process logs. Anyone able to read those logs obtains a working administrative session token for the cookie check in `do_GET`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.auth-failure-not-logged",
+      "path": "Insecure_Frameworks/bad_mvc.py",
+      "start": {
+        "line": 27,
+        "col": 13,
+        "offset": 891
+      },
+      "end": {
+        "line": 29,
+        "col": 24,
+        "offset": 960
+      },
+      "extra": {
+        "message": "Session-cookie decryption failure \u2014 the only authentication check in the request path \u2014 is swallowed by a bare `except:` that returns HTTP 500 without recording any security event (no logger, no audit sink, and no shared middleware exists in this handler). Repeated forgery or padding-oracle probing of `session_id` produces no durable audit trail for detection or investigation.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-778: Insufficient Logging"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.csrf.state-changing-post-without-token",
+      "path": "SQLI/main.py",
+      "start": {
+        "line": 93,
+        "col": 1,
+        "offset": 2996
+      },
+      "end": {
+        "line": 109,
+        "col": 39,
+        "offset": 3050
+      },
+      "extra": {
+        "message": "The `create` route (and likewise `edit` and `delete`) accepts state-changing POST requests with no CSRF token: the app registers no CSRF protection (no Flask-WTF/CSRFProtect), and the `create.html`/`edit.html` forms contain no hidden token field. A third-party site can therefore force a visitor's browser to create, modify, or delete posts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.csrf.state-changing-post-without-token",
+      "path": "XSS/app.py",
+      "start": {
+        "line": 31,
+        "col": 1,
+        "offset": 716
+      },
+      "end": {
+        "line": 34,
+        "col": 47,
+        "offset": 850
+      },
+      "extra": {
+        "message": "The index route persists `request.form['comment']` to the database on POST with no CSRF token validation and no authentication; the app configures no CSRF protection and `templates/index.html`'s comment form emits no token. Any external page can silently post comments as a visiting user.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-signing-secret",
+      "path": "Other/length_extension_attack.py",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 104
+      },
+      "end": {
+        "line": 7,
+        "col": 17,
+        "offset": 120
+      },
+      "extra": {
+        "message": "The signing secret used by `sign_for_payment` is a hardcoded module-level string literal (`secret = \"[....]\"`) rather than being loaded from a secret manager or environment configuration. Committing the signing key to source means anyone with repository access can mint valid payment signatures. The same pattern appears in Other/vuln_payment_code.py line 5.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}
