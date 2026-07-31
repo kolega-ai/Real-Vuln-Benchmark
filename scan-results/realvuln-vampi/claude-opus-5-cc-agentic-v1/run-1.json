@@ -1,0 +1,380 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "security.injection.sql-injection",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 72,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 73,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "User.get_user() builds a raw SQL string with an f-string interpolating the attacker-controlled `username` value and passes it to db.session.execute(text(...)). The value comes straight from the /users/v1/{username} path parameter (api_views/users.py:45-47), so input such as `' OR '1'='1` or a UNION payload is executed as SQL, allowing authentication-free extraction of arbitrary table data including password hashes and admin flags.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.hardcoded-jwt-signing-key",
+      "path": "config.py",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 44,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The Flask SECRET_KEY is hardcoded to the trivially guessable value 'random'. This same key signs all HS256 JWTs (models/user_model.py:37-41) and verifies them (models/user_model.py:48). Anyone who knows or brute-forces this key can forge a token for any user, including 'admin', completely bypassing authentication and authorization on every protected endpoint.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.config.flask-debug-enabled",
+      "path": "app.py",
+      "start": {
+        "line": 17,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 63,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The application is started with debug=True and bound to 0.0.0.0, enabling the Werkzeug interactive debugger on all network interfaces. Any unhandled exception exposes an interactive console that permits arbitrary Python code execution on the server, plus full stack traces and source disclosure. The Dockerfile (CMD [\"app.py\"]) runs exactly this entrypoint in the shipped image.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.unauthorized-password-change",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 186,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 190,
+        "col": 39,
+        "offset": 0
+      },
+      "extra": {
+        "message": "update_password() validates only that some token is present, then looks up the target user by the attacker-supplied `username` path parameter rather than by the authenticated identity `resp['sub']`, and overwrites that user's password. Any authenticated low-privilege user can PUT /users/v1/admin/password to take over the admin account. The authoritative write is not constrained to the token owner.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.broken-object-level-authorization",
+      "path": "api_views/books.py",
+      "start": {
+        "line": 50,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 58,
+        "col": 82,
+        "offset": 0
+      },
+      "extra": {
+        "message": "get_by_title() queries Book by title alone, with no filter on the authenticated user, and returns the book's secret_content plus owner. The token is only checked for validity, never for ownership of the requested object. Any authenticated user can read another user's book secrets by requesting GET /books/v1/{book_title} (titles are enumerable via the unauthenticated GET /books/v1). The non-vulnerable branch at line 62-63 shows the required owner-scoped query that this path omits.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.mass-assignment-privilege-escalation",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 60,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 66,
+        "col": 66,
+        "offset": 0
+      },
+      "extra": {
+        "message": "register_user() copies the client-supplied 'admin' field from the JSON request body directly into the User object's admin attribute. The registration JSON schema (api_views/json_schemas.py:1-9) does not forbid it. An anonymous attacker can POST /users/v1/register with {\"admin\": true} to create an administrator account, which then satisfies the admin check in delete_user() (api_views/users.py:212). Privilege is asserted by the client instead of by server-side policy.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes (Mass Assignment)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-authentication-debug-endpoint",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 24,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The /users/v1/_debug endpoint (openapi_specs/openapi3.yml:88-94) has no `security` requirement and the handler performs no token validation. It returns User.json_debug() for every user, which includes the cleartext password and admin flag (models/user_model.py:58-59). Any unauthenticated remote user can dump every credential in the database.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-authentication-db-reset",
+      "path": "api_views/main.py",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 26,
+        "offset": 0
+      },
+      "extra": {
+        "message": "populate_db() is exposed as an unauthenticated GET /createdb (openapi_specs/openapi3.yml:16-22, no `security` block) and calls db.drop_all() followed by db.create_all(). Any anonymous attacker can destroy all application data with a single GET request and reset accounts to known dummy credentials (name1/pass1, admin/pass1), which is both a denial of service and an authentication bypass path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.crypto.plaintext-password-storage",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 24,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 38,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Passwords are assigned to the model and persisted verbatim with no hashing or salting (column defined at models/user_model.py:15), and login compares them with a plain equality check against the stored value (api_views/users.py:93). Any database read \u2014 including via the SQL injection in get_user() or the unauthenticated /users/v1/_debug endpoint \u2014 yields directly reusable credentials.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.dos.regex-denial-of-service",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 144,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 146,
+        "col": 46,
+        "offset": 0
+      },
+      "extra": {
+        "message": "update_email() applies the regex ^([0-9a-zA-Z]([-.\\w]*[0-9a-zA-Z])*@... to the attacker-controlled 'email' body field. The nested quantifier group ([-.\\w]*[0-9a-zA-Z])* has ambiguous overlapping alternatives, producing catastrophic backtracking on a non-matching input such as a long run of 'a' characters with no '@'. A single request can pin a worker CPU indefinitely, and there is no rate limiting to bound the damage.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1333: Inefficient Regular Expression Complexity"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-brute-force-protection",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 85,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 93,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "login_user() performs an unlimited-attempt credential check. There is no per-account lockout, no per-IP throttling, no CAPTCHA, and no delay; the Connexion app in config.py registers no rate-limiting middleware and no reverse proxy or gateway is configured anywhere in the repo (docker-compose.yaml exposes Flask directly). Combined with the enumeration oracle below, an attacker can exhaustively guess passwords for any known username at full request rate. The same absence applies to POST /users/v1/register.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.user-enumeration",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 101,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 106,
+        "col": 108,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Failed logins return distinguishable messages: 'Password is not correct for the given username.' when the account exists versus 'Username does not exist' when it does not. This response discrepancy lets an attacker enumerate valid usernames without credentials, and confirms which guesses to target for brute forcing. The non-vulnerable branch at line 108-110 returns a single generic message, showing the intended behavior.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-204: Observable Response Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.invalid-token-not-rejected",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 50,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 53,
+        "col": 62,
+        "offset": 0
+      },
+      "extra": {
+        "message": "decode_auth_token() swallows ExpiredSignatureError and InvalidTokenError and returns a truthy dict instead of raising. This function is registered as Connexion's x-bearerInfoFunc (openapi_specs/openapi3.yml:14), and Connexion treats any non-None return value as successful authentication. Every endpoint declaring `security: bearerAuth` therefore passes the framework's security check with a forged, tampered, or expired token; rejection depends entirely on each handler remembering to re-inspect the result for an 'error' key, so the framework-level auth gate provides no protection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.missing-security-event-logging",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 179,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 203,
+        "col": 105,
+        "offset": 0
+      },
+      "extra": {
+        "message": "No security audit logging exists anywhere in the request path. Password changes (this function), account deletion (line 206), privilege assignment at registration (line 60), authentication failures (lines 101-110), and authorization failures (line 221) all return responses without emitting any durable log record. config.py registers no logging handler or middleware, and no logging module is imported in any application file, so account takeover and privilege escalation leave no forensic trace.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-778: Insufficient Logging"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.data-exposure.unauthenticated-user-listing",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 21,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET /users/v1 is declared without any `security` requirement (openapi_specs/openapi3.yml:62-68) and the handler performs no token check, returning the username and email address of every registered user to anonymous callers. This hands attackers a complete list of valid usernames and personal email addresses to feed into the unthrottled login endpoint.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

