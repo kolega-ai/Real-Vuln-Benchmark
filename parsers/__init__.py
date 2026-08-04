@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from .base import BaseParser
+from .rowan import RowanParser
 from .semgrep import SemgrepParser
 
 PARSER_REGISTRY: dict[str, type[BaseParser]] = {
+    "rowan": RowanParser,
     "semgrep": SemgrepParser,
     "opengrep": SemgrepParser,
     "sonarqube": SemgrepParser,
