@@ -209,6 +209,15 @@ scans    = load_dataset("{repo_id}", "scan_results", split="train")
 Corpora are not comparable across major versions, because the official target
 set changes. {sibling_note}
 
+## License
+
+Released under **{license}**, matching the
+[benchmark repository](https://github.com/kolega-ai/Real-Vuln-Benchmark).
+
+Version 1 remains under the MIT terms it was originally published with; that is
+deliberate, since retroactively changing the licence on already-published data
+would be worse than the inconsistency. Newer versions follow the repository.
+
 ## Notes
 
 The vulnerable source code is not redistributed here. Each `repos` row gives a

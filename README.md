@@ -416,6 +416,29 @@ Some repositories are forked under the [kolega-ai](https://github.com/kolega-ai)
 
 ---
 
+## Companion Datasets
+
+Ground truth, target metadata and raw scanner output are mirrored to HuggingFace,
+generated from this repo by `export_hf_dataset.py` so they cannot drift from it.
+Only scanners published on the public dashboard are included.
+
+| Dataset | Corpus | Findings | Licence |
+|---|---|---|---|
+| [Kolega-Dev/RealVuln-v2](https://huggingface.co/datasets/Kolega-Dev/RealVuln-v2) | 66 targets | 2,182 | Apache-2.0 |
+| [Kolega-Dev/RealVuln](https://huggingface.co/datasets/Kolega-Dev/RealVuln) | 26 targets (v1, the paper's corpus) | 796 | MIT |
+
+`main` tracks the latest release of that major version; every release is also a
+git tag, so a citation can pin an exact corpus:
+
+```python
+load_dataset("Kolega-Dev/RealVuln-v2", "findings", revision="v2.0.0")
+load_dataset("Kolega-Dev/RealVuln",    "findings", revision="v1.0.0")  # paper
+```
+
+Scores are not comparable across major versions, because the official target set
+changes. v1 stays under the MIT terms it was published with; v2 onward follows
+this repository's Apache-2.0 licence.
+
 ## Further Reading
 
 - Blog post: [Why We Built Our Own Security Benchmark](https://kolega.dev/blog/why-we-built-our-own-security-benchmark)
