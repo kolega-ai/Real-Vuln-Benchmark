@@ -1,0 +1,306 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "security.injection.sql-injection-select-endpoint",
+      "path": "main.py",
+      "start": {
+        "line": 182,
+        "col": 32,
+        "offset": 5189
+      },
+      "end": {
+        "line": 182,
+        "col": 86,
+        "offset": 5243
+      },
+      "extra": {
+        "message": "The `username` query parameter of GET /select is interpolated directly into a SQL string via an f-string and executed by `run_sql_query()` (aiosqlite `db.execute`). No parameter binding or escaping is performed, so a request such as /select?username=\" OR 1=1;-- returns every row of the `users` table and allows arbitrary SQL (UNION SELECT, sqlite_master enumeration, etc.).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.sql-injection-put-user",
+      "path": "main.py",
+      "start": {
+        "line": 188,
+        "col": 13,
+        "offset": 5383
+      },
+      "end": {
+        "line": 205,
+        "col": 45,
+        "offset": 5953
+      },
+      "extra": {
+        "message": "PUT /user builds an INSERT statement by f-string interpolation of the attacker-supplied `User` model fields (`name`, `username`, `address`, `email`, `contact`) and executes it with commit=True. Any double quote in a field terminates the string literal, allowing injection of arbitrary SQL statements/values into the write path (e.g. name = '\", \"x\"), (\"...'), including tampering with other users' records.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.sql-injection-delete-user",
+      "path": "main.py",
+      "start": {
+        "line": 231,
+        "col": 31,
+        "offset": 6814
+      },
+      "end": {
+        "line": 231,
+        "col": 94,
+        "offset": 6877
+      },
+      "extra": {
+        "message": "DELETE /user interpolates the `username` query parameter straight into a DELETE statement executed with commit=True. A payload such as ?username=\" OR 1=1; -- deletes every user record, and the injection point permits arbitrary attacker-controlled SQL against the database.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.sql-injection-delete-user-address",
+      "path": "main.py",
+      "start": {
+        "line": 235,
+        "col": 31,
+        "offset": 7023
+      },
+      "end": {
+        "line": 235,
+        "col": 95,
+        "offset": 7087
+      },
+      "extra": {
+        "message": "The body-based branch of DELETE /user interpolates `user.address` into `DELETE FROM users WHERE address = {user.address};` with no quoting at all. Because the value is not even wrapped in quotes, the attacker-controlled address is parsed directly as SQL expression text (e.g. address = \"1 OR 1=1\" deletes all rows), giving unauthenticated arbitrary SQL execution and mass data destruction.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.nosql-injection-find",
+      "path": "main.py",
+      "start": {
+        "line": 224,
+        "col": 5,
+        "offset": 6535
+      },
+      "end": {
+        "line": 225,
+        "col": 34,
+        "offset": 6597
+      },
+      "extra": {
+        "message": "POST /find takes the raw JSON request body and passes it unvalidated as the MontyDB/MongoDB-style query document to `users.find(query)` (main.py:169-174). An attacker fully controls query operators, so bodies like {\"id\":{\"$gt\":0}} or {\"username\":{\"$regex\":\".*\"}} dump the entire user collection and allow operator-based query manipulation. There is no schema, key allowlist, or operator filtering.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic (NoSQL Injection)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-authentication-destructive-reset",
+      "path": "main.py",
+      "start": {
+        "line": 242,
+        "col": 1,
+        "offset": 7269
+      },
+      "end": {
+        "line": 247,
+        "col": 28,
+        "offset": 7438
+      },
+      "extra": {
+        "message": "POST /reset is a critical, destructive function (it `remove()`s the SQLite database file, `rmtree()`s the NoSQL store, and rebuilds the database) yet requires no authentication, authorization, CSRF token, or rate limit. Any anonymous remote client can permanently destroy all application data at will, and repeated calls also force expensive re-seeding (Faker generation plus per-row commits), enabling resource-exhaustion denial of service.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-authorization-delete-user",
+      "path": "main.py",
+      "start": {
+        "line": 227,
+        "col": 1,
+        "offset": 6599
+      },
+      "end": {
+        "line": 236,
+        "col": 29,
+        "offset": 7116
+      },
+      "extra": {
+        "message": "DELETE /user deletes an arbitrary user record selected solely by the client-supplied `username` query parameter (or body `address`). There is no authentication dependency, no session/identity check, and no verification that the caller owns the targeted record \u2014 the identity of the object to delete is asserted entirely by the client. Any anonymous caller can delete any other user from both the SQL and NoSQL stores.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-authentication-user-creation",
+      "path": "main.py",
+      "start": {
+        "line": 185,
+        "col": 1,
+        "offset": 5261
+      },
+      "end": {
+        "line": 186,
+        "col": 32,
+        "offset": 5310
+      },
+      "extra": {
+        "message": "PUT /user creates arbitrary user accounts (name, username, password, address, email, contact) in both the SQL and NoSQL stores with no authentication, authorization, uniqueness check, CAPTCHA, or rate limiting on the endpoint or in any middleware (no auth dependency or middleware is registered anywhere in main.py). Anonymous clients can mass-create records, enabling account/data pollution and storage exhaustion.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.data.password-hash-exposure-multi-row",
+      "path": "main.py",
+      "start": {
+        "line": 162,
+        "col": 9,
+        "offset": 4608
+      },
+      "end": {
+        "line": 162,
+        "col": 32,
+        "offset": 4631
+      },
+      "extra": {
+        "message": "`run_sql_query()` strips the password column only on the single-row path (lines 151-161); the multi-row path returns the raw `SELECT *` tuples, which include the stored password hash (column index 3). Combined with the unauthenticated GET /select endpoint (and its SQL injection), a request like /select?username=\" OR 1=1;-- returns every user's PII plus password hashes to an anonymous caller.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.crypto.weak-password-hash-md5",
+      "path": "main.py",
+      "start": {
+        "line": 187,
+        "col": 5,
+        "offset": 5315
+      },
+      "end": {
+        "line": 187,
+        "col": 60,
+        "offset": 5370
+      },
+      "extra": {
+        "message": "User passwords are hashed with a single unsalted MD5 digest (`md5(user.password.encode()).hexdigest()`), the same scheme used when seeding (main.py:113). MD5 is fast and broken for password storage: the digests are trivially crackable with rainbow tables/GPU brute force and, being unsalted, identical passwords produce identical hashes. No salt, no key-stretching KDF (bcrypt/scrypt/argon2/PBKDF2) is used.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.missing-security-event-logging",
+      "path": "main.py",
+      "start": {
+        "line": 243,
+        "col": 1,
+        "offset": 7289
+      },
+      "end": {
+        "line": 247,
+        "col": 28,
+        "offset": 7438
+      },
+      "extra": {
+        "message": "Security-significant state changes produce no durable audit record: full database destruction (POST /reset, lines 243-247), user deletion (lines 227-236), and user creation (lines 185-216) are executed without any logging of actor, source address, target, or outcome. No logging middleware, exception handler, or dependency is registered on the FastAPI app (main.py:42-63), and the only `print()` in the codebase is inside a KeyboardInterrupt handler (line 165). Destructive and data-access events are therefore undetectable and non-attributable after the fact.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-778: Insufficient Logging"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.misconfig.exposed-api-documentation",
+      "path": "main.py",
+      "start": {
+        "line": 261,
+        "col": 1,
+        "offset": 7745
+      },
+      "end": {
+        "line": 268,
+        "col": 562,
+        "offset": 9159
+      },
+      "extra": {
+        "message": "Although the FastAPI constructor disables the built-in docs (`redoc_url=False, docs_url=False` at lines 48-49), custom unauthenticated routes re-enable interactive Swagger UI at GET /docs and ReDoc at GET /redoc, and `app.openapi = openapi` (line 270) keeps /openapi.json publicly reachable. This exposes a complete, machine-readable map of every endpoint, parameter, and schema \u2014 including the destructive /reset and /user endpoints \u2014 to anonymous users with no environment gating.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

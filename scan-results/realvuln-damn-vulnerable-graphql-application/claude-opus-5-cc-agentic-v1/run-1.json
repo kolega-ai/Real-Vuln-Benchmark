@@ -1,0 +1,982 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "security.injection.sql-injection-raw-text",
+      "path": "core/views.py",
+      "start": {
+        "line": 320,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 320,
+        "col": 79,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `filter` argument of the `pastes` GraphQL query is interpolated with Python `%` string formatting directly into a raw SQL fragment passed to SQLAlchemy's `text()`. Any client can supply `filter` (e.g. `' UNION SELECT ...--`) to break out of the quoted literal and execute arbitrary SQL against the SQLite database, allowing extraction of the `users` table (including cleartext passwords).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.os-command-injection-system-debug",
+      "path": "core/views.py",
+      "start": {
+        "line": 352,
+        "col": 16,
+        "offset": 0
+      },
+      "end": {
+        "line": 352,
+        "col": 52,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`resolve_system_debug` concatenates the unvalidated GraphQL `arg` argument into the shell string `'ps {}'` and executes it via `helpers.run_cmd` -> `os.popen`. There is no authentication, no allowlist and no shell escaping, so `systemDebug(arg: \"; id\")` yields arbitrary OS command execution as the application user.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.os-command-injection-system-diagnostics",
+      "path": "core/views.py",
+      "start": {
+        "line": 344,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 345,
+        "col": 38,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`resolve_system_diagnostics` passes the client-supplied `cmd` argument straight to `helpers.run_cmd` (`os.popen`). The only guard is `security.allowed_cmds`, which returns True unconditionally in the default (easy) server mode (core/security.py:33-39), and even in hard mode only checks a `startswith` prefix, so `cmd=\"echo x; id\"` still executes. This is arbitrary command execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.os-command-injection-import-paste",
+      "path": "core/views.py",
+      "start": {
+        "line": 211,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 211,
+        "col": 56,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `importPaste` mutation builds a shell command `curl --insecure {url}` from the attacker-controlled `scheme`, `host`, `port` and `path` arguments and runs it through `os.popen`. `security.strip_dangerous_characters` returns the string unchanged in the default easy mode and only strips `;` and `&` in hard mode (core/security.py:41-46), leaving backticks, `$(...)`, `|` and newlines usable for command injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.ssrf.import-paste-arbitrary-url",
+      "path": "core/views.py",
+      "start": {
+        "line": 210,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 211,
+        "col": 56,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`importPaste` fetches a fully attacker-controlled URL (scheme, host, port and path) with `curl --insecure` and returns the response body to the caller. There is no host allowlist or internal-network blocklist, so an unauthenticated client can force the server to request internal services (e.g. `http://127.0.0.1:5013/`, cloud metadata endpoints) and read the responses \u2014 a full read SSRF.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.shell-command-sink",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 28,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`run_cmd` executes its argument through `os.popen`, which runs the string in a shell. It is the shared sink for `systemDebug`, `systemDiagnostics`, `importPaste` and `systemHealth`, all of which pass request-controlled data. No argument list, quoting or escaping is used anywhere.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.path-traversal.arbitrary-file-write",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 25,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 47,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`save_file` concatenates the caller-supplied `filename` onto `WEB_UPLOADDIR` and opens it for writing with no canonicalisation (`os.path.realpath`), no confinement check and no `secure_filename` sanitisation. A filename such as `../../app.py` or `../../../../home/dvga/.bashrc` escapes the upload directory and overwrites arbitrary files with attacker-controlled content, which on this Flask app leads to remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.path-traversal.externally-controlled-upload-path",
+      "path": "core/views.py",
+      "start": {
+        "line": 185,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 186,
+        "col": 48,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `uploadPaste` mutation takes a raw `filename` argument from the GraphQL request and passes it unvalidated to `helpers.save_file`, which uses it to build the write path. The externally supplied name fully controls the destination file, with no allowlist, extension check or directory confinement, and the mutation requires no authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-73: External Control of File Name or Path"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.jwt-signature-verification-disabled",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 79,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`get_identity` decodes the JWT with `options={\"verify_signature\": False, \"verify_exp\": False}`, so the token's signature and expiry are never checked. Any client can hand-craft an unsigned token with `{\"identity\": \"admin\"}` and be treated as that user by `resolve_me`, and expired tokens remain valid forever. This is a complete authentication bypass.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.identity-from-forgeable-token",
+      "path": "core/views.py",
+      "start": {
+        "line": 283,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 296,
+        "col": 18,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`resolve_me` derives the acting user solely from the `token` argument via `get_identity`, which does not verify the signature. Because the resulting username is then used to look up and return the `User` record, an attacker submitting a forged token impersonates any account (e.g. `admin`) and reads its data without ever authenticating.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.client-asserted-identity-password-disclosure",
+      "path": "core/views.py",
+      "start": {
+        "line": 61,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 65,
+        "col": 21,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`UserObject.resolve_password` decides whether to reveal the stored password by reading `identity` out of the request's own JSON body (`info.context.json.get('identity')`). The client controls that value, so simply POSTing `{\"query\": \"...\", \"identity\": \"admin\"}` makes the resolver return every user's cleartext password. Authorization must be derived from server-side session/token state, never from request-supplied fields.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.client-controlled-security-mode-header",
+      "path": "core/views.py",
+      "start": {
+        "line": 468,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 475,
+        "col": 31,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `before_request` hook lets any unauthenticated client globally switch the server's security posture with the `X-DVGA-MODE` request header. Sending `X-DVGA-MODE: Beginner` calls `set_mode('easy')`, which disables the depth, cost, operation-name, denylist and introspection middlewares for every user (they all early-return when `is_level_easy()`), and re-enables the command allowlist bypass. A security decision affecting all clients is taken from an untrusted request header.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.cookie-controlled-graphiql-access",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 122,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 126,
+        "col": 63,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`IGQLProtectionMiddleware` gates access to the GraphiQL IDE on the value of the client-side `env` cookie (`graphiql:enable`). The cookie is set by the server without any integrity protection (core/views.py:395), so any user can simply edit it in the browser to unlock the interface. Access control must not depend on a value the client can rewrite.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.missing-auth-delete-all-pastes",
+      "path": "core/views.py",
+      "start": {
+        "line": 385,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 389,
+        "col": 35,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`resolve_delete_all_pastes` (exposed as the `deleteAllPastes` query) deletes every row in the `pastes` table with no authentication or authorization check of any kind. Any anonymous client that can reach `/graphql` can destroy all application data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.idor-edit-paste",
+      "path": "core/views.py",
+      "start": {
+        "line": 140,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 148,
+        "col": 70,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `editPaste` mutation looks up and updates a paste purely by the client-supplied `id` (`Paste.query.filter_by(id=id).update(...)`), with no authentication and no check that the paste belongs to the caller (the `owner_id` column is ignored). Any client can rewrite the title and content of any other user's paste, public or private, by iterating IDs.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.idor-delete-paste",
+      "path": "core/views.py",
+      "start": {
+        "line": 164,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 169,
+        "col": 26,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `deletePaste` mutation deletes the row matching the client-supplied `id` without authenticating the caller or constraining the delete to pastes they own. Object-level authorization is entirely absent, so any ID can be destroyed by any client.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.idor-read-private-paste",
+      "path": "core/views.py",
+      "start": {
+        "line": 324,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 330,
+        "col": 57,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`resolve_paste` returns any paste selected by the user-controlled `id` or `title`, filtering only on `burn=False`. Pastes marked `public=False` (private) and their owner, IP address and User-Agent metadata are returned to any unauthenticated caller; there is no ownership or visibility constraint on the query. The same applies to `readAndBurn` (line 357), which additionally deletes the record.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.missing-authz-users-enumeration",
+      "path": "core/views.py",
+      "start": {
+        "line": 370,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 378,
+        "col": 17,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`resolve_users` returns the whole `users` table (or any single record by user-controlled `id`) with no authentication or authorization check. Combined with the client-asserted `identity` check in `resolve_password` (line 62), this lets an anonymous caller enumerate all accounts and their cleartext passwords.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.info-disclosure.audit-log-exposed",
+      "path": "core/views.py",
+      "start": {
+        "line": 380,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 383,
+        "col": 15,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`resolve_audits` (and the `/audit` HTML route at line 426) exposes the complete audit log \u2014 every GraphQL query body previously submitted by any user \u2014 to unauthenticated callers. Since the recorded queries include other users' operations and only partially redact credentials (core/models.py:26-28), this leaks sensitive data and operational detail to anyone.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.credentials-written-to-audit-log",
+      "path": "core/models.py",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 15,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`clean_query` attempts to redact secrets from the query text stored in the `audits` table using the regexes `(?<=token:\")(.*)(?=\")` and `(?<=password:\")(.*)(?=\")`. These only match when the value immediately follows `password:\"` with no whitespace, so a normally formatted query such as `login(username: \"admin\", password: \"changeme\")` is stored verbatim. The raw credential is then persisted to the database and rendered on the publicly reachable `/audit` page (templates/audit.html:33).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.info-disclosure.stack-trace-in-graphql-errors",
+      "path": "core/view_override.py",
+      "start": {
+        "line": 47,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 55,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`format_custom_error` attaches `traceback.format_stack()`, `traceback.format_exc()` and the absolute server file path to the `extensions.exception` field of every GraphQL error response. Any client that triggers an error receives internal stack traces, source file paths and framework/version details, aiding further exploitation.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.misconfig.debug-enabled-by-default",
+      "path": "config.py",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`WEB_DEBUG` defaults to `True` when the environment variable is unset, so a deployment that forgets to set `WEB_DEBUG` runs with debug behaviour enabled. Note also that `os.environ.get` returns strings, so even `WEB_DEBUG=False` evaluates truthy \u2014 the flag can never be turned off through configuration.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.misconfig.debug-endpoint-exposed",
+      "path": "core/views.py",
+      "start": {
+        "line": 349,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 355,
+        "col": 17,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `systemDebug` diagnostic field is registered in the production schema (line 274) and runs process-listing commands on the host for any unauthenticated caller. Debug/diagnostic functionality of this kind should not be reachable in a deployed application; here it also serves as a command-injection sink.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-jwt-and-flask-secret",
+      "path": "app.py",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 39,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`SECRET_KEY` and `JWT_SECRET_KEY` are hardcoded to the literal string `'dvga'` in source. Because the JWT signing key is public knowledge, anyone can mint a validly signed access token for any identity (including `admin`), and the Flask session signing key is equally forgeable. Secrets must come from the environment or a secret store.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-weak-user-passwords",
+      "path": "setup.py",
+      "start": {
+        "line": 63,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 64,
+        "col": 89,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The database seeder creates the `admin` account with the hardcoded weak password `changeme` (via `random_password()`, line 48-50) and the `operator` account with `password123`. These credentials are committed to the repository and are guessable by any attacker.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.crypto.cleartext-password-storage",
+      "path": "core/models.py",
+      "start": {
+        "line": 14,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `User.password` column stores passwords as cleartext \u2014 `create_user` writes the raw value (line 17-22) and `Login` authenticates with `User.query.filter_by(username=username, password=password)` (core/views.py:234), a direct plaintext comparison. No hashing (bcrypt/argon2/PBKDF2) or salting is applied, so any read of the database or of the `password` GraphQL field discloses usable credentials.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-brute-force-protection-login",
+      "path": "core/views.py",
+      "start": {
+        "line": 233,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 241,
+        "col": 10,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `login` mutation performs unlimited credential checks: there is no rate limiting, throttling, exponential backoff, CAPTCHA or account lockout on this resolver, on the GraphQL view, in `before_request`, or anywhere in the request path (no rate-limiting dependency exists in requirements.txt). Combined with batching being enabled on `/graphql`, an attacker can attempt thousands of passwords per request. The same absence applies to the credential check in `resolve_system_diagnostics` (line 337).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.unauthenticated-state-reset",
+      "path": "core/views.py",
+      "start": {
+        "line": 431,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 439,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `/start_over` route is reachable by any anonymous visitor and calls `helpers.initialize()`, which shells out to `python3 setup.py` \u2014 deleting the upload directory and the entire SQLite database and re-seeding it. A critical, destructive administrative function is exposed with no authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.unauthenticated-security-control-toggle",
+      "path": "core/views.py",
+      "start": {
+        "line": 441,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 451,
+        "col": 53,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `/difficulty/<level>` route lets any unauthenticated visitor call `helpers.set_mode(level)`, which flips the global `ServerMode.hardened` flag and thereby disables or enables the query-depth, cost, operation-name, denylist, introspection and GraphiQL protections for every client of the application. A security-configuration change of global scope has no authentication or authorization check.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.missing-audit-for-security-config-change",
+      "path": "core/views.py",
+      "start": {
+        "line": 449,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 449,
+        "col": 27,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Changing the global server security mode via `/difficulty/<level>` (and via the `X-DVGA-MODE` header in `before_request`, line 468-475) produces no security audit record. Unlike the GraphQL resolvers, which all call `Audit.create_audit_entry`, these paths write no entry to the `audits` table and there is no Flask logger, `after_request` hook or other shared logging in the request path, so a state change that disables all query protections is untraceable. The same gap applies to `/start_over` (line 431).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-778: Insufficient Logging"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.stored-xss-paste-subscription-render",
+      "path": "templates/paste.html",
+      "start": {
+        "line": 65,
+        "col": 25,
+        "offset": 0
+      },
+      "end": {
+        "line": 74,
+        "col": 20,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The WebSocket subscription handler interpolates `paste.title`, `paste.content`, `paste.owner.name`, `paste.ipAddr` and `paste.userAgent` into an HTML template literal that is then parsed and inserted into the DOM by jQuery (`$(pasteHTML).prependTo(...)`). None of these attacker-controlled values are escaped, so a paste created with a payload like `<img src=x onerror=alert(1)>` in its title or content executes JavaScript in every viewer's browser \u2014 stored XSS. Note `userAgent` is taken straight from the request header (core/views.py:125), so the sink is also reachable via header injection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.stored-xss-paste-gallery-render",
+      "path": "templates/paste.html",
+      "start": {
+        "line": 132,
+        "col": 15,
+        "offset": 0
+      },
+      "end": {
+        "line": 156,
+        "col": 16,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`get_pastes()` builds the paste gallery markup by interpolating the unescaped `title`, `content`, `owner`, `ipAddr` and `userAgent` values returned from `/graphql` into a template literal passed to `$(...).append()`, which parses it as HTML. Stored paste content therefore executes as script in the browser of anyone visiting `/my_pastes` or `/public_pastes`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.dos.resource-intensive-query",
+      "path": "core/views.py",
+      "start": {
+        "line": 332,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 335,
+        "col": 37,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `systemUpdate` query calls `security.simulate_load`, which blocks in a `time.sleep(0.1)` loop for 200-500 iterations (20-50 seconds) per invocation (core/security.py:8-16). The cost middleware that would reject it is disabled in the default easy mode, and the field is unauthenticated, so a handful of concurrent requests exhaust the server's worker capacity \u2014 uncontrolled resource consumption.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.dos.graphql-batching-unlimited",
+      "path": "core/views.py",
+      "start": {
+        "line": 508,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 514,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `/graphql` endpoint is registered with `batch=True` and no limit on the number of operations per batch, no query complexity/cost cap in the default mode, and no rate limiting. A single request containing thousands of array-batched queries (or aliased/duplicated fields) multiplies server work arbitrarily, and also defeats any per-request throttling.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.dos.excessive-recursion-limit",
+      "path": "app.py",
+      "start": {
+        "line": 26,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 33,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`sys.setrecursionlimit(100000)` raises Python's stack-depth guard by three orders of magnitude specifically so that deeply nested GraphQL queries are parsed instead of rejected. Combined with the depth-check middleware being inactive in the default easy mode, a deeply recursive or circular-fragment query consumes memory and stack until the process crashes.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-674: Uncontrolled Recursion"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.misconfig.cookie-missing-httponly-secure",
+      "path": "core/views.py",
+      "start": {
+        "line": 395,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 395,
+        "col": 46,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`resp.set_cookie(\"env\", \"graphiql:disable\")` sets a cookie that is used for an access-control decision (core/middleware.py:122) without `httponly=True`, `secure=True` or `samesite`. The cookie is therefore readable and writable by client-side script and transmitted over plaintext HTTP.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without HttpOnly Flag",
+            "CWE-614: Sensitive Cookie Without Secure Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.misconfig.graphiql-interface-exposed",
+      "path": "core/views.py",
+      "start": {
+        "line": 516,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 523,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The interactive GraphiQL IDE is registered as a permanent route at `/graphiql` with `graphiql=True` and a verbose `format_error` handler. Its only gate is a client-editable cookie, so the full schema explorer and query console are effectively public \u2014 an information-disclosure and attack-surface misconfiguration for a deployed application.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.info-disclosure.introspection-enabled",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 106,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 114,
+        "col": 41,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`IntrospectionMiddleware` returns early whenever `is_level_easy()` \u2014 the default server state \u2014 so schema introspection (`__schema`) is fully available to unauthenticated clients. Even in hard mode the check only matches the field name `__schema` and misses `__type`, so introspection of individual types still succeeds. This discloses the complete API surface, including the administrative `deleteAllPastes`, `systemDebug` and `systemDiagnostics` fields.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.csrf.missing-csrf-protection-graphql",
+      "path": "core/views.py",
+      "start": {
+        "line": 508,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 514,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `/graphql` endpoint accepts state-changing mutations (`createPaste`, `editPaste`, `deletePaste`, `uploadPaste`, `importPaste`) and destructive queries (`deleteAllPastes`, `readAndBurn`) with no CSRF token, no `SameSite` cookie policy and no Origin/Referer validation, and `OverriddenView.dispatch_request` additionally reads query parameters from `request.args` on GET requests. A cross-origin page can therefore trigger these operations on behalf of a visiting user.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

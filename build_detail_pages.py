@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from build_site import SCANNER_META, SCANNER_NOTES, SCANNER_PROVIDERS, SCANNER_URLS, inject_analytics  # slug -> (name, cat, ver); slug -> note html
+from build_site import SCANNER_META, SCANNER_NOTES, SCANNER_PROVIDERS, SCANNER_URLS, SITE_BASE_URL, inject_analytics  # slug -> (name, cat, ver); slug -> note html
 
 ROOT = Path(__file__).resolve().parent
 REPORTS = ROOT / "reports"
@@ -26,6 +26,7 @@ SHELL_HEAD = """<!DOCTYPE html>
 <title>{title} — RealVuln</title>
 <meta name="description" content="RealVuln scanner deep-dive for {title}: F3/F2, recall, precision, cost, per-repository detection, severity, CWE families, and operational metrics." />
 <link rel="stylesheet" href="../styles.css" />
+<link rel="canonical" href="{canonical}" />
 </head>
 <body>
 
@@ -140,7 +141,19 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
     rows.sort(key=lambda r: r["f2"], reverse=True)
     max_total = max((r["tp"] + r["fp"] + r["fn"] for r in rows), default=1) or 1
 
-    out = [inject_analytics(SHELL_HEAD.format(title=name, ver=VER))]
+    # Self-canonical. These pages are generated here rather than copied from
+    # site/, so build_site's inject_canonical never sees them — without this the
+    # frozen /v/<version>/scanners/ copies would point at a live page that makes
+    # no canonical claim of its own.
+    out = [
+        inject_analytics(
+            SHELL_HEAD.format(
+                title=name,
+                ver=VER,
+                canonical=f"{SITE_BASE_URL}/scanners/{slug}.html",
+            )
+        )
+    ]
 
     # hero
     out.append('<section class="wrap page-hero">')

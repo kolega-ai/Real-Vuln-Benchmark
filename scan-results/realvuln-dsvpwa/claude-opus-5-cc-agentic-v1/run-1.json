@@ -1,0 +1,931 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "security.injection.sql-injection-user-id",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 39,
+        "col": 13,
+        "offset": 1100
+      },
+      "end": {
+        "line": 39,
+        "col": 114,
+        "offset": 1201
+      },
+      "extra": {
+        "message": "The `id` query parameter from `/users?id=` (read at line 37 from `handler.params`) is concatenated directly into a SQL statement executed against the SQLite connection. No parameterisation, type check or escaping is applied, so an attacker can inject arbitrary SQL (e.g. `?id=1 UNION SELECT ...`) to read the whole `users` table including password and session columns.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.sql-injection-login",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 289,
+        "col": 21,
+        "offset": 8600
+      },
+      "end": {
+        "line": 289,
+        "col": 121,
+        "offset": 8700
+      },
+      "extra": {
+        "message": "The login handler builds the authentication query by string concatenation of the `password` request parameter (and `username`) into `SELECT * FROM users WHERE username='...' AND password='...'`. `password` is not sanitised at all (only `username` is passed through `re.sub(r\"[^\\w]\", '', ...)`), so a payload such as `password=' OR '1'='1` authenticates as any user \u2014 a full authentication bypass via SQL injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.injection.command-injection-diag",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 165,
+        "col": 26,
+        "offset": 4900
+      },
+      "end": {
+        "line": 170,
+        "col": 18,
+        "offset": 5100
+      },
+      "extra": {
+        "message": "The `/diag` endpoint passes the attacker-controlled `domain` query parameter (line 164) into `subprocess.check_output(..., shell=True)` after simple string joining with `host`/`nslookup`. Shell metacharacters are not filtered, so `?domain=x;id` or `?domain=x|curl ...` executes arbitrary OS commands as the server user.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.backdoor.command-injection-http-method",
+      "path": "dsvpwa/handlers.py",
+      "start": {
+        "line": 183,
+        "col": 23,
+        "offset": 5300
+      },
+      "end": {
+        "line": 188,
+        "col": 14,
+        "offset": 5500
+      },
+      "extra": {
+        "message": "The undocumented `BDR` HTTP method handler executes the request path itself as a shell command: `subprocess.check_output(self.path[1:], shell=True)`. Any unauthenticated client that sends `BDR /id;cat%20/etc/passwd HTTP/1.1` obtains remote command execution. There is no authentication or authorisation on this method, only a `risk` level check.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.debug.hidden-backdoor-method",
+      "path": "dsvpwa/handlers.py",
+      "start": {
+        "line": 177,
+        "col": 5,
+        "offset": 5150
+      },
+      "end": {
+        "line": 194,
+        "col": 26,
+        "offset": 5600
+      },
+      "extra": {
+        "message": "`do_BDR` is a hidden diagnostic/backdoor HTTP verb (documented in CHANGELOG.md as 'Backdoor as custom HTTP method') that is registered unconditionally in the production request handler and reachable by any client. Active debug/diagnostic functionality left in the deployed application provides an undocumented administrative channel with no authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.deserialization.pickle-loads-user-input",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 199,
+        "col": 23,
+        "offset": 5900
+      },
+      "end": {
+        "line": 199,
+        "col": 82,
+        "offset": 5960
+      },
+      "extra": {
+        "message": "The `/extract` endpoint base64-decodes the `object` query parameter and passes it straight to `pickle.loads`. Python pickle invokes arbitrary callables during unpickling (the class `RCE.__reduce__` at lines 178-181 demonstrates it with `os.system`), so any user can achieve remote code execution by supplying a crafted serialised payload.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.path-traversal.docs-arbitrary-file-read",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 211,
+        "col": 24,
+        "offset": 6200
+      },
+      "end": {
+        "line": 211,
+        "col": 60,
+        "offset": 6236
+      },
+      "extra": {
+        "message": "The `/docs` endpoint opens the file named by the `path` query parameter using `open(os.path.abspath(path), 'rb')`. `os.path.abspath` only normalises the path \u2014 it does not confine it to the `docs/` directory, and there is no allowlist check against the three intended documents. `?path=../../etc/passwd` or `?path=/etc/shadow` reads arbitrary files, whose contents are returned in the response.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.ssrf.docs-url-fetch",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 213,
+        "col": 24,
+        "offset": 6300
+      },
+      "end": {
+        "line": 213,
+        "col": 55,
+        "offset": 6331
+      },
+      "extra": {
+        "message": "If the `path` parameter of `/docs` contains '://', it is fetched with `urllib.request.urlopen(path)` with no scheme allowlist, host validation or redirect restriction. An attacker can force the server to issue requests to internal addresses (`http://169.254.169.254/`, `http://127.0.0.1:.../`) or to non-HTTP schemes such as `file://` and `ftp://`, and the response body is echoed back \u2014 a fully readable server-side request forgery.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.path-traversal.static-handler",
+      "path": "dsvpwa/handlers.py",
+      "start": {
+        "line": 116,
+        "col": 17,
+        "offset": 3300
+      },
+      "end": {
+        "line": 118,
+        "col": 62,
+        "offset": 3450
+      },
+      "extra": {
+        "message": "`StaticHandler.find` opens `'./{}'.format(path)` where `path` is the raw request path taken from `self.path` in `do_GET` (line 211) with only the query string stripped. There is no normalisation, no `..` rejection and no confinement to the `static/` directory, so a request such as `GET /../../../../etc/passwd` or `GET /db/users.xml` (which is not under `static/`) serves arbitrary files from the filesystem, including the plaintext credential store and `ssl/key.pem`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.reflected-msg",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 71,
+        "col": 9,
+        "offset": 1750
+      },
+      "end": {
+        "line": 77,
+        "col": 23,
+        "offset": 1900
+      },
+      "extra": {
+        "message": "The `msg` query parameter of `/post` is returned verbatim as the page `content` and is interpolated unescaped into `templates/post.html` at the `{content}` placeholder (TemplateHandler.get_content, dsvpwa/handlers.py:82). `?msg=<script>alert(1)</script>` executes attacker script in the victim's browser; the response also disables browser XSS filtering and sets a permissive CSP.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.stored-guestbook",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 97,
+        "col": 21,
+        "offset": 2500
+      },
+      "end": {
+        "line": 98,
+        "col": 62,
+        "offset": 2600
+      },
+      "extra": {
+        "message": "Comments submitted to `/guestbook?comment=` are persisted (line 88) and later rendered into the HTML table with `'<td>{}</td>'.format(column)` without any HTML escaping. Any visitor to the guestbook page executes script stored by a previous attacker \u2014 persistent cross-site scripting.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.stored-profile-fields",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 341,
+        "col": 29,
+        "offset": 10600
+      },
+      "end": {
+        "line": 347,
+        "col": 60,
+        "offset": 10800
+      },
+      "extra": {
+        "message": "The `email` value stored by `/settings` (line 324) and the first/last name columns are interpolated unescaped into HTML attributes (`value=\"{}\"`) and into the profile page (`SessionHijacking.run`, lines 256-261). Storing `\"><script>alert(1)</script>` as the email address yields stored XSS that fires whenever the profile or settings page is rendered.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.sql-error-message-reflected",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 41,
+        "col": 13,
+        "offset": 1250
+      },
+      "end": {
+        "line": 41,
+        "col": 22,
+        "offset": 1259
+      },
+      "extra": {
+        "message": "When the injected SQL is malformed the raw `sqlite3.OperationalError` object is returned as page content and rendered unescaped. This both leaks internal database error details (schema names, syntax context, query fragments) to the client, aiding SQL-injection exploitation, and reflects attacker-controlled input from the failed query back into the HTML page.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.error-disclosure.login-sql-error",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 291,
+        "col": 21,
+        "offset": 8750
+      },
+      "end": {
+        "line": 291,
+        "col": 63,
+        "offset": 8792
+      },
+      "extra": {
+        "message": "The login handler formats the database exception message straight into the response alert box (`message=e`). Failed authentication attempts therefore return internal SQL error text to an unauthenticated attacker, which turns the injection at line 289 into a fully error-based (verbose) SQL injection oracle.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.error-disclosure.exception-to-client",
+      "path": "dsvpwa/handlers.py",
+      "start": {
+        "line": 216,
+        "col": 9,
+        "offset": 6600
+      },
+      "end": {
+        "line": 224,
+        "col": 42,
+        "offset": 6800
+      },
+      "extra": {
+        "message": "Any exception raised while producing the response body is stringified and sent to the client as the HTTP error message (`self.send_error(code, content)`). Internal exception text \u2014 including filesystem paths from failed `open()` calls in the static/template handlers \u2014 is disclosed to unauthenticated users.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.dom-based-location-hash",
+      "path": "static/js/custom.js",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 180
+      },
+      "end": {
+        "line": 9,
+        "col": 150,
+        "offset": 400
+      },
+      "extra": {
+        "message": "`custom.js` \u2014 included by every template \u2014 reads `document.location.hash` and writes the URL-decoded fragment directly into the page with `document.write` without encoding. A link such as `/home#lang=<img src=x onerror=alert(1)>` executes attacker-controlled script in the victim's browser (DOM-based XSS).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.redirect.open-redirect-jump",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 118,
+        "col": 9,
+        "offset": 3050
+      },
+      "end": {
+        "line": 125,
+        "col": 30,
+        "offset": 3250
+      },
+      "extra": {
+        "message": "The `/jump` endpoint takes the `path` query parameter and interpolates it unvalidated into a client-side `window.location.replace('{path}')` call. `?path=https://evil.example/` redirects the victim off-site (phishing), and because the value is injected into a JavaScript string literal with no escaping, `?path=');alert(1)//` also breaks out of the string and executes arbitrary script.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.redirect.open-redirect-home",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 233,
+        "col": 9,
+        "offset": 7000
+      },
+      "end": {
+        "line": 240,
+        "col": 30,
+        "offset": 7200
+      },
+      "extra": {
+        "message": "`SessionFixation.run` (route `/home`) interpolates the unvalidated `path` query parameter into `window.location = '{path}'`. An attacker-supplied absolute URL redirects the victim to an external site, and a single quote in the value escapes the JavaScript string literal, allowing script injection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.session.session-fixation",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 229,
+        "col": 9,
+        "offset": 6900
+      },
+      "end": {
+        "line": 231,
+        "col": 46,
+        "offset": 6990
+      },
+      "extra": {
+        "message": "`/home?session=<value>` writes an attacker-chosen value straight into the `SESSIONID` cookie, which is then echoed back as a `Set-Cookie` header (dsvpwa/handlers.py:232-234). The session identifier is never regenerated on successful authentication \u2014 `AuthBypass.run` binds whatever session value the client already presented to the authenticated user (line 297). An attacker can therefore fix a victim's session ID before login and reuse it afterwards to hijack the account.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.crypto.insecure-session-token-prng",
+      "path": "dsvpwa/handlers.py",
+      "start": {
+        "line": 202,
+        "col": 21,
+        "offset": 6100
+      },
+      "end": {
+        "line": 202,
+        "col": 92,
+        "offset": 6171
+      },
+      "extra": {
+        "message": "Session tokens are generated with `random.sample()` from the `random` module, which is a deterministic Mersenne Twister PRNG seeded from system time and is not cryptographically secure. `random.sample` also draws each character without replacement, further shrinking the keyspace. Observing a few tokens allows an attacker to recover PRNG state and predict other users' session identifiers; `secrets`/`os.urandom` is required here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.session.shared-cookie-class-attribute",
+      "path": "dsvpwa/handlers.py",
+      "start": {
+        "line": 141,
+        "col": 5,
+        "offset": 4100
+      },
+      "end": {
+        "line": 141,
+        "col": 44,
+        "offset": 4139
+      },
+      "extra": {
+        "message": "`cookie` is a class-level `SimpleCookie` on `VulnHTTPRequestHandler`, so it is shared by every request across every thread of the `ThreadingHTTPServer`. `do_GET` loads the requesting client's `Cookie` header into this shared object (line 199) and then writes all of its morsels back as `Set-Cookie` (lines 232-234), so one user's `SESSIONID` can be leaked to, and used by, a different user's session.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-488: Exposure of Data Element to Wrong Session"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.cookie.missing-httponly-secure-samesite",
+      "path": "dsvpwa/handlers.py",
+      "start": {
+        "line": 232,
+        "col": 9,
+        "offset": 7100
+      },
+      "end": {
+        "line": 234,
+        "col": 62,
+        "offset": 7250
+      },
+      "extra": {
+        "message": "The session cookie is emitted with only the `path` attribute set \u2014 no `HttpOnly`, no `Secure` and no `SameSite`. The `SESSIONID` is therefore readable by JavaScript (directly weaponising the reflected, stored and DOM XSS sinks in this application into session theft), transmitted in cleartext over the default HTTP listener, and attached to cross-site requests, enabling the CSRF issues on `/settings` and `/danger`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.headers.xss-protection-disabled",
+      "path": "dsvpwa/handlers.py",
+      "start": {
+        "line": 237,
+        "col": 9,
+        "offset": 7300
+      },
+      "end": {
+        "line": 238,
+        "col": 82,
+        "offset": 7420
+      },
+      "extra": {
+        "message": "Every response explicitly disables the browser XSS auditor (`X-XSS-Protection: 0`) and sets a maximally permissive Content-Security-Policy (`default-src * 'unsafe-inline'`) that allows inline script and script from any origin. These headers remove the last-resort browser mitigations for the XSS sinks in this application. No `X-Frame-Options`/`frame-ancestors` directive is sent either.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.clickjacking.missing-frame-ancestors",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 366,
+        "col": 17,
+        "offset": 11400
+      },
+      "end": {
+        "line": 368,
+        "col": 44,
+        "offset": 11520
+      },
+      "extra": {
+        "message": "The irreversible account-deletion action at `/danger?delete=1` is performed on a plain GET with no confirmation token, while the server sends no `X-Frame-Options` header and a CSP without `frame-ancestors` (dsvpwa/handlers.py:238). An attacker can frame `/danger` invisibly and trick an authenticated victim into clicking the Delete button (clickjacking), or simply trigger the deletion cross-site via an `<img src=\"/danger?delete=1\">` tag.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendered UI Layers or Frames"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.csrf.state-changing-get-no-token",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 322,
+        "col": 17,
+        "offset": 9900
+      },
+      "end": {
+        "line": 326,
+        "col": 63,
+        "offset": 10100
+      },
+      "extra": {
+        "message": "`/settings?email=` performs a persistent update of the authenticated user's e-mail address on a GET request, authenticated solely by the ambient `SESSIONID` cookie. There is no CSRF token, no `SameSite` cookie attribute and no origin/referer check, so any third-party page can silently change a logged-in victim's e-mail address (an account-takeover primitive) with a single `<img>` tag. The account deletion at `/danger?delete=1` (line 367) has the same defect.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.missing-authentication-users-listing",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 33,
+        "col": 5,
+        "offset": 1000
+      },
+      "end": {
+        "line": 47,
+        "col": 90,
+        "offset": 1400
+      },
+      "extra": {
+        "message": "The `/users` endpoint performs no authentication or authorisation check at all before querying the `users` table, and the projection deliberately includes the `session` column, which is rendered into the response table (line 47). Any unauthenticated visitor can enumerate every user's identity data and, critically, read their live session tokens and replay them against `/profile`, `/settings` and `/danger` to take over accounts.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.idor-user-record",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 37,
+        "col": 9,
+        "offset": 1050
+      },
+      "end": {
+        "line": 39,
+        "col": 114,
+        "offset": 1201
+      },
+      "extra": {
+        "message": "The object identifier `id` supplied by the client is used as the sole selector for the authoritative read of a user record; the query is not constrained to the requester's own identity (the `SESSIONID` cookie is never consulted on this route). Incrementing `?id=` walks the entire user table, a direct broken object-level authorization / IDOR defect.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.execution-after-redirect-admin",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 141,
+        "col": 9,
+        "offset": 4200
+      },
+      "end": {
+        "line": 144,
+        "col": 23,
+        "offset": 4330
+      },
+      "extra": {
+        "message": "The `/admin` route builds the privileged administration menu ('Manage Users', 'Update Database Settings') into the response body *first* and only then appends a client-side `window.location = '/login'` redirect for unauthenticated visitors. The protected content is still transmitted in the HTTP response, so an attacker who inspects the raw body (curl, proxy, JS disabled) bypasses the control entirely. The check itself is also merely `if not cookie` \u2014 the presence of any cookie, not a validated session, is treated as authorisation, and no role/privilege check is performed.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.hardcoded-backdoor-credentials",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 285,
+        "col": 13,
+        "offset": 8400
+      },
+      "end": {
+        "line": 286,
+        "col": 61,
+        "offset": 8480
+      },
+      "extra": {
+        "message": "The login handler contains a hardcoded credential pair (`dsvpwa`/`dsvpwa`) that short-circuits the database lookup and grants an authenticated session for a synthetic user. This backdoor account exists in every deployment, cannot be disabled through configuration, and is bound to the caller's session ID at line 297.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-brute-force-protection",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 281,
+        "col": 9,
+        "offset": 8300
+      },
+      "end": {
+        "line": 301,
+        "col": 74,
+        "offset": 9100
+      },
+      "extra": {
+        "message": "The `/login` handler applies no rate limiting, throttling, CAPTCHA, incremental delay or account lockout, and no such control exists anywhere else in the request path (`VulnHTTPRequestHandler.do_GET` in dsvpwa/handlers.py:196-241 dispatches straight to the attack handler with no middleware). Credentials are additionally accepted over GET, so an attacker can brute-force passwords with unlimited parallel requests against the threaded server.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.missing-auth-failure-audit",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 299,
+        "col": 13,
+        "offset": 9000
+      },
+      "end": {
+        "line": 301,
+        "col": 74,
+        "offset": 9100
+      },
+      "extra": {
+        "message": "Failed and successful authentications, the use of the hardcoded backdoor account, session binding (line 297), profile e-mail changes (line 324) and account deletion (line 367) produce no security audit record. The only logging in the request path is the generic access line written to stdout by `VulnHTTPRequestHandler.log_request` (dsvpwa/handlers.py:153-162), which records no authentication outcome or user identity, so credential attacks and privileged state changes cannot be detected or investigated.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-778: Insufficient Logging"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.credentials-in-log",
+      "path": "dsvpwa/handlers.py",
+      "start": {
+        "line": 156,
+        "col": 9,
+        "offset": 4600
+      },
+      "end": {
+        "line": 162,
+        "col": 10,
+        "offset": 4800
+      },
+      "extra": {
+        "message": "`log_request` writes the full request line (`self.requestline`) to stdout for every request. Because the login form submits via GET (`templates/login.html:12`), every authentication attempt logs the cleartext username and password (e.g. `\"GET /login?username=admin&password=Y3RFgwZP$v6v#D HTTP/1.1\"`), and `/home?session=` logs session identifiers. Credentials are thereby persisted into server logs and container output.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.plaintext-password-storage",
+      "path": "db/users.xml",
+      "start": {
+        "line": 6,
+        "col": 9,
+        "offset": 120
+      },
+      "end": {
+        "line": 6,
+        "col": 40,
+        "offset": 151
+      },
+      "extra": {
+        "message": "User passwords are stored in cleartext in the checked-in `db/users.xml` credential store (including weak values such as `guest`, `babygirl` and `123456`), loaded verbatim into the `users` table (dsvpwa/server.py:9-46) and compared as plaintext during login (dsvpwa/attacks.py:289) \u2014 no hashing or salting is applied. Any file-read primitive (the path traversal in dsvpwa/handlers.py:116 or dsvpwa/attacks.py:211) or SQL injection immediately yields usable credentials for every account.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.crypto.private-key-in-repository",
+      "path": "ssl/key.pem",
+      "start": {
+        "line": 1,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 1,
+        "offset": 1600
+      },
+      "extra": {
+        "message": "The TLS private key used by the `--ssl` listener is committed to the repository (and copied into the Docker image by `COPY . .` in the Dockerfile) alongside its certificate. A hardcoded, publicly distributed private key means every deployment shares the same key material, so any transport encryption it provides can be trivially decrypted or impersonated. The key is also served to clients via the static-file path traversal (dsvpwa/handlers.py:116).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.tls.weakened-ssl-context",
+      "path": "dsvpwa.py",
+      "start": {
+        "line": 37,
+        "col": 13,
+        "offset": 1000
+      },
+      "end": {
+        "line": 39,
+        "col": 58,
+        "offset": 1150
+      },
+      "extra": {
+        "message": "The TLS context is deliberately weakened by clearing protective options: `~ssl.OP_NO_SSLv3` re-enables the broken SSLv3 protocol (POODLE), `~ssl.OP_NO_COMPRESSION` re-enables TLS compression (CRIME), and `~ssl.OP_CIPHER_SERVER_PREFERENCE` lets the client dictate cipher selection, permitting downgrade to weak ciphers. No minimum protocol version or cipher allowlist is configured.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-757: Selection of Less-Secure Algorithm During Negotiation ('Algorithm Downgrade')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.transport.cleartext-by-default",
+      "path": "dsvpwa.py",
+      "start": {
+        "line": 23,
+        "col": 5,
+        "offset": 700
+      },
+      "end": {
+        "line": 24,
+        "col": 56,
+        "offset": 800
+      },
+      "extra": {
+        "message": "Encryption is off by default (`--ssl` defaults to false) and the Docker entrypoint starts the server with `--host 0.0.0.0` and no `--ssl` flag (Dockerfile:22). Session cookies and the GET-submitted login credentials are therefore transmitted in cleartext over the network, where they can be captured by any on-path observer.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-319: Cleartext Transmission of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.authz.session-token-only-authentication",
+      "path": "dsvpwa/attacks.py",
+      "start": {
+        "line": 250,
+        "col": 9,
+        "offset": 7500
+      },
+      "end": {
+        "line": 261,
+        "col": 60,
+        "offset": 7900
+      },
+      "extra": {
+        "message": "Identity on `/profile`, `/settings` and `/danger` is established purely from the client-supplied `SESSIONID` cookie value looked up in the `users.session` column, with no server-side session store, no expiry, no binding to client properties and no invalidation. Combined with the weak token PRNG (dsvpwa/handlers.py:202) and the unauthenticated disclosure of every user's session token by `/users` (line 39), an attacker can assert any user's identity by replaying a session value \u2014 the authorization decision is entirely client-asserted.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

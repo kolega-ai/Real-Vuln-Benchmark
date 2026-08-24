@@ -1,0 +1,458 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "security.injection.sql-injection-string-format",
+      "path": "sqli/dao/student.py",
+      "start": {
+        "line": 42,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 43,
+        "col": 49,
+        "offset": 0
+      },
+      "extra": {
+        "message": "SQL injection. `Student.create()` builds the INSERT statement with Python `%` string interpolation: `q = (\"INSERT INTO students (name) \" \"VALUES ('%(name)s')\" % {'name': name})`, then executes the already-formatted string via `cur.execute(q)` with no parameters (line 45). `name` is fully attacker-controlled: `sqli/views.py:57` passes `data['name']` straight from the unauthenticated `POST /students/` form body. A value such as `x'); DROP TABLE marks; --` or `x' || (SELECT pwd_hash FROM users WHERE is_admin) || '` breaks out of the quoted literal and injects arbitrary SQL, allowing data exfiltration (including admin password hashes) and destruction. All sibling DAO methods correctly use psycopg2 bound parameters (`%s` / `%(name)s` passed as the second argument), which is the fix here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.missing-authorization-evaluate",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 134,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 153,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Missing authorization on a privileged operation. The `evaluate` handler, routed at `POST /students/{student_id}/evaluate/{course_id}` (sqli/routes.py:21-23), writes a student grade via `Mark.create()` (line 151) without any authentication or authorization check \u2014 it carries no `@authorize(ensure_admin=True)` decorator and never calls `get_auth_user()`. The admin restriction exists only in the UI: `sqli/templates/course.jinja2:41` hides the evaluation form behind `{% if auth_user.is_admin %}`. Any unauthenticated remote user can POST directly to the URL and assign arbitrary grades (0-5) to any student in any course. The `authorize()` helper in sqli/utils/auth.py:12 is applied only to `logout`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.missing-authentication-course-create",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 86,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 90,
+        "col": 49,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Missing authentication/authorization on a state-changing endpoint. `courses` handles `POST /courses/` (sqli/routes.py:18) and inserts a new course from `data['title']` and `data['description']` with no identity or role check. The intended control is client-side only: `sqli/templates/courses.jinja2:25` renders the creation form only `{% if auth_user and auth_user.is_admin %}`, but the handler enforces nothing, so any anonymous request creates courses. Input is also never validated against `COURSE_SCHEMA` (sqli/schema/forms.py:16), unlike `evaluate`, so unbounded title/description values are accepted.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.missing-authentication-student-create",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 54,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 57,
+        "col": 49,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Missing authentication on a state-changing endpoint. `students` handles `POST /students/` (sqli/routes.py:14) and calls `Student.create(conn, data['name'])` with no authentication check, while `sqli/templates/students.jinja2:21` only shows the form `{% if auth_user %}`. Anonymous users can create arbitrary student records; because `Student.create` interpolates the name into SQL (sqli/dao/student.py:42), this unauthenticated route is also the entry point for the SQL injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.jinja2-autoescape-disabled",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 33,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 35,
+        "col": 33,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Jinja2 is configured with `autoescape=False` for the entire application, so every template expression renders raw HTML unless it explicitly applies `| e`. Most templates do not: `sqli/templates/course.jinja2:22` renders `{{ review.review_text }}`, `course.jinja2:14-15` renders `{{ course.title }}` / `{{ course.description }}`, and `students.jinja2:16` renders `{{ name }}`. Combined with the unauthenticated write endpoints, an attacker stores `<script>` in a course review (`POST /courses/{id}/review`, sqli/views.py:129) or a student name and it executes for every visitor of the course/student listing \u2014 stored XSS leading to session theft (aggravated by the non-HttpOnly session cookie).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.xss.stored-xss-review-text",
+      "path": "sqli/templates/course.jinja2",
+      "start": {
+        "line": 22,
+        "col": 21,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 46,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Stored XSS sink. `{{ review.review_text }}` is emitted without the `| e` filter into the course page, and application-wide autoescaping is disabled (sqli/app.py:35). The value originates from unauthenticated, unvalidated user input: `sqli/views.py:121` reads `data.get('review_text')` from `POST /courses/{course_id}/review` and stores it verbatim via `Review.create` (sqli/views.py:129) without applying `REVIEW_SCHEMA`. Any HTML/JavaScript submitted as a review executes in the browser of every user viewing that course.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.csrf.protection-disabled",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 23,
+        "col": 11,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "CSRF protection is disabled. The middleware chain registers only `session_middleware` and `error_middleware`; `csrf_middleware` is commented out on line 27. The CSRF machinery exists but is inert \u2014 `sqli/utils/jinja2.py:8` still generates `_csrf_token` and templates embed it (e.g. sqli/templates/students.jinja2:36, courses.jinja2:40, review.jinja2:33, base.jinja2:29), yet no request path ever compares the submitted token to the session value (the check in sqli/middlewares.py:26-38 is never installed). Every POST route \u2014 login, student/course creation, review, evaluate, logout \u2014 is therefore forgeable cross-site.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.cookie.session-cookie-missing-httponly",
+      "path": "sqli/middlewares.py",
+      "start": {
+        "line": 20,
+        "col": 15,
+        "offset": 0
+      },
+      "end": {
+        "line": 20,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The session cookie is created with `RedisStorage(app['redis'], httponly=False)`, explicitly turning off the HttpOnly flag, so client-side JavaScript can read the session identifier via `document.cookie`. `secure=True` is likewise not set, so the cookie is also transmitted over plaintext HTTP. Together with the stored XSS above, this makes full session hijacking (including of the `superadmin` account) trivial.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.crypto.weak-password-hash-md5",
+      "path": "sqli/dao/user.py",
+      "start": {
+        "line": 40,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 41,
+        "col": 71,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Passwords are verified against an unsalted single-round MD5 digest: `return self.pwd_hash == md5(password.encode('utf-8')).hexdigest()` (import at line 1). MD5 is fast and broken for password storage \u2014 stolen `users.pwd_hash` values are recoverable instantly by rainbow tables/GPU cracking, and identical passwords produce identical hashes across accounts. The stored fixtures confirm the scheme (`migrations/001-fixtures.sql:10-13` uses `md5('superadmin')`). A password KDF such as bcrypt/scrypt/argon2 with a per-user salt is required. The comparison is also non-constant-time.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.misconfiguration.debug-mode-enabled",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 23,
+        "col": 11,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 20,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Active debug functionality. The aiohttp `Application` is constructed with a hardcoded `debug=True` with no environment/config gate, so debug behaviour is on in every deployment (the app is launched this way by run.py:13 and by the container command in docker-compose.yml:23). Debug mode enables verbose internal warnings and developer-oriented diagnostics; `run.py:11` compounds it with `logging.basicConfig(level=logging.DEBUG)`, which emits framework and query-level detail to logs. Debug must be driven by configuration and default to off.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.information-disclosure.exception-details-in-response",
+      "path": "sqli/templates/errors/50x.jinja2",
+      "start": {
+        "line": 6,
+        "col": 10,
+        "offset": 0
+      },
+      "end": {
+        "line": 6,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 5xx error template renders `<pre>{{ error.__dict__ }}</pre>`, dumping the raw attribute dictionary of the server-side exception object to the client. This handler is wired to every status from 500-599 by `error_middleware` (sqli/middlewares.py:68-78), and autoescaping is off, so internal state \u2014 exception messages, database driver errors including failing SQL fragments, file paths and object internals \u2014 is disclosed to unauthenticated attackers. This directly assists exploitation of the SQL injection by turning it into an error-based oracle.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.auth.missing-brute-force-protection",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 33,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 45,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The login handler (`POST /`) performs an unlimited number of credential checks: it looks up `User.get_by_username` and calls `check_password` with no rate limiting, throttling, account lockout, CAPTCHA, or failed-attempt counter. There is no such control anywhere in the request path either \u2014 the only middlewares are `session_middleware` and `error_middleware` (sqli/app.py:25-29), and no reverse proxy/gateway config exists in the repo. Redis is already available (sqli/services/redis.py) but is used solely for session storage. Combined with fast MD5 hashing and known fixture usernames, credentials can be brute-forced at full request rate.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.logging.missing-security-event-logging",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 41,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 45,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Insufficient logging of security-relevant events. A failed login only appends a UI string (`errors.append('Invalid username or password')`) and successful login only sets `session['user_id']` \u2014 neither produces an audit record, and the module-level `log` created at sqli/views.py:19 is never called anywhere in the file. No shared middleware supplies it: `session_middleware` and `error_middleware` (sqli/middlewares.py) log nothing security-related, and the only logging call in the codebase is in the disabled `csrf_middleware` (line 33). Authentication failures/successes, authorization denials raised by `authorize()` (sqli/utils/auth.py:18-20), and state changes such as grade creation and course/student creation are therefore untraceable, so credential-stuffing and abuse of the unauthenticated write endpoints cannot be detected or investigated.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-778: Insufficient Logging"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.missing-authentication-sensitive-data",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 63,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 80,
+        "col": 50,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `student` handler (`GET /students/{id}`, sqli/routes.py:15) returns a named individual's full academic record \u2014 every mark, its value and timestamp per course (lines 71-79) \u2014 with no authentication or authorization whatsoever. The object id comes straight from `request.match_info['id']` and is used to read any student's data; no ownership, role or scope constraint is applied. The same applies to `GET /courses/{id}` (line 96), which additionally enumerates all students. Any anonymous visitor can walk sequential ids to harvest the entire student and grade database.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.session.missing-session-fixation-protection",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 41,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 43,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Session fixation. On successful authentication the handler writes `session['user_id'] = user.id` into the pre-existing session without first invalidating it (`session.invalidate()`) or otherwise forcing a new session identifier. A session cookie is already established for anonymous visitors before login \u2014 `index` writes `session['last_visited']` on line 29 and `csrf_processor` writes `_csrf_token` (sqli/utils/jinja2.py:13) on every render \u2014 so an attacker who fixes a victim's session cookie value (easy here, since the cookie is not HttpOnly) retains a valid authenticated session after the victim logs in, inheriting their privileges.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.access-control.missing-authentication-review-create",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 119,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 129,
+        "col": 58,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`POST /courses/{course_id}/review` (sqli/routes.py:28-30) stores content attributable to no one: the handler never calls `get_auth_user()` and carries no `@authorize()` decorator, so unauthenticated clients can persist arbitrary review text to any course. The text is also stored without applying `REVIEW_SCHEMA` (sqli/schema/forms.py:8) \u2014 only a truthiness check on line 122 \u2014 so length is unbounded, and no author identity is recorded with the row (migrations/000-init-schema.sql:38-43 has no author column). This is the injection vector for the stored XSS and enables unbounded anonymous content flooding.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-credentials",
+      "path": "config/dev.yaml",
+      "start": {
+        "line": 2,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 3,
+        "col": 21,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Hardcoded database credentials (`user: postgres`, `password: postgres`) are committed in the configuration file that the application loads by default (`default_config='./config/dev.yaml'`, sqli/app.py:18) and that is baked into the production image (`ADD ./config /app/config`, Dockerfile.app:20). The credentials are interpolated into the DSN at sqli/services/db.py:15-18. Because docker-compose.yml:8-9 also publishes Postgres on host port 5432, these default credentials are directly reachable. Secrets should come from the environment or a secret store, never from a checked-in file.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "security.secrets.hardcoded-default-admin-credentials",
+      "path": "migrations/001-fixtures.sql",
+      "start": {
+        "line": 10,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 46,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The schema bootstrap seeds accounts with well-known hardcoded passwords, including an administrator: `('Super', NULL, 'Admin', 'superadmin', md5('superadmin'), TRUE)` plus `md5('password')` and `md5('spidey')` for regular users. These migrations run automatically on database initialisation (`COPY ./migrations/* /docker-entrypoint-initdb.d/`, Dockerfile.db:4), so every deployment starts with a guessable admin credential and no forced password change.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}
