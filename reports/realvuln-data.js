@@ -31,16 +31,17 @@
     { name: "Minimax M2.7", slug: "minimax-m2.7-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://www.minimax.io/models/text/m27", repos: 61, f2: 33.9, f2s: 31.6, f3: 32.0, f3s: 29.7, rec: 0.303, recs: 0.28, tp: 533, fp: 293, prec: 0.645, cost: 3, cpv: 1.41, est: false, sd: 16.2 },
     { name: "Gemma 4 31B", slug: "gemma4-31b-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://ai.google.dev/gemma", repos: 66, f2: 27.6, f2s: 27.6, f3: 25.4, f3s: 25.4, rec: 0.235, recs: 0.235, tp: 448, fp: 48, prec: 0.903, cost: null, cpv: null, est: false, sd: null },
     { name: "Ornith 1.0 35B", slug: "ornith-q3-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://huggingface.co/OrnithAI", repos: 58, f2: 28.2, f2s: 24.9, f3: 26.6, f3s: 23.3, rec: 0.252, recs: 0.22, tp: 418, fp: 362, prec: 0.536, cost: null, cpv: null, est: false, sd: null },
+    { name: "Rowan", slug: "rowan", cat: "rule", ver: "0.2.0", url: "https://hedgerow.dev", repos: 64, f2: 23.0, f2s: 22.7, f3: 23.4, f3s: 23.0, rec: 0.238, recs: 0.234, tp: 445, fp: 1737, prec: 0.204, cost: null, cpv: null, est: false, sd: null },
     { name: "SonarQube", slug: "sonarqube", cat: "rule", ver: "community", url: "https://www.sonarsource.com/products/sonarqube/", repos: 66, f2: 14.5, f2s: 14.5, f3: 14.4, f3s: 14.4, rec: 0.144, recs: 0.144, tp: 274, fp: 1587, prec: 0.147, cost: null, cpv: null, est: false, sd: null },
     { name: "Semgrep", slug: "semgrep", cat: "rule", ver: "rule-based", url: "https://semgrep.dev/products/semgrep-code", repos: 66, f2: 7.7, f2s: 7.7, f3: 7.4, f3s: 7.4, rec: 0.07, recs: 0.07, tp: 134, fp: 905, prec: 0.129, cost: null, cpv: null, est: false, sd: null },
   ];
 
   var CWE = [
     { label: "SQL injection", cwe: "CWE-89", llm: 96, rule: 37 },
-    { label: "Command / OS injection", cwe: "CWE-77 \u00b7 78", llm: 100, rule: 68 },
-    { label: "Insecure deserialization", cwe: "CWE-502", llm: 100, rule: 57 },
+    { label: "Command / OS injection", cwe: "CWE-77 \u00b7 78", llm: 100, rule: 88 },
+    { label: "Insecure deserialization", cwe: "CWE-502", llm: 100, rule: 92 },
     { label: "Cross-site scripting", cwe: "CWE-79", llm: 88, rule: 18 },
-    { label: "Code injection / RFI", cwe: "CWE-94 \u00b7 98", llm: 100, rule: 71 },
+    { label: "Code injection / RFI", cwe: "CWE-94 \u00b7 98", llm: 100, rule: 94 },
   ];
 
   window.RV = {
@@ -72,6 +73,7 @@
       { name: "Minimax M2.7", slug: "minimax-m2.7-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://www.minimax.io/models/text/m27", repos: 61, f2: 33.9, f2s: 31.6, f3: 32.0, f3s: 29.7, rec: 0.303, recs: 0.28, tp: 533, fp: 293, prec: 0.645, cost: 3, cpv: 1.41, est: false, sd: 16.2 },
       { name: "Gemma 4 31B", slug: "gemma4-31b-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://ai.google.dev/gemma", repos: 66, f2: 27.6, f2s: 27.6, f3: 25.4, f3s: 25.4, rec: 0.235, recs: 0.235, tp: 448, fp: 48, prec: 0.903, cost: null, cpv: null, est: false, sd: null },
       { name: "Ornith 1.0 35B", slug: "ornith-q3-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://huggingface.co/OrnithAI", repos: 58, f2: 28.2, f2s: 24.9, f3: 26.6, f3s: 23.3, rec: 0.252, recs: 0.22, tp: 418, fp: 362, prec: 0.536, cost: null, cpv: null, est: false, sd: null },
+      { name: "Rowan", slug: "rowan", cat: "rule", ver: "0.2.0", url: "https://hedgerow.dev", repos: 64, f2: 23.0, f2s: 22.7, f3: 23.4, f3s: 23.0, rec: 0.238, recs: 0.234, tp: 445, fp: 1737, prec: 0.204, cost: null, cpv: null, est: false, sd: null },
       { name: "SonarQube", slug: "sonarqube", cat: "rule", ver: "community", url: "https://www.sonarsource.com/products/sonarqube/", repos: 66, f2: 14.5, f2s: 14.5, f3: 14.4, f3s: 14.4, rec: 0.144, recs: 0.144, tp: 274, fp: 1587, prec: 0.147, cost: null, cpv: null, est: false, sd: null },
       { name: "Semgrep", slug: "semgrep", cat: "rule", ver: "rule-based", url: "https://semgrep.dev/products/semgrep-code", repos: 66, f2: 7.7, f2s: 7.7, f3: 7.4, f3s: 7.4, rec: 0.07, recs: 0.07, tp: 134, fp: 905, prec: 0.129, cost: null, cpv: null, est: false, sd: null },
     ],
@@ -101,6 +103,7 @@
       { name: "Gemini 3.5 Flash", slug: "gemini-3.5-flash-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://deepmind.google/models/gemini/flash/", repos: 25, f2: 38.3, f2s: 37.0, f3: 35.8, f3s: 34.5, rec: 0.337, recs: 0.324, tp: 228, fp: 40, prec: 0.851, cost: null, cpv: null, est: false, sd: 16.1 },
       { name: "Ornith 1.0 35B", slug: "ornith-q3-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://huggingface.co/OrnithAI", repos: 22, f2: 36.6, f2s: 30.7, f3: 35.1, f3s: 29.0, rec: 0.337, recs: 0.276, tp: 194, fp: 154, prec: 0.558, cost: null, cpv: null, est: false, sd: null },
       { name: "Gemma 4 31B", slug: "gemma4-31b-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://ai.google.dev/gemma", repos: 26, f2: 30.8, f2s: 30.8, f3: 28.4, f3s: 28.4, rec: 0.264, recs: 0.264, tp: 186, fp: 21, prec: 0.899, cost: null, cpv: null, est: false, sd: null },
+      { name: "Rowan", slug: "rowan", cat: "rule", ver: "0.2.0", url: "https://hedgerow.dev", repos: 24, f2: 22.5, f2s: 21.6, f3: 22.3, f3s: 21.3, rec: 0.221, recs: 0.21, tp: 148, fp: 465, prec: 0.241, cost: null, cpv: null, est: false, sd: null },
       { name: "Semgrep", slug: "semgrep", cat: "rule", ver: "rule-based", url: "https://semgrep.dev/products/semgrep-code", repos: 26, f2: 19.5, f2s: 19.5, f3: 19.3, f3s: 19.3, rec: 0.19, recs: 0.19, tp: 134, fp: 481, prec: 0.218, cost: null, cpv: null, est: false, sd: null },
       { name: "SonarQube", slug: "sonarqube", cat: "rule", ver: "community", url: "https://www.sonarsource.com/products/sonarqube/", repos: 26, f2: 7.6, f2s: 7.6, f3: 6.9, f3s: 6.9, rec: 0.063, recs: 0.063, tp: 44, fp: 28, prec: 0.611, cost: null, cpv: null, est: false, sd: null },
     ],
@@ -127,6 +130,7 @@
       { name: "Qwen 3.6 35B", slug: "qwen3.6-35b-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://qwen.ai/", repos: 40, f2: 36.5, f2s: 36.5, f3: 35.0, f3s: 35.0, rec: 0.335, recs: 0.335, tp: 402, fp: 305, prec: 0.569, cost: null, cpv: null, est: false, sd: null },
       { name: "Gemini 3.5 Flash", slug: "gemini-3.5-flash-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://deepmind.google/models/gemini/flash/", repos: 39, f2: 38.0, f2s: 37.1, f3: 35.4, f3s: 34.5, rec: 0.331, recs: 0.323, tp: 387, fp: 30, prec: 0.928, cost: null, cpv: null, est: false, sd: 7.1 },
       { name: "GLM-5", slug: "glm-5-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://docs.z.ai/guides/llm/glm-5", repos: 40, f2: 34.9, f2s: 34.9, f3: 32.6, f3s: 32.6, rec: 0.305, recs: 0.305, tp: 366, fp: 78, prec: 0.824, cost: null, cpv: null, est: false, sd: 22.9 },
+      { name: "Rowan", slug: "rowan", cat: "rule", ver: "0.2.0", url: "https://hedgerow.dev", repos: 40, f2: 23.3, f2s: 23.3, f3: 24.0, f3s: 24.0, rec: 0.248, recs: 0.248, tp: 297, fp: 1272, prec: 0.189, cost: null, cpv: null, est: false, sd: null },
       { name: "Gemma 4 31B", slug: "gemma4-31b-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://ai.google.dev/gemma", repos: 40, f2: 25.8, f2s: 25.8, f3: 23.6, f3s: 23.6, rec: 0.219, recs: 0.219, tp: 262, fp: 27, prec: 0.907, cost: null, cpv: null, est: false, sd: null },
       { name: "Minimax M2.7", slug: "minimax-m2.7-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://www.minimax.io/models/text/m27", repos: 35, f2: 27.4, f2s: 24.4, f3: 25.7, f3s: 22.8, rec: 0.242, recs: 0.213, tp: 256, fp: 184, prec: 0.582, cost: null, cpv: null, est: false, sd: 14.1 },
       { name: "Ornith 1.0 35B", slug: "ornith-q3-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://huggingface.co/OrnithAI", repos: 36, f2: 23.5, f2s: 21.4, f3: 22.0, f3s: 20.0, rec: 0.207, recs: 0.187, tp: 224, fp: 208, prec: 0.519, cost: null, cpv: null, est: false, sd: null },
@@ -140,6 +144,6 @@
     CAT_LABEL: { sec: 'Security-Specialized', llm: 'General-Purpose LLM', rule: 'Rule-Based SAST' },
     CAT_SHORT: { sec: 'Sec.-spec.', llm: 'GP-LLM', rule: 'Rule SAST' },
     COL: { sec: '#cfa45c', llm: '#7e9fc4', rule: '#8c8478' },
-    DATASET: { repos: 66, vulns: 1903, traps: 279, loc: 133782, scanners: 27, families: 18 }
+    DATASET: { repos: 66, vulns: 1903, traps: 279, loc: 133782, scanners: 28, families: 18 }
   };
 })();

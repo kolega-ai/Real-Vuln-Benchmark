@@ -131,6 +131,7 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
     "qwen3.6-35b-agentic-v1": ("Qwen 3.6 35B", "llm", "agentic-v1"),
     "gemma4-31b-agentic-v1": ("Gemma 4 31B", "llm", "agentic-v1"),
     "ornith-q3-agentic-v1": ("Ornith 1.0 35B", "llm", "agentic-v1"),
+    "rowan": ("Rowan", "rule", "0.2.0"),
     "semgrep": ("Semgrep", "rule", "rule-based"),
     "snyk": ("Snyk Code", "rule", "pattern+flow"),
     "sonarqube": ("SonarQube", "rule", "community"),
@@ -177,6 +178,7 @@ SCANNER_URLS: dict[str, str] = {
     "qwen3.6-35b-agentic-v1": "https://qwen.ai/",
     "gemma4-31b-agentic-v1": "https://ai.google.dev/gemma",
     "ornith-q3-agentic-v1": "https://huggingface.co/OrnithAI",
+    "rowan": "https://hedgerow.dev",
     "semgrep": "https://semgrep.dev/products/semgrep-code",
     "snyk": "https://snyk.io/product/snyk-code/",
     "sonarqube": "https://www.sonarsource.com/products/sonarqube/",
@@ -221,6 +223,7 @@ SCANNER_PROVIDERS: dict[str, str] = {
     "qwen3.6-35b-agentic-v1": "Alibaba Qwen",
     "gemma4-31b-agentic-v1": "Google",
     "ornith-q3-agentic-v1": "OrnithAI",
+    "rowan": "Hedgerow",
     "semgrep": "Semgrep",
     "snyk": "Snyk",
     "sonarqube": "SonarSource",
@@ -296,7 +299,7 @@ CWE_FAMILIES: list[tuple[str, str, str]] = [
     ("Code injection / RFI", "CWE-94 · 98", "code_injection"),
 ]
 
-RULE_SLUGS = {"semgrep", "snyk", "sonarqube"}
+RULE_SLUGS = {"rowan", "semgrep", "snyk", "sonarqube"}
 SEC_SLUGS = {
     "kolega-devsec-max-v0.0.1",
     "kolega-devsec-core-v0.0.1",
