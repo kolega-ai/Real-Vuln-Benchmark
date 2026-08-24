@@ -71,6 +71,32 @@ def load_targets(authorship: str | None) -> list[tuple[str, dict]]:
     return targets
 
 
+def flatten_finding(f: dict, repo_id: str) -> dict:
+    """Project a ground-truth finding onto the dataset's flat schema.
+
+    Ground truth nests location and evidence; the published dataset is flat, and
+    renames `id` to `finding_id`. Reading only top-level keys silently yields
+    null `start_line`/`end_line`/`source` on every row — which is exactly what
+    the first version of this exporter did, and it is not obvious from a row
+    count or a field-order check.
+    """
+    loc = f.get("location") or {}
+    ev = f.get("evidence") or {}
+    return row(
+        f, FINDING_FIELDS,
+        repo_id=repo_id,
+        finding_id=f.get("id"),
+        start_line=loc.get("start_line"),
+        end_line=loc.get("end_line"),
+        function=loc.get("function"),
+        source=ev.get("source"),
+        cve_id=ev.get("cve_id"),
+        description=ev.get("description"),
+        manually_verified=ev.get("manually_verified", f.get("manually_verified")),
+        poc=f.get("poc"),
+    )
+
+
 def published_scanners() -> set[str]:
     """Scanner slugs allowed into the dataset: exactly those on the public site.
 
@@ -268,7 +294,7 @@ def main() -> None:
         repo_id = gt.get("repo_id") or dir_name
         repos.append(row(gt, REPO_FIELDS, repo_id=repo_id))
         for f in gt["findings"]:
-            findings.append(row(f, FINDING_FIELDS, repo_id=repo_id))
+            findings.append(flatten_finding(f, repo_id))
         scans += scan_rows(dir_name, repo_id, allowed)
 
     write_jsonl(out / "repos.jsonl", repos)
