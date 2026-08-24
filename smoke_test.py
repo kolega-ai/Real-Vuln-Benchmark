@@ -21,15 +21,25 @@ from scorer.matcher import load_ground_truth, match_findings
 from scorer.metrics import compute_scorecard
 from parsers import get_parser
 
-# Reference values (semgrep on realvuln-pygoat, deterministic)
+# Reference values: semgrep on realvuln-pygoat. Deterministic for a given ground
+# truth, but NOT constant across releases — a GT enhancement campaign that adds
+# vulnerabilities to pygoat moves every number here. These were last regenerated
+# for benchmark 2.0.0 (pygoat: 78 vulns / 10 traps).
+#
+# If this test fails, suspect these constants before suspecting the scorer: the
+# usual cause is ground truth having moved without them being updated. Confirm
+# with `python3 validate_gt.py` and `python3 score.py --repo realvuln-pygoat
+# --scanner semgrep`, then update the values below in the same commit as the GT
+# change.
 EXPECTED = {
     "repo": "realvuln-pygoat",
     "scanner": "semgrep",
-    "tp": 18,
-    "fp": 115,
-    "fn": 52,
+    "gt_version": "2.0.0",
+    "tp": 25,
+    "fp": 108,
+    "fn": 53,
     "tn": 9,
-    "f2": 21.8,
+    "f2": 28.1,
 }
 
 
@@ -83,7 +93,11 @@ def run_smoke_test() -> bool:
     if passed:
         print("\nAll checks passed.")
     else:
-        print("\nSome checks failed. Your scoring pipeline may have issues.")
+        print(
+            "\nSome checks failed. The most likely cause is that the reference "
+            "values above are stale — a ground-truth change moves them — rather "
+            "than a broken scoring pipeline. See the note on EXPECTED."
+        )
 
     return passed
 

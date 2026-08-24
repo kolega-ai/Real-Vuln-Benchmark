@@ -25,7 +25,7 @@ Full story: [Why We Built Our Own Security Benchmark](https://kolega.dev/blog/wh
 
 **Benchmark version: `2.0.0`**
 
-**66 Python repos · 1,723 findings · 1,443 vulnerabilities · 280 FP traps**
+**66 Python repos · 2,182 findings · 1,903 vulnerabilities · 279 FP traps**
 
 All targets are **Type 1 (intentionally vulnerable apps)**. RealVuln v2 adds
 a dedicated LLM-generated corpus to the original human-authored benchmark set.
@@ -38,9 +38,9 @@ official repo set and ground truth.
 
 | Corpus | Repos | Vulns | FP Traps | Authorship |
 |---|---:|---:|---:|---|
-| Human-authored intentionally vulnerable apps | 26 | 697 | 120 | `human_authored` |
-| LLM-generated seeded apps | 40 | 746 | 160 | `llm_generated` |
-| **Total** | **66** | **1,443** | **280** |  |
+| Human-authored intentionally vulnerable apps | 26 | 704 | 120 | `human_authored` |
+| LLM-generated seeded apps | 40 | 1,199 | 159 | `llm_generated` |
+| **Total** | **66** | **1,903** | **279** |  |
 
 #### LLM-Generated Seeded Corpus
 
@@ -51,11 +51,11 @@ enhancement campaigns. Each generated repo is pinned by commit SHA in
 
 | Provider Run | Authorship Model | Repos | Vulns | FP Traps |
 |---|---|---:|---:|---:|
-| `claude-code` | Claude Opus 4.7 | 10 | 187 | 40 |
-| `codex` | GPT-5.5 | 10 | 187 | 40 |
-| `codex-high` | GPT-5.5 x-high | 10 | 186 | 40 |
-| `kimi-code` | Kimi K2.6 | 10 | 186 | 40 |
-| **Total** |  | **40** | **746** | **160** |
+| `claude-code` | Claude Opus 4.7 | 10 | 308 | 40 |
+| `codex` | GPT-5.5 | 10 | 339 | 39 |
+| `codex-high` | GPT-5.5 x-high | 10 | 263 | 40 |
+| `kimi-code` | Kimi K2.6 | 10 | 289 | 40 |
+| **Total** |  | **40** | **1,199** | **159** |
 
 #### Human-Authored Corpus
 
@@ -63,19 +63,19 @@ enhancement campaigns. Each generated repo is pinned by commit SHA in
 |------|----------|-----------|------:|--------:|
 | realvuln-damn-vulnerable-flask-application | python | flask | 15 | 4 |
 | realvuln-damn-vulnerable-graphql-application | python | flask | 36 | 4 |
-| realvuln-djangoat | python | django | 50 | 6 |
+| realvuln-djangoat | python | django | 52 | 6 |
 | realvuln-dsvpwa | python | — | 32 | 6 |
 | realvuln-dsvw | python | — | 27 | 4 |
 | realvuln-dvblab | python | flask | 22 | 4 |
-| realvuln-dvpwa | python | aiohttp | 22 | 4 |
+| realvuln-dvpwa | python | aiohttp | 23 | 4 |
 | realvuln-extremely-vulnerable-flask-app | python | flask | 32 | 4 |
 | realvuln-flask-xss | python | flask | 30 | 5 |
 | realvuln-insecure-web | python | flask | 9 | 2 |
 | realvuln-intentionally-vulnerable-python-application | python | flask | 7 | 2 |
 | realvuln-lets-be-bad-guys | python | django | 24 | 4 |
 | realvuln-owasp-web-playground | python | flask | 28 | 6 |
-| realvuln-pygoat | python | django | 77 | 10 |
-| realvuln-python-app | python | flask | 20 | 4 |
+| realvuln-pygoat | python | django | 78 | 10 |
+| realvuln-python-app | python | flask | 21 | 4 |
 | realvuln-python-insecure-app | python | fastapi | 8 | 2 |
 | realvuln-pythonssti | python | fastapi | 2 | 1 |
 | realvuln-threatbyte | python | flask | 26 | 5 |
@@ -85,7 +85,7 @@ enhancement campaigns. Each generated repo is pinned by commit SHA in
 | realvuln-vulnerable-flask-app | python | flask | 21 | 4 |
 | realvuln-vulnerable-python-apps | python | flask | 22 | 5 |
 | realvuln-vulnerable-tornado-app | python | tornado | 14 | 3 |
-| realvuln-vulnpy | python | — | 78 | 16 |
+| realvuln-vulnpy | python | — | 80 | 16 |
 | realvuln-vulpy | python | flask | 57 | 6 |
 
 The full official repo list, pinned commit SHAs, authorship metadata, and GT
