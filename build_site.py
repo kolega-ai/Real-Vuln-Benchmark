@@ -47,6 +47,27 @@ def inject_analytics(html: str) -> str:
     return html.replace("<head>", "<head>" + GA_SNIPPET, 1)
 
 
+# Absolute self-canonical per live page. Without these, the frozen snapshots
+# under /v/<version>/ ship byte-identical <title>/<meta description> to the live
+# root and compete with it in search; the snapshots point their canonical here
+# (see release.py) so ranking consolidates on the live URL.
+def canonical_url(name: str) -> str:
+    """Absolute canonical URL for a page file at the site root.
+
+    index.html canonicalises to the bare origin, since that is the form the
+    paper, external links and the sitemap all use.
+    """
+    return SITE_BASE_URL + ("/" if name == "index.html" else f"/{name}")
+
+
+def inject_canonical(html: str, name: str) -> str:
+    """Insert <link rel="canonical"> before </head>. Idempotent."""
+    if 'rel="canonical"' in html or "</head>" not in html:
+        return html
+    tag = f'<link rel="canonical" href="{canonical_url(name)}" />\n'
+    return html.replace("</head>", tag + "</head>", 1)
+
+
 # --- scanner slug -> (display name, category, version label) -----------------
 # category: sec = Security-Specialized, llm = General-Purpose LLM, rule = Rule-Based SAST
 SCANNER_META: dict[str, tuple[str, str, str]] = {
@@ -728,6 +749,93 @@ def emit_data_js(
     return "\n".join(lines)
 
 
+CAT_INDEX_LABEL = {
+    "sec": "Security-Specialized",
+    "llm": "General-Purpose LLM",
+    "rule": "Rule-Based SAST",
+}
+
+
+def scanner_index_html(scanners: list[dict]) -> str:
+    """Static, crawlable link list of every published scanner detail page.
+
+    The leaderboard tables also link these pages, but they are built client-side
+    in app.js/dashboard.js, so a crawler that does not execute JavaScript sees
+    the detail pages as orphans (in the sitemap, linked from nowhere). This
+    renders the same links into the HTML source, grouped by category.
+    """
+    by_cat: dict[str, list[dict]] = {}
+    for s in scanners:
+        if (REPORTS / "scanners" / f"{s['slug']}.html").is_file():
+            by_cat.setdefault(s["cat"], []).append(s)
+    blocks = []
+    for cat in ("sec", "llm", "rule"):
+        grp = sorted(by_cat.get(cat, []), key=lambda s: -s["f3s"])
+        if not grp:
+            continue
+        links = " ".join(
+            f'<a href="scanners/{s["slug"]}.html">{s["name"]}</a>' for s in grp
+        )
+        blocks.append(
+            f'<div class="sx-group"><h3 class="sx-cat">{CAT_INDEX_LABEL[cat]}</h3>'
+            f'<div class="sx-links">{links}</div></div>'
+        )
+    return "\n        ".join(blocks)
+
+
+def write_llms_txt(dataset: dict, version: str) -> None:
+    """Emit reports/llms.txt — a curated map of the site for AI crawlers.
+
+    Mirrors the sitemap's canonical page set in the llms.txt convention so
+    engines summarising or citing RealVuln reach the live pages (and the
+    methodology behind the numbers) rather than a frozen snapshot.
+    """
+    lines = [
+        "# RealVuln",
+        "",
+        f"> An open, reproducible benchmark measuring how well security scanners "
+        f"find real vulnerabilities in real code. Version {version}: "
+        f"{dataset['repos']} pinned Python repositories, "
+        f"{dataset['vulns']:,} hand-labeled vulnerabilities and "
+        f"{dataset['traps']:,} false-positive traps, "
+        f"{dataset['scanners']} scanners compared. Ranked by F3 (recall-weighted).",
+        "",
+        "Every ground-truth label, scanner output and scoring script is public so "
+        "results can be reproduced independently. RealVuln is maintained by John "
+        "Pellew and Faizan Raza of Kolega.Dev, whose scanner is itself one of the "
+        "evaluated tools — hence the open audit trail.",
+        "",
+        "## Core pages",
+        "",
+        f"- [Benchmark overview]({SITE_BASE_URL}/): headline leaderboard and what the benchmark measures.",
+        f"- [Interactive dashboard]({SITE_BASE_URL}/dashboard.html): full leaderboard, precision-recall, cost-efficiency and per-category breakdowns.",
+        f"- [Methodology]({SITE_BASE_URL}/methodology.html): benchmark design, ground-truth labeling, finding-matching algorithm and F3 scoring.",
+        f"- [Dataset]({SITE_BASE_URL}/dataset.html): the corpus, ground-truth schema, false-positive traps and framework coverage.",
+        f"- [Findings]({SITE_BASE_URL}/findings.html): results and analysis, including the three-tier scanner hierarchy and per-CWE detection.",
+        f"- [Roadmap & contributing]({SITE_BASE_URL}/roadmap.html): versioning policy, how to contribute scanners or repositories, and how to cite.",
+        "",
+        "## Per-scanner results",
+        "",
+    ]
+    for slug, (name, _cat, ver) in SCANNER_META.items():
+        if (REPORTS / "scanners" / f"{slug}.html").is_file():
+            lines.append(
+                f"- [{name} ({ver})]({SITE_BASE_URL}/scanners/{slug}.html): "
+                f"per-repository scores, detection breakdown and run conditions."
+            )
+    lines += [
+        "",
+        "## Optional",
+        "",
+        f"- [Paper (PDF)]({SITE_BASE_URL}/assets/realvuln-paper.pdf): arXiv:2604.13764.",
+        f"- [Source & ground truth](https://github.com/kolega-ai/Real-Vuln-Benchmark): Apache 2.0.",
+        f"- [Archived releases]({SITE_BASE_URL}/versions.json): frozen, citable snapshots under /v/<version>/. Cite these for reproducibility; prefer the live pages above for current results.",
+        "",
+    ]
+    (REPORTS / "llms.txt").write_text("\n".join(lines))
+    print("wrote reports/llms.txt")
+
+
 def warn_unfrozen_overwrite() -> None:
     """Warn (don't block) if the site currently in reports/ reflects a release
     that was never frozen under reports/v/. Rebuilding the root overwrites it,
@@ -867,6 +975,19 @@ def main() -> None:
 
     warn_unfrozen_overwrite()
 
+    # reskin-styled per-scanner deep-dive pages (reports/scanners/<slug>.html).
+    # Generated before the HTML copy below so the static scanner index (and the
+    # sitemap) see the pages produced by *this* build, not the previous one.
+    try:
+        import build_detail_pages
+
+        build_detail_pages.main()
+    except Exception as e:  # never block the main build on detail-page generation
+        print(f"  WARNING: detail-page generation skipped: {e}")
+
+    # static crawlable index of the per-scanner pages (see scanner_index_html)
+    tokens["{{SCANNER_INDEX}}"] = scanner_index_html(scanners)
+
     # copy static site source into reports/, replacing old dashboard.html
     for src in sorted(SITE_SRC.iterdir()):
         if src.name == "realvuln-data.js":
@@ -887,23 +1008,19 @@ def main() -> None:
             if left:
                 print(f"  WARNING: unresolved tokens in {src.name}: {left}")
             text = inject_analytics(text)
+            text = inject_canonical(text, src.name)
             text = bust(text)
             dst.write_text(text)
         else:
             shutil.copy2(src, dst)
         print(f"copied {src.name}")
 
-    # reskin-styled per-scanner deep-dive pages (reports/scanners/<slug>.html)
-    try:
-        import build_detail_pages
-
-        build_detail_pages.main()
-    except Exception as e:  # never block the main build on detail-page generation
-        print(f"  WARNING: detail-page generation skipped: {e}")
-
     # sitemap.xml — generated from the pages that actually exist so it never
     # drifts as scanner detail pages are added/removed.
     write_sitemap()
+
+    # llms.txt — curated site map for AI crawlers, same canonical page set.
+    write_llms_txt(dataset, ver_short)
 
 
 SITE_BASE_URL = "https://realvuln.com"

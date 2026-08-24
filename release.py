@@ -44,6 +44,56 @@ SNAPSHOT_DIRS = ("scanners",)
 ROOT_ONLY = {"wrangler.jsonc", "robots.txt", "sitemap.xml", "versions.json"}
 
 BANNER_MARKER = "RV-ARCHIVE-BANNER"
+SEO_MARKER = "RV-ARCHIVE-SEO"
+SITE_BASE_URL = "https://realvuln.com"
+
+
+def archive_seo_html(rel_path: str) -> str:
+    """<head> tags that keep a frozen snapshot citable but out of search results.
+
+    A snapshot ships the same title and meta description as the live page it was
+    copied from, so left alone the two compete for the same queries — which is
+    what was cannibalising the live pages (the /v/1.0.0/ URLs drew impressions
+    but effectively no clicks).
+
+    ``noindex`` drops the duplicate from search listings while leaving the URL
+    fully served, so a citation printed in the paper keeps resolving. ``follow``
+    matters: crawlers still traverse the archive banner's link to the live site,
+    so any accumulated authority flows there instead of being stranded. The
+    canonical names the live equivalent as the version that should rank.
+    """
+    live = f"{SITE_BASE_URL}/" if rel_path == "index.html" else f"{SITE_BASE_URL}/{rel_path}"
+    return (
+        f"<!-- {SEO_MARKER} -->\n"
+        '<meta name="robots" content="noindex,follow" />\n'
+        f'<link rel="canonical" href="{live}" />\n'
+    )
+
+
+def inject_archive_seo(text: str, version: str, rel_path: str) -> str:
+    """Apply archive <head> tags and mark the <title> as an archived version.
+
+    Any canonical inherited from the live build is stripped first — it would
+    otherwise point the snapshot at itself. The title prefix is belt-and-braces:
+    until a crawler re-reads the page and honours the noindex, an already-listed
+    snapshot at least stops presenting itself as the current results.
+    """
+    if SEO_MARKER in text or "</head>" not in text:
+        return text
+    text = re.sub(r'\s*<link rel="canonical"[^>]*>', "", text)
+    text = text.replace("</head>", archive_seo_html(rel_path) + "</head>", 1)
+    return re.sub(
+        r"<title>(.*?)</title>",
+        lambda m: f"<title>[v{version} archive] {m.group(1)}</title>",
+        text,
+        count=1,
+        flags=re.S,
+    )
+
+
+def prepare_snapshot_html(text: str, version: str, rel_path: str) -> str:
+    """Both snapshot-only HTML rewrites: the visible banner and the SEO tags."""
+    return inject_archive_seo(inject_banner(text, version), version, rel_path)
 
 
 def banner_html(version: str) -> str:
@@ -93,7 +143,9 @@ def freeze(version: str, force: bool) -> None:
     for f in snapshot_files(REPORTS):
         text_dst = dest / f.name
         if f.suffix == ".html":
-            text_dst.write_text(inject_banner(f.read_text(), version))
+            text_dst.write_text(
+                prepare_snapshot_html(f.read_text(), version, f.name)
+            )
         else:
             shutil.copy2(f, text_dst)
         copied += 1
@@ -103,7 +155,11 @@ def freeze(version: str, force: bool) -> None:
             dstd = dest / d
             shutil.copytree(srcd, dstd)
             for html in dstd.glob("*.html"):
-                html.write_text(inject_banner(html.read_text(), version))
+                html.write_text(
+                    prepare_snapshot_html(
+                        html.read_text(), version, f"{d}/{html.name}"
+                    )
+                )
             copied += sum(1 for _ in dstd.rglob("*") if _.is_file())
     print(f"froze {copied} files into {dest.relative_to(ROOT)}")
 
