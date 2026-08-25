@@ -819,6 +819,7 @@ def write_llms_txt(dataset: dict, version: str) -> None:
         f"- [Dataset]({SITE_BASE_URL}/dataset.html): the corpus, ground-truth schema, false-positive traps and framework coverage.",
         f"- [Findings]({SITE_BASE_URL}/findings.html): results and analysis, including the three-tier scanner hierarchy and per-CWE detection.",
         f"- [Roadmap & contributing]({SITE_BASE_URL}/roadmap.html): versioning policy, how to contribute scanners or repositories, and how to cite.",
+        f"- [Paper]({SITE_BASE_URL}/paper.html): abstract, headline results, common questions and citation for arXiv:2604.13764."
         "",
         "## Per-scanner results",
         "",
@@ -1043,7 +1044,9 @@ def write_sitemap() -> None:
     urls: list[tuple[str, str, str]] = []  # (loc, changefreq, priority)
 
     def add(path: str, changefreq: str, priority: str) -> None:
-        loc = SITE_BASE_URL if path == "index.html" else f"{SITE_BASE_URL}/{path}"
+        # trailing slash on the root so the sitemap matches the canonical
+        # (<link rel="canonical" href="https://realvuln.com/">) exactly
+        loc = f"{SITE_BASE_URL}/" if path == "index.html" else f"{SITE_BASE_URL}/{path}"
         urls.append((loc, changefreq, priority))
 
     # canonical nav pages, in priority order
@@ -1054,6 +1057,7 @@ def write_sitemap() -> None:
         ("dataset.html", "0.7"),
         ("findings.html", "0.7"),
         ("roadmap.html", "0.7"),
+        ("paper.html", "0.8"),
     ]
     for name, pr in nav_pages:
         if (REPORTS / name).is_file():
