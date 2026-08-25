@@ -32,7 +32,7 @@ SHELL_HEAD = """<!DOCTYPE html>
 
 <header class="topbar">
   <div class="wrap topbar-inner">
-    <a class="brand" href="../index.html"><span class="mark">▚</span> real<span style="color:var(--accent)">vuln</span> <span class="v">v{ver}</span></a>
+    <a class="brand" href="/"><span class="mark">▚</span> real<span style="color:var(--accent)">vuln</span> <span class="v">v{ver}</span></a>
     <nav class="topnav">
       <span class="navlinks" style="display:contents">
         <a href="../dashboard.html" style="color:var(--fg)">Dashboard</a>
@@ -157,7 +157,7 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
 
     # hero
     out.append('<section class="wrap page-hero">')
-    out.append('  <div class="breadcrumb"><a href="../index.html">RealVuln</a><span class="sep">/</span>'
+    out.append('  <div class="breadcrumb"><a href="/">RealVuln</a><span class="sep">/</span>'
                '<a href="../dashboard.html">Dashboard</a><span class="sep">/</span><span>' + name + '</span></div>')
     out.append('  <div class="ph-num">Scanner deep-dive</div>')
     provider, url = SCANNER_PROVIDERS.get(slug), SCANNER_URLS.get(slug)
