@@ -91,9 +91,26 @@ def inject_archive_seo(text: str, version: str, rel_path: str) -> str:
     )
 
 
+def relativise_root_links(text: str) -> str:
+    """Point root-relative links back inside the snapshot.
+
+    The live pages link the brand and breadcrumb to "/" so they never reference
+    the duplicate /index.html. Inside a frozen snapshot that would jump the
+    reader out to the current site, which defeats the point of the archive: a
+    reader should be able to browse the whole of v1.0.0 as it was. Relative
+    links resolve within /v/<version>/, so rewrite them at freeze time.
+
+    The archive banner's explicit link to the live site is absolute and
+    unaffected, so leaving the archive stays possible and obvious.
+    """
+    return text.replace('href="/"', 'href="index.html"')
+
+
 def prepare_snapshot_html(text: str, version: str, rel_path: str) -> str:
-    """Both snapshot-only HTML rewrites: the visible banner and the SEO tags."""
-    return inject_archive_seo(inject_banner(text, version), version, rel_path)
+    """All snapshot-only HTML rewrites: banner, SEO tags, in-version links."""
+    return relativise_root_links(
+        inject_archive_seo(inject_banner(text, version), version, rel_path)
+    )
 
 
 def banner_html(version: str) -> str:
