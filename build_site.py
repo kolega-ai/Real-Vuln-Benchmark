@@ -60,13 +60,14 @@ def canonical_url(name: str) -> str:
     return SITE_BASE_URL + ("/" if name == "index.html" else f"/{name}")
 
 
-def copy_journal_dir(src_dir: Path, bust) -> None:
+def copy_journal_dir(src_dir: Path, bust, tokens: dict[str, str]) -> None:
     """Copy site/journal/*.html into reports/journal/, applying the same
-    GA-injection / canonical / cache-busting treatment as top-level pages.
+    token substitution / GA-injection / canonical / cache-busting treatment
+    as top-level pages.
 
-    These pages carry no {{TOKENS}} (the journal is static prose, not
-    data-driven), so no token substitution is needed here — only the
-    generic per-HTML-file treatment every other page gets.
+    The prose itself carries no {{TOKENS}}, but the shared brand/footer
+    markup (e.g. "v{{VERSION}}") does, same as every other page — so the
+    same tokens dict built in main() is substituted here too.
     """
     dst_dir = REPORTS / "journal"
     dst_dir.mkdir(exist_ok=True)
@@ -76,6 +77,11 @@ def copy_journal_dir(src_dir: Path, bust) -> None:
         dst = dst_dir / src.name
         if src.suffix == ".html":
             text = src.read_text()
+            for tok, val in tokens.items():
+                text = text.replace(tok, val)
+            left = [t for t in tokens if t in text]
+            if left:
+                print(f"  WARNING: unresolved tokens in journal/{src.name}: {left}")
             text = inject_analytics(text)
             # canonical URLs are already hardcoded per-issue in the source
             # (site/journal/<slug>.html carries its own <link rel="canonical">
@@ -1054,7 +1060,7 @@ def main() -> None:
                 # {{TOKENS}}) but still need the same GA/canonical/cache-bust
                 # treatment as top-level pages — shutil.copytree alone would
                 # skip that, since it copies bytes verbatim.
-                copy_journal_dir(src, bust)
+                copy_journal_dir(src, bust, tokens)
                 print("processed journal/")
                 continue
             # static asset directories (e.g. site/assets — the paper PDF) copied verbatim
