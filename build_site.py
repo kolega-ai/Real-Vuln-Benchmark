@@ -60,6 +60,40 @@ def canonical_url(name: str) -> str:
     return SITE_BASE_URL + ("/" if name == "index.html" else f"/{name}")
 
 
+def copy_journal_dir(src_dir: Path, bust, tokens: dict[str, str]) -> None:
+    """Copy site/journal/*.html into reports/journal/, applying the same
+    token substitution / GA-injection / canonical / cache-busting treatment
+    as top-level pages.
+
+    The prose itself carries no {{TOKENS}}, but the shared brand/footer
+    markup (e.g. "v{{VERSION}}") does, same as every other page — so the
+    same tokens dict built in main() is substituted here too.
+    """
+    dst_dir = REPORTS / "journal"
+    dst_dir.mkdir(exist_ok=True)
+    for src in sorted(src_dir.iterdir()):
+        if not src.is_file():
+            continue
+        dst = dst_dir / src.name
+        if src.suffix == ".html":
+            text = src.read_text()
+            for tok, val in tokens.items():
+                text = text.replace(tok, val)
+            left = [t for t in tokens if t in text]
+            if left:
+                print(f"  WARNING: unresolved tokens in journal/{src.name}: {left}")
+            text = inject_analytics(text)
+            # canonical URLs are already hardcoded per-issue in the source
+            # (site/journal/<slug>.html carries its own <link rel="canonical">
+            # from frontmatter), so inject_canonical is a no-op there; call it
+            # anyway for consistency/idempotency with every other page.
+            text = inject_canonical(text, f"journal/{src.name}")
+            text = bust(text)
+            dst.write_text(text)
+        else:
+            shutil.copy2(src, dst)
+
+
 def inject_canonical(html: str, name: str) -> str:
     """Insert <link rel="canonical"> before </head>. Idempotent."""
     if 'rel="canonical"' in html or "</head>" not in html:
@@ -142,10 +176,10 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
 # model (or the provider site where none exists); rule-based tools at their
 # product page.
 SCANNER_URLS: dict[str, str] = {
-    "kolega-devsec-max-v0.0.1": "https://kolega.dev/",
-    "kolega-devsec-core-v0.0.1": "https://kolega.dev/",
-    "kolega-claude-adaptation": "https://kolega.dev/",
-    "kolega-claude-adaptation-deepseek-only": "https://kolega.dev/",
+    "kolega-devsec-max-v0.0.1": "https://kolega.ai/devsec",
+    "kolega-devsec-core-v0.0.1": "https://kolega.ai/devsec",
+    "kolega-claude-adaptation": "https://kolega.ai/devsec",
+    "kolega-claude-adaptation-deepseek-only": "https://kolega.ai/devsec",
     "kolega-original-claude-adaptation-deepseek-v4-pro": "https://claude.com/blog/using-llms-to-secure-source-code",
     "kolega-ca-cc-sonnet": "https://claude.com/blog/using-llms-to-secure-source-code",
     "gpt-5.5-agentic-v1": "https://openai.com/index/introducing-gpt-5-5/",
@@ -789,6 +823,15 @@ def scanner_index_html(scanners: list[dict]) -> str:
     return "\n        ".join(blocks)
 
 
+def _journal_title(path: Path) -> str:
+    """Pull the <title> text out of a journal issue page, stripped of the
+    ' — RealVuln Journal' suffix used in its <title> tag."""
+    m = re.search(r"<title>(.*?)</title>", path.read_text(), re.S)
+    if not m:
+        return ""
+    return m.group(1).split(" — RealVuln Journal")[0].strip()
+
+
 def write_llms_txt(dataset: dict, version: str) -> None:
     """Emit reports/llms.txt — a curated map of the site for AI crawlers.
 
@@ -830,6 +873,18 @@ def write_llms_txt(dataset: dict, version: str) -> None:
                 f"- [{name} ({ver})]({SITE_BASE_URL}/scanners/{slug}.html): "
                 f"per-repository scores, detection breakdown and run conditions."
             )
+    lines += [
+        "",
+        "## Journal",
+        "",
+        f"- [RealVuln Journal]({SITE_BASE_URL}/journal.html): the narrative dev-log — every release, benchmark run, and methodology change, dated and in order.",
+    ]
+    journal_dir = REPORTS / "journal"
+    if journal_dir.is_dir():
+        for f in sorted(journal_dir.glob("*.html")):
+            title = _journal_title(f)
+            if title:
+                lines.append(f"- [{title}]({SITE_BASE_URL}/journal/{f.name})")
     lines += [
         "",
         "## Optional",
@@ -1000,6 +1055,14 @@ def main() -> None:
         if src.name == "realvuln-data.js":
             continue  # generated above
         if src.is_dir():
+            if src.name == "journal":
+                # site/journal/*.html are hand-authored dev-log pages (no
+                # {{TOKENS}}) but still need the same GA/canonical/cache-bust
+                # treatment as top-level pages — shutil.copytree alone would
+                # skip that, since it copies bytes verbatim.
+                copy_journal_dir(src, bust, tokens)
+                print("processed journal/")
+                continue
             # static asset directories (e.g. site/assets — the paper PDF) copied verbatim
             shutil.copytree(src, REPORTS / src.name, dirs_exist_ok=True)
             print(f"copied {src.name}/")
@@ -1062,6 +1125,14 @@ def write_sitemap() -> None:
     for name, pr in nav_pages:
         if (REPORTS / name).is_file():
             add(name, "weekly", pr)
+
+    # journal index + each dated issue page
+    if (REPORTS / "journal.html").is_file():
+        add("journal.html", "weekly", "0.6")
+    journal_dir = REPORTS / "journal"
+    if journal_dir.is_dir():
+        for f in sorted(journal_dir.glob("*.html")):
+            add(f"journal/{f.name}", "monthly", "0.6")
 
     # per-scanner deep-dive pages — only those actually published on the site
     for slug in SCANNER_META:
