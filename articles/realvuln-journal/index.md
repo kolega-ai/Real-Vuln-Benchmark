@@ -26,4 +26,4 @@ The narrative record of the RealVuln benchmark — every release, benchmark run,
 - [09 · RealVuln 2.0.0: the full 66-repo, false-positive-aware release](https://realvuln.com/journal/v2-0-0-release.html) — 2026-06-29
 - [10 · Local models and GPT-5.6: can open-weight scanners compete?](https://realvuln.com/journal/local-models-and-gpt-5-6.html) — 2026-07-14
 - [11 · Frontier and community scanners: Claude Opus 5 and the first external contribution (Rowan)](https://realvuln.com/journal/frontier-and-community-scanners.html) — 2026-08-04
-- [13 · RealVuln 2.1.0: the current release and the dataset export](https://realvuln.com/journal/v2-1-0-release.html) — 2026-08-24
+- [12 · RealVuln 2.1.0: the current release and the dataset export](https://realvuln.com/journal/v2-1-0-release.html) — 2026-08-24

@@ -19,7 +19,7 @@ The journal is deliberately neutral: it reports measurements and interpretation 
 | 09 | [RealVuln 2.0.0 release](https://realvuln.com/journal/v2-0-0-release.html) | 2026-06-29 |
 | 10 | [Local models and GPT-5.6](https://realvuln.com/journal/local-models-and-gpt-5-6.html) | 2026-07-14 |
 | 11 | [Frontier and community scanners](https://realvuln.com/journal/frontier-and-community-scanners.html) | 2026-08-04 |
-| 13 | [RealVuln 2.1.0 release](https://realvuln.com/journal/v2-1-0-release.html) | 2026-08-24 |
+| 12 | [RealVuln 2.1.0 release](https://realvuln.com/journal/v2-1-0-release.html) | 2026-08-24 |
 
 > Issue 12 (an industry-state survey) is withheld from publication pending the fuller analysis and will be published separately.
 
