@@ -176,10 +176,10 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
 # model (or the provider site where none exists); rule-based tools at their
 # product page.
 SCANNER_URLS: dict[str, str] = {
-    "kolega-devsec-max-v0.0.1": "https://kolega.dev/",
-    "kolega-devsec-core-v0.0.1": "https://kolega.dev/",
-    "kolega-claude-adaptation": "https://kolega.dev/",
-    "kolega-claude-adaptation-deepseek-only": "https://kolega.dev/",
+    "kolega-devsec-max-v0.0.1": "https://kolega.ai/devsec",
+    "kolega-devsec-core-v0.0.1": "https://kolega.ai/devsec",
+    "kolega-claude-adaptation": "https://kolega.ai/devsec",
+    "kolega-claude-adaptation-deepseek-only": "https://kolega.ai/devsec",
     "kolega-original-claude-adaptation-deepseek-v4-pro": "https://claude.com/blog/using-llms-to-secure-source-code",
     "kolega-ca-cc-sonnet": "https://claude.com/blog/using-llms-to-secure-source-code",
     "gpt-5.5-agentic-v1": "https://openai.com/index/introducing-gpt-5-5/",

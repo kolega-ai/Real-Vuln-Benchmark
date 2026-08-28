@@ -1,6 +1,6 @@
 # RealVuln Benchmark
 
-**[Live Dashboard →](https://realvuln.kolega.dev)**
+**[Live Dashboard →](https://realvuln.com/dashboard.html)**
 
 An open benchmark for evaluating security scanners against ground-truth vulnerabilities in real-world code. Primary metric is **F3 Score** (0–100, recall-weighted 9:1).
 
@@ -15,7 +15,7 @@ Application security scanners routinely fail to catch basic vulnerabilities — 
 
 **RealVuln** is an open, extensible benchmark that uses real-world code, provides machine-readable ground truth with CWE mappings, includes an automated scoring engine, and is designed for community contribution. We launch as **RealVuln Beta** — publishing the framework, initial ground truth, and our results as an invitation for the security community to contribute, validate, and extend.
 
-Full story: [Why We Built Our Own Security Benchmark](https://kolega.dev/blog/why-we-built-our-own-security-benchmark/)
+Full story: [Why We Built Our Own Security Benchmark](https://kolega.ai/blog/why-we-built-our-own-security-benchmark)
 
 ---
 
@@ -441,4 +441,4 @@ this repository's Apache-2.0 licence.
 
 ## Further Reading
 
-- Blog post: [Why We Built Our Own Security Benchmark](https://kolega.dev/blog/why-we-built-our-own-security-benchmark)
+- Blog post: [Why We Built Our Own Security Benchmark](https://kolega.ai/blog/why-we-built-our-own-security-benchmark)
