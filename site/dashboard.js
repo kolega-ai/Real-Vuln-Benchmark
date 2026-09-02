@@ -12,10 +12,28 @@
   var TAB_TOTALS = window.RV.TAB_TOTALS || { all: (window.RV.SCANNERS || []).length };
   var METRIC_LABEL = { f2: 'F2', f3: 'F3' };
 
-  var state = { tab: 'all', metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1, cats: { sec: true, llm: true, rule: true } };
+  var LANG_LABELS = window.RV.LANG_LABELS || { all: 'Overall' };
+  var SHORT_LANG = { python: 'Python', tsjs: 'TS/JS', java: 'Java' };
+
+  // tab = "<lang>:<src>" collapsed: "all" when both are all, "<lang>" or "<src>" when one is.
+  var state = { lang: 'all', src: 'all', tab: 'all', metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1, cats: { sec: true, llm: true, rule: true } };
+  function tabKey() {
+    if (state.lang === 'all' && state.src === 'all') return 'all';
+    if (state.lang === 'all') return state.src;
+    if (state.src === 'all') return state.lang;
+    return state.lang + ':' + state.src;
+  }
   // active scanner list + repo total for the selected corpus tab (reassigned on tab switch)
   var SC = BY_TAB[state.tab] || window.RV.SCANNERS;
   function tabTotal() { return TAB_TOTALS[state.tab] || SC.length; }
+  // language badges: on a multi-language tab, a scanner that did not cover every
+  // language is flagged (amber) with the languages it did cover
+  function langBadges(s) {
+    if (!s.langs || s.full !== false) return '';
+    return s.langs.map(function (l) {
+      return '<span class="lang-badge limited" title="Language-limited run — scored on ' + (LANG_LABELS[l] || l) + ' repositories only">' + (SHORT_LANG[l] || l) + '</span>';
+    }).join('');
+  }
 
   function mk(base) { return state.mode === 'strict' ? base + 's' : base; }
   function val(s, base) { return s[mk(base)]; }
@@ -55,9 +73,10 @@
     pool.forEach(function (s) { if (val(s, 'rec') > val(recLead, 'rec')) recLead = s; });
     setText('kpi-recall-val', (val(recLead, 'rec') * 100).toFixed(1));
     setText('kpi-recall-sub', recLead.name);
-    var loc = (window.RV.DATASET && window.RV.DATASET.loc) || 0;
+    var tabLoc = window.RV.TAB_LOC && window.RV.TAB_LOC[state.tab];
+    var loc = tabLoc || (window.RV.DATASET && window.RV.DATASET.loc) || 0;
     setText('kpi-loc-val', loc.toLocaleString());
-    setText('kpi-loc-sub', 'across all repos');
+    setText('kpi-loc-sub', state.tab === 'all' ? 'across all repos' : 'in the selected corpus');
   }
 
   // ---- leaderboard ----
@@ -98,7 +117,7 @@
         : '<span class="rank">' + String(++rankNo).padStart(2, '0') + '</span>';
       tr.innerHTML =
         '<td class="l">' + rankCell + '</td>' +
-        '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' +
+        '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' + langBadges(s) +
           '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
@@ -247,18 +266,47 @@
   // ---- controls ----
   function rerenderAll() { renderKPIs(); renderLeaderboard(); renderPR(); renderCost(); renderRankings(); renderCategory(); }
 
-  // ---- corpus tabs (All / Intentionally Vulnerable / Vibe Coded) ----
+  // ---- corpus tabs: language (Overall / Python / TS-JS / ...) x authorship ----
+  function switchTab() {
+    var tab = tabKey();
+    if (!BY_TAB[tab]) return;
+    state.tab = tab;
+    SC = BY_TAB[tab];
+    var note = document.getElementById('lang-note');
+    if (note) note.hidden = !(state.lang === 'all' && SC.some(function (s) { return s.full === false; }));
+    rerenderAll();
+  }
+  var langHost = document.getElementById('lang-tabs');
+  if (langHost) {
+    Object.keys(LANG_LABELS).forEach(function (lk) {
+      if (lk === 'all' || !BY_TAB[lk]) return;
+      var b = document.createElement('button');
+      b.className = 'ctab'; b.setAttribute('data-lang', lk); b.setAttribute('role', 'tab');
+      b.textContent = LANG_LABELS[lk];
+      langHost.appendChild(b);
+    });
+    langHost.querySelectorAll('.ctab').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var lang = btn.getAttribute('data-lang');
+        if (lang === state.lang) return;
+        langHost.querySelectorAll('.ctab').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        state.lang = lang;
+        switchTab();
+      });
+    });
+  }
   document.querySelectorAll('#corpus-tabs .ctab').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      var tab = btn.getAttribute('data-tab');
-      if (!BY_TAB[tab] || tab === state.tab) return;
+      var src = btn.getAttribute('data-tab');
+      if (src === state.src) return;
       document.querySelectorAll('#corpus-tabs .ctab').forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
-      state.tab = tab;
-      SC = BY_TAB[tab];
-      rerenderAll();
+      state.src = src;
+      switchTab();
     });
   });
+  (function () { var note = document.getElementById('lang-note'); if (note) note.hidden = !SC.some(function (s) { return s.full === false; }); })();
 
   document.querySelectorAll('.metric-toggle [data-metric]').forEach(function (btn) {
     btn.addEventListener('click', function () {

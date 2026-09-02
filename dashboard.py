@@ -453,6 +453,106 @@ def compute_source_aggregates(
     return source_aggregates, source_repos
 
 
+# Language groups for the per-language leaderboards. Keyed by dashboard tab key;
+# values are the GT `language` strings that belong to the group. Ordered as the
+# tabs appear. A group with no repos in the corpus is simply not emitted.
+LANGUAGE_GROUPS: dict[str, tuple[str, ...]] = {
+    "python": ("python",),
+    "tsjs": ("typescript", "javascript"),
+    "java": ("java",),
+}
+LANGUAGE_LABELS = {"python": "Python", "tsjs": "TypeScript / JS", "java": "Java"}
+
+
+def load_repo_languages(gt_dir: Path, repos: list[str]) -> dict[str, str]:
+    """Map repo -> language group key from GT `language`.
+
+    A language that is not in LANGUAGE_GROUPS gets its own key so it is never
+    silently folded into another group.
+    """
+    by_lang = {lang: key for key, langs in LANGUAGE_GROUPS.items() for lang in langs}
+    out: dict[str, str] = {}
+    for repo in repos:
+        gt_path = gt_dir / repo / "ground-truth.json"
+        language = ""
+        if gt_path.exists():
+            with open(gt_path) as f:
+                language = (json.load(f).get("language") or "").lower()
+        out[repo] = by_lang.get(language, language or "unknown")
+    return out
+
+
+def language_coverage(
+    grid: dict[str, dict[str, dict | None]],
+    scanners: list[str],
+    repo_languages: dict[str, str],
+) -> dict[str, dict[str, list[int]]]:
+    """scanner -> {language key: [repos scored, repos total]} within `grid`."""
+    totals: dict[str, int] = {}
+    for repo in grid:
+        totals[repo_languages[repo]] = totals.get(repo_languages[repo], 0) + 1
+    out: dict[str, dict[str, list[int]]] = {}
+    for scanner in scanners:
+        scored: dict[str, int] = {}
+        for repo, row in grid.items():
+            if row.get(scanner) is not None:
+                lang = repo_languages[repo]
+                scored[lang] = scored.get(lang, 0) + 1
+        out[scanner] = {lang: [scored.get(lang, 0), n] for lang, n in totals.items()}
+    return out
+
+
+def compute_tab_aggregates(
+    grid: dict[str, dict[str, dict | None]],
+    scanners: list[str],
+    gt_dir: Path,
+) -> tuple[dict[str, dict], dict[str, list[str]], dict[str, str]]:
+    """Aggregates for every language x authorship leaderboard tab.
+
+    Tab keys: "all", each language group present ("python", "tsjs", ...), each
+    authorship source ("intentional", "vibe"), and the cross product
+    "<language>:<source>". Every aggregate carries `language_coverage`
+    (scanner -> {language: [scored, total]} within that tab) so the site can
+    tell a scanner that covered the whole tab from one that only covered one of
+    its languages.
+
+    Returns (tab_aggregates, tab_repos, languages) where `languages` maps each
+    language key present in the corpus to its display label.
+    """
+    repo_sources = load_repo_sources(gt_dir, list(grid))
+    repo_languages = load_repo_languages(gt_dir, list(grid))
+    present = [k for k in LANGUAGE_GROUPS if k in repo_languages.values()]
+    present += sorted({v for v in repo_languages.values() if v not in LANGUAGE_GROUPS})
+    languages = {k: LANGUAGE_LABELS.get(k, k.title()) for k in present}
+
+    def subset(lang: str | None, source: str | None) -> dict:
+        return {
+            r: grid[r]
+            for r in grid
+            if (lang is None or repo_languages[r] == lang)
+            and (source is None or repo_sources[r] == source)
+        }
+
+    tabs: dict[str, dict] = {"all": subset(None, None)}
+    for lang in present:
+        tabs[lang] = subset(lang, None)
+    for source in REPO_SOURCES:
+        tabs[source] = subset(None, source)
+        for lang in present:
+            tabs[f"{lang}:{source}"] = subset(lang, source)
+
+    tab_aggregates: dict[str, dict] = {}
+    tab_repos: dict[str, list[str]] = {}
+    for key, sub_grid in tabs.items():
+        tab_repos[key] = sorted(sub_grid)
+        agg = compute_aggregates(sub_grid, scanners, gt_dir) if sub_grid else {}
+        cov = language_coverage(sub_grid, scanners, repo_languages)
+        for scanner, a in agg.items():
+            a["language_coverage"] = cov.get(scanner, {})
+        tab_aggregates[key] = agg
+    return tab_aggregates, tab_repos, languages
+
+
 def compute_cwe_coverage(
     grid: dict[str, dict[str, dict | None]],
     scanners: list[str],
@@ -1798,6 +1898,9 @@ def build_json_report(
     scanner_metadata: dict | None = None,
     source_aggregates: dict | None = None,
     source_repos: dict | None = None,
+    tab_aggregates: dict | None = None,
+    tab_repos: dict | None = None,
+    languages: dict | None = None,
 ) -> dict:
     """Build machine-readable JSON report."""
     report: dict = {
@@ -1826,6 +1929,12 @@ def build_json_report(
         report["source_aggregates"] = source_aggregates
     if source_repos:
         report["source_repos"] = source_repos
+    if tab_aggregates:
+        report["tab_aggregates"] = tab_aggregates
+    if tab_repos:
+        report["tab_repos"] = tab_repos
+    if languages:
+        report["languages"] = languages
     return report
 
 
@@ -1875,6 +1984,17 @@ def main() -> int:
         type=int,
         default=0,
         help="Exclude scanners that scored fewer than N repos (default: 0 = no filter)",
+    )
+    parser.add_argument(
+        "--min-coverage",
+        type=float,
+        default=0.0,
+        help=(
+            "Exclude scanners that did not score at least this share of the repos "
+            "of ANY language group (default: 0 = no filter). Applied per language so "
+            "a scanner that fully covered one language is kept even if it never "
+            "attempted another."
+        ),
     )
     args = parser.parse_args()
 
@@ -1946,11 +2066,15 @@ def main() -> int:
     grid = score_all(repos, scanners, gt_dir, scan_dir, cwe_families)
     aggregates = compute_aggregates(grid, scanners, gt_dir)
     source_aggregates, source_repos = compute_source_aggregates(grid, scanners, gt_dir)
+    tab_aggregates, tab_repos, languages = compute_tab_aggregates(grid, scanners, gt_dir)
     scanner_costs = compute_scanner_costs(scan_dir, scanners, repo_loc)
     scanner_metadata = compute_scanner_metadata(scan_dir, scanners)
 
-    # Merge costs and metadata into aggregates
+    # Merge costs, metadata and per-language coverage into aggregates
     for scanner in scanners:
+        aggregates.setdefault(scanner, {})["language_coverage"] = (
+            tab_aggregates["all"].get(scanner, {}).get("language_coverage", {})
+        )
         aggregates.setdefault(scanner, {})["cost"] = scanner_costs.get(scanner, {})
         aggregates.setdefault(scanner, {})["metadata"] = scanner_metadata.get(
             scanner, {"has_metrics": False}
@@ -1984,6 +2108,21 @@ def main() -> int:
         dropped = before - len(scanners)
         if dropped:
             print(f"Dropped {dropped} scanners with < {args.min_repos} repos")
+    if args.min_coverage > 0:
+        before = len(scanners)
+        scanners = [
+            s for s in scanners
+            if any(
+                total and scored >= args.min_coverage * total
+                for scored, total in aggregates.get(s, {}).get("language_coverage", {}).values()
+            )
+        ]
+        dropped = before - len(scanners)
+        if dropped:
+            print(
+                f"Dropped {dropped} scanners below {args.min_coverage:.0%} coverage "
+                "of every language group"
+            )
 
     # Prune every emitted structure to the kept scanners — otherwise dropped
     # scanners' data still ships in dashboard.json (and build_detail_pages
@@ -1999,6 +2138,10 @@ def main() -> int:
         src: {s: v for s, v in per.items() if s in kept}
         for src, per in source_aggregates.items()
     }
+    tab_aggregates = {
+        key: {s: v for s, v in per.items() if s in kept}
+        for key, per in tab_aggregates.items()
+    }
 
     # dashboard.py is the data source of truth: it emits dashboard.json only.
     # All HTML (reports/dashboard.html, scanners/*.html) is built by build_site.py.
@@ -2006,6 +2149,7 @@ def main() -> int:
         grid, scanners, aggregates,
         manifest=manifest, scanner_metadata=scanner_metadata,
         source_aggregates=source_aggregates, source_repos=source_repos,
+        tab_aggregates=tab_aggregates, tab_repos=tab_repos, languages=languages,
     )
 
     json_path = Path(args.json)

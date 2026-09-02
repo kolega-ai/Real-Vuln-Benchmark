@@ -6,6 +6,56 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-09-02
+
+### Added
+- **TypeScript/JavaScript corpus**: 74 pinned repositories (24 community intentionally
+  vulnerable apps + 50 LLM-generated company-style apps) with 2,236 reviewed vulnerable
+  findings, bringing the official dataset to 140 repositories across two languages.
+- **Non-scoring ground-truth entries** (`"scoring": "non_scoring"` + `non_scoring_reason`):
+  reviewed locations whose status is too discretionary to grade. The matcher never assigns
+  them, leftover findings inside one are withheld as `NS` rather than counted as false
+  positives, and missing one is never a false negative. `ScoreCard` gains `ns` / `ns_gt`.
+  176 entries in this release (all TS/JS).
+- **Per-language leaderboards**: the homepage and dashboard now carry Overall / Python /
+  TypeScript-JS tabs crossed with the All / Human Authored / Vibe Coded authorship tabs.
+  Scanners that only cover one language are flagged as language-limited on the Overall
+  tab; per-language tabs are like-for-like.
+- New authorship models for the LLM-generated corpus: DeepSeek V4 Pro and DeepSeek V4 Flash.
+- `build_manifest.py` regenerates `benchmark-manifest.json` from ground truth
+  (`--check` fails when it is stale); manifest schema 3.0 adds per-language totals,
+  `non_scoring_entries`, LOC and `distinct_primary_cwes`.
+- `compute_loc.py` counts C-style languages and reads from the pinned commit; every
+  ground-truth file now records `loc`.
+- `dashboard.py --min-coverage` and per-language tab aggregates (`tab_aggregates`,
+  `tab_repos`, `languages` in `reports/dashboard.json`).
+- Semgrep (`--config auto`, OSS) results for all 74 TS/JS repositories; Kolega DevSec Max
+  V0.1.0 results for the TS/JS corpus.
+- `source_layout` ground-truth field for repositories whose source is not checked in as a
+  plain tree (`realvuln-xvna` ships `xvna.zip`).
+
+### Changed
+- Official dataset: 140 repositories, 4,138 vulnerable findings, 280 false-positive traps,
+  176 non-scoring entries. The Python subset (66 repos) is unchanged from 2.1.0, so Python
+  per-language scores remain comparable with 2.x.
+- Community TS/JS repositories are pinned to forks under `kolega-ai-dev`; generated
+  repositories are published as single-snapshot public repositories under the same account.
+- Dashboard and dataset pages report lines of code and languages for the whole corpus,
+  not Python only.
+
+### Compatibility
+- Major version: the official repo set changed. Overall (140-repo) scores must not be
+  compared with 2.x scores. Ground-truth schema version stays 1.0; the only additions are
+  the optional `scoring` / `non_scoring_reason` finding fields and the optional top-level
+  `loc` / `source_layout` fields. The TS/JS corpus ships without false-positive traps.
+
+## [2.1.0] - 2026-08-24
+
+### Changed
+- Hugging Face dataset export is now generated from ground truth (`export_hf_dataset.py`).
+- Ground-truth correction: `damn-vulnerable-flask-app-003` reclassified as a false-positive trap.
+- RealVuln Journal added to the public site.
+
 ## [2.0.0] - 2026-05-26
 
 ### Added

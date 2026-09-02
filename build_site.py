@@ -117,6 +117,11 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
         "sec",
         "Kolega DevSec Platform",
     ),
+    "kolega-devsec-max-v0.1.0": (
+        "Kolega DevSec Max V0.1.0 (TS/JS)",
+        "sec",
+        "Kolega DevSec Platform",
+    ),
     "kolega-claude-adaptation": (
         "Kolega Scan OSS - V2 - 3 Model",
         "sec",
@@ -180,6 +185,7 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
 SCANNER_URLS: dict[str, str] = {
     "kolega-devsec-max-v0.0.1": "https://kolega.ai/devsec",
     "kolega-devsec-core-v0.0.1": "https://kolega.ai/devsec",
+    "kolega-devsec-max-v0.1.0": "https://kolega.ai/devsec",
     "kolega-claude-adaptation": "https://kolega.ai/devsec",
     "kolega-claude-adaptation-deepseek-only": "https://kolega.ai/devsec",
     "kolega-original-claude-adaptation-deepseek-v4-pro": "https://claude.com/blog/using-llms-to-secure-source-code",
@@ -225,6 +231,7 @@ SCANNER_URLS: dict[str, str] = {
 SCANNER_PROVIDERS: dict[str, str] = {
     "kolega-devsec-max-v0.0.1": "Kolega DevSec Platform",
     "kolega-devsec-core-v0.0.1": "Kolega DevSec Platform",
+    "kolega-devsec-max-v0.1.0": "Kolega DevSec Platform",
     "kolega-claude-adaptation": "Kolega Scan OSS",
     "kolega-claude-adaptation-deepseek-only": "Kolega Scan OSS",
     "kolega-original-claude-adaptation-deepseek-v4-pro": "Kolega Scan OSS",
@@ -270,6 +277,14 @@ SCANNER_PROVIDERS: dict[str, str] = {
 # (OpenCode) harness, so the difference is transparent rather than implicit in
 # the version label. HTML allowed.
 SCANNER_NOTES: dict[str, str] = {
+    "kolega-devsec-max-v0.1.0": (
+        "<strong>TypeScript/JavaScript only.</strong> This run covers the 74 pinned "
+        "TS/JS repositories introduced in 3.0.0 and none of the Python corpus, so it "
+        "appears on the Overall tab as language-limited and is only directly comparable "
+        "with other scanners on the TypeScript/JS tab. Hybrid deterministic + LLM-review "
+        "scan; the 74 runs cost $14.56 in total at off-peak API rates. Ground truth was "
+        "never supplied to the scanner."
+    ),
     "claude-opus-5-cc-agentic-v1": (
         "<strong>Claude Code harness; post-hoc v2 scoring.</strong> Claude Opus 5 "
         "scanned all 66 pinned Python repositories through the "
@@ -339,6 +354,7 @@ RULE_SLUGS = {"rowan", "semgrep", "snyk", "sonarqube"}
 SEC_SLUGS = {
     "kolega-devsec-max-v0.0.1",
     "kolega-devsec-core-v0.0.1",
+    "kolega-devsec-max-v0.1.0",
 }
 
 
@@ -357,10 +373,22 @@ def round3(x: float) -> float:
 COVERAGE_THRESHOLD = 0.69
 
 
-def scanners_from_aggregates(ag: dict, repos_total: int) -> list[dict]:
+def scanners_from_aggregates(
+    ag: dict, repos_total: int, languages: dict[str, str] | None = None
+) -> list[dict]:
+    """Leaderboard rows for one tab.
+
+    Coverage is judged per language: a scanner is kept on a tab if it covered at
+    least COVERAGE_THRESHOLD of the tab's repos in at least one language group, and
+    `langs` lists the groups it did cover. On a single-language tab this is the
+    old whole-tab rule; on the Overall tab it keeps a Python-only scanner visible
+    (flagged as language-limited) instead of silently dropping it.
+    """
     out = []
+    languages = languages or {}
     # total Python LOC of the whole corpus — used to price fixed-rate products per vuln
     _, _, _, _, corpus_loc = count_ground_truth(ROOT / "ground-truth")
+    group_loc = language_group_loc(ROOT / "ground-truth")
     for slug, meta in SCANNER_META.items():
         a = ag.get(slug)
         if not a or not a.get("repos_scored", 0):
@@ -371,6 +399,7 @@ def scanners_from_aggregates(ag: dict, repos_total: int) -> list[dict]:
         COST_OVERRIDES = {
             "kolega-devsec-core-v0.0.1": 5.69,
             "kolega-devsec-max-v0.0.1": 2.37,
+            "kolega-devsec-max-v0.1.0": 2.20,  # $14.56 over 660,941 TS/JS LOC (ground-truth loc), off-peak rates
         }
         if slug in COST_OVERRIDES:
             cost_val = COST_OVERRIDES[slug]
@@ -383,11 +412,32 @@ def scanners_from_aggregates(ag: dict, repos_total: int) -> list[dict]:
             cost_est = bool((a.get("cost") or {}).get("estimated"))
         total_cost = a.get("cost", {}).get("total_cost", 0) or 0
         tp = micro.get("tp", 0) or 0
+        lang_cov = a.get("language_coverage") or {}
+        if lang_cov:
+            covered = [
+                lang for lang in (list(languages) or sorted(lang_cov))
+                if lang in lang_cov
+                and lang_cov[lang][1]
+                and lang_cov[lang][0] >= COVERAGE_THRESHOLD * lang_cov[lang][1]
+            ]
+        else:
+            covered = (
+                ["all"]
+                if a.get("repos_scored", repos_total) >= COVERAGE_THRESHOLD * repos_total
+                else []
+            )
         if slug in COST_OVERRIDES and COST_OVERRIDES[slug] == 0:
             cpv_val = 0.0
         elif slug in COST_OVERRIDES and COST_OVERRIDES[slug] > 0 and tp > 0:
             # LOC this scanner covered; fall back to corpus LOC scaled by repo coverage
             loc_cov = a.get("cost", {}).get("total_loc_scanned", 0) or 0
+            if loc_cov <= 0 and lang_cov and group_loc:
+                # sum the LOC of each language group, scaled by repo coverage in it
+                loc_cov = sum(
+                    group_loc.get(lang, 0) * (cov[0] / cov[1])
+                    for lang, cov in lang_cov.items()
+                    if cov[1]
+                )
             if loc_cov <= 0:
                 repos_cov = a.get("repos_scored", repos_total)
                 loc_cov = (
@@ -429,12 +479,13 @@ def scanners_from_aggregates(ag: dict, repos_total: int) -> list[dict]:
                 "sd": (
                     round1(a.get("f2_stddev", 0)) if a.get("num_runs", 1) > 1 else None
                 ),
-                # partial: covered fewer than COVERAGE_THRESHOLD of this tab's repos —
-                # score is not comparable, rendered unranked below the leaderboard
-                "partial": (
-                    a.get("repos_scored", repos_total)
-                    < COVERAGE_THRESHOLD * repos_total
-                ),
+                # langs: language groups this scanner covered on this tab (>= threshold)
+                "langs": covered,
+                # full: covered every language group present on this tab
+                "full": len(covered) == len(lang_cov) if lang_cov else True,
+                # partial: covered fewer than COVERAGE_THRESHOLD of this tab's repos in
+                # every language — score is not comparable, dropped from the tab
+                "partial": not covered,
             }
         )
     # entries below the coverage threshold are dropped from this tab entirely —
@@ -448,26 +499,36 @@ def scanners_from_aggregates(ag: dict, repos_total: int) -> list[dict]:
 def build_scanners(data: dict) -> tuple[list[dict], int]:
     ag = data["aggregates"]
     repos_total = max((a.get("repos_total", 26) for a in ag.values()), default=26)
-    return scanners_from_aggregates(ag, repos_total), repos_total
+    return scanners_from_aggregates(ag, repos_total, data.get("languages")), repos_total
 
 
 def build_tab_datasets(
     data: dict, all_scanners: list[dict], repos_total: int
 ) -> tuple[dict, dict]:
-    """Build leaderboard datasets for the All / Intentional / Vibe tabs.
+    """Build leaderboard datasets for every language x authorship tab.
 
-    'intentional' = the 26 hand-labeled realvuln-* apps; 'vibe' = the 40
-    vc-*-seeded-v2 apps. Source split comes from dashboard.json source_aggregates.
+    Keys come from dashboard.json `tab_aggregates`: "all", one per language
+    group ("python", "tsjs", ...), one per authorship source ("intentional" =
+    hand-labeled community apps, "vibe" = LLM-generated apps) and the cross
+    product "<language>:<source>".
     """
-    src_ag = data.get("source_aggregates", {}) or {}
-    src_repos = data.get("source_repos", {}) or {}
     tabs = {"all": all_scanners}
     totals = {"all": repos_total}
-    for key in ("intentional", "vibe"):
-        if key in src_ag:
-            n = len(src_repos.get(key, [])) or repos_total
-            tabs[key] = scanners_from_aggregates(src_ag[key], n)
-            totals[key] = n
+    languages = data.get("languages") or {}
+    tab_ag = data.get("tab_aggregates") or {}
+    tab_repos = data.get("tab_repos") or {}
+    if not tab_ag:
+        # pre-3.0 dashboard.json: authorship tabs only
+        tab_ag = data.get("source_aggregates", {}) or {}
+        tab_repos = data.get("source_repos", {}) or {}
+    for key, ag in tab_ag.items():
+        if key == "all":
+            continue
+        n = len(tab_repos.get(key, []))
+        if not n:
+            continue
+        tabs[key] = scanners_from_aggregates(ag, n, languages)
+        totals[key] = n
     return tabs, totals
 
 
@@ -509,6 +570,59 @@ def build_cwe(data: dict) -> list[dict]:
     return rows
 
 
+# Language groups, mirrored from dashboard.LANGUAGE_GROUPS (display label -> GT
+# `language` values). Keep the two in step when a language is added.
+# leaderboard group key -> display label used in prose
+LANGUAGE_DISPLAY_GROUP = {"python": "Python", "tsjs": "TypeScript/JavaScript", "java": "Java"}
+LANGUAGE_GROUPS: dict[str, tuple[str, ...]] = {
+    "python": ("python",),
+    "tsjs": ("typescript", "javascript"),
+    "java": ("java",),
+}
+LANGUAGE_DISPLAY = {
+    "python": "Python",
+    "typescript": "TypeScript",
+    "javascript": "JavaScript",
+    "java": "Java",
+}
+
+
+def tab_loc(data: dict, gt_dir: Path) -> dict[str, int]:
+    """Total GT `loc` of the repositories behind each leaderboard tab."""
+    loc_by_repo: dict[str, int] = {}
+    for f in gt_dir.glob("*/ground-truth.json"):
+        gt = json.loads(f.read_text())
+        loc_by_repo[f.parent.name] = int(gt.get("loc") or 0) if isinstance(gt, dict) else 0
+    out = {"all": sum(loc_by_repo.values())}
+    for tab, repos in (data.get("tab_repos") or {}).items():
+        out[tab] = sum(loc_by_repo.get(r, 0) for r in repos)
+    return out
+
+
+def language_group_loc(gt_dir: Path) -> dict[str, int]:
+    """Total GT `loc` per leaderboard language group (python / tsjs / java)."""
+    by_lang = {lang: group for group, langs in LANGUAGE_GROUPS.items() for lang in langs}
+    out: dict[str, int] = {}
+    for f in sorted(gt_dir.glob("*/ground-truth.json")):
+        gt = json.loads(f.read_text())
+        lang = ((gt.get("language") if isinstance(gt, dict) else None) or "unknown").lower()
+        group = by_lang.get(lang, lang)
+        out[group] = out.get(group, 0) + int(gt.get("loc") or 0)
+    return out
+
+
+def language_distribution(gt_dir: Path) -> list[tuple[str, int]]:
+    """(display_name, repo_count) per GT `language`, count desc."""
+    from collections import Counter
+
+    counts: Counter = Counter()
+    for f in sorted(gt_dir.glob("*/ground-truth.json")):
+        gt = json.loads(f.read_text())
+        lang = ((gt.get("language") if isinstance(gt, dict) else None) or "unknown").lower()
+        counts[lang] += 1
+    return [(LANGUAGE_DISPLAY.get(k, k.title()), v) for k, v in counts.most_common()]
+
+
 def framework_distribution(gt_dir: Path) -> list[tuple[str, int]]:
     """(display_name, repo_count) per framework, from ground-truth, count desc."""
     from collections import Counter
@@ -519,6 +633,13 @@ def framework_distribution(gt_dir: Path) -> list[tuple[str, int]]:
         "fastapi": "FastAPI",
         "aiohttp": "aiohttp",
         "tornado": "Tornado",
+        "express": "Express",
+        "nextjs": "Next.js",
+        "nestjs-angular": "NestJS + Angular",
+        "remix": "Remix",
+        "fastify-vue": "Fastify + Vue",
+        "react": "React",
+        "koa": "Koa",
         "none": "custom",
     }
     counts: Counter = Counter()
@@ -616,12 +737,14 @@ def repo_table_rows(gt_dir: Path) -> str:
         name = (gt.get("repo_id") if isinstance(gt, dict) else None) or f.parent.name
         name = name.replace("realvuln-", "")
         fw = (gt.get("framework") if isinstance(gt, dict) else None) or "none"
-        repos.append((name, FW.get(fw, fw), vulns, traps))
-    repos.sort(key=lambda r: r[2], reverse=True)
+        lang = ((gt.get("language") if isinstance(gt, dict) else None) or "unknown").lower()
+        repos.append((name, LANGUAGE_DISPLAY.get(lang, lang.title()), FW.get(fw, fw), vulns, traps))
+    repos.sort(key=lambda r: r[3], reverse=True)
     return "\n          ".join(
-        f'<tr><td class="repo-id">{n}</td><td><span class="fw-pill">{fw}</span></td>'
+        f'<tr><td class="repo-id">{n}</td><td><span class="fw-pill">{lang}</span></td>'
+        f'<td><span class="fw-pill">{fw}</span></td>'
         f'<td class="r">{v}</td><td class="r">{t}</td></tr>'
-        for n, fw, v, t in repos
+        for n, lang, fw, v, t in repos
     )
 
 
@@ -702,6 +825,8 @@ def emit_data_js(
     dataset: dict,
     tabs: dict | None = None,
     tab_totals: dict | None = None,
+    languages: dict | None = None,
+    tab_loc: dict | None = None,
 ) -> str:
     lines = []
     lines.append("/* ============================================================")
@@ -732,9 +857,11 @@ def emit_data_js(
         "cpv",
         "est",
         "sd",
+        "langs",
+        "full",
     ]
     for s in scanners:
-        parts = ", ".join(f"{k}: {js_value(s[k])}" for k in keys)
+        parts = ", ".join(f"{k}: {js_value(s.get(k))}" for k in keys)
         lines.append(f"    {{ {parts} }},")
     lines.append("  ];")
     lines.append("")
@@ -748,38 +875,26 @@ def emit_data_js(
     lines.append("")
     lines.append("  window.RV = {")
     lines.append("    SCANNERS: S,")
-    # Per-tab leaderboard datasets: all (66) / intentional (26) / vibe (40)
+    # Per-tab leaderboard datasets: language x authorship. Keys: "all", each
+    # language group, each authorship source, and "<language>:<source>".
     if tabs:
-        keys = [
-            "name",
-            "slug",
-            "cat",
-            "ver",
-            "url",
-            "repos",
-            "f2",
-            "f2s",
-            "f3",
-            "f3s",
-            "rec",
-            "recs",
-            "tp",
-            "fp",
-            "prec",
-            "cost",
-            "cpv",
-            "est",
-            "sd",
-        ]
         lines.append("    SCANNERS_BY_TAB: {")
-        for tk in ("all", "intentional", "vibe"):
-            if tk in tabs:
-                lines.append(f"      {tk}: {emit_scanner_array(tabs[tk], keys)},")
+        for tk in tabs:
+            lines.append(f"      {json.dumps(tk)}: {emit_scanner_array(tabs[tk], keys)},")
         lines.append("    },")
         lines.append("    TAB_TOTALS: " + json.dumps(tab_totals or {}) + ",")
-        lines.append(
-            "    TAB_LABELS: { all: 'All', intentional: 'Human Authored', vibe: 'Vibe Coded' },"
-        )
+        lines.append("    TAB_LOC: " + json.dumps(tab_loc or {}) + ",")
+        src_labels = {"all": "All", "intentional": "Human Authored", "vibe": "Vibe Coded"}
+        lang_labels = {"all": "Overall", **(languages or {})}
+        tab_labels = dict(src_labels)
+        tab_labels.update({k: v for k, v in lang_labels.items() if k != "all"})
+        for lk, lv in lang_labels.items():
+            for sk, sv in src_labels.items():
+                if lk != "all" and sk != "all":
+                    tab_labels[f"{lk}:{sk}"] = f"{lv} · {sv}"
+        lines.append("    TAB_LABELS: " + json.dumps(tab_labels) + ",")
+        lines.append("    LANG_LABELS: " + json.dumps(lang_labels) + ",")
+        lines.append("    SRC_LABELS: " + json.dumps(src_labels) + ",")
     lines.append("    CWE: CWE,")
     lines.append(
         "    CAT_LABEL: { sec: 'Security-Specialized', llm: 'General-Purpose LLM', rule: 'Rule-Based SAST' },"
@@ -954,7 +1069,10 @@ def main() -> None:
 
     REPORTS.mkdir(exist_ok=True)
     (REPORTS / "realvuln-data.js").write_text(
-        emit_data_js(scanners, cwe, dataset, tabs, tab_totals)
+        emit_data_js(
+            scanners, cwe, dataset, tabs, tab_totals, data.get("languages"),
+            tab_loc(data, ROOT / "ground-truth"),
+        )
     )
     print(
         f"wrote reports/realvuln-data.js  ({len(scanners)} scanners, {len(cwe)} CWE families)"
@@ -1015,7 +1133,27 @@ def main() -> None:
     tokens["{{HUMAN_PCT}}"] = f"{human / tot * 100:.0f}"
     tokens["{{LLM_PCT}}"] = f"{llm / tot * 100:.0f}"
     tokens["{{REPO_TABLE_ROWS}}"] = repo_table_rows(ROOT / "ground-truth")
-    for k, v in per_tier_bests(scanners).items():
+    # per-language corpus split, from ground truth
+    lang_counts = language_distribution(ROOT / "ground-truth")
+    tokens["{{LANG_COUNT}}"] = str(len(lang_counts))
+    tokens["{{LANGUAGE_BARS}}"] = bar_rows(lang_counts)
+    tokens["{{LANGUAGE_LIST}}"] = ", ".join(f"{n} {k}" for k, n in lang_counts)
+    tokens["{{NON_SCORING}}"] = f"{dataset['non_scoring']:,}"
+    for key, langs in LANGUAGE_GROUPS.items():
+        n = sum(n for k, n in lang_counts if k.lower() in langs)
+        tokens[f"{{{{REPOS_{key.upper()}}}}}"] = str(n)
+    # Tier prose (best per category, tier gaps) is computed on the language tab
+    # where the most scanners have full coverage, so the figures compare
+    # like-for-like runs instead of mixing language-limited scores.
+    prose_tab = max(
+        (t for t in tabs if ":" not in t and t != "all"),
+        key=lambda t: sum(1 for sc in tabs[t] if sc.get("full")),
+        default="all",
+    )
+    lang_labels = {"all": "Overall", **{k: v for k, v in LANGUAGE_DISPLAY_GROUP.items()}}
+    tokens["{{PROSE_LANG}}"] = lang_labels.get(prose_tab, prose_tab)
+    tokens["{{PROSE_REPOS}}"] = str(tab_totals.get(prose_tab, repos_total))
+    for k, v in per_tier_bests(tabs.get(prose_tab, scanners)).items():
         tokens[f"{{{{{k}}}}}"] = str(v)
 
     # per-CWE recall tokens (best LLM vs best rule), keyed by family slug → e.g. {{CWE_SQL_LLM}}

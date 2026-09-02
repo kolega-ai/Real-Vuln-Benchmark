@@ -175,7 +175,8 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
         provider_html = ""
     out.append(f'  <h1>{name}{provider_html}</h1>')
     out.append(f'  <p class="lede">{CAT_LABEL.get(cat, cat)} · <span class="mono">{ver}</span> · '
-               f'scored on {repos_scored}/{repos_total} repositories. Strict scoring (unfinished repos counted as misses).</p>')
+               f'scored on {repos_scored}/{repos_total} {agg.get("scope_label", "")}repositories. '
+               f'Strict scoring (unfinished repos counted as misses).</p>')
     out.append("</section>")
 
     # optional methodology note (e.g. non-standard harness)
@@ -262,7 +263,7 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
     if cost > 0:
         out.append(mg(f'${cost_d.get("cost_per_run", 0):.2f}', "Cost / run"))
         out.append(mg(f'${cost_d.get("cost_per_100_loc", 0):.3f}', "Cost / 100 LOC"))
-    out.append(mg(f'{cost_d.get("total_loc_scanned", 0):,}', "Python LOC scanned"))
+    out.append(mg(f'{cost_d.get("total_loc_scanned", 0):,}', "Lines of code scanned"))
     out.append(mg(f'{cost_d.get("successful_runs", 0)}', "Successful runs"))
     out.append("  </div>")
 
@@ -286,10 +287,21 @@ def main() -> None:
     outdir = REPORTS / "scanners"
     outdir.mkdir(exist_ok=True)
     n = 0
+    tab_aggs = data.get("tab_aggregates") or {}
+    lang_labels = {"python": "Python", "tsjs": "TypeScript/JavaScript", "java": "Java"}
     for slug in SCANNER_META:
         if slug not in aggs:
             continue
-        (outdir / f"{slug}.html").write_text(build_page(slug, aggs[slug], grid, meta_all.get(slug, {})))
+        agg = aggs[slug]
+        # A scanner that only covers one language group is judged strictly within
+        # that group: repositories in languages it never targets are not misses.
+        cov = agg.get("language_coverage") or {}
+        scanned = [lang for lang, c in cov.items() if c[0]]
+        if len(scanned) == 1 and len(cov) > 1 and scanned[0] in tab_aggs and slug in tab_aggs[scanned[0]]:
+            agg = dict(tab_aggs[scanned[0]][slug])
+            agg["cost"] = aggs[slug].get("cost")
+            agg["scope_label"] = f"{lang_labels.get(scanned[0], scanned[0])} "
+        (outdir / f"{slug}.html").write_text(build_page(slug, agg, grid, meta_all.get(slug, {})))
         n += 1
     print(f"wrote {n} reskin-styled scanner detail pages -> reports/scanners/")
 

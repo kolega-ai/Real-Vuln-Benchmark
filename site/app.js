@@ -5,8 +5,19 @@
 (function () {
   'use strict';
   if (!window.RV) return;
-  var SC = window.RV.SCANNERS, COL = window.RV.COL;
-  var REPO_TOTAL = (window.RV.DATASET && window.RV.DATASET.repos) || 26;
+  var BY_TAB = window.RV.SCANNERS_BY_TAB || { all: window.RV.SCANNERS };
+  var TAB_TOTALS = window.RV.TAB_TOTALS || {};
+  var LANG_LABELS = window.RV.LANG_LABELS || { all: 'Overall' };
+  var SHORT_LANG = { python: 'Python', tsjs: 'TS/JS', java: 'Java' };
+  var lang = 'all';
+  var SC = BY_TAB[lang] || window.RV.SCANNERS, COL = window.RV.COL;
+  var REPO_TOTAL = TAB_TOTALS[lang] || (window.RV.DATASET && window.RV.DATASET.repos) || 26;
+  function langBadges(s) {
+    if (!s.langs || s.full !== false) return '';
+    return s.langs.map(function (l) {
+      return '<span class="lang-badge limited" title="Language-limited run — scored on ' + (LANG_LABELS[l] || l) + ' repositories only">' + (SHORT_LANG[l] || l) + '</span>';
+    }).join('');
+  }
 
   var state = { metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1 };
 
@@ -59,7 +70,7 @@
 
       tr.innerHTML =
         '<td class="l">' + rankCell + '</td>' +
-        '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' +
+        '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' + langBadges(s) +
           '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
@@ -79,6 +90,27 @@
     });
   }
 
+  // homepage language tabs (Overall / Python / TS-JS / ...), built from the data file
+  var langHost = document.getElementById('home-lang-tabs');
+  if (langHost) {
+    Object.keys(LANG_LABELS).forEach(function (lk) {
+      if (lk === 'all' || !BY_TAB[lk]) return;
+      var b = document.createElement('button');
+      b.className = 'ltab'; b.setAttribute('data-lang', lk); b.setAttribute('role', 'tab');
+      b.textContent = LANG_LABELS[lk];
+      langHost.appendChild(b);
+    });
+    langHost.querySelectorAll('.ltab').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var lk = btn.getAttribute('data-lang');
+        if (lk === lang || !BY_TAB[lk]) return;
+        langHost.querySelectorAll('.ltab').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        lang = lk; SC = BY_TAB[lk]; REPO_TOTAL = TAB_TOTALS[lk] || REPO_TOTAL;
+        render(); if (typeof renderScatter === 'function') renderScatter();
+      });
+    });
+  }
   document.querySelectorAll('.metric-toggle [data-metric]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       document.querySelectorAll('.metric-toggle [data-metric]').forEach(function (b) { b.classList.remove('active'); });
