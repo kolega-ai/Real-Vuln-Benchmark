@@ -46,6 +46,9 @@ class ScoreCard:
     fp: int = 0
     fn: int = 0
     tn: int = 0
+    # Non-scoring: excluded from every metric below, reported for transparency.
+    ns: int = 0  # scanner findings withheld (landed on a non-scoring entry)
+    ns_gt: int = 0  # non-scoring GT entries in this repo
     precision: float = 0.0
     recall: float = 0.0
     f1: float = 0.0
@@ -69,6 +72,8 @@ class ScoreCard:
             "fp": self.fp,
             "fn": self.fn,
             "tn": self.tn,
+            "ns": self.ns,
+            "ns_gt": self.ns_gt,
             "precision": round(self.precision, 4),
             "recall": round(self.recall, 4),
             "f1": round(self.f1, 4),
@@ -152,6 +157,11 @@ def compute_scorecard(
             card.fn += 1
         elif r.classification == "TN":
             card.tn += 1
+        elif r.classification == "NS":
+            if r.scanner_finding is not None:
+                card.ns += 1
+            else:
+                card.ns_gt += 1
 
     card.precision = _safe_div(card.tp, card.tp + card.fp)
     card.recall = _safe_div(card.tp, card.tp + card.fn)
@@ -170,11 +180,15 @@ def compute_scorecard(
     card.fpr = _safe_div(card.fp, card.fp + card.tn)
     card.youden_j = card.tpr - card.fpr
 
+    # Breakdowns only see scored results; NS entries would otherwise create
+    # empty family/severity buckets.
+    scored_results = [r for r in match_results if r.classification != "NS"]
+
     # Per-family breakdown (bucket GT entries by primary_cwe)
     cwe_to_families = _build_cwe_to_families(cwe_families)
     family_scores: dict[str, FamilyScore] = {}
 
-    for r in match_results:
+    for r in scored_results:
         gt = r.ground_truth_entry
         if gt is None:
             continue
@@ -205,7 +219,7 @@ def compute_scorecard(
     # Per-severity breakdown (use GT entry severity)
     severity_scores: dict[str, SeverityScore] = {}
 
-    for r in match_results:
+    for r in scored_results:
         gt = r.ground_truth_entry
         if gt is None:
             continue

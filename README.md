@@ -239,6 +239,7 @@ Key design decisions:
 
 - **`benchmark_version` and `ground_truth_version`** make each GT file self-identifying. RealVuln v2.0.0 scores should not be compared directly with v1.x scores.
 - **`is_vulnerable: false` entries** are false-positive traps — code that looks suspicious but is safe. Critical for measuring FP rates.
+- **`scoring: "non_scoring"` entries** (optional field; default `"scored"`) are reviewed locations whose status cannot be settled from the source alone. Each carries a `non_scoring_reason`. See [Non-scoring entries](#non-scoring-entries).
 - **`acceptable_cwes`** handles CWE ambiguity. Missing auth could be CWE-306, CWE-862, CWE-287, or CWE-284. Any acceptable CWE on the correct file earns credit.
 - **Pinned commit SHAs** prevent ground truth drift as repos get patched.
 - A **global CWE family mapping** (`config/cwe-families.json`) groups related CWEs so scoring handles scanner-specific CWE choices gracefully.
@@ -271,8 +272,22 @@ Each GT entry can only be matched once. Once a GT entry is claimed by a finding,
 | **False Positive (FP)** | Matches an `is_vulnerable: false` ground truth entry, or flagged something with no ground truth entry |
 | **False Negative (FN)** | `is_vulnerable: true` entry the scanner missed |
 | **True Negative (TN)** | `is_vulnerable: false` entry the scanner correctly ignored |
+| **Non-Scoring (NS)** | A `scoring: "non_scoring"` entry, or a finding that landed on one. Excluded from every metric |
 
 Unmatched scanner findings (no ground truth entry) are scored as false positives. If a scanner flags something that isn't in ground truth, the burden is on the scanner to be right — not on the benchmark to assume it might be.
+
+### Non-scoring entries
+
+Some reviewed locations are **highly discretionary**: whether they are a vulnerability depends on intent or deployment context that the source alone does not settle — for example an unauthenticated endpoint that the code itself documents as deliberately public, or one instance of a pattern that ground truth already credits through a whole-file entry. Labelling such a location vulnerable would penalise scanners for our uncertainty; labelling it safe would reward them for it. Neither is defensible, so the entry is kept in ground truth and marked `scoring: "non_scoring"` with a `non_scoring_reason` explaining why.
+
+Non-scoring entries are excluded from scoring **in both directions**:
+
+- **Reporting one is not a false positive.** A finding that matched no scored entry but lands inside a non-scoring entry's file and line range (±10) is withheld from the FP count. This check is on location only — the CWE the scanner chose is irrelevant, because it is the location's status that is unsettled. Any number of findings may be withheld by the same entry.
+- **Missing one is not a false negative.** Non-scoring entries never appear in the FN or TN counts.
+
+Non-scoring entries take **no part in matching**. Scored entries are matched first, so a non-scoring entry can never claim a finding away from a co-located vulnerable entry and turn a TP into a FN. Only findings left over after scored matching are checked against non-scoring entries.
+
+The scorer reports the number of withheld findings (`ns`) and non-scoring entries (`ns_gt`) alongside the confusion matrix so the exclusion is visible, and the markdown scorecard lists each with its `non_scoring_reason` so every exclusion can be audited individually. Published dataset totals (vulnerabilities, traps) never include non-scoring entries.
 
 ### Metrics
 

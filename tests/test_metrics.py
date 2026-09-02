@@ -182,3 +182,62 @@ class TestComputeScorecard:
         assert d["tp"] == 3
         assert isinstance(d["per_family"], dict)
         assert isinstance(d["details"], list)
+
+
+def _ns_result(withheld: bool, gt_id: str = "ns-001", cwe: str = "CWE-89") -> MatchResult:
+    """NS result: withheld scanner finding (withheld=True) or bare NS GT entry."""
+    finding = NormalisedFinding(
+        file="app.py", cwe=cwe, line=42,
+        function=None, severity="high", rule_id="test",
+        message="test", scanner="test",
+    ) if withheld else None
+    return MatchResult(
+        classification="NS",
+        ground_truth_id=gt_id,
+        scanner_finding=finding,
+        ground_truth_entry={
+            "id": gt_id,
+            "is_vulnerable": True,
+            "scoring": "non_scoring",
+            "non_scoring_reason": "Reviewed: cannot be settled from the source alone.",
+            "primary_cwe": cwe,
+            "severity": "high",
+        },
+    )
+
+
+class TestNonScoringMetrics:
+    def test_ns_counted_separately_and_excluded_from_metrics(self):
+        results = [
+            _make_result("TP", "gt-1"),
+            _make_result("FP"),
+            _make_result("FN", "gt-2"),
+            _ns_result(withheld=True),
+            _ns_result(withheld=True),
+            _ns_result(withheld=False),
+        ]
+        card = compute_scorecard("repo", "scanner", "ts", results, CWE_FAMILIES)
+        assert (card.tp, card.fp, card.fn, card.tn) == (1, 1, 1, 0)
+        assert card.ns == 2
+        assert card.ns_gt == 1
+        assert card.precision == 0.5
+        assert card.recall == 0.5
+
+    def test_ns_absent_from_family_and_severity_breakdowns(self):
+        results = [_ns_result(withheld=True), _ns_result(withheld=False)]
+        card = compute_scorecard("repo", "scanner", "ts", results, CWE_FAMILIES)
+        assert card.per_family == {}
+        assert card.per_severity == {}
+
+    def test_ns_in_to_dict(self):
+        card = compute_scorecard("repo", "scanner", "ts", [_ns_result(withheld=True)], CWE_FAMILIES)
+        d = card.to_dict()
+        assert d["ns"] == 1 and d["ns_gt"] == 0
+        assert d["details"][0]["classification"] == "NS"
+
+    def test_ns_does_not_move_headline_scores(self):
+        base = [_make_result("TP", "gt-1"), _make_result("FP"), _make_result("FN", "gt-2"), _make_result("TN", "gt-3")]
+        with_ns = base + [_ns_result(withheld=True), _ns_result(withheld=False)]
+        a = compute_scorecard("repo", "s", "ts", base, CWE_FAMILIES)
+        b = compute_scorecard("repo", "s", "ts", with_ns, CWE_FAMILIES)
+        assert (a.f2_score, a.f3_score, a.fpr, a.youden_j) == (b.f2_score, b.f3_score, b.fpr, b.youden_j)

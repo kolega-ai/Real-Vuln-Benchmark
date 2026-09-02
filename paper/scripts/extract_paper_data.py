@@ -77,6 +77,8 @@ def load_ground_truth_stats():
         if fw:
             frameworks.add(fw)
         for f in gt.get("findings", []):
+            if f.get("scoring", "scored") == "non_scoring":
+                continue  # excluded from every published count
             if f.get("is_vulnerable", True):
                 total_vulns += 1
                 cwe = f.get("primary_cwe")

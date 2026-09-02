@@ -20,6 +20,8 @@ import shutil
 from datetime import date
 from pathlib import Path
 
+from scorer.matcher import is_non_scoring
+
 ROOT = Path(__file__).resolve().parent
 SITE_SRC = ROOT / "site"
 REPORTS = ROOT / "reports"
@@ -358,7 +360,7 @@ COVERAGE_THRESHOLD = 0.69
 def scanners_from_aggregates(ag: dict, repos_total: int) -> list[dict]:
     out = []
     # total Python LOC of the whole corpus — used to price fixed-rate products per vuln
-    _, _, _, corpus_loc = count_ground_truth(ROOT / "ground-truth")
+    _, _, _, _, corpus_loc = count_ground_truth(ROOT / "ground-truth")
     for slug, meta in SCANNER_META.items():
         a = ag.get(slug)
         if not a or not a.get("repos_scored", 0):
@@ -608,6 +610,7 @@ def repo_table_rows(gt_dir: Path) -> str:
     for f in sorted(gt_dir.glob("*/ground-truth.json")):
         gt = json.loads(f.read_text())
         items = gt.get("findings", gt) if isinstance(gt, dict) else gt
+        items = [it for it in items if not is_non_scoring(it)]
         vulns = sum(1 for it in items if it.get("is_vulnerable", True))
         traps = sum(1 for it in items if not it.get("is_vulnerable", True))
         name = (gt.get("repo_id") if isinstance(gt, dict) else None) or f.parent.name
@@ -622,9 +625,12 @@ def repo_table_rows(gt_dir: Path) -> str:
     )
 
 
-def count_ground_truth(gt_dir: Path) -> tuple[int, int, int, int]:
-    """Return (repos, real_vulns, fp_traps, total_loc) counted from ground-truth.json files."""
-    repos = vulns = traps = loc = 0
+def count_ground_truth(gt_dir: Path) -> tuple[int, int, int, int, int]:
+    """Return (repos, real_vulns, fp_traps, non_scoring, total_loc) from ground-truth.json files.
+
+    Non-scoring entries are reported separately and never counted as vulns or traps.
+    """
+    repos = vulns = traps = non_scoring = loc = 0
     for f in sorted(gt_dir.glob("*/ground-truth.json")):
         repos += 1
         gt = json.loads(f.read_text())
@@ -637,20 +643,23 @@ def count_ground_truth(gt_dir: Path) -> tuple[int, int, int, int]:
                     items = gt[k]
                     break
         for it in items:
-            if it.get("is_vulnerable", True):
+            if is_non_scoring(it):
+                non_scoring += 1
+            elif it.get("is_vulnerable", True):
                 vulns += 1
             else:
                 traps += 1
-    return repos, vulns, traps, loc
+    return repos, vulns, traps, non_scoring, loc
 
 
 def dataset_stats(data: dict, scanners: list[dict], repos_total: int) -> dict:
     # total Python LOC across every benchmark repo (summed from ground truth)
-    repos, vulns, traps, loc = count_ground_truth(ROOT / "ground-truth")
+    repos, vulns, traps, non_scoring, loc = count_ground_truth(ROOT / "ground-truth")
     return {
         "repos": repos or repos_total,
         "vulns": vulns,
         "traps": traps,
+        "non_scoring": non_scoring,
         "loc": loc,
         "scanners": len(scanners),
         # number of distinct CWE families with at least one labeled finding

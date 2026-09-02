@@ -15,7 +15,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from parsers import get_parser
-from scorer.matcher import load_ground_truth, match_findings
+from scorer.matcher import is_non_scoring, load_ground_truth, match_findings
 from scorer.metrics import compute_scorecard, ScoreCard
 
 
@@ -48,7 +48,7 @@ def print_summary_table(
     print()
     header = (
         f"{'Scanner':<20} {'F2 Score':>8} {'F3 Score':>8}  "
-        f"{'TP':>4} {'FP':>4} {'FN':>4} {'TN':>4}  "
+        f"{'TP':>4} {'FP':>4} {'FN':>4} {'TN':>4} {'NS':>4}  "
         f"{'Prec':>6} {'Recall':>6} {'F1':>6} {'F2':>6} {'F3':>6}"
     )
     print(header)
@@ -57,7 +57,7 @@ def print_summary_table(
     for card in scorecards:
         print(
             f"{card.scanner:<20} {card.f2_score:>7.1f}  {card.f3_score:>7.1f}   "
-            f"{card.tp:>4} {card.fp:>4} {card.fn:>4} {card.tn:>4}  "
+            f"{card.tp:>4} {card.fp:>4} {card.fn:>4} {card.tn:>4} {card.ns:>4}  "
             f"{card.precision:>6.3f} {card.recall:>6.3f} {card.f1:>6.3f} {card.f2:>6.3f} {card.f3:>6.3f}"
         )
 
@@ -137,8 +137,10 @@ def build_markdown(
     """Build a human-readable markdown scorecard."""
     gt_meta = ground_truth
     gt_findings = gt_meta["findings"]
-    vuln_count = sum(1 for f in gt_findings if f["is_vulnerable"])
-    fp_trap_count = sum(1 for f in gt_findings if not f["is_vulnerable"])
+    scored = [f for f in gt_findings if not is_non_scoring(f)]
+    vuln_count = sum(1 for f in scored if f["is_vulnerable"])
+    fp_trap_count = sum(1 for f in scored if not f["is_vulnerable"])
+    non_scoring_count = len(gt_findings) - len(scored)
 
     lines: list[str] = []
     w = lines.append
@@ -148,7 +150,10 @@ def build_markdown(
     w("")
     w(f"**Commit:** `{commit_sha[:12]}`  ")
     w(f"**Generated:** {timestamp}  ")
-    w(f"**Ground Truth:** {vuln_count} vulnerabilities, {fp_trap_count} false-positive traps  ")
+    gt_line = f"**Ground Truth:** {vuln_count} vulnerabilities, {fp_trap_count} false-positive traps"
+    if non_scoring_count:
+        gt_line += f", {non_scoring_count} non-scoring entries"
+    w(gt_line + "  ")
     repo_url = gt_meta.get("repo_url", "")
     if repo_url:
         w(f"**Repository:** {repo_url}  ")
@@ -162,7 +167,7 @@ def build_markdown(
     w("")
     w("### Classification")
     w("")
-    w("Every scanner finding and ground truth entry is classified into one of four categories:")
+    w("Every scanner finding and ground truth entry is classified into one of five categories:")
     w("")
     w("| Classification | What it means |")
     w("|----------------|---------------|")
@@ -170,6 +175,7 @@ def build_markdown(
     w("| **False Positive (FP)** | Scanner flagged something that isn't vulnerable (noise) |")
     w("| **False Negative (FN)** | Scanner missed a real vulnerability |")
     w("| **True Negative (TN)** | Scanner correctly ignored a false-positive trap (code that looks suspicious but is safe) |")
+    w("| **Non-Scoring (NS)** | Reviewed location whose status cannot be settled from the source alone. Excluded from every metric: reporting it is not an FP, missing it is not an FN |")
     w("")
     w("### Metrics")
     w("")
@@ -216,6 +222,8 @@ def build_markdown(
         w(f"| F2 | {card.f2:.3f} |")
         w(f"| F3 | {card.f3:.3f} |")
         w(f"| TP / FP / FN / TN | {card.tp} / {card.fp} / {card.fn} / {card.tn} |")
+        if card.ns_gt:
+            w(f"| Non-scoring (withheld findings / entries) | {card.ns} / {card.ns_gt} |")
         w("")
 
         # Multi-run stats
@@ -243,11 +251,11 @@ def build_markdown(
         w("")
         w("## Scanner Comparison")
         w("")
-        w("| Scanner | F2 Score | F3 Score | TP | FP | FN | TN | Prec | Recall | F1 | F2 | F3 |")
-        w("|---------|--------:|--------:|---:|---:|---:|---:|-----:|-------:|---:|---:|---:|")
+        w("| Scanner | F2 Score | F3 Score | TP | FP | FN | TN | NS | Prec | Recall | F1 | F2 | F3 |")
+        w("|---------|--------:|--------:|---:|---:|---:|---:|---:|-----:|-------:|---:|---:|---:|")
         for slug, card in scorecards.items():
             w(
-                f"| {slug} | **{card.f2_score:.1f}** | **{card.f3_score:.1f}** | {card.tp} | {card.fp} | {card.fn} | {card.tn} "
+                f"| {slug} | **{card.f2_score:.1f}** | **{card.f3_score:.1f}** | {card.tp} | {card.fp} | {card.fn} | {card.tn} | {card.ns} "
                 f"| {card.precision:.3f} | {card.recall:.3f} | {card.f1:.3f} "
                 f"| {card.f2:.3f} | {card.f3:.3f} |"
             )
@@ -315,6 +323,7 @@ def build_markdown(
             ("False Positives", "FP", "\u274c"),
             ("False Negatives (Missed)", "FN", "\u26a0\ufe0f"),
             ("True Negatives", "TN", "\u26aa"),
+            ("Non-Scoring (excluded from all metrics)", "NS", "\u2796"),
         ]:
             items = [d for d in card.details if d.classification == cls_code]
             if not items:
@@ -326,12 +335,15 @@ def build_markdown(
                 if d.scanner_finding:
                     f = d.scanner_finding
                     line_str = f"L{f.line}" if f.line else ""
-                    w(f"- {emoji} `{f.cwe}` on `{f.file}`{':' + line_str if line_str else ''} → matched **{gt_id}**")
+                    verb = "withheld by" if cls_code == "NS" else "matched"
+                    w(f"- {emoji} `{f.cwe}` on `{f.file}`{':' + line_str if line_str else ''} → {verb} **{gt_id}**")
                 elif d.ground_truth_entry:
                     gt = d.ground_truth_entry
                     loc = gt.get("location", {})
                     line_str = f"L{loc.get('start_line', '?')}"
-                    w(f"- {emoji} `{gt.get('primary_cwe', '?')}` on `{gt.get('file', '?')}`:{line_str} — **{gt_id}** ({gt.get('vulnerability_class', '?')})")
+                    reason = gt.get("non_scoring_reason") if cls_code == "NS" else None
+                    suffix = f" — {reason}" if reason else ""
+                    w(f"- {emoji} `{gt.get('primary_cwe', '?')}` on `{gt.get('file', '?')}`:{line_str} — **{gt_id}** ({gt.get('vulnerability_class', '?')}){suffix}")
             w("")
 
     return "\n".join(lines)
@@ -489,6 +501,8 @@ def main() -> int:
                 fp=round(statistics.mean([c.fp for c in run_cards])),
                 fn=round(statistics.mean([c.fn for c in run_cards])),
                 tn=round(statistics.mean([c.tn for c in run_cards])),
+                ns=round(statistics.mean([c.ns for c in run_cards])),
+                ns_gt=run_cards[0].ns_gt,  # run-invariant: a property of the GT
             )
             avg_card.precision = statistics.mean([c.precision for c in run_cards])
             avg_card.recall = statistics.mean([c.recall for c in run_cards])

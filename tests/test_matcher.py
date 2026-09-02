@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from parsers.base import NormalisedFinding
 from scorer.matcher import (
+    is_non_scoring,
     load_ground_truth,
     match_findings,
     _line_within_tolerance,
@@ -287,3 +290,148 @@ class TestMatchFindings:
         fp = [r for r in results if r.classification == "FP"]
         assert len(tp) == 1
         assert len(fp) == 1
+
+
+def _ns_entry(
+    id: str = "ns-001",
+    file: str = "app.py",
+    start: int = 40,
+    end: int = 45,
+    cwe: str = "CWE-89",
+    reason: str = "Reviewed: cannot be settled from the source alone.",
+) -> dict:
+    return {
+        "id": id,
+        "is_vulnerable": True,
+        "scoring": "non_scoring",
+        "non_scoring_reason": reason,
+        "vulnerability_class": "sql_injection",
+        "primary_cwe": cwe,
+        "acceptable_cwes": [cwe],
+        "file": file,
+        "location": {"start_line": start, "end_line": end},
+        "severity": "high",
+        "evidence": {"source": "manual_review", "description": "unsettled"},
+    }
+
+
+def _by_class(results, cls):
+    return [r for r in results if r.classification == cls]
+
+
+class TestNonScoring:
+    def test_finding_on_non_scoring_entry_is_withheld(self):
+        """A finding landing on a non-scoring entry is NS, not FP."""
+        results = match_findings([_make_finding(line=42)], _make_gt([_ns_entry()]))
+        assert _by_class(results, "FP") == []
+        withheld = [r for r in _by_class(results, "NS") if r.scanner_finding]
+        assert len(withheld) == 1
+        assert withheld[0].ground_truth_id == "ns-001"
+
+    def test_unmatched_non_scoring_entry_is_not_fn(self):
+        """Missing a non-scoring entry is not a false negative."""
+        results = match_findings([], _make_gt([_ns_entry()]))
+        assert _by_class(results, "FN") == []
+        assert _by_class(results, "TN") == []
+        entries = [r for r in _by_class(results, "NS") if r.scanner_finding is None]
+        assert [r.ground_truth_id for r in entries] == ["ns-001"]
+
+    def test_non_scoring_never_steals_from_colocated_positive(self):
+        """Scored rows are matched first; NS rows take no part in assignment."""
+        gt = _make_gt()
+        gt["findings"].append(_ns_entry(id="ns-001", start=42, end=42))
+        results = match_findings([_make_finding(line=42)], gt)
+        tp = _by_class(results, "TP")
+        assert len(tp) == 1 and tp[0].ground_truth_id == "gt-001"
+        assert _by_class(results, "FN") == []
+        assert all(r.scanner_finding is None for r in _by_class(results, "NS"))
+
+    def test_second_finding_on_consumed_positive_is_withheld_by_ns(self):
+        """Once the positive is consumed, an extra finding falls through to NS."""
+        gt = _make_gt()
+        gt["findings"].append(_ns_entry(id="ns-001", start=42, end=42))
+        findings = [_make_finding(line=42), _make_finding(line=43)]
+        results = match_findings(findings, gt)
+        assert len(_by_class(results, "TP")) == 1
+        assert _by_class(results, "FP") == []
+        assert len([r for r in _by_class(results, "NS") if r.scanner_finding]) == 1
+
+    def test_withholding_is_location_only(self):
+        """NS withholding ignores CWE: the location is unsettled, not the label."""
+        results = match_findings(
+            [_make_finding(cwe="CWE-79", line=42)], _make_gt([_ns_entry(cwe="CWE-89")])
+        )
+        assert _by_class(results, "FP") == []
+        assert len([r for r in _by_class(results, "NS") if r.scanner_finding]) == 1
+
+    def test_withholding_respects_line_tolerance(self):
+        """A finding outside the NS region ± tolerance is still an FP."""
+        results = match_findings([_make_finding(line=56)], _make_gt([_ns_entry()]))
+        assert len(_by_class(results, "FP")) == 1
+
+    def test_many_findings_may_hit_one_non_scoring_entry(self):
+        """NS withholding is many-to-one; the entry is never 'consumed'."""
+        findings = [_make_finding(line=l) for l in (40, 41, 42)]
+        results = match_findings(findings, _make_gt([_ns_entry()]))
+        assert _by_class(results, "FP") == []
+        assert len([r for r in _by_class(results, "NS") if r.scanner_finding]) == 3
+
+    def test_finding_prefers_scored_trap_over_non_scoring(self):
+        """A co-located FP trap is scored (FP); NS only applies when nothing scored matched."""
+        trap = {
+            "id": "trap-001",
+            "is_vulnerable": False,
+            "vulnerability_class": "sql_injection",
+            "primary_cwe": "CWE-89",
+            "acceptable_cwes": ["CWE-89"],
+            "file": "app.py",
+            "location": {"start_line": 42, "end_line": 42},
+            "severity": "medium",
+            "evidence": {"source": "manual_review", "description": "safe"},
+        }
+        results = match_findings([_make_finding(line=42)], _make_gt([trap, _ns_entry()]))
+        fp = _by_class(results, "FP")
+        assert len(fp) == 1 and fp[0].ground_truth_id == "trap-001"
+
+    def test_explicit_scored_value_behaves_as_default(self):
+        gt = _make_gt()
+        gt["findings"][0]["scoring"] = "scored"
+        results = match_findings([_make_finding(line=42)], gt)
+        assert len(_by_class(results, "TP")) == 1
+
+    def test_loader_rejects_invalid_scoring_value(self, tmp_path):
+        gt = _make_gt()
+        gt["findings"][0]["scoring"] = "indeterminate"
+        gt_path = tmp_path / "ground-truth.json"
+        gt_path.write_text(json.dumps(gt))
+        with pytest.raises(ValueError, match="invalid scoring"):
+            load_ground_truth(str(gt_path))
+
+    def test_finding_without_line_is_never_withheld(self):
+        """Without a CWE gate, a line-less finding must not be exempted by any NS entry in the file."""
+        results = match_findings([_make_finding(line=None)], _make_gt([_ns_entry()]))
+        assert len(_by_class(results, "FP")) == 1
+
+    def test_ns_acceptable_location_withholds(self):
+        ns = _ns_entry(file="views/main.py", start=100, end=105)
+        ns["acceptable_locations"] = [{"file": "app.py", "start_line": 40, "end_line": 45}]
+        results = match_findings([_make_finding(line=42)], _make_gt([ns]))
+        assert _by_class(results, "FP") == []
+        assert len([r for r in _by_class(results, "NS") if r.scanner_finding]) == 1
+
+    def test_is_vulnerable_ignored_on_non_scoring_entry(self):
+        ns = _ns_entry()
+        ns["is_vulnerable"] = False
+        results = match_findings([], _make_gt([ns]))
+        assert _by_class(results, "TN") == [] and _by_class(results, "FN") == []
+        assert len(_by_class(results, "NS")) == 1
+
+    def test_overlapping_ns_entries_resolve_to_lowest_id(self):
+        gt = _make_gt([_ns_entry(id="ns-b"), _ns_entry(id="ns-a")])
+        results = match_findings([_make_finding(line=42)], gt)
+        withheld = [r for r in _by_class(results, "NS") if r.scanner_finding]
+        assert withheld[0].ground_truth_id == "ns-a"
+
+    def test_is_non_scoring_rejects_invalid_value(self):
+        with pytest.raises(ValueError, match="invalid scoring"):
+            is_non_scoring({"id": "x", "scoring": "indeterminate"})

@@ -21,7 +21,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from parsers import get_parser
-from scorer.matcher import load_ground_truth, match_findings
+from scorer.matcher import is_non_scoring, load_ground_truth, match_findings
 from scorer.metrics import compute_scorecard
 
 BASELINE_SCANNERS = {"semgrep", "snyk", "sonarqube"}
@@ -128,7 +128,7 @@ def score_all(
                 else:
                     # Average core metrics across runs
                     cell = dict(run_dicts[0])  # copy structure
-                    for key in ("tp", "fp", "fn", "tn"):
+                    for key in ("tp", "fp", "fn", "tn", "ns"):
                         cell[key] = round(statistics.mean(
                             [rd[key] for rd in run_dicts]
                         ))
@@ -322,7 +322,8 @@ def compute_aggregates(
             if gt_path.exists():
                 with open(gt_path) as f:
                     gt = json.load(f)
-                findings = gt.get("findings", [])
+                # Non-scoring entries are excluded from every published count.
+                findings = [f for f in gt.get("findings", []) if not is_non_scoring(f)]
                 repo_vuln_counts[repo] = sum(1 for f in findings if f.get("is_vulnerable", True))
                 repo_trap_counts[repo] = sum(1 for f in findings if not f.get("is_vulnerable", True))
 
@@ -1925,8 +1926,9 @@ def main() -> int:
         gt_path = gt_dir / repo / "ground-truth.json"
         if gt_path.exists():
             gt_data = json.load(open(gt_path))
-            gt_total_vulns += sum(1 for f in gt_data["findings"] if f["is_vulnerable"])
-            gt_total_traps += sum(1 for f in gt_data["findings"] if not f["is_vulnerable"])
+            scored = [f for f in gt_data["findings"] if not is_non_scoring(f)]
+            gt_total_vulns += sum(1 for f in scored if f["is_vulnerable"])
+            gt_total_traps += sum(1 for f in scored if not f["is_vulnerable"])
             gt_total_repos += 1
 
     # Load LOC data

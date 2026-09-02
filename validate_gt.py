@@ -23,6 +23,11 @@ VALID_AUTHORSHIPS = {"human_authored", "llm_assisted", "llm_generated", "unknown
 VALID_CONFIDENCE = {"high", "medium", "low"}
 VALID_TYPES = {1, 2, 3, 4, 5}
 VALID_EVIDENCE_SOURCES = {"manual_review", "cve_id", "walkthrough"}
+# Optional per-finding `scoring` field. Absent == "scored". A "non_scoring"
+# finding is excluded from metrics in both directions and MUST carry a
+# `non_scoring_reason` so every exclusion is individually auditable.
+VALID_SCORING = {"scored", "non_scoring"}
+MIN_NON_SCORING_REASON_LEN = 20
 CWE_PATTERN = re.compile(r"^CWE-\d+$")
 SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 
@@ -60,6 +65,14 @@ LOCATION_REQUIRED = {
     "start_line": int,
     "end_line": int,
     "function": (str, type(None)),
+}
+
+# Optional alternate locations. `file` + `start_line` are mandatory: a location
+# with no line would match every finding in its file in the scorer.
+ACCEPTABLE_LOCATION_REQUIRED = {
+    "file": str,
+    "start_line": int,
+    "end_line": int,
 }
 
 EVIDENCE_REQUIRED = {
@@ -171,11 +184,25 @@ def validate_gt(gt_path: Path) -> list[ValidationError]:
             errors.append(ValidationError(path_str, fid, "duplicate finding ID"))
         seen_ids.add(fid)
 
-        # is_vulnerable counting
-        if f.get("is_vulnerable") is True:
-            vuln_count += 1
-        elif f.get("is_vulnerable") is False:
-            fp_count += 1
+        # Scoring status (optional field; default "scored")
+        scoring = f.get("scoring", "scored")
+        if scoring not in VALID_SCORING:
+            errors.append(ValidationError(path_str, fid, f"invalid scoring: {scoring!r} (expected one of {sorted(VALID_SCORING)})"))
+        if scoring == "non_scoring":
+            reason = f.get("non_scoring_reason")
+            if not isinstance(reason, str):
+                errors.append(ValidationError(path_str, fid, "non_scoring finding missing required field: non_scoring_reason"))
+            elif len(reason.strip()) < MIN_NON_SCORING_REASON_LEN:
+                errors.append(ValidationError(path_str, fid, f"non_scoring_reason too short (< {MIN_NON_SCORING_REASON_LEN} chars)"))
+        elif "non_scoring_reason" in f:
+            errors.append(ValidationError(path_str, fid, "non_scoring_reason present on a scored finding"))
+
+        # is_vulnerable counting (scored findings only)
+        if scoring != "non_scoring":
+            if f.get("is_vulnerable") is True:
+                vuln_count += 1
+            elif f.get("is_vulnerable") is False:
+                fp_count += 1
 
         # CWE format
         primary_cwe = f.get("primary_cwe", "")
@@ -217,6 +244,17 @@ def validate_gt(gt_path: Path) -> list[ValidationError]:
                     errors.append(ValidationError(path_str, fid, f"start_line must be >= 1, got {start}"))
                 if end < start:
                     errors.append(ValidationError(path_str, fid, f"end_line ({end}) < start_line ({start})"))
+
+        # Acceptable (alternate) locations
+        alt_locs = f.get("acceptable_locations", [])
+        if not isinstance(alt_locs, list):
+            errors.append(ValidationError(path_str, fid, "acceptable_locations must be an array"))
+        else:
+            for j, alt in enumerate(alt_locs):
+                if not isinstance(alt, dict):
+                    errors.append(ValidationError(path_str, fid, f"acceptable_locations[{j}] must be an object"))
+                    continue
+                validate_types(alt, ACCEPTABLE_LOCATION_REQUIRED, f"acceptable_locations[{j}].", errors, path_str, fid)
 
         # Evidence
         ev = f.get("evidence", {})
@@ -261,11 +299,14 @@ def main():
         try:
             with open(gt_file) as f:
                 gt = json.load(f)
-            n_findings = len(gt.get("findings", []))
-            n_vulns = sum(1 for f in gt.get("findings", []) if f.get("is_vulnerable"))
-            n_fps = n_findings - n_vulns
+            all_findings = gt.get("findings", [])
+            n_findings = len(all_findings)
+            scored = [f for f in all_findings if f.get("scoring", "scored") != "non_scoring"]
+            n_ns = n_findings - len(scored)
+            n_vulns = sum(1 for f in scored if f.get("is_vulnerable"))
+            n_fps = len(scored) - n_vulns
         except Exception:
-            n_findings = n_vulns = n_fps = 0
+            n_findings = n_vulns = n_fps = n_ns = 0
 
         total_findings += n_findings
         total_errors += len(errors)
@@ -276,7 +317,8 @@ def main():
             for e in errors:
                 print(e)
         else:
-            print(f"OK   {d.name} ({n_vulns} vulns, {n_fps} FP traps)")
+            ns_str = f", {n_ns} non-scoring" if n_ns else ""
+            print(f"OK   {d.name} ({n_vulns} vulns, {n_fps} FP traps{ns_str})")
 
     # Summary
     print(f"\n{'='*60}")
