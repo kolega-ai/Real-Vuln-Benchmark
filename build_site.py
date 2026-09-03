@@ -308,6 +308,18 @@ SCANNER_NOTES: dict[str, str] = {
         "<strong>Locally hosted.</strong> Open-weight GGUF (Q4_K_M) via Ollama on one "
         "RTX PRO 6000, standard agentic-v1 harness. Cost $0 (self-hosted)."
     ),
+    "deepseek-v4-flash-agentic-v1": (
+        "<strong>Full coverage.</strong> The only third-party LLM scanner to date to "
+        "cover both languages. The Python results are the 2.1.0 runs, unchanged "
+        "(three runs per repository). The 74 TypeScript / JS repositories were "
+        "scanned once each on 2026-09-03 through the standard agentic-v1 harness with "
+        "the TS/JS variant of the prompt (prompt hash "
+        '<span class="mono">sha256:45a1200d61e6</span>), for $2.33 in total at '
+        "off-peak rates. Six of those runs initially failed validation on an invalid "
+        "JSON escape in the model's own message; the validator now repairs that, and the "
+        "six outputs were re-validated from the stored session transcript rather than "
+        "re-run, so no finding was regenerated."
+    ),
     "gemma4-31b-agentic-v1": (
         "<strong>Locally hosted.</strong> Open-weight GGUF (Q4_K_M) via Ollama, standard "
         "agentic-v1 harness. Cost $0 (self-hosted)."
@@ -396,11 +408,22 @@ def scanners_from_aggregates(
         name, cat, ver = meta
         micro, strict = a["micro"], a["strict_micro"]
         cost_per_100k = (a.get("cost", {}).get("cost_per_100_loc", 0) or 0) * 1000
+        # Kolega runs are not metered by the harness; per-language spend at
+        # off-peak rates is recorded here and priced against the GT LOC of the
+        # languages the row covers, so each tab shows the rate for its own corpus.
+        KOLEGA_SPEND = {
+            "kolega-devsec-max-v0.1.0": {"python": 3.17, "tsjs": 14.56},
+        }
         COST_OVERRIDES = {
             "kolega-devsec-core-v0.0.1": 5.69,
             "kolega-devsec-max-v0.0.1": 2.37,  # retired slug: Python results now live under v0.1.0
-            "kolega-devsec-max-v0.1.0": 2.23,  # $17.73 ($3.17 py + $14.56 ts) over 794,723 LOC, off-peak rates
         }
+        lang_cov = a.get("language_coverage") or {}
+        if slug in KOLEGA_SPEND:
+            spend = KOLEGA_SPEND[slug]
+            langs = [l for l in spend if l in lang_cov and lang_cov[l][0]] or list(spend)
+            loc_l = sum(group_loc.get(l, 0) for l in langs)
+            COST_OVERRIDES[slug] = round(sum(spend[l] for l in langs) / loc_l * 100000, 2) if loc_l else 0
         if slug in COST_OVERRIDES:
             cost_val = COST_OVERRIDES[slug]
             cost_est = False
@@ -408,11 +431,11 @@ def scanners_from_aggregates(
             cost_val = None
             cost_est = False
         else:
-            cost_val = round(cost_per_100k)
+            # keep cents for cheap models so $0.52/100k LOC does not round to "Free"
+            cost_val = round(cost_per_100k) if cost_per_100k >= 10 else round(cost_per_100k, 2)
             cost_est = bool((a.get("cost") or {}).get("estimated"))
         total_cost = a.get("cost", {}).get("total_cost", 0) or 0
         tp = micro.get("tp", 0) or 0
-        lang_cov = a.get("language_coverage") or {}
         if lang_cov:
             covered = [
                 lang for lang in (list(languages) or sorted(lang_cov))

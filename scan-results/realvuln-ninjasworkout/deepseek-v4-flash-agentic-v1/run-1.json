@@ -1,0 +1,438 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.misc.hardcoded-secret",
+      "path": "routers/index.js",
+      "start": {
+        "line": 10,
+        "col": 27,
+        "offset": 369
+      },
+      "end": {
+        "line": 10,
+        "col": 33,
+        "offset": 375
+      },
+      "extra": {
+        "message": "Hardcoded JWT signing secret 'hello' is used to sign the auth cookie (line 165/168), verify it in authenticateToken (line 206), and create password-reset tokens (line 522). An attacker who knows this secret can forge a valid Auth JWT with arbitrary username/email/admin claims, fully bypassing authentication (no need for credentials) and impersonating any user, including admin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.weak-password-reset",
+      "path": "routers/index.js",
+      "start": {
+        "line": 600,
+        "col": 16,
+        "offset": 12198
+      },
+      "end": {
+        "line": 600,
+        "col": 39,
+        "offset": 12221
+      },
+      "extra": {
+        "message": "Password-reset POST handler verifies the :token only with jwt.verify against the hardcoded secret 'hello' (see line 10) and never checks that the token was actually issued/stored for that user (no Token DB lookup here, unlike the GET handler at line 569). Because the secret is known, an attacker can forge a token for any username (jwt.sign with 'hello') and call POST /secret/password-reset/:username/:token to change the victim's password, achieving full account takeover. Also the JWT admin claim is attacker-controllable via the same forgery.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.deserialization-rce",
+      "path": "routers/index.js",
+      "start": {
+        "line": 727,
+        "col": 25,
+        "offset": 15784
+      },
+      "end": {
+        "line": 727,
+        "col": 45,
+        "offset": 15804
+      },
+      "extra": {
+        "message": "The route calls serialize.unserialize(req.body) from the 'node-serialize' package. node-serialize unserialize() eval()s any value prefixed with '_$$ND_FUNC$$_' (see node_modules/node-serialize/lib/serialize.js), so a crafted value such as {\"rce\":\"_$$ND_FUNC$$_function(){...}()\"} achieves arbitrary server-side JavaScript execution (RCE). The route is only gated by authenticateToken, which is itself bypassable due to the hardcoded JWT secret.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.server-side-request-forgery",
+      "path": "routers/index.js",
+      "start": {
+        "line": 687,
+        "col": 13,
+        "offset": 14441
+      },
+      "end": {
+        "line": 696,
+        "col": 16,
+        "offset": 14620
+      },
+      "extra": {
+        "message": "GET /secret/ fetches the user-supplied url query parameter and passes it directly to needle.get(url, ...) at line 696, then reflects the fetched body back to the caller. An attacker can make the server issue requests to internal services (e.g. http://127.0.0.1, cloud metadata endpoints) \u2014 classic SSRF (CWE-918). No allow-list/protocol validation is applied to the URL.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.reflected-xss",
+      "path": "routers/index.js",
+      "start": {
+        "line": 700,
+        "col": 1,
+        "offset": 14853
+      },
+      "end": {
+        "line": 700,
+        "col": 148,
+        "offset": 15000
+      },
+      "extra": {
+        "message": "The value of the user-controlled url query parameter is written unescaped into the HTML response (response.write at line 700, and again at line 707 in the error branch) with Content-Type text/html (mime defaults to 'html'). An attacker can inject arbitrary HTML/JavaScript (e.g. /secret/?mime=html&url=</font><script>...) that executes in the origin of the app. Note the app also echoes the fetched response1.body (line 702), enabling script execution from attacker-controlled remote content.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal",
+      "path": "app.js",
+      "start": {
+        "line": 27,
+        "col": 9,
+        "offset": 779
+      },
+      "end": {
+        "line": 36,
+        "col": 1,
+        "offset": 933
+      },
+      "extra": {
+        "message": "express-blinker is mounted with basePath = __dirname/images and a catch-all test /.*/ (lines 17, 27-36). The middleware (node_modules/express-blinker/index.js) builds the served path as filePath = basePath + req.url with no normalization/traversal check, so a request such as /../../etc/passwd resolves and streams arbitrary files from disk (the app source itself, .env, etc.) \u2014 directory/path traversal giving arbitrary file disclosure.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.nosql-injection",
+      "path": "routers/index.js",
+      "start": {
+        "line": 148,
+        "col": 2,
+        "offset": 3608
+      },
+      "end": {
+        "line": 150,
+        "col": 34,
+        "offset": 3700
+      },
+      "extra": {
+        "message": "Login performs userSchema.findOne({username: req.body.username, password: req.body.password}, ...) using values from the urlencoded body parser (extended:true, line 50) without casting/sanitizing. Sending username[$ne]=x / password[$ne]=x turns the query into an operator object ({password: {$ne: null}}), so a single findOne returns a matching user and login succeeds without a valid password \u2014 NoSQL injection authentication bypass. Passwords are also compared in plaintext.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data.user-data-leak",
+      "path": "routers/index.js",
+      "start": {
+        "line": 263,
+        "col": 1,
+        "offset": 6197
+      },
+      "end": {
+        "line": 276,
+        "col": 22,
+        "offset": 6457
+      },
+      "extra": {
+        "message": "POST /secret/username requires no authentication and passes the raw, user-controlled req.body.username into userSchema.findOne(...) (extended:true urlencoded parser allows nested objects, enabling NoSQL operator injection such as {\"$ne\": null}), then returns the whole matched user document via res.json(result). This discloses sensitive user records \u2014 including the plaintext password and admin flag \u2014 to unauthenticated callers and acts as a user/enumeration oracle. (GET /secret/?user at line 230 has the same flaw via req.query.user.)",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.broken-access-control-idor",
+      "path": "routers/index.js",
+      "start": {
+        "line": 383,
+        "col": 12,
+        "offset": 8316
+      },
+      "end": {
+        "line": 383,
+        "col": 27,
+        "offset": 8331
+      },
+      "extra": {
+        "message": "In GET /secret/posts/:username the authorization check only tests truthiness of payload.username (if(payload.username){ ... }) instead of comparing payload.username with req.params.username. Any authenticated user can therefore read any other user's posts by supplying the victim's username in the URL \u2014 broken access control / IDOR (CWE-639). The dead-code branch at line 391 references the intended check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.mass-assignment",
+      "path": "routers/index.js",
+      "start": {
+        "line": 320,
+        "col": 5,
+        "offset": 7255
+      },
+      "end": {
+        "line": 320,
+        "col": 24,
+        "offset": 7274
+      },
+      "extra": {
+        "message": "Registration handler stores admin: req.body.admin directly from the request body into the new user document (line 320). A client can register with admin=true (or override via mass assignment) and the resulting account's JWT (created at login, line 165) carries admin:true \u2014 privilege escalation by mass assignment.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data.plaintext-password",
+      "path": "models/user.js",
+      "start": {
+        "line": 15,
+        "col": 5,
+        "offset": 295
+      },
+      "end": {
+        "line": 17,
+        "col": 10,
+        "offset": 325
+      },
+      "extra": {
+        "message": "User passwords are stored and compared in plaintext. The password field in the Mongoose schema (lines 15-17) has no type/hashing; signup stores req.body.password verbatim (routers/index.js line 319) and login matches plaintext (routers/index.js line 150). Any database readout or the unauthenticated endpoints (e.g. /secret/username) expose the plaintext credential.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.dom-xss-eval",
+      "path": "home.html",
+      "start": {
+        "line": 249,
+        "col": 7,
+        "offset": 5046
+      },
+      "end": {
+        "line": 249,
+        "col": 14,
+        "offset": 5053
+      },
+      "extra": {
+        "message": "home.html reads the 'id' URL query parameter and passes it straight to eval(id) (lines 241-251). An attacker can craft a link such as /home?id=<script>... payload executed via eval \u2014 DOM-based code injection / XSS running in the application origin; the non-HttpOnly Auth cookie (routers/index.js line 168) can then be exfiltrated.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
+            "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misc.cookie-missing-flags",
+      "path": "routers/index.js",
+      "start": {
+        "line": 168,
+        "col": 12,
+        "offset": 4338
+      },
+      "end": {
+        "line": 168,
+        "col": 41,
+        "offset": 4367
+      },
+      "extra": {
+        "message": "The session JWT is stored with res.cookie('Auth', accessToken) and no options, so the cookie lacks HttpOnly, Secure, and SameSite. Any XSS (e.g. home.html eval or the reflected XSS in /secret/) can read the token via document.cookie, and the cookie is sent over plain HTTP.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.csrf.missing-csrf",
+      "path": "routers/index.js",
+      "start": {
+        "line": 30,
+        "col": 1,
+        "offset": 1027
+      },
+      "end": {
+        "line": 30,
+        "col": 43,
+        "offset": 1069
+      },
+      "extra": {
+        "message": "csurf is imported (line 14) and csrfProtection = csrf({cookie:true}) is created at line 30 but the middleware is never mounted on any route; the _csrf hidden fields rendered in login.pug/create.pug are therefore never validated. State-changing, cookie-authenticated endpoints (addpost, signup, login, password reset) are left without CSRF protection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misc.user-enumeration",
+      "path": "routers/index.js",
+      "start": {
+        "line": 517,
+        "col": 46,
+        "offset": 10315
+      },
+      "end": {
+        "line": 517,
+        "col": 76,
+        "offset": 10345
+      },
+      "extra": {
+        "message": "The forgot-password flow returns an explicit distinct message 'Email Address is not associated with account' when the address has no account (vs 'Reset Mail Sent to ...' otherwise), letting an unauthenticated attacker enumerate registered user emails (CWE-204).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-204: Observable Response Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misc.hardcoded-session-secret",
+      "path": "app.js",
+      "start": {
+        "line": 92,
+        "col": 13,
+        "offset": 2170
+      },
+      "end": {
+        "line": 92,
+        "col": 29,
+        "offset": 2186
+      },
+      "extra": {
+        "message": "The express-session secret is a hardcoded, publicly-known value 'Your_Secret_Key' (used at app.js line 92), enabling session forgery for any deployment that does not override it.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misc.postmessage-wildcard",
+      "path": "public/redirect.html",
+      "start": {
+        "line": 31,
+        "col": 85,
+        "offset": 1103
+      },
+      "end": {
+        "line": 31,
+        "col": 87,
+        "offset": 1105
+      },
+      "extra": {
+        "message": "The OAuth popup redirect page sends the Google access token to window.opener via postMessage(..., '*') with a wildcard target origin. Any window that can set itself as opener (or a malicious origin able to obtain an opener handle to this popup) can receive the victim's OAuth access token, leaking credentials. The receiving listener in views/login.pug (line 365) also does no origin validation.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information",
+            "CWE-345: Insufficient Verification of Data Authenticity"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

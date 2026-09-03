@@ -25,12 +25,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `build_manifest.py` regenerates `benchmark-manifest.json` from ground truth
   (`--check` fails when it is stale); manifest schema 3.0 adds per-language totals,
   `non_scoring_entries`, LOC and `distinct_primary_cwes`.
-- `compute_loc.py` counts C-style languages and reads from the pinned commit; every
-  ground-truth file now records `loc`.
+- `compute_loc.py` counts C-style languages and reads from the pinned commit, skipping
+  vendored third-party libraries checked into asset directories; every ground-truth file
+  now records `loc` (741,034 in total, 607,252 TS/JS).
+- `run_agentic.py --language tsjs --repos-dir`; the output validator repairs invalid JSON
+  escapes before falling back to LLM repair; `salvage_from_opencode.py` re-validates
+  stored session output for runs that failed only on validation.
 - `dashboard.py --min-coverage` and per-language tab aggregates (`tab_aggregates`,
   `tab_repos`, `languages` in `reports/dashboard.json`).
-- Semgrep (`--config auto`, OSS) results for all 74 TS/JS repositories; Kolega DevSec Max
-  V0.1.0 results for the TS/JS corpus. The Python results previously published under
+- Semgrep (`--config auto`, OSS) and DeepSeek V4 Flash (agentic-v1, one run per repository,
+  TS/JS prompt variant `prompts/system-prompt-tsjs.md`) results for all 74 TS/JS
+  repositories; Kolega DevSec Max V0.1.0 results for the TS/JS corpus. The Python results previously published under
   `kolega-devsec-max-v0.0.1` now live under `kolega-devsec-max-v0.1.0` (same scanner,
   unchanged results), giving it full 140-repository coverage; the `v0.0.1` slug is retired
   and remains in the frozen 2.1.0 release.
@@ -44,7 +49,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Community TS/JS repositories are pinned to forks under `kolega-ai-dev`; generated
   repositories are published as single-snapshot public repositories under the same account.
 - Dashboard and dataset pages report lines of code and languages for the whole corpus,
-  not Python only.
+  not Python only. Cost/100k LOC is now computed per tab from that tab's repositories and
+  keeps cents below $10 instead of rounding cheap models to "Free".
 
 ### Compatibility
 - Major version: the official repo set changed. Overall (140-repo) scores must not be

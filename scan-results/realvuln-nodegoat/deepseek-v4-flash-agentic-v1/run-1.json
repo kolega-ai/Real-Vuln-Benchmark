@@ -1,0 +1,490 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.eval-rce",
+      "path": "app/routes/contributions.js",
+      "start": {
+        "line": 32,
+        "col": 1,
+        "offset": 911
+      },
+      "end": {
+        "line": 34,
+        "col": 41,
+        "offset": 1047
+      },
+      "extra": {
+        "message": "Server-side JavaScript injection / Remote Code Execution: handleContributionsUpdate passes raw, unvalidated POST body values (req.body.preTax, req.body.afterTax, req.body.roth) directly to eval() (lines 32-34). An attacker can submit arbitrary JavaScript (e.g. process.mainModule.require('child_process').execSync('cmd')) which executes with the full privileges of the Node.js process. The comments on lines 37-41 document that parseInt() was the intended safe alternative.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-95: Eval-based Code Injection",
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.nosql-js-injection",
+      "path": "app/data/allocations-dao.js",
+      "start": {
+        "line": 78,
+        "col": 1,
+        "offset": 2746
+      },
+      "end": {
+        "line": 78,
+        "col": 92,
+        "offset": 2837
+      },
+      "extra": {
+        "message": "NoSQL / JavaScript injection into MongoDB: the user-controlled 'threshold' value (from req.query.threshold, see app/routes/allocations.js:19-23) is concatenated unvalidated into a MongoDB $where JavaScript expression: `this.userId == ... && this.stocks > '${threshold}'`. An attacker can inject arbitrary JS that MongoDB executes, e.g. `1'; while(true){} '` for a denial of service, or `1'; return 1=='1 '` to bypass filtering and read other users' allocation data. Only parseInt() of userId is done; threshold is never sanitized (the intended fix is documented in the commented lines 64-76).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic",
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf",
+      "path": "app/routes/research.js",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 341
+      },
+      "end": {
+        "line": 16,
+        "col": 66,
+        "offset": 464
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery: displayResearch builds a URL from the fully attacker-controlled query parameters req.query.url + req.query.symbol and fetches it with needle.get(), then streams the response body back to the client. Although the research.html form provides a default 'url' hidden field, an attacker can set ?url=http://169.254.169.254/... (cloud metadata) or any internal-only host and the server will fetch it and disclose the response, allowing internal network scanning and access to internal services.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.missing-admin-role-check",
+      "path": "app/routes/index.js",
+      "start": {
+        "line": 55,
+        "col": 1,
+        "offset": 2010
+      },
+      "end": {
+        "line": 56,
+        "col": 70,
+        "offset": 2150
+      },
+      "extra": {
+        "message": "Broken function-level access control / missing authorization: GET and POST /benefits are protected only by isLoggedIn and never by isAdminUserMiddleware (defined at app/routes/session.js:25 but unused), even though the intended fix is documented in the comment on lines 57-60. Any authenticated non-admin user can therefore view the full list of non-admin users (PII in app/routes/benefits.js:15-20) and POST an arbitrary userId + benefitStartDate to modify other users' benefit records (benefits-dao.updateBenefits, app/data/benefits-dao.js:23-40). Privilege escalation to admin functions.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor",
+      "path": "app/routes/allocations.js",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 453
+      },
+      "end": {
+        "line": 18,
+        "col": 23,
+        "offset": 510
+      },
+      "extra": {
+        "message": "Insecure Direct Object Reference: displayAllocations takes userId from req.params.userId (destructured on lines 16-18) instead of from req.session.userId (the fix is documented in the commented lines 12-15). Since /allocations/:userId is mounted with only isLoggedIn middleware, any authenticated user can change the URL parameter to view another user's allocation data (DAO lookup by arbitrary userId in app/data/allocations-dao.js:57-110).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-firstlast-name",
+      "path": "app/views/layout.html",
+      "start": {
+        "line": 75,
+        "col": 1,
+        "offset": 3541
+      },
+      "end": {
+        "line": 75,
+        "col": 162,
+        "offset": 3702
+      },
+      "extra": {
+        "message": "Stored cross-site scripting: the global nav renders the DB-stored user fields {{firstName}} {{lastName}} with no escaping, and swig autoescaping is globally disabled in server.js:137 (autoescape: false). firstName/lastName are attacker-controlled: the signup validator only constrains length (/^.{1,100}$/, app/routes/session.js:163-170) and /profile allows updating them freely. A payload such as <script>...</script> stored in a user profile executes in the browser of every logged-in user who views any page (including admins on /benefits via benefits.html:51-52), enabling session hijacking.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')",
+            "CWE-80: XSS via Direct Output"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.reflected-login-username",
+      "path": "app/views/login.html",
+      "start": {
+        "line": 110,
+        "col": 1,
+        "offset": 4646
+      },
+      "end": {
+        "line": 110,
+        "col": 157,
+        "offset": 4802
+      },
+      "extra": {
+        "message": "Reflected cross-site scripting: on a failed login the raw userName POST field is echoed back into value=\"{{userName}}\" (set in app/routes/session.js:83 and rendered here) with no sanitization and global swig autoescaping disabled (server.js:137). An attacker can craft a login URL/username like \"><script>alert(document.cookie)</script> that reflects and executes in the victim's browser when the (nonexistent) account fails to authenticate.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.reflected-signup-username",
+      "path": "app/views/signup.html",
+      "start": {
+        "line": 75,
+        "col": 1,
+        "offset": 2517
+      },
+      "end": {
+        "line": 75,
+        "col": 157,
+        "offset": 2673
+      },
+      "extra": {
+        "message": "Reflected cross-site scripting: when signup validation fails, handleSignup re-renders the form spreading the raw req.body values (app/routes/session.js:249-252: errors.userName = userName), and this template prints value=\"{{userName}}\" unescaped (autoescape is off globally, server.js:137). A userName payload containing HTML/JS attributes is reflected back to the victim's browser and executed.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.reflected-profile-firstname",
+      "path": "app/views/profile.html",
+      "start": {
+        "line": 78,
+        "col": 1,
+        "offset": 3966
+      },
+      "end": {
+        "line": 78,
+        "col": 92,
+        "offset": 4057
+      },
+      "extra": {
+        "message": "Reflected (and stored) cross-site scripting: on a failed bankRouting validation, handleProfileUpdate re-renders the profile page with firstNameSafeString = raw, unencoded firstName (app/routes/profile.js:64-75) and this template interpolates it both in value=\"{{firstNameSafeString}}\" (line 41) and inside an href attribute (line 78) with autoescaping disabled. Note the developer only encodes doc.website for HTML (profile.js:28) \u2014 firstName/lastName from the DB are otherwise rendered raw across every page (see layout.html:75), so stored firstName values also trigger XSS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect",
+      "path": "app/routes/index.js",
+      "start": {
+        "line": 72,
+        "col": 1,
+        "offset": 2843
+      },
+      "end": {
+        "line": 72,
+        "col": 43,
+        "offset": 2885
+      },
+      "extra": {
+        "message": "Open redirect: GET /learn (protected only by isLoggedIn) redirects the browser directly to the user-controlled req.query.url value via res.redirect(req.query.url). An attacker can send a victim /learn?url=https://evil.example (or //evil.example) to phish credentials on an attacker-controlled look-alike site. The in-page fix comment (index.js:71) confirms this is intentionally insecure.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.redos",
+      "path": "app/routes/profile.js",
+      "start": {
+        "line": 59,
+        "col": 1,
+        "offset": 2077
+      },
+      "end": {
+        "line": 59,
+        "col": 43,
+        "offset": 2119
+      },
+      "extra": {
+        "message": "Regular expression denial of service (ReDoS): the regex /([0-9]+)+\\#/ used to validate the user-supplied bankRouting field contains a nested quantifier (([0-9]+)+) whose greedy repetition of a greedy group causes catastrophic backtracking on long strings of digits without a trailing '#' (e.g. a few dozen digits), pinning the Node.js event loop and denying service. The vulnerable pattern is confirmed by the developer's own comment on lines 52-58 describing the fix.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1333: Inefficient Regular Expression Complexity"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.csrf-missing-protection",
+      "path": "server.js",
+      "start": {
+        "line": 104,
+        "col": 1,
+        "offset": 3443
+      },
+      "end": {
+        "line": 113,
+        "col": 6,
+        "offset": 3691
+      },
+      "extra": {
+        "message": "Missing CSRF protection: the csurf import (line 7) and the csrf() middleware that would expose a token to templates are commented out (lines 104-113), and no token is validated on the state-changing POST endpoints (/profile, /contributions, /benefits, /memos \u2014 routes registered in app/routes/index.js). A logged-in victim can be forced by a malicious page to submit forged cross-origin POSTs (e.g. changing benefit dates, contribution percentages, or their own profile/bank data) because these handlers rely only on the session cookie.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.plaintext-credential-storage",
+      "path": "app/data/user-dao.js",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 783
+      },
+      "end": {
+        "line": 25,
+        "col": 50,
+        "offset": 832
+      },
+      "extra": {
+        "message": "Plaintext storage and comparison of passwords: addUser stores the raw password in the user document (line 25) because the bcrypt.hashSync(...) fix is commented out (lines 27-30), and validateLogin compares plaintext via fromDB === fromUser (line 61) with the bcrypt.compareSync fix commented out (lines 63-66). A database leak exposes every credential in cleartext; combined with the weak password policy /^.{1,20}$/ (app/routes/session.js:144) this allows trivial account compromise.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Unprotected Credential Storage",
+            "CWE-521: Weak Password Requirements"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secret",
+      "path": "config/env/all.js",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 180
+      },
+      "end": {
+        "line": 9,
+        "col": 46,
+        "offset": 277
+      },
+      "extra": {
+        "message": "Hardcoded session signing secret and crypto key shipped in the default (and production) config: cookieSecret is the fixed value \"session_cookie_secret_key_here\" (line 8) and cryptoKey \"a_secure_key_for_crypto_here\" (line 9). Because express-session signs the session cookie with this secret (server.js:82), any attacker who knows it (it is in public source code) can forge a session cookie for an arbitrary userId \u2014 including an admin \u2014 without credentials, bypassing authentication entirely.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.information-disclosure-error-page",
+      "path": "app/routes/error.js",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 215
+      },
+      "end": {
+        "line": 11,
+        "col": 18,
+        "offset": 232
+      },
+      "extra": {
+        "message": "Sensitive information disclosure via the error handler: the catch-all error middleware logs err.stack to the console (error.js:7-8) and passes the entire err object into the view, which prints it with {{error}} in error-template.html:11 while swig autoescaping is disabled (server.js:137). Internal exception messages and stack traces (file paths, library internals, and any user data embedded in thrown errors) are disclosed to the client.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information",
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.insecure-session-cookie",
+      "path": "server.js",
+      "start": {
+        "line": 78,
+        "col": 1,
+        "offset": 2825
+      },
+      "end": {
+        "line": 102,
+        "col": 8,
+        "offset": 3440
+      },
+      "extra": {
+        "message": "Security misconfiguration of the session cookie: the express-session middleware uses the default cookie name (connect.sid) and the httpOnly/secure cookie options are commented out (lines 92-100), so the session identifier is readable by JavaScript and transmitted over the plaintext HTTP channel (http.createServer, line 145). Any XSS or network observer can steal a live session; saveUninitialized:true and resave:true also create unnecessary session state (CWE-614/CWE-1004).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.session-fixation",
+      "path": "app/routes/session.js",
+      "start": {
+        "line": 116,
+        "col": 1,
+        "offset": 5138
+      },
+      "end": {
+        "line": 116,
+        "col": 42,
+        "offset": 5179
+      },
+      "extra": {
+        "message": "Session fixation: handleLoginRequest assigns req.session.userId directly (line 116) without regenerating the session ID on authentication; the required req.session.regenerate() wrapper is documented but commented out (lines 104-115). An attacker who fixes a victim's session ID before login can reuse that ID after the victim authenticates to impersonate them.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.log-injection",
+      "path": "app/routes/session.js",
+      "start": {
+        "line": 64,
+        "col": 1,
+        "offset": 2050
+      },
+      "end": {
+        "line": 64,
+        "col": 89,
+        "offset": 2138
+      },
+      "extra": {
+        "message": "Log injection / log forging: the attacker-controlled userName submitted to the login form is written to the server log with console.log without sanitization (line 64). A userName containing CR/LF characters can forge arbitrary log lines and mislead log-based monitoring/forensics. The surrounding comments (lines 66-80) document the intended encoding fix that is not applied.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfig-security-headers-http",
+      "path": "server.js",
+      "start": {
+        "line": 145,
+        "col": 1,
+        "offset": 4498
+      },
+      "end": {
+        "line": 145,
+        "col": 47,
+        "offset": 4544
+      },
+      "extra": {
+        "message": "Security misconfiguration: the application runs over cleartext HTTP (http.createServer, line 145) because the HTTPS setup is commented out (lines 149-155), and hardening is disabled \u2014 app.disable('x-powered-by') (leaks the Express version), helmet (frameguard/nocache/CSP/HSTS), and the nosniff middleware are all commented out (lines 38-65, 14). This exposes the app to traffic sniffing, clickjacking, MIME-sniffing and other header-based attacks.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration",
+            "CWE-319: Cleartext Transmission of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

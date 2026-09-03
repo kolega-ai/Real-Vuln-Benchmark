@@ -1,0 +1,506 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "routes/search.ts",
+      "start": {
+        "line": 23,
+        "col": 5,
+        "offset": 832
+      },
+      "end": {
+        "line": 23,
+        "col": 50,
+        "offset": 877
+      },
+      "extra": {
+        "message": "The product search query parameter 'q' (req.query.q) is truncated only by length and concatenated directly into a raw SQL string passed to models.sequelize.query(). A value like q=') UNION SELECT ...-- allows full SQL injection (UNION-based data exfiltration of Users table, schema dump).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "routes/login.ts",
+      "start": {
+        "line": 36,
+        "col": 5,
+        "offset": 1484
+      },
+      "end": {
+        "line": 36,
+        "col": 50,
+        "offset": 1529
+      },
+      "extra": {
+        "message": "The login endpoint interpolates req.body.email directly into a raw SQL query ('... WHERE email = '' + req.body.email + '' ...'). An attacker can bypass authentication entirely, e.g. email=' OR 1=1--, and log in as the first user / any account without knowing the password.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-eval",
+      "path": "routes/userProfile.ts",
+      "start": {
+        "line": 36,
+        "col": 15,
+        "offset": 1458
+      },
+      "end": {
+        "line": 36,
+        "col": 60,
+        "offset": 1503
+      },
+      "extra": {
+        "message": "The profile page reads the (attacker-controlled) username from the database and, if it matches /#{(.*)}/, passes the captured expression to eval(). A user can register/set a username such as #{global.process.mainModule.require('child_process').exec('...')} to achieve arbitrary server-side code execution (the Pug template engine also re-interprets the substituted username, making this a server-side template injection / RCE).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-execution",
+      "path": "routes/b2bOrder.ts",
+      "start": {
+        "line": 22,
+        "col": 9,
+        "offset": 756
+      },
+      "end": {
+        "line": 22,
+        "col": 60,
+        "offset": 807
+      },
+      "extra": {
+        "message": "The B2B order endpoint passes the client-controlled 'orderLinesData' string into safeEval() executed inside a vm context. Arbitrary JavaScript supplied by the caller is evaluated server-side; notevil is a sandbox that has known escape vectors, so this must be treated as remote code execution on the request path /b2b/v2/orders.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xxe",
+      "path": "routes/fileUpload.ts",
+      "start": {
+        "line": 80,
+        "col": 24,
+        "offset": 3110
+      },
+      "end": {
+        "line": 80,
+        "col": 70,
+        "offset": 3156
+      },
+      "extra": {
+        "message": "XML complaint uploads are parsed with libxmljs2 using { noent: true }, which enables external entity resolution. A crafted XML file with <!DOCTYPE ... [<!ENTITY xxe SYSTEM 'file:///etc/passwd'>]> causes arbitrary local file disclosure (the handler explicitly checks the result for /etc/passwd / system.ini content). XXE can also be abused for internal port scanning (SSRF) and, with entity recursion, DoS.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.zip-slip",
+      "path": "routes/fileUpload.ts",
+      "start": {
+        "line": 42,
+        "col": 33,
+        "offset": 1700
+      },
+      "end": {
+        "line": 42,
+        "col": 70,
+        "offset": 1737
+      },
+      "extra": {
+        "message": "Zip file uploads extract entries using entry.path from the archive unvalidated and stream them to fs.createWriteStream('uploads/complaints/' + fileName). The guard at line 41 only checks that path.resolve(...) stays inside the repository root, so a malicious zip with entries like '../../ftp/legal.md' or '../../server.ts' allows writing/overwriting arbitrary files within the project directory (zip-slip / path traversal with file write), e.g. to plant files served by the app or overwrite source code.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.local-file-read",
+      "path": "routes/dataErasure.ts",
+      "start": {
+        "line": 69,
+        "col": 32,
+        "offset": 2256
+      },
+      "end": {
+        "line": 80,
+        "col": 9,
+        "offset": 2545
+      },
+      "extra": {
+        "message": "The data-erasure form lets the user supply 'layout', which is resolved with path.resolve() and passed as the template to res.render(). The only check blocks paths containing 'ftp', 'ctf.key' or 'encryptionkeys'; any other readable server file (e.g. /etc/passwd, package.json, config/*.yml, source files) is loaded and its first 100 chars returned in the response, giving an unauthenticated-arbitrary local file read via a lowercase-normalized absolute path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf",
+      "path": "routes/profileImageUrlUpload.ts",
+      "start": {
+        "line": 23,
+        "col": 11,
+        "offset": 861
+      },
+      "end": {
+        "line": 23,
+        "col": 45,
+        "offset": 895
+      },
+      "extra": {
+        "message": "The profile-image-by-URL upload performs a server-side HTTP GET of the fully user-supplied 'imageUrl' (request.get(url)) with no scheme/host allow-listing. A logged-in user can make the server fetch arbitrary internal URLs (e.g. http://169.254.169.254/... cloud metadata, http://localhost:<port>/... internal services), i.e. server-side request forgery; the fetched bytes are also written to the local filesystem and its URL is stored.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.nosql-injection",
+      "path": "routes/showProductReviews.ts",
+      "start": {
+        "line": 34,
+        "col": 23,
+        "offset": 1105
+      },
+      "end": {
+        "line": 34,
+        "col": 60,
+        "offset": 1142
+      },
+      "extra": {
+        "message": "The unauthenticated GET /rest/products/:id/reviews endpoint builds a MongoDB $where clause by string-concatenating the route parameter: db.reviews.find({ $where: 'this.product == ' + id }). Injecting JavaScript into 'id' (e.g. a sleep/loop expression or an expression leaking document fields) enables NoSQL/JavaScript injection inside the DB engine, including a server-side blocking DoS and unauthorized data access.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic (NoSQL Injection)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.nosql-injection",
+      "path": "routes/trackOrder.ts",
+      "start": {
+        "line": 18,
+        "col": 22,
+        "offset": 717
+      },
+      "end": {
+        "line": 18,
+        "col": 60,
+        "offset": 755
+      },
+      "extra": {
+        "message": "The unauthenticated order-tracking endpoint concatenates the route parameter into a MongoDB $where JavaScript expression: db.orders.find({ $where: `this.orderId === '${id}'` }). A crafted id can break out of the string and execute arbitrary JS in the query, enabling NoSQL injection (data extraction of more orders than allowed / DoS via heavy expressions).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: NoSQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.nosql-injection",
+      "path": "routes/updateProductReviews.ts",
+      "start": {
+        "line": 18,
+        "col": 9,
+        "offset": 757
+      },
+      "end": {
+        "line": 20,
+        "col": 7,
+        "offset": 905
+      },
+      "extra": {
+        "message": "The review-update endpoint uses the raw client value req.body.id as the MongoDB selector and runs a multi-document update ({ multi: true }). Passing an object/operator payload as 'id' (e.g. {'$ne': ...}) updates more than the intended single review, and the handler never verifies that the review's author is the logged-in user, so any authenticated user can forge/modify other users' reviews (broken object-level authorization combined with NoSQL operator injection).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: NoSQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect",
+      "path": "routes/redirect.ts",
+      "start": {
+        "line": 19,
+        "col": 7,
+        "offset": 1033
+      },
+      "end": {
+        "line": 19,
+        "col": 40,
+        "offset": 1066
+      },
+      "extra": {
+        "message": "The /redirect endpoint 302-redirects to the user-controlled 'to' parameter whenever security.isRedirectAllowed() returns true. isRedirectAllowed (lib/insecurity.ts:144) uses a substring test url.includes(allowedUrl), so an attacker can bypass the allow-list with URLs such as https://github.com/bkimminich/juice-shop.evil.com/... or ...?to=https://evil.com, yielding an open redirect used for phishing/credential theft.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor-basket",
+      "path": "routes/basket.ts",
+      "start": {
+        "line": 18,
+        "col": 5,
+        "offset": 620
+      },
+      "end": {
+        "line": 18,
+        "col": 50,
+        "offset": 665
+      },
+      "extra": {
+        "message": "GET /rest/basket/:id loads BasketModel.findOne({ where: { id } }) using only the numeric id from the URL and returns the full basket (including its products) with no check that the basket belongs to the authenticated user. Any logged-in user can enumerate and read other users' baskets (IDOR / broken access control); the code even contains a challenge flag that fires when user.bid != id.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-crypto-key",
+      "path": "lib/insecurity.ts",
+      "start": {
+        "line": 23,
+        "col": 1,
+        "offset": 767
+      },
+      "end": {
+        "line": 23,
+        "col": 60,
+        "offset": 826
+      },
+      "extra": {
+        "message": "The RSA private key used to sign JWT authentication tokens (security.authorize) is hardcoded in the source code. Anyone with access to the repository/source can forge valid tokens for arbitrary users including the admin role (the JWT payload embeds the user role), completely defeating authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key",
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.jwt-algorithm-confusion",
+      "path": "lib/insecurity.ts",
+      "start": {
+        "line": 54,
+        "col": 14,
+        "offset": 2586
+      },
+      "end": {
+        "line": 54,
+        "col": 60,
+        "offset": 2632
+      },
+      "extra": {
+        "message": "security.isAuthorized() verifies JWTs with express-jwt/jsonwebtoken using only the public RSA key as secret and without restricting the allowed algorithms. Because the public key is served at /encryptionkeys/jwt.pub, an attacker can forge admin tokens signed with HS256 (using the PEM public key as the HMAC secret) or with alg 'none' \u2014 an authentication bypass (algorithm confusion / unsigned token acceptance).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment-privilege-escalation",
+      "path": "server.ts",
+      "start": {
+        "line": 457,
+        "col": 5,
+        "offset": 21920
+      },
+      "end": {
+        "line": 462,
+        "col": 6,
+        "offset": 22060
+      },
+      "extra": {
+        "message": "The finale-rest generated API (POST /api/Users is publicly reachable - only GET is restricted) exposes every User model attribute for creation because finale.resource() is declared without restricting writable fields. A registration request that includes \"role\":\"admin\" (or \"deluxe\"/\"accounting\") creates an account with elevated privileges directly (privilege escalation / mass assignment).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.csrf",
+      "path": "routes/updateUserProfile.ts",
+      "start": {
+        "line": 17,
+        "col": 5,
+        "offset": 560
+      },
+      "end": {
+        "line": 33,
+        "col": 6,
+        "offset": 1150
+      },
+      "extra": {
+        "message": "POST /profile authenticates the request solely via the 'token' cookie (security.authenticatedUsers.get(req.cookies.token)) and changes the account username/state with no CSRF token and no enforced Origin/Referer check. A cross-site request from a malicious page can silently alter the victim's profile (CSRF). The same cookie-based auth is used by other state-changing endpoints.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.jsonp-user-data-exposure",
+      "path": "routes/currentUser.ts",
+      "start": {
+        "line": 28,
+        "col": 9,
+        "offset": 1090
+      },
+      "end": {
+        "line": 28,
+        "col": 30,
+        "offset": 1111
+      },
+      "extra": {
+        "message": "GET /rest/user/whoami responds with res.jsonp(response) whenever a 'callback' parameter is present. The response body contains the logged-in user's id, email and profile image. Because JSONP is intended to be consumed cross-origin via <script> tags, an attacker can lure a victim into loading this endpoint with the victim's cookie and exfiltrate the victim's email/account data to a third-party domain (cross-origin information disclosure).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.weak-rate-limit",
+      "path": "server.ts",
+      "start": {
+        "line": 309,
+        "col": 5,
+        "offset": 13701
+      },
+      "end": {
+        "line": 309,
+        "col": 60,
+        "offset": 13756
+      },
+      "extra": {
+        "message": "The password-reset rate limiter keys on headers['X-Forwarded-For'] (falling back to ip) while app.enable('trust proxy') is set. An attacker can spoof the X-Forwarded-For header on every request to reset the rate-limit counter and brute-force the security answer / passwords unthrottled, defeating the anti-automation control.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.weak-password-hashing",
+      "path": "lib/insecurity.ts",
+      "start": {
+        "line": 43,
+        "col": 1,
+        "offset": 2207
+      },
+      "end": {
+        "line": 43,
+        "col": 60,
+        "offset": 2266
+      },
+      "extra": {
+        "message": "User passwords (and other secrets such as B2B order ids) are hashed with unsalted MD5 (crypto.createHash('md5')), which is trivially brute-forceable and vulnerable to rainbow-table attacks. Stored password hashes for all users can be recovered quickly if the database leaks (as it does via the SQL injection findings).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

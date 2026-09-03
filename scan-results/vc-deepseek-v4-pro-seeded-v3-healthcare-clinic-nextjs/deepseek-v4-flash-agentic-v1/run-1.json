@@ -1,0 +1,361 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.mass-assignment.privilege-escalation",
+      "path": "src/lib/preferences.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 310
+      },
+      "end": {
+        "line": 12,
+        "col": 1,
+        "offset": 510
+      },
+      "extra": {
+        "message": "restoreDashboardLayout() JSON-parses the client-controlled 'clinic_layout' cookie and passes the entire object as `data` to prisma.user.update() with no allow-list. The /api/dashboard GET handler (src/app/api/dashboard/route.ts:14) calls this for any authenticated user before any role check. A user can set their cookie to {\"role\":\"clinic_admin\"} (or set passwordHash/active) and be silently promoted to admin on the next dashboard request - a mass-assignment privilege escalation. The safe sibling restoreNotificationLayout() validates with layoutPreferenceSchema, confirming the intended control.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "src/lib/labelPrinting.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 256
+      },
+      "end": {
+        "line": 11,
+        "col": 1,
+        "offset": 475
+      },
+      "extra": {
+        "message": "queuePrescriptionLabel() builds a shell command string (`labelctl print --job ${prescriptionId} --layout ${layoutPreset}`) and executes it with spawn('sh', ['-c', cmd]). layoutPreset is taken unvalidated from the request body in src/app/api/prescriptions/[id]/label/route.ts:22,32 and interpolated into the shell command, allowing any clinician/front-desk user to inject arbitrary OS commands (e.g. layoutPreset='x; id; #'). The safe counterpart queueChartLabel() validates the preset against an allow-list and uses spawnSync with discrete args.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "src/lib/documentConvert.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 275
+      },
+      "end": {
+        "line": 12,
+        "col": 1,
+        "offset": 462
+      },
+      "extra": {
+        "message": "convertDocumentToFormat() interpolates the caller-controlled `format` argument directly into an execSync shell string: `pandoc \"${sourcePath}\" -o \"${outputPath}\" -t ${format}`. The `format` query parameter (default 'pdf') is forwarded unvalidated from src/app/api/documents/[id]/convert/route.ts:22,37, so an authenticated staff user can achieve OS command injection. The restricted convertVisitRecordToFormat() in the same file shows the intended safe pattern (allow-list + spawnSync with shell:false).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cryptographic.signature-verification-missing",
+      "path": "src/lib/referralLink.ts",
+      "start": {
+        "line": 26,
+        "col": 1,
+        "offset": 845
+      },
+      "end": {
+        "line": 30,
+        "col": 1,
+        "offset": 1070
+      },
+      "extra": {
+        "message": "readReferralClaim() decodes only the payload segment of a partner referral 'code' and never verifies the HMAC signature segment (the file's own comment admits it 'never recomputed or compared the signature segment'). src/app/api/referrals/intake/route.ts:23 uses this function and applies no authentication or role check, so any caller (an account can be self-registered as patient) can forge a claim with an arbitrary patientExternalId/partnerId, overwrite a patient's insuranceProvider, and - when the insurance policy number is known - retrieve that patient's name. The secure sibling admitReferralClaim() (used by /api/referrals/resolve) recomputes the HMAC with timingSafeEqual.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "src/lib/directoryService.ts",
+      "start": {
+        "line": 47,
+        "col": 1,
+        "offset": 1701
+      },
+      "end": {
+        "line": 50,
+        "col": 1,
+        "offset": 1801
+      },
+      "extra": {
+        "message": "queryEmployeeDirectory() builds an LDAP filter by concatenating the raw search term: `(cn=*${searchTerm}*)`. The term is user-controlled via the `q` query parameter of src/app/api/providers/coverage-directory/route.ts:18,27 and is never escaped, allowing LDAP filter injection to broaden the match and enumerate or extract corporate-directory entries. Note the sibling findUserByEmail() correctly escapes via escapeDirectoryFilterTerm(), showing the intended control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.lfi",
+      "path": "src/lib/formLibrary.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 498
+      },
+      "end": {
+        "line": 16,
+        "col": 1,
+        "offset": 677
+      },
+      "extra": {
+        "message": "loadClinicForm() joins the user-supplied formName into a filesystem path (`path.join(FORMS_DIR, ${formName}.pdf)`) and reads it without confining the result to FORMS_DIR - unlike the sibling loadIntakeForm() which resolves and prefix-checks the path. /api/documents/forms (src/app/api/documents/forms/route.ts:16,22) passes the raw `formName` query param and only requires any authenticated user (including the patient role), so a patient can traverse (e.g. formName=../../uploads/<id>) to read arbitrary .pdf files on the server, including other patients' uploaded documents.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.write",
+      "path": "src/lib/reportCache.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 446
+      },
+      "end": {
+        "line": 17,
+        "col": 1,
+        "offset": 705
+      },
+      "extra": {
+        "message": "persistExportBatch() writes `${batchId}.csv` under CACHE_DIR without sanitizing batchId. The batch id comes from the client-controlled `clinic_batch` cookie in src/app/api/admin/export/appointments/route.ts:103-105, so a caller can set clinic_batch=../../../public/x to write a .csv file outside the cache directory (arbitrary file write with attacker-influenced content). The sibling persistExportSnapshot() confines the name with path.basename(), confirming the missing control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.write",
+      "path": "src/app/api/admin/settings/letterhead/route.ts",
+      "start": {
+        "line": 28,
+        "col": 1,
+        "offset": 1006
+      },
+      "end": {
+        "line": 30,
+        "col": 1,
+        "offset": 1128
+      },
+      "extra": {
+        "message": "The letterhead upload writes the raw, unsanitized upload filename via path.join(brandingDir, file.name) directly under public/branding, with no extension/content-type restriction. A filename such as '../x.html' escapes the branding folder into the public web root, letting an uploader place attacker-controlled HTML/JS that Next.js serves from the same origin (stored XSS), or overwrite other assets. (Admin-only today, but trivially chainable with the dashboard privilege escalation.)",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory",
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cryptographic.weak-randomness",
+      "path": "src/lib/companionAccess.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 303
+      },
+      "end": {
+        "line": 24,
+        "col": 1,
+        "offset": 700
+      },
+      "extra": {
+        "message": "issueCompanionViewCode() generates the waiting-room companion bearer code with Math.random().toString(36).substring(2,10) - a non-cryptographic PRNG producing only ~36^8 of guessable entropy. This code is the sole credential for the unauthenticated resume endpoint GET /api/appointments/[id]/companion-link (companion-link/route.ts:46-70) which discloses appointment details, and it has no attempt rate limiting. The sibling issueRecordShareCode() correctly uses crypto.randomBytes(16).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.unbounded-resource-allocation",
+      "path": "src/app/api/appointments/series/route.ts",
+      "start": {
+        "line": 30,
+        "col": 1,
+        "offset": 1098
+      },
+      "end": {
+        "line": 44,
+        "col": 1,
+        "offset": 1503
+      },
+      "extra": {
+        "message": "The number of series occurrences is taken from the client-controlled X-Series-Occurrences header via parseInt with no upper bound and no availability/conflict check, then expandAppointmentSeries() (src/lib/seriesScheduling.ts:20-40) loops and inserts one Appointment row per occurrence. An authenticated patient can send a huge value (e.g. 10000000) to exhaust database/CPU resources (DoS) and mass-book appointments. The capped sibling expandProviderScheduleWeeks() (MAX_SCHEDULE_WEEKS=26 guard) shows the intended limit.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-770: Allocation of Resources Without Limits or Throttling",
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.broken-access-control",
+      "path": "src/app/api/patients/[id]/route.ts",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 664
+      },
+      "end": {
+        "line": 34,
+        "col": 1,
+        "offset": 1045
+      },
+      "extra": {
+        "message": "The clinician assignment check is gated on `user.provider` being present: `if (user.role === 'clinician' && user.provider)`. A user whose role is clinician but who has no Provider row (e.g. after an admin role change) skips the check entirely and can fetch any patient's full chart (PHI, visit summaries, prescriptions, documents, messages). The intended control exists in canAccessPatient() (src/lib/access.ts:12-22) which returns false for a clinician without a provider, but this route re-implements the logic incompletely instead of using it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.config.hardcoded-session-secret",
+      "path": "src/lib/session.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 222
+      },
+      "end": {
+        "line": 12,
+        "col": 1,
+        "offset": 313
+      },
+      "extra": {
+        "message": "iron-session is configured with a hardcoded fallback secret ('dev-secret-change-in-production-min-32-chars!!') whenever SESSION_SECRET is not set. If the app is deployed without that env var, all session cookies are signed with a publicly known key, letting anyone forge a session for any userId/role and bypass authentication entirely.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.config.hardcoded-credentials",
+      "path": "src/lib/prisma.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 173
+      },
+      "end": {
+        "line": 14,
+        "col": 1,
+        "offset": 520
+      },
+      "extra": {
+        "message": "The Prisma database client is constructed with hardcoded PostgreSQL credentials (user 'postgres' / password 'postgres' on localhost:5432). Credentials embedded in source are leaked to anyone with repository access and prevent safe rotation.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cryptographic.hardcoded-key",
+      "path": "src/lib/recordRelease.ts",
+      "start": {
+        "line": 3,
+        "col": 1,
+        "offset": 30
+      },
+      "end": {
+        "line": 6,
+        "col": 1,
+        "offset": 175
+      },
+      "extra": {
+        "message": "The AES key used to seal/unseal record-release envelopes falls back to a hardcoded constant '0123456789abcdef0123456789abcdef' when RECORD_RELEASE_KEY is unset. Because the value is public, anyone can forge or tamper with release envelopes submitted to the unauthenticated partner-release endpoints (documents/external-release and documents/partner-release routes).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key",
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

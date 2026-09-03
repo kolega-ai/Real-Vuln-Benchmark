@@ -101,9 +101,15 @@ def load_model_config(name: str) -> dict:
     return data["models"][name]
 
 
-def clone_or_find_repo(repo_slug: str) -> Path | None:
-    """Find or clone the repo for analysis."""
-    repos_dir = PROJECT_ROOT / "repos"
+LANGUAGES = {
+    "python": {"files": "Python files", "template": "system-prompt.md"},
+    "tsjs": {"files": "TypeScript and JavaScript files", "template": "system-prompt-tsjs.md"},
+}
+
+
+def clone_or_find_repo(repo_slug: str, repos_dir: Path | None = None) -> Path | None:
+    """Find or clone the repo for analysis, pinned to the ground-truth commit."""
+    repos_dir = repos_dir or PROJECT_ROOT / "repos"
     repo_path = repos_dir / repo_slug
     if repo_path.is_dir():
         return repo_path
@@ -162,8 +168,10 @@ def run_one_agentic(
     prompt_version: str = "",
     prompt_label: str = "",
     benchmark_metadata: dict | None = None,
+    language: str = "python",
 ) -> dict:
     """Run one agentic evaluation using OpenCode CLI."""
+    lang_files = LANGUAGES[language]["files"]
     model_id = model_config["model_id"]
     scanner_slug = model_config["scanner_slug"]
 
@@ -198,8 +206,8 @@ def run_one_agentic(
         f"{system_prompt}\n\n"
         f"The repository to audit is in the current directory.\n\n"
         f"You MUST follow these steps IN ORDER:\n"
-        f"1. List all Python files in this repo\n"
-        f"2. Read each Python file to understand the code\n"
+        f"1. List all {lang_files} in this repo\n"
+        f"2. Read each of those files to understand the code\n"
         f"3. Look for SQL injection, XSS, command injection, path traversal, etc.\n"
         f"4. ONLY after reading ALL files, output your findings\n\n"
         f"CRITICAL: The example JSON in the prompt above is just a FORMAT TEMPLATE.\n"
@@ -359,6 +367,10 @@ def main() -> int:
                         help="Hard stop if cumulative cost exceeds this USD amount (default: $50)")
     parser.add_argument("--prompt-template", type=Path, default=None, help="Path to prompt template")
     parser.add_argument("--prompt-label", type=str, default="", help="Human-readable prompt label")
+    parser.add_argument("--language", choices=sorted(LANGUAGES), default="python",
+                        help="Corpus language: picks the prompt template and file-listing wording")
+    parser.add_argument("--repos-dir", type=Path, default=None,
+                        help="Directory of repo checkouts (default: <root>/repos)")
     args = parser.parse_args()
 
     # Verify opencode is installed
@@ -379,7 +391,10 @@ def main() -> int:
 
     # Build system prompt
     cwe_families = load_cwe_families()
-    prompt_info = build_prompt(cwe_families, template_path=args.prompt_template, label=args.prompt_label)
+    template_path = args.prompt_template or (
+        LLM_BENCH_DIR / "prompts" / LANGUAGES[args.language]["template"]
+    )
+    prompt_info = build_prompt(cwe_families, template_path=template_path, label=args.prompt_label)
     benchmark_metadata = load_benchmark_manifest()
 
     if args.dry_run:
@@ -417,7 +432,7 @@ def main() -> int:
     # Pre-clone all repos
     repo_paths: dict[str, Path] = {}
     for repo_slug in repos:
-        repo_path = clone_or_find_repo(repo_slug)
+        repo_path = clone_or_find_repo(repo_slug, args.repos_dir)
         if repo_path is None:
             logger.warning("Skipping %s — repo not found", repo_slug)
             continue
@@ -448,6 +463,7 @@ def main() -> int:
             prompt_version=prompt_info.version_hash,
             prompt_label=prompt_info.label,
             benchmark_metadata=benchmark_metadata,
+            language=args.language,
         )
         return repo_slug, run_id, result
 

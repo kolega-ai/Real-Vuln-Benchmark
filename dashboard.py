@@ -180,8 +180,12 @@ def load_repo_loc(gt_dir: Path) -> dict[str, int]:
 
 def compute_scanner_costs(
     scan_dir: Path, scanners: list[str], repo_loc: dict[str, int],
+    repos: set[str] | None = None,
 ) -> dict[str, dict]:
     """Collect cost data from .metrics.json files per scanner.
+
+    `repos` restricts the sum to that subset of repositories (used for the
+    per-language / per-authorship tabs); None means every scanned repository.
 
     Returns {scanner: {"total_cost", "successful_runs", "cost_per_run",
                         "total_loc_scanned", "cost_per_100_loc"}}.
@@ -193,7 +197,7 @@ def compute_scanner_costs(
     )
 
     for repo_dir in scan_dir.iterdir():
-        if not repo_dir.is_dir():
+        if not repo_dir.is_dir() or (repos is not None and repo_dir.name not in repos):
             continue
         for scanner_dir in repo_dir.iterdir():
             if not scanner_dir.is_dir() or scanner_dir.name not in scanners:
@@ -232,6 +236,28 @@ def compute_scanner_costs(
             "cost_per_100_loc": cost_per_100_loc,
         }
     return result
+
+
+def _project_fable_cost(aggregates: dict) -> None:
+    """Estimated cost for the Claude Code Fable 5 run (interactive, so unmetered).
+
+    Fable 5's API price is exactly 2x Claude Opus 4.8 ($10/$50 vs $5/$25 per 1M
+    in/out tokens), so we project its cost as 2x Opus 4.8's measured cost on the
+    same repositories. Flagged as estimated so the UI can mark it.
+    """
+    _est_target, _est_base = "claude-fable-5-cc-v1", "claude-opus-4-8-agentic-v1"
+    _base_cost = aggregates.get(_est_base, {}).get("cost") or {}
+    _tgt = aggregates.get(_est_target)
+    if _tgt is not None and _base_cost.get("total_cost", 0) > 0 and not (_tgt.get("cost") or {}).get("total_cost"):
+        _tgt["cost"] = {
+            "total_cost": round(_base_cost.get("total_cost", 0) * 2, 4),
+            "cost_per_run": round(_base_cost.get("cost_per_run", 0) * 2, 4),
+            "cost_per_100_loc": round(_base_cost.get("cost_per_100_loc", 0) * 2, 4),
+            "total_loc_scanned": _base_cost.get("total_loc_scanned", 0),
+            "successful_runs": _base_cost.get("successful_runs", 0),
+            "estimated": True,
+            "estimate_basis": "2x claude-opus-4-8-agentic-v1 (matching 2x API token price)",
+        }
 
 
 def compute_scanner_metadata(
@@ -2080,23 +2106,15 @@ def main() -> int:
             scanner, {"has_metrics": False}
         )
 
-    # Estimated cost for the Claude Code Fable 5 run (interactive, so unmetered).
-    # Fable 5's API price is exactly 2x Claude Opus 4.8 ($10/$50 vs $5/$25 per 1M
-    # in/out tokens), so we project its cost as 2x Opus 4.8's measured cost on the
-    # same benchmark. Flagged as estimated so the UI can mark it.
-    _est_target, _est_base = "claude-fable-5-cc-v1", "claude-opus-4-8-agentic-v1"
-    _base_cost = aggregates.get(_est_base, {}).get("cost") or {}
-    _tgt = aggregates.get(_est_target)
-    if _tgt is not None and _base_cost.get("total_cost", 0) > 0 and not (_tgt.get("cost") or {}).get("total_cost"):
-        _tgt["cost"] = {
-            "total_cost": round(_base_cost.get("total_cost", 0) * 2, 4),
-            "cost_per_run": round(_base_cost.get("cost_per_run", 0) * 2, 4),
-            "cost_per_100_loc": round(_base_cost.get("cost_per_100_loc", 0) * 2, 4),
-            "total_loc_scanned": _base_cost.get("total_loc_scanned", 0),
-            "successful_runs": _base_cost.get("successful_runs", 0),
-            "estimated": True,
-            "estimate_basis": "2x claude-opus-4-8-agentic-v1 (matching 2x API token price)",
-        }
+    # Per-tab costs: the same sums restricted to each tab's repositories, so a
+    # language tab prices the scanner on the code it scored there.
+    for key, agg in tab_aggregates.items():
+        tab_costs = compute_scanner_costs(scan_dir, scanners, repo_loc, set(tab_repos[key]))
+        for scanner, a in agg.items():
+            a["cost"] = tab_costs.get(scanner, {})
+        _project_fable_cost(agg)
+
+    _project_fable_cost(aggregates)
 
     # Filter scanners by minimum repo count
     if args.min_repos > 0:

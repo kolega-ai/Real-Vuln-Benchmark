@@ -1,0 +1,285 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.exec.os-command-injection",
+      "path": "backend/src/routes/products.ts",
+      "start": {
+        "line": 1025,
+        "col": 5,
+        "offset": 32669
+      },
+      "end": {
+        "line": 1027,
+        "col": 45,
+        "offset": 32800
+      },
+      "extra": {
+        "message": "OS command injection in convertProductExportFormat(): the user-supplied body field reportType is concatenated directly into a shell command string (no allowlist, unlike vendors.ts convertPayoutStatementFormat) that is executed via child_process.exec(). A vendor_manager who owns a product can submit reportType such as 'pdf; id' or 'pdf && curl attacker' to execute arbitrary OS commands on the server. sourcePath/outputPath also embed the unvalidated reportType.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.arbitrary-file-write",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 458,
+        "col": 5,
+        "offset": 15153
+      },
+      "end": {
+        "line": 459,
+        "col": 60,
+        "offset": 15270
+      },
+      "extra": {
+        "message": "Path traversal leading to arbitrary file write in writePayoutLedgerSnapshot(): the req.query.period value is interpolated unvalidated into the snapshot filename, `${vendor.id}-${period}.csv`, passed to path.join(LEDGER_DIR, ...). A period value containing ../ sequences (e.g. period='../../../../tmp/x') escapes LEDGER_DIR, and fs.writeFileSync writes payout CSV data to an attacker-chosen location on disk. Note admin.ts archiveVendorStatement correctly applies path.basename() to its label while this route does not sanitize period.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal",
+            "CWE-23: Relative Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.arbitrary-file-read",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 845,
+        "col": 5,
+        "offset": 29598
+      },
+      "end": {
+        "line": 846,
+        "col": 60,
+        "offset": 29720
+      },
+      "extra": {
+        "message": "Path traversal / arbitrary file read in renderVendorLogoAsset(): logoUrl is a vendor-controlled DB value (settable via PUT /api/vendors/:id body('logoUrl') with only .trim() validation, stored unvalidated) and is joined onto the asset directory and read with fs.readFileSync without the containment check that the sibling renderVendorBannerAsset handler performs (path.resolve + startsWith(ASSET_DIR+sep)). A vendor can set logoUrl to e.g. '../../.env' or any path and then read arbitrary server files through the unauthenticated GET /api/vendors/:id/branding/logo endpoint.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.broken-access-control",
+      "path": "backend/src/routes/products.ts",
+      "start": {
+        "line": 932,
+        "col": 5,
+        "offset": 28993
+      },
+      "end": {
+        "line": 936,
+        "col": 55,
+        "offset": 29230
+      },
+      "extra": {
+        "message": "Mass assignment / improper authorization in applyMerchandisingFeedPatch(): the full JSON body of req.query.patch is JSON.parse()d and passed wholesale as Prisma update data (Object.assign({}, feedPatch)). Unlike the admin endpoint applyCatalogFeedPatch (admin.ts:1924-1947) which restricts patches to an allowlist of merchandising fields, this vendor-facing route lets the patch set protected fields such as status ('published', bypassing the pending_review moderation workflow), price, inventory, and vendorId with no validation.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-915: Improperly Controlled Modification of Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.missing-role-check",
+      "path": "backend/src/routes/reviews.ts",
+      "start": {
+        "line": 525,
+        "col": 5,
+        "offset": 15562
+      },
+      "end": {
+        "line": 552,
+        "col": 60,
+        "offset": 16470
+      },
+      "extra": {
+        "message": "Broken access control in updateReviewVisibility(): authorization is decided solely by the client-supplied sharingMode body value ('vendor_storefront' or 'marketplace_staff') with no server-side role or ownership check, so any authenticated user (e.g. a buyer) can call PUT /api/reviews/:id/visibility on any review and set hidden=true to reject/hide reviews, or hidden=false to approve a previously rejected review \u2014 effectively bypassing marketplace_admin-only moderation.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 813,
+        "col": 5,
+        "offset": 28371
+      },
+      "end": {
+        "line": 814,
+        "col": 45,
+        "offset": 28490
+      },
+      "extra": {
+        "message": "LDAP filter injection in verifyVendorStaffDirectory(): the req.query.staff_name value is concatenated unescaped into an LDAP filter string `(&(objectClass=person)(cn=*${staffQuery}*))` passed to directoryClient.search(). Wildcard, parenthesis, and backslash characters in staff_name can alter the filter logic (e.g. bypass the objectClass constraint or enumerate directory entries). The codebase provides an RFC 4515 escaper escapeFilterValue() (used by admin.ts findCorporateContactByEmail) but it is not applied here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.upload.dangerous-file-type",
+      "path": "backend/src/middleware/upload.ts",
+      "start": {
+        "line": 12,
+        "col": 5,
+        "offset": 288
+      },
+      "end": {
+        "line": 31,
+        "col": 30,
+        "offset": 840
+      },
+      "extra": {
+        "message": "Unrestricted file upload / stored XSS: multer's fileFilter only inspects the client-supplied file.mimetype (trivially spoofable), while the on-disk filename preserves the attacker-chosen original extension via path.extname(file.originalname). Uploading a file whose Content-Type is an allowed type (e.g. image/png) but whose originalname ends in .html (or .svg/.js) stores attacker-controlled HTML/script under /uploads/<uuid>.html, which is served as text/html by express.static on the same origin (index.ts:51). Since the SPA keeps the JWT in localStorage, opening the link in a privileged session leaks tokens.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-434: Unrestricted Upload of File with Dangerous Type",
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.server-side-request-forgery",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 2285,
+        "col": 5,
+        "offset": 71186
+      },
+      "end": {
+        "line": 2293,
+        "col": 50,
+        "offset": 71670
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery in importVendorCatalogAsset() (and identically importVendorComplianceDocument() at line 2340): the handler fetches an arbitrary attacker-supplied URL (req.body.assetUrl / documentUrl) with no scheme/host allowlist or private-IP filtering, then writes the fetched bytes to disk with an attacker-controlled fileExtension. A vendor-submitted asset URL can target internal services (http://169.254.169.254/, internal admin panels), and the response body is persisted server-side, enabling blind SSRF and internal file exfiltration when an admin processes the onboarding import.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.credentials.hardcoded-secret",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 13,
+        "col": 5,
+        "offset": 446
+      },
+      "end": {
+        "line": 13,
+        "col": 80,
+        "offset": 520
+      },
+      "extra": {
+        "message": "Hardcoded default JWT signing secret: `process.env.JWT_SECRET || 'marketplace-dev-jwt-secret-change-in-production'` is used to sign/verify all auth tokens (also backend/src/middleware/auth.ts:5 and backend/src/routes/admin.ts:18, plus statically-derived crypto keys in orders.ts:787-791 and disputes.ts:982-986). If JWT_SECRET is not set in the environment (including production), the signing key is a publicly known constant, allowing an attacker to forge valid JWTs for any known userId (privilege escalation to admin). Defaults should never silently enable insecure operation.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data.exposure-in-log",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 260,
+        "col": 9,
+        "offset": 7804
+      },
+      "end": {
+        "line": 260,
+        "col": 80,
+        "offset": 7875
+      },
+      "extra": {
+        "message": "Sensitive data exposure: the password-reset JWT (valid for 1 hour and able to change the victim's password via POST /api/auth/reset-password, which never marks the token consumed so it is reusable) is printed in cleartext to the server console on every forgot-password request. Anyone with access to logs (or the mocked emailLog DB row created by sendEmail) can hijack the victim's account.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-leak.stack-trace-disclosure",
+      "path": "backend/src/routes/orders.ts",
+      "start": {
+        "line": 739,
+        "col": 9,
+        "offset": 23376
+      },
+      "end": {
+        "line": 741,
+        "col": 70,
+        "offset": 23480
+      },
+      "extra": {
+        "message": "Information disclosure via debug backdoor in recalculateOrderTotals(): when the caller appends ?context=diagnostic and an error is thrown, the handler returns res.status(500).json({ error: err.message, stack: err.stack, query: req.query }) to any authenticated participant of the order, leaking internal stack traces, file paths, and runtime internals that can aid further attacks.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,414 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.code-injection-unsafe-function",
+      "path": "app/worksheet.server.ts",
+      "start": {
+        "line": 21,
+        "col": 17,
+        "offset": 959
+      },
+      "end": {
+        "line": 21,
+        "col": 81,
+        "offset": 1024
+      },
+      "extra": {
+        "message": "evaluateDamagesWorksheet compiles an attacker-controlled formula line with `new Function(...Object.keys(context), 'return (...);')`. The worksheet text is decoded from an uploaded file in app/routes/app.matters.$matterId.documents.new.tsx:82-89 when category='damages_worksheet', which any user who can view the matter (including a client) can trigger. Because new Function runs in the global scope, a 'formula:' line such as `process.mainModule.require('child_process').execSync('id')` achieves arbitrary remote code execution on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection",
+            "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "app/render.server.ts",
+      "start": {
+        "line": 40,
+        "col": 3,
+        "offset": 1641
+      },
+      "end": {
+        "line": 40,
+        "col": 80,
+        "offset": 1719
+      },
+      "extra": {
+        "message": "renderFilingBrief interpolates `requestedFormat` directly into a shell command passed to execSync: `pandoc ${srcPath} -f markdown -t ${requestedFormat} -o ${outPath}`. requestedFormat is taken verbatim from the 'x-brief-format' request header in app/routes/app.matters.$matterId.brief.tsx:30 and is never validated/escaped, so an authenticated user with matter view access can inject shell metacharacters (e.g. `pdf; curl ... | sh;`) to execute arbitrary OS commands.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "app/audit.server.ts",
+      "start": {
+        "line": 69,
+        "col": 1,
+        "offset": 2109
+      },
+      "end": {
+        "line": 75,
+        "col": 3,
+        "offset": 2433
+      },
+      "extra": {
+        "message": "searchAuditTrailByDateRange passes raw user input into Prisma's $queryRawUnsafe: keyword, fromDate and toDate are concatenated into the SQL string (`summary ILIKE '%${keyword}%'`, `\"createdAt\" BETWEEN '${fromDate}' AND '${toDate}'`). These values come straight from the 'q'/'from'/'to' URL query parameters in app/routes/app.audit._index.tsx:71-75 (only requires a from+to param to hit the raw query), enabling SQL injection against the Postgres database.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xml-xxe-file-read",
+      "path": "app/feed.server.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 548
+      },
+      "end": {
+        "line": 26,
+        "col": 1,
+        "offset": 1023
+      },
+      "extra": {
+        "message": "resolveDeclaredEntities parses `<!DOCTYPE ... [ <!ENTITY name SYSTEM \"file://...\"> ]>` declarations out of a fetched XML feed and reads the referenced local file with readFileSync (line 21), then expands those entities into the docket feed items that are returned to the caller. The feed URL is user-controlled (matter action 'docket.feed_sync', app/routes/app.matters.$matterId.tsx:593-595, fetches any http(s) URL). A malicious/compromised feed can therefore read arbitrary files from the application server (e.g. file:///etc/passwd, .env) and have their contents echoed back inside the parsed feed items (XXE + server-side request forgery).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference",
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf-server-side-request-forgery",
+      "path": "app/exhibits.server.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 532
+      },
+      "end": {
+        "line": 25,
+        "col": 1,
+        "offset": 1157
+      },
+      "extra": {
+        "message": "pullFiledExhibitCopy fetches an arbitrary user-supplied URL (sourceUrl from the 'exhibit.import' matter action, app/routes/app.matters.$matterId.tsx:479-481) with no hostname/SSRF allowlist (unlike the registry variant above it), then writes the response body into the public web root at public/exhibits with an attacker-influenced basename (lines 19-24). This allows a staff user to probe internal RFC1918 addresses / cloud metadata endpoints and have the internal response (e.g. IAM credentials JSON) published to a publicly fetchable /exhibits/... URL.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dom-stored-xss",
+      "path": "app/viewer.tsx",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 313
+      },
+      "end": {
+        "line": 8,
+        "col": 101,
+        "offset": 414
+      },
+      "extra": {
+        "message": "buildDocumentPreviewBootstrap interpolates documentTitle and tags directly into a <script> string with no escaping, and DocumentPreviewBootstrap injects the result via dangerouslySetInnerHTML (viewer.tsx:13, used at app/routes/app.documents.$documentId.tsx:210). document title and tags are set by any user who can upload a document (clients included, via app/routes/app.matters.$matterId.documents.new.tsx:55-57). A crafted title such as `</script><img src=x onerror=alert(document.cookie)>` terminates the script element and injects an executable handler, giving stored XSS against any staff member who later opens the document (client->staff privilege escalation).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dom-stored-xss",
+      "path": "app/richtext.tsx",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 427
+      },
+      "end": {
+        "line": 11,
+        "col": 61,
+        "offset": 558
+      },
+      "extra": {
+        "message": "renderPortalSummary performs only the `**bold**` replacement and feeds the result to dangerouslySetInnerHTML without HTML-escaping the input text first (the staff-side renderStaffSummary escapes, this one does not). matter.description is rendered through this helper for the client portal view at app/routes/app.matters.$matterId.tsx:792, so any HTML in a matter description (editable via matter edit/new) executes in the client's browser - a stored XSS sink for raw user content.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment",
+      "path": "app/routes/app.client-contact.tsx",
+      "start": {
+        "line": 23,
+        "col": 1,
+        "offset": 1061
+      },
+      "end": {
+        "line": 28,
+        "col": 3,
+        "offset": 1277
+      },
+      "extra": {
+        "message": "applyClientContactUpdate spreads the entire submitted FormData (Object.fromEntries(form)) into prisma.client.update. A client user can add arbitrary fields (e.g. status, conflictNotes, accountId) to the POST and overwrite columns they must not control - e.g. flipping their own status away from 'conflict_blocked', wiping conflict/sanctions notes, or re-linking the client row to another account - a mass-assignment/broken object-level authorization flaw (the equivalent staff helper in app/routes/app.clients.$clientId.tsx:61-72 correctly allowlists fields).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.broken-access-control-forged-referral",
+      "path": "app/routes/referral.$assertion.tsx",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 638
+      },
+      "end": {
+        "line": 14,
+        "col": 59,
+        "offset": 697
+      },
+      "extra": {
+        "message": "The referral-packet landing loader authorizes access with decodeHandoffAssertion (line 14), which only base64-decodes the JWT-like payload and NEVER verifies the HMAC signature (see app/handoff.server.ts:39-47, whose own comment states it is 'Not used to authorize access on its own'). An attacker who has ever received a legitimate referral link can swap the payload to any other matter id and this unauthenticated route will return that matter's full referral packet (title, description, client name/email/phone, attorney name/email/phone) - broken access control / IDOR on client PII.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.broken-access-control-sealed-matter",
+      "path": "app/routes/case-status.$reference.tsx",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 795
+      },
+      "end": {
+        "line": 18,
+        "col": 74,
+        "offset": 949
+      },
+      "extra": {
+        "message": "The unauthenticated case-status page passes a client-supplied `dataLevel` query parameter into lookupCaseStatusForReferringFirm (app/casedocs.server.ts:101-113). That function lifts the sensitivity gate whenever `dataLevel === 'full'` (`matter.sensitivity !== 'standard' && dataLevel !== 'full'`), even though the value is fully attacker-controlled and never bound to a real correspondent-firm session. Anyone who knows (or can guess) a sequential MAT-YYYY-NNNN reference can read the title/status/openedAt of matters the firm deliberately sealed from public lookup.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.permissive-cors-credentials",
+      "path": "app/routes/app.clients.$clientId.tsx",
+      "start": {
+        "line": 42,
+        "col": 1,
+        "offset": 1579
+      },
+      "end": {
+        "line": 54,
+        "col": 14,
+        "offset": 2006
+      },
+      "extra": {
+        "message": "The client-detail loader (cookie-authenticated staff data incl. client email/phone/address/conflict notes and matter list) echoes back ANY Origin as Access-Control-Allow-Origin together with Access-Control-Allow-Credentials: true. Because the auth session cookie is SameSite=None (app/auth.server.ts:16), a malicious website can make credentialed fetch() calls to this endpoint from a logged-in staff member's browser and read the full client JSON, provided it can discover a client id - arbitrary-origin credentialed CORS data exposure.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.information-disclosure-privileged-doc-titles",
+      "path": "app/routes/app._index.tsx",
+      "start": {
+        "line": 45,
+        "col": 1,
+        "offset": 1450
+      },
+      "end": {
+        "line": 53,
+        "col": 5,
+        "offset": 1738
+      },
+      "extra": {
+        "message": "The dashboard's 'Recent document activity' query filters document versions only by `matter: scope` and never applies the viewer's visibility rules (compare app/routes/app.documents._index.tsx:20-24 which correctly restricts by visibleDocVisibilities). For a client user, this leaks the titles and existence of internal_only and privileged documents on their matters - content that is explicitly supposed to be invisible to clients everywhere else in the product.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-284: Improper Access Control",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.missing-csrf-token",
+      "path": "app/routes/app.documents.$documentId.tsx",
+      "start": {
+        "line": 103,
+        "col": 1,
+        "offset": 3468
+      },
+      "end": {
+        "line": 130,
+        "col": 32,
+        "offset": 4722
+      },
+      "extra": {
+        "message": "State-changing POST actions do not enforce the session mutation token implemented in app/csrf.server.ts (verified only in app/sensitivity.server.ts:23). The auth session cookie is set with SameSite='none' (app/auth.server.ts:16), so cross-site form/fetch POSTs carry it. A malicious page can therefore, for example, POST intent=visibility.change to flip a privileged/internal document to client_shared (this handler, lines 103-130), publish an approved client message, change matter status, or create notes/tasks - no anti-CSRF token is checked on these actions.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secret",
+      "path": "app/notary.server.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 306
+      },
+      "end": {
+        "line": 10,
+        "col": 66,
+        "offset": 372
+      },
+      "extra": {
+        "message": "The notary vendor API client secret is hardcoded in source (notaryClientSecret = 'nlk_9f3c2a7b5d1e4408b6a2f0c9d7e5b3a1') and sent as a Bearer token on every vendor call (lines 22, 47, 63). Hardcoded credentials in the repository can be extracted by anyone with source access.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.weak-password-hashing",
+      "path": "app/auth.server.ts",
+      "start": {
+        "line": 37,
+        "col": 1,
+        "offset": 1088
+      },
+      "end": {
+        "line": 38,
+        "col": 48,
+        "offset": 1243
+      },
+      "extra": {
+        "message": "provisionCoCounselPassword defaults the bcrypt cost to work factor 4 (`bcrypt.hash(password, workFactor || 4)`), and the admin co-counsel CSV importer passes the per-row `workFactor` column straight through (app/routes/app.admin.import.tsx:74,90). Rounds=4 is trivially fast to brute-force; accounts provisioned this way (or when a CSV omits the column) have effectively weak password hashes at rest.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data-in-logs",
+      "path": "app/apikey.server.ts",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 859
+      },
+      "end": {
+        "line": 29,
+        "col": 1,
+        "offset": 1006
+      },
+      "extra": {
+        "message": "logApiAccessAttempt writes the full set of request headers - including the Authorization header with its bearer API key - to the server log whenever an API call is rejected. A client whose key is merely revoked, mistyped in header casing, or stripped by a proxy has their live/secret key material persisted in plaintext logs (CWE-532); the log also captures any other sensitive headers sent by the caller.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

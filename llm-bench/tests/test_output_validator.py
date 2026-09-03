@@ -219,3 +219,19 @@ class TestValidateOutput:
         result = validate_output(raw)
         assert result.valid
         assert result.findings_count == 1
+
+
+def test_invalid_escape_in_message_does_not_lose_results_object():
+    """A regex quoted verbatim (`\\#`) makes the outer object invalid JSON; the
+    extractor must repair it rather than fall back to a nested finding object
+    that parses but has no `results` key."""
+    raw = (
+        'Done auditing.\n{\n  "version": "1.0.0",\n  "results": [\n    {"check_id": "js.redos", '
+        '"path": "a.js", "start": {"line": 1, "col": 1}, "end": {"line": 1, "col": 2}, '
+        '"extra": {"message": "regex /([0-9]+)+\\#/ is vulnerable", "severity": "WARNING", '
+        '"metadata": {"cwe": ["CWE-1333"], "confidence": "HIGH", "category": "security"}}}\n  ]\n}'
+    )
+    extracted = extract_json_from_text(raw)
+    data = json.loads(extracted)
+    assert "results" in data and len(data["results"]) == 1
+    assert data["results"][0]["extra"]["message"] == "regex /([0-9]+)+\\#/ is vulnerable"

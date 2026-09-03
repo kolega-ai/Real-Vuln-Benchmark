@@ -1,0 +1,410 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "typescript.security.injection.command-injection",
+      "path": "backend/src/import-export/import-export.service.ts",
+      "start": {
+        "line": 563,
+        "col": 9,
+        "offset": 17511
+      },
+      "end": {
+        "line": 566,
+        "col": 30,
+        "offset": 17679
+      },
+      "extra": {
+        "message": "The user-controlled exportFormat query parameter is concatenated into outputPath (line 557) and then into a shell command string 'pandoc ${sourcePath} -o ${outputPath}' executed via spawn('bash', ['-c', cmd], { shell: true }). Unlike convertEscalationBundleToFormat (which validates exportFormat against ALLOWED_ESCALATION_REPORT_FORMATS), convertTicketBundleToFormat performs no allowlist check, so a team_lead/support_admin can inject arbitrary shell metacharacters (e.g. exportFormat=pdf;curl... ) and achieve remote code execution on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.organization-idor",
+      "path": "backend/src/tickets/tickets.service.ts",
+      "start": {
+        "line": 243,
+        "col": 5,
+        "offset": 6622
+      },
+      "end": {
+        "line": 245,
+        "col": 6,
+        "offset": 6714
+      },
+      "extra": {
+        "message": "In findAll(), the tenant isolation set for customer_user at line 218 (where.organizationId = user.organizationId) is unconditionally overwritten at lines 243-245 by a client-supplied organizationId filter. Because TicketFilterDto.organizationId is whitelisted, any authenticated customer_user can call GET /tickets?organizationId=<victim-org> to list another organization's tickets (subjects, requester names/emails, statuses, SLA data). This is a cross-tenant IDOR / broken object-level authorization.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.agent-unscoped-ticket-list",
+      "path": "backend/src/tickets/tickets.service.ts",
+      "start": {
+        "line": 219,
+        "col": 5,
+        "offset": 5895
+      },
+      "end": {
+        "line": 228,
+        "col": 51,
+        "offset": 6371
+      },
+      "extra": {
+        "message": "For support_agent and team_lead the role-based branch in findAll() applies no constraint at all (empty block, lines 219-227), so any agent can list every ticket of every customer organization (including requester emails and subjects) instead of only tickets assigned to them or owned by their team's queues, as required by the spec's authorization rules. The agent detail-level check in checkTicketAccess is not mirrored on the list endpoint.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.timeline-internal-note-leak",
+      "path": "backend/src/tickets/tickets.service.ts",
+      "start": {
+        "line": 927,
+        "col": 3,
+        "offset": 23728
+      },
+      "end": {
+        "line": 992,
+        "col": 4,
+        "offset": 26000
+      },
+      "extra": {
+        "message": "getTicketTimeline() is reachable by customer_user via GET /tickets/:id/timeline (tickets.controller.ts lines 201-208, no @Roles restriction) but only enforces checkSimpleAccess (same-org). It returns internalNotes (line 948), full auditLogs and escalations for the ticket. A customer in the same organization can therefore read staff-only internal notes, audit history and escalation details, violating the requirement that internal notes never reach customers.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.escalation-membership-tier-bypass",
+      "path": "backend/src/escalations/escalations.service.ts",
+      "start": {
+        "line": 315,
+        "col": 5,
+        "offset": 8538
+      },
+      "end": {
+        "line": 317,
+        "col": 6,
+        "offset": 8617
+      },
+      "extra": {
+        "message": "findById() grants full cross-organization visibility whenever the caller supplies the query string membershipTier=partner_reviewer, which is a client-controlled value (escalations.controller.ts line 115) and is never validated against a token, header or directory record. Because customer_user is an allowed role on GET /escalations/:id, any authenticated user can enumerate escalation ids and read arbitrary organizations' escalation + full ticket context (requester email/PII, assignee, internal escalation reason) by appending ?membershipTier=partner_reviewer, bypassing the org check at lines 319-325.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.escalation-create-missing-authz",
+      "path": "backend/src/escalations/escalations.service.ts",
+      "start": {
+        "line": 68,
+        "col": 3,
+        "offset": 1882
+      },
+      "end": {
+        "line": 165,
+        "col": 4,
+        "offset": 4400
+      },
+      "extra": {
+        "message": "create() verifies the target ticket exists but never verifies the caller has access to it (no equivalent of checkEscalationAccess / ticket ownership). The route POST /escalations is open to customer_user (escalations.controller.ts lines 51-58), so a customer can escalate tickets of other organizations by id, mutating their status to 'escalated' and attaching attacker-controlled reason/priority \u2014 unauthorized state modification across tenants.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.path-traversal-arbitrary-write",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 87,
+        "col": 5,
+        "offset": 2928
+      },
+      "end": {
+        "line": 88,
+        "col": 55,
+        "offset": 3063
+      },
+      "extra": {
+        "message": "saveBrandingAsset() writes the uploaded file using the client-controlled file.originalname directly in path.join(brandingDir, file.originalname) with no basename/normalization (contrast with saveWorkspaceIconAsset which uses a random id). A support_admin can upload a file named e.g. ../../app.js or ../../public/evil.html and the raw bytes are written to an arbitrary location on the server (path traversal \u2192 arbitrary file write), potentially overwriting application files.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.path-traversal-local-file-read",
+      "path": "backend/src/reports/reports.service.ts",
+      "start": {
+        "line": 37,
+        "col": 5,
+        "offset": 1256
+      },
+      "end": {
+        "line": 42,
+        "col": 58,
+        "offset": 1460
+      },
+      "extra": {
+        "message": "renderCategoryReport() builds templatePath = path.join(templatesDir, category + '.txt') using ticket.category, a value that any customer can set to an arbitrary string when creating a ticket (CreateTicketDto.category, up to 100 chars, no allowlist) and that staff can also edit. No traversal guard is applied (unlike renderQueueReport which checks templatePath.startsWith(templatesDir)), so category=../../../etc/... resolves outside the templates directory and fs.readFileSync reads an arbitrary server file (constrained to a .txt suffix).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.ldap-injection",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 44,
+        "col": 5,
+        "offset": 1424
+      },
+      "end": {
+        "line": 45,
+        "col": 66,
+        "offset": 1528
+      },
+      "extra": {
+        "message": "findStaffRecordByEmail() builds the LDAP filter `(mail=${email})` by directly concatenating the user-supplied email query parameter without LDAP escaping (unlike searchStaffDirectory/syncStaffRoleFromDirectory which use escapeLdapFilterValue). An authenticated support_admin can inject LDAP filter operators to broaden the search (e.g. email=*)(objectClass=*))(|(mail=*) to enumerate directory entries. The DirectoryClient is a stub in this checkout, but the injection exists at the filter-construction sink.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authentication.weak-password-recovery",
+      "path": "backend/src/auth/auth.service.ts",
+      "start": {
+        "line": 201,
+        "col": 5,
+        "offset": 5158
+      },
+      "end": {
+        "line": 205,
+        "col": 6,
+        "offset": 5358
+      },
+      "extra": {
+        "message": "forgotPassword() (unauthenticated endpoint POST /auth/forgot-password) returns the password reset token to the caller in the response body (resetToken). Combined with POST /auth/reset-password, which accepts only token+password with no further proof of identity (auth.controller.ts lines 48-52), any remote attacker can request a reset for a victim's email and immediately reset the victim's password \u2014 full account takeover for any account including admins. Reset tokens are also stored in an in-memory Map with no binding to the requesting IP/device.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.secrets.hardcoded-jwt-secret",
+      "path": "backend/src/auth/jwt.strategy.ts",
+      "start": {
+        "line": 26,
+        "col": 47,
+        "offset": 741
+      },
+      "end": {
+        "line": 26,
+        "col": 111,
+        "offset": 849
+      },
+      "extra": {
+        "message": "JWT verification (and symmetric signing in auth.module.ts line 18) falls back to the hardcoded, publicly-known secret 'change-me-in-production-use-a-real-secret-key' whenever JWT_SECRET is not set. If the environment variable is missing in a deployment, an attacker can forge valid JWTs for any user id and any role (e.g. support_admin) and fully bypass authentication and role checks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authentication.weak-bcrypt-cost-dos",
+      "path": "backend/src/auth/auth.service.ts",
+      "start": {
+        "line": 338,
+        "col": 5,
+        "offset": 9106
+      },
+      "end": {
+        "line": 339,
+        "col": 63,
+        "offset": 9231
+      },
+      "extra": {
+        "message": "initializeAccount() (unauthenticated endpoint POST /auth/initialize-account, auth.controller.ts lines 86-90) accepts a client-controlled provisioningTier integer that is passed directly as the bcrypt cost to bcrypt.hash(dto.password, rounds). An attacker can submit a large cost (e.g. 25-31), causing bcryptjs to run an astronomically expensive hash on every request, trivially exhausting server CPU \u2014 an unauthenticated denial-of-service vector (only throttled at 100 req/min, which a single expensive request defeats).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.info-disclosure.ops-context-stack-leak",
+      "path": "backend/src/sla/sla.service.ts",
+      "start": {
+        "line": 179,
+        "col": 7,
+        "offset": 5245
+      },
+      "end": {
+        "line": 186,
+        "col": 8,
+        "offset": 5600
+      },
+      "extra": {
+        "message": "getCapacityForecast() returns err.message and err.stack to the caller whenever the request carries the client-spoofable header x-ops-context: internal-ops (sla.controller.ts line 78). Any team_lead/support_admin can set this header and receive internal error messages and stack traces (query, file paths, library internals) in the HTTP response, leaking implementation details that aid further attacks.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.xss.stored-innerhtml-reply",
+      "path": "frontend/src/app/ticket/ticket-detail.component.html",
+      "start": {
+        "line": 167,
+        "col": 61,
+        "offset": 7683
+      },
+      "end": {
+        "line": 167,
+        "col": 94,
+        "offset": 7709
+      },
+      "extra": {
+        "message": "Ticket reply content is rendered with [innerHTML]=\"reply.content | nl2br\". The nl2br pipe only replaces newlines with <br> (nl2br.pipe.ts lines 5-8) and does not sanitize HTML, and Angular does not sanitize innerHTML property bindings. Reply content is fully user-controlled (customers and agents can post replies containing <script>/<img onerror> payloads), producing stored XSS that executes in the browsers of agents/admins/customers who open the ticket, allowing session/token theft and further account compromise.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.xss.stored-innerhtml-kb-content",
+      "path": "frontend/src/app/knowledge-base/kb-detail/kb-detail.component.html",
+      "start": {
+        "line": 64,
+        "col": 43,
+        "offset": 2519
+      },
+      "end": {
+        "line": 64,
+        "col": 80,
+        "offset": 2544
+      },
+      "extra": {
+        "message": "Knowledge-base article content is rendered via [innerHTML]=\"article.content\" with no sanitizer. KB content is stored verbatim from the editor textarea (kb-editor.component.ts lines 119-124; CreateKbDto.content is a plain string) and can include arbitrary HTML authored by any support_agent/team_lead/admin. Because KB articles are viewed by customers and all staff, a malicious or compromised staff account can inject scripts (stored XSS) that run in every reader's session, including admins.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.file-upload.unrestricted-upload",
+      "path": "backend/src/attachments/attachments.service.ts",
+      "start": {
+        "line": 53,
+        "col": 5,
+        "offset": 1500
+      },
+      "end": {
+        "line": 78,
+        "col": 46,
+        "offset": 2450
+      },
+      "extra": {
+        "message": "The ticket attachment upload endpoint (POST /attachments/upload/:ticketId) imposes no server-side file-size or content-type restrictions (FileInterceptor is registered without limits, and the whole file is buffered in memory then written with fs.writeFileSync at line 78). Any authenticated customer can repeatedly upload arbitrarily large files, causing unbounded memory/disk consumption (denial of service). Uploaded HTML/SVG content is also stored with user-controlled mimeType, later reflected in Content-Type headers and audit logs.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption",
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

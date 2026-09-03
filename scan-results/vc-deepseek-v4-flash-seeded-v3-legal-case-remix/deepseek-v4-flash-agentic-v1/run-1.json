@@ -1,0 +1,409 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "app/lib/directory.server.ts",
+      "start": {
+        "line": 18,
+        "col": 3,
+        "offset": 665
+      },
+      "end": {
+        "line": 18,
+        "col": 40,
+        "offset": 703
+      },
+      "extra": {
+        "message": "LDAP injection (CWE-90): searchStaffByEmail() builds an LDAP search filter by concatenating the caller-supplied searchTerm directly: `(mail=${searchTerm})`. Unlike verifyGroupAccess() (which uses escapeLdapFilterValue), no escaping is applied. searchStaffByEmail is reachable from clients.new.tsx intent \"checkDirectoryConflict\" (runDirectoryConflictCheck -> searchStaffByEmail(directoryTerm)) where directoryTerm is attacker-controlled form input from any authenticated staff user. An attacker can inject filter logic (e.g. `*)(|(mail=*))(&(mail=` ) to broaden the search and enumerate directory entries.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "app/routes/admin.export.tsx",
+      "start": {
+        "line": 65,
+        "col": 5,
+        "offset": 2286
+      },
+      "end": {
+        "line": 67,
+        "col": 1,
+        "offset": 2426
+      },
+      "extra": {
+        "message": "OS command injection (CWE-78): packageExportBundle() runs spawn('tar czf ' + archivePath + ' -C ' + workDir + ' export.csv --transform s|export.csv|' + reportType + '.csv|', [], { shell: true }). reportType is taken from the user-controlled form field 'reportType' (line 256, intent exportMattersBundle) and interpolated into a shell command string with shell:true and no quoting/validation (unlike packageRetentionExportBundle which uses the safe array form). A firm_admin can inject arbitrary shell commands through reportType, e.g. `$(touch /tmp/pwned)`. The tar output/exit is surfaced, and archivePath (also derived from reportType) is echoed back to the client in the success message, enabling command execution and exfiltration.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf",
+      "path": "app/routes/documents.$id.tsx",
+      "start": {
+        "line": 18,
+        "col": 3,
+        "offset": 924
+      },
+      "end": {
+        "line": 24,
+        "col": 1,
+        "offset": 1148
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery (CWE-918): importExternalDocumentVersion() calls fetch(documentUrl) where documentUrl comes verbatim from the client-controlled 'x-dms-content-url' request header (line 214) in the action intent \"importExternalVersion\" (staff-triggerable but no URL allowlist/validation). The response body is written to a document version in the current matter (lines 234-235), which the same authenticated user can then download, so an attacker can reach internal network services (metadata endpoints, localhost, cloud instance metadata) and retrieve their contents through the created version.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.reflected",
+      "path": "app/routes/documents.$id.print.tsx",
+      "start": {
+        "line": 20,
+        "col": 3,
+        "offset": 912
+      },
+      "end": {
+        "line": 20,
+        "col": 46,
+        "offset": 956
+      },
+      "extra": {
+        "message": "Reflected XSS (CWE-79): the 'layout' query parameter (line 52) is fully attacker-controlled and is compiled as a Handlebars template server-side (Handlebars.compile(layout), line 20). Handlebars leaves raw HTML outside {{}} expressions untouched, and the compiled output (letterhead) is injected into the DOM via dangerouslySetInnerHTML at line 72 without any sanitization. A crafted ?layout=<script>... payload executes in the victim's browser in the context of the authenticated documents session. The loader only requires an authenticated user (requireUser) plus the weak resolveDocumentViewScope check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.broken-access-control.document-view-scope",
+      "path": "app/lib/permissions.server.ts",
+      "start": {
+        "line": 188,
+        "col": 3,
+        "offset": 5721
+      },
+      "end": {
+        "line": 190,
+        "col": 1,
+        "offset": 5777
+      },
+      "extra": {
+        "message": "Broken access control / authorization bypass (CWE-862, CWE-285): resolveDocumentViewScope() trusts a client-set cookie: if the request carries Cookie 'viewAccess=firm-wide' (parsed at line 185-186) it returns true immediately, skipping the real canAccessDocument() authorization entirely. Because the cookie is user-controlled, ANY authenticated user (including the 'client' role) can set viewAccess=firm-wide and access the print letterhead view (documents.$id.print.tsx loader line 34) for arbitrary document IDs they should not be able to reach, disclosing titles, matter/category/privilege metadata of privileged documents of other clients.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor.document-version-download",
+      "path": "app/routes/documents.$id.download.tsx",
+      "start": {
+        "line": 28,
+        "col": 5,
+        "offset": 884
+      },
+      "end": {
+        "line": 39,
+        "col": 1,
+        "offset": 1090
+      },
+      "extra": {
+        "message": "IDOR / missing authorization on document version download (CWE-639): the loader authorizes against the URL document id (line 16, canAccessDocument(user.id, id)) but when a versionId query parameter is supplied it fetches any DocumentVersion by that id (lines 28-31) without verifying version.documentId === id. A user who can access even one document can therefore download the file content of an arbitrary privileged/other-matter document version just by supplying its versionId, bypassing the per-document access control; the filePath of the foreign version is then read from disk (lines 46-54).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor.matter-filter-messages",
+      "path": "app/routes/messages.tsx",
+      "start": {
+        "line": 64,
+        "col": 5,
+        "offset": 2133
+      },
+      "end": {
+        "line": 64,
+        "col": 34,
+        "offset": 2163
+      },
+      "extra": {
+        "message": "IDOR / authorization scope override in messages list (CWE-639): the loader first scopes messages to the user's accessible matters with where.matterId = { in: matterIds } (lines 48-50), but the user-controlled 'matter' query parameter then overwrites it with an exact matterId (line 64), dropping the access restriction entirely. A client (or an attorney/paralegal) can request /messages?matter=<any matter id> and read the full subject/content of client communications from matters they have no access to.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor.matter-filter-calendar",
+      "path": "app/routes/calendar.tsx",
+      "start": {
+        "line": 61,
+        "col": 5,
+        "offset": 1992
+      },
+      "end": {
+        "line": 62,
+        "col": 1,
+        "offset": 2023
+      },
+      "extra": {
+        "message": "IDOR / authorization scope override in calendar (CWE-639): identical pattern to messages.tsx - where.matterId = { in: matterIds } (line 53) is replaced by the user-controlled 'matter' query param (line 61). Any authenticated user, including clients, can pass ?matter=<foreign matter id> and enumerate other matters' deadlines (titles, descriptions, due dates, assignees).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor.matter-filter-documents",
+      "path": "app/routes/documents._index.tsx",
+      "start": {
+        "line": 112,
+        "col": 7,
+        "offset": 3595
+      },
+      "end": {
+        "line": 112,
+        "col": 46,
+        "offset": 3635
+      },
+      "extra": {
+        "message": "IDOR / authorization scope override for client document search (CWE-639): for client-role users the loader constrains results to the client's own matters (matterId: { in: clientMatterIds }, line 102), but the 'matterId' query parameter then overwrites that constraint (line 112). A client can list document titles/matter/category metadata of client-shared documents belonging to other clients' matters. Staff users are likewise able to list documents of matters they are not assigned to via the same override in the staff branch (line 69).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.profile-preferences",
+      "path": "app/routes/profile.tsx",
+      "start": {
+        "line": 46,
+        "col": 5,
+        "offset": 1391
+      },
+      "end": {
+        "line": 47,
+        "col": 1,
+        "offset": 1409
+      },
+      "extra": {
+        "message": "Mass assignment / privilege escalation (CWE-915, CWE-269): applyPreferencesPayload() JSON.parses the user-supplied 'preferencesJson' field (line 43) and passes the entire object straight to db.user.update({ where: { id: userId }, data: preferences }) with no allowlist of keys. The hidden form field is client-controlled (action lines 55-59), so any authenticated user (including a 'client') can submit {\"role\":\"firm_admin\"} (or change isActive/passwordHash/email) and escalate to firm_admin on their own account. The in-memory helpers in workspace.server.ts/dashboard whitelist preference keys, but this DB-persisting path does not.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.privileged-notes",
+      "path": "app/routes/matters.$id.tsx",
+      "start": {
+        "line": 82,
+        "col": 7,
+        "offset": 2829
+      },
+      "end": {
+        "line": 87,
+        "col": 1,
+        "offset": 2923
+      },
+      "extra": {
+        "message": "Sensitive data exposure (CWE-200): the matter loader includes privilegedNotes (attorney-client privileged content) unconditionally and serializes the whole matter object (including privilegedNotes, clientMessages with drafts, assignments) to the response (lines 82-87, 127-135). canViewPrivilegedNotes() correctly returns false for the 'client' role, but that flag only hides the notes tab in the UI; the raw privileged-note content and authors is still shipped to client users in the loader JSON, leaking internal strategy/settlement-authority information that should never reach the client.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.broken-access-control.draft-message-edit",
+      "path": "app/routes/messages.tsx",
+      "start": {
+        "line": 105,
+        "col": 3,
+        "offset": 3324
+      },
+      "end": {
+        "line": 108,
+        "col": 1,
+        "offset": 3355
+      },
+      "extra": {
+        "message": "Missing authorization on draft edit (CWE-862, CWE-639): applyDraftMessageEdit() (lines 96-111) and the editDraftMessage action (lines 118-141) only verify the target message is still a draft; they never check that the caller is staff, that the message belongs to the caller (senderId), or that the message's matter is within the caller's accessible matters. Any authenticated user - including a client account - can POST intent=editDraftMessage with an arbitrary messageId and rewrite the subject/content of an internal staff draft on any matter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect",
+      "path": "app/routes/co-counsel.$matterId.tsx",
+      "start": {
+        "line": 54,
+        "col": 5,
+        "offset": 2165
+      },
+      "end": {
+        "line": 55,
+        "col": 1,
+        "offset": 2190
+      },
+      "extra": {
+        "message": "Open redirect (CWE-601): the action redirects to the raw, unvalidated 'x-return-url' request header value (line 52-55): throw redirect(returnTo). Any party holding a valid collab_ctx token for the matter (or who can obtain one via the share flow) can supply x-return-url: https://evil.example/phish and the server responds with a 302 to the external site. Unlike resolveTrustedReturnDestination() in messages.tsx, no same-origin validation is performed.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.view-snapshot-write",
+      "path": "app/lib/workspace.server.ts",
+      "start": {
+        "line": 20,
+        "col": 3,
+        "offset": 594
+      },
+      "end": {
+        "line": 21,
+        "col": 1,
+        "offset": 648
+      },
+      "extra": {
+        "message": "Path traversal enabling arbitrary file write (CWE-22): persistMatterViewSnapshot() does path.join(CACHE_ROOT, `${viewLabel}.json`) and fs.writeFileSync's attacker-controlled payload to it. viewLabel is taken from the client-controlled 'matterViewLabel' cookie (matters.$id.tsx lines 161-165) with no path.basename() sanitization (unlike persistTaskDraftNote, which does use basename). The saveViewLayout action (matters.$id.tsx line 159-168) only calls requireUser - no staff/matter check - so any authenticated user, including clients, can set the cookie to a traversal such as ../../../../tmp/owned and write arbitrary .json file content (layoutJson) anywhere the process user can write.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.upload-filename",
+      "path": "app/lib/upload.server.ts",
+      "start": {
+        "line": 49,
+        "col": 3,
+        "offset": 1513
+      },
+      "end": {
+        "line": 52,
+        "col": 1,
+        "offset": 1608
+      },
+      "extra": {
+        "message": "Path traversal via unsanitized upload filename (CWE-22): saveUploadedFile() builds the destination as `${uuidv4()}-${file.name}` and writes through path.join (lines 49-52) without sanitizing file.name. The multipart filename is client-controlled (matters.$id.tsx uploadDocument line 234-238 and documents.$id.tsx uploadNewVersion lines 169-172). A filename containing ../ segments (e.g. ../../../../evil) makes path.join normalize the path outside the intended matter subdirectory (and out of the uploads root with enough segments), allowing arbitrary file writes on the server for any user permitted to upload.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.weak-secret.default-session-secret",
+      "path": "app/lib/auth.server.ts",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 138
+      },
+      "end": {
+        "line": 5,
+        "col": 118,
+        "offset": 256
+      },
+      "extra": {
+        "message": "Use of hardcoded/default credential (CWE-798, CWE-1188): SESSION_SECRET falls back to the publicly-known default 'change-this-to-a-random-secret-in-production-min-32-chars-long' (also present in .env.example). Because the length guard (lines 7-9) only requires >= 32 chars, the fallback passes validation silently, so a production deployment that forgets SESSION_SECRET signs all session cookies (and, via collab.server.ts lines 3-6, all co-counsel/portal-feed HMAC tokens) with a well-known secret, enabling full session forgery / account takeover. The collab.server.ts chain also falls back through SESSION_SECRET to the same default.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-1188: Insecure Default Initialization of Resource"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

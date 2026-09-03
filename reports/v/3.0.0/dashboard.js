@@ -132,7 +132,7 @@
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
         '<td title="Noise — share of findings that were false alarms (100% − precision)">' + (100 - s.prec * 100).toFixed(1) + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/' + total + '</span></td>' +
-        '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : ' title="API spend per 100,000 lines of code scanned"') + '>' + (s.cost == null ? '—' : s.cost === 0 ? 'Free' : (s.est ? '~$' : '$') + s.cost.toLocaleString()) + '</td>' +
+        '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : ' title="API spend per 100,000 lines of code scanned"') + '>' + (s.cost == null ? '—' : s.cost === 0 ? 'Free' : (s.est ? '~$' : '$') + (s.cost < 10 ? s.cost.toFixed(2) : s.cost.toLocaleString())) + '</td>' +
         '<td class="dim" title="API spend per 100 real vulnerabilities found">' + (s.cpv == null ? '—' : s.cpv === 0 ? 'Free' : '$' + s.cpv.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})) + '</td>';
       tbody.appendChild(tr);
     });

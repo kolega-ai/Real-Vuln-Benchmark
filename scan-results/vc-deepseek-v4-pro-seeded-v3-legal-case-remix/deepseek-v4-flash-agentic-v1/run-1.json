@@ -1,0 +1,362 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.access-control.open-registration-privilege-escalation",
+      "path": "app/routes/register.tsx",
+      "start": {
+        "line": 44,
+        "col": 1,
+        "offset": 1374
+      },
+      "end": {
+        "line": 74,
+        "col": 5,
+        "offset": 2108
+      },
+      "extra": {
+        "message": "The public /register route lets an unauthenticated user choose their own role from the form (`role = formData.get(\"role\")`), and `registerSchema` permits `firm_admin`, `attorney`, and `paralegal` (validation.server.ts:13). createUserSession immediately logs the new account in. Anyone can self-register a `firm_admin` account and gain full administrative access, bypassing all authentication/authorization controls.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-269: Improper Privilege Management",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "app/lib/convert.server.ts",
+      "start": {
+        "line": 16,
+        "col": 3,
+        "offset": 600
+      },
+      "end": {
+        "line": 16,
+        "col": 110,
+        "offset": 707
+      },
+      "extra": {
+        "message": "convertMatterDocument builds a shell command by string interpolation: `execSync(\\`pandoc ${sourcePath} -o ${outPath} -t ${targetFormat}\\`)`. Both sourceFilename and targetFormat originate from unvalidated POST fields in the action at app/routes/_app.documents.tsx:20-24 (`filename`, `format` \u2014 no server-side allowlist for format). A staff user can inject shell metacharacters (e.g. `;`, backticks, `$(...)`) to achieve arbitrary OS command execution on the server (RCE).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection",
+      "path": "app/lib/feeEstimate.server.ts",
+      "start": {
+        "line": 15,
+        "col": 3,
+        "offset": 555
+      },
+      "end": {
+        "line": 15,
+        "col": 80,
+        "offset": 632
+      },
+      "extra": {
+        "message": "estimateMatterFee evaluates attacker-influenced text as JavaScript: `new Function(\"params\", \\`return (${formula});\\`)`. The formula comes straight from the `feeFormula` URL query parameter in the loader at app/routes/_app.matters.new.tsx:34-40, so any authenticated attorney/admin can supply an expression such as `process.mainModule.require('child_process').execSync('id')` and get arbitrary server-side code execution (RCE). Only firm_admin/attorney roles are required to reach it.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.insecure-handoff-token",
+      "path": "app/lib/portal.server.ts",
+      "start": {
+        "line": 38,
+        "col": 3,
+        "offset": 1253
+      },
+      "end": {
+        "line": 43,
+        "col": 9,
+        "offset": 1405
+      },
+      "extra": {
+        "message": "resolveHandoffToken trusts the embedded matterId/clientId whenever the HMAC signature segment is missing OR does not match (`if (signature !== expected) return payload;`, and tokens with no signature are parsed without any check). An attacker can forge a token for any matterId (base64url JSON `{\"matterId\":...,\"clientId\":...,\"exp\":<future>}`) and, via app/routes/_app.client.messages.tsx:19-30, read approved messages of any matter they do not own. This defeats the HMAC access control entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-client-action",
+      "path": "app/routes/_app.matters.$id.tsx",
+      "start": {
+        "line": 192,
+        "col": 3,
+        "offset": 5977
+      },
+      "end": {
+        "line": 194,
+        "col": 3,
+        "offset": 6090
+      },
+      "extra": {
+        "message": "The action handler authorizes with `if (!isAdmin && !isAssigned && role !== \"client\")`, which excludes client-role users from the check entirely and never verifies `matter.clientId === userId` (unlike the loader at lines 75-80). Any logged-in client can POST actions to ANY `/matters/:id` \u2014 create_message, create_note, upload_document, transition_status, export_binder \u2014 on matters owned by other clients/users, causing cross-matter data modification (IDOR / broken access control).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.file-write",
+      "path": "app/lib/archive.server.ts",
+      "start": {
+        "line": 32,
+        "col": 3,
+        "offset": 1103
+      },
+      "end": {
+        "line": 32,
+        "col": 60,
+        "offset": 1160
+      },
+      "extra": {
+        "message": "exportCaseBinder writes `path.join(BINDER_DIR, \\`${label}.json\\`)` where `label` is user-supplied (app/routes/_app.matters.$id.tsx:520-523, form field `label`). A label containing `../` sequences escapes BINDER_DIR, allowing arbitrary file writes (e.g. `../../../../tmp/pwn` -> path outside the uploads/binders dir). Because client-role users are not blocked from the export_binder intent (see the action authz bypass above), an authenticated client can write files to arbitrary locations on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-session-secret",
+      "path": "app/lib/session.server.ts",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 133
+      },
+      "end": {
+        "line": 4,
+        "col": 80,
+        "offset": 212
+      },
+      "extra": {
+        "message": "The session cookie signer falls back to a well-known hardcoded secret: `process.env.SESSION_SECRET || \"dev-secret-change-in-production\"` (used as `secrets: [sessionSecret]`). If SESSION_SECRET is unset at deploy time, the HMAC key for the `legal_case_session` cookie is public knowledge, letting anyone forge a session cookie for any userId (including a firm_admin) \u2014 full account/session hijacking. The same default secret is reused for portal/delegate/kiosk HMAC tokens in portal.server.ts, clientPortal.server.ts, delegateInvite.server.ts, kioskLayout.server.ts and notifications.server.ts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-1188: Insecure Default Initialization of Resource"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "app/lib/staffDirectory.server.ts",
+      "start": {
+        "line": 63,
+        "col": 3,
+        "offset": 2177
+      },
+      "end": {
+        "line": 64,
+        "col": 3,
+        "offset": 2236
+      },
+      "extra": {
+        "message": "findAttorneyByBarEmail interpolates the caller-supplied email directly into an LDAP search filter without escaping: `` const filter = `(&(objectClass=person)(mail=${email}))` ``. The value comes from the `linkEmail` query parameter in the loader at app/routes/_app.admin.users.tsx:29-30, enabling LDAP filter injection (e.g. `*)(uid=*))(|(mail=*`) to alter the directory query. Contrast with queryEmployeeDirectory (line 82-86), which escapes via escapeDirectoryFilterValue \u2014 proving this sink is unhardened.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-cookie-draft",
+      "path": "app/lib/intake.server.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 729
+      },
+      "end": {
+        "line": 21,
+        "col": 30,
+        "offset": 821
+      },
+      "extra": {
+        "message": "resumeMatterIntakeDraft reads the client-controlled `matter_intake_draft` cookie and spreads it unvalidated into `prisma.matter.create({ data: { ...draft, createdById } })`. The cookie JSON is not checked against matterSchema (unlike resumeTaskTemplateDraft which calls taskSchema.parse). A firm attorney/admin can inject arbitrary Matter columns through the cookie \u2014 setting status (`open`/`archived`), sensitivity, attorneyId, practiceAreaId, clientId \u2014 bypassing the normal intake/conflict-review workflow and server-side validation (mass assignment / CWE-915). Reached via the resume_draft intent in app/routes/_app.matters.new.tsx:55-57.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.search-information-disclosure",
+      "path": "app/routes/_app.search.tsx",
+      "start": {
+        "line": 27,
+        "col": 3,
+        "offset": 947
+      },
+      "end": {
+        "line": 77,
+        "col": 5,
+        "offset": 2297
+      },
+      "extra": {
+        "message": "The search loader only scopes results by matter ownership for client-role users; attorneys and paralegals can search across ALL matters, ALL clients (names/emails), ALL documents (including `privileged`/`internal_only` visibility) and ALL tasks regardless of whether they are assigned to those matters. This contradicts the access scoping enforced in _app.matters.tsx:21-31 (staff limited to assigned matters) and the matter detail loader, leaking confidential client/matter data to any staff member (missing authorization / information disclosure).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.insecure-directory-grant",
+      "path": "app/lib/directorySync.server.ts",
+      "start": {
+        "line": 32,
+        "col": 5,
+        "offset": 1027
+      },
+      "end": {
+        "line": 35,
+        "col": 5,
+        "offset": 1217
+      },
+      "extra": {
+        "message": "applyDirectoryAccessGrants promotes accounts to firm_admin using an unsafe condition `row.role == \"firm_admin\" || (result.access && grantLevel >= 5)`. The directory stub returns `access: \"0\"`, and the non-empty string `\"0\"` is truthy, so ANY CSV row with `level >= 5` is promoted to firm_admin even when the directory reports no access; loose `==` and radix-less parseInt add further bypasses. The import path in app/routes/_admin.import-export.tsx:238-239 (`import_staff_access`) calls this vulnerable variant (the reviewed variant, applyDirectoryAccessGrantsReviewed, is only used from _app.admin.users.tsx). Improper privilege assignment from the bulk sync data.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-269: Improper Privilege Management",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.cross-matter-idor",
+      "path": "app/routes/_app.matters.$id.tsx",
+      "start": {
+        "line": 305,
+        "col": 5,
+        "offset": 10096
+      },
+      "end": {
+        "line": 311,
+        "col": 5,
+        "offset": 10303
+      },
+      "extra": {
+        "message": "Intent handlers in the matter action do not verify that the referenced record belongs to the current matter. `approve_message` (lines 305-313) and `update_task_status` (lines 259-266) update a message/task purely by id with no `matterId` scoping, so any user authorized for the matter in the URL can modify (approve/transition) messages and tasks belonging to OTHER matters by supplying a foreign id \u2014 a cross-matter broken-object-level-authorization flaw.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.session.inadequate-expiration",
+      "path": "app/lib/clientPortal.server.ts",
+      "start": {
+        "line": 25,
+        "col": 3,
+        "offset": 844
+      },
+      "end": {
+        "line": 29,
+        "col": 50,
+        "offset": 1129
+      },
+      "extra": {
+        "message": "verifyKioskOverviewSession validates the HMAC signature but never checks the `exp` claim of the portal session (compare verifyKioskMatterListSession at lines 36-43 which does check it). The signed `kiosk_session` token therefore never expires, so a captured kiosk portal URL on the shared office tablet can be replayed indefinitely to keep viewing the client matter overview (CWE-613). The counterpart function proves the expiry check was intended.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.shared-config-mass-assignment",
+      "path": "app/lib/notificationPrefs.server.ts",
+      "start": {
+        "line": 24,
+        "col": 3,
+        "offset": 716
+      },
+      "end": {
+        "line": 26,
+        "col": 4,
+        "offset": 853
+      },
+      "extra": {
+        "message": "registerNotificationPreferences does `Object.assign(digestConfig, update)` on a process-global, cross-tenant config object. It is reached from the notifications action in app/routes/_app.notifications.tsx:39-43 where the whole body of the `x-digest-preferences` header (arbitrary user-controlled JSON from ANY authenticated user, including clients) is merged in with no allowlist \u2014 allowing any user to overwrite arbitrary keys of the shared digest configuration (intervalMinutes, channels, quietHours, etc.) for the entire firm. The whitelisting fix is present in registerDeadlineReminderPreferences (lines 40-46) but is not used by this caller.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

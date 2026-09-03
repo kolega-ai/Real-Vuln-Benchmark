@@ -1,0 +1,520 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.auth.jwt-algorithm-confusion",
+      "path": "server/middleware/auth.js",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 100,
+        "offset": 0
+      },
+      "extra": {
+        "message": "jwt.verify() accepts both 'RS256' and 'HS256' algorithms while verifying against the RSA public key (server/cert/pub_key.crt). An attacker can forge an arbitrary token (e.g. role:ADMIN) signed with HS256 using the publicly downloadable RSA public key as the HMAC secret (see server/routes/system.js:/key and server/middleware/auth.js:8), bypassing authentication entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-290: Authentication Bypass by Spoofing"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 33,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Registration builds `new User(req.body)` from the entire untrusted request body without whitelisting fields (only name/email/username/password/ref are used by the client). A malicious POST to /api/users can include `\"role\":\"ADMIN\"` (role is a schema field with default USER) to register an administrator account \u2014 privilege escalation via mass assignment / broken object property level authorization.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor-user-password-takeover",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 46,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 67,
+        "col": 10,
+        "offset": 0
+      },
+      "extra": {
+        "message": "PUT /api/users/:id only requires a valid JWT (auth middleware); it never verifies that the authenticated user owns the target account nor that the target is not an admin. Any logged-in user can set another user's password via req.body.newPass (line 56) and change their name/email/website, enabling full account takeover of any account (CWE-639 broken object level authorization).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor-user-delete",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 111,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 112,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "DELETE /api/users/:id requires only authentication ([auth, validateObjectId]); any authenticated (non-admin) user can delete arbitrary user accounts, including admins, by supplying a target _id. No ownership or role check is performed.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 51,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 53,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "PUT /api/users/:id performs `needle('get', req.body.url)` where req.body.url is fully attacker-controlled. The server fetches an arbitrary URL, enabling SSRF against internal services (e.g. cloud metadata 169.254.169.254, internal networks). The response body is even reflected back to the caller via the `domain` variable.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.nosql-injection",
+      "path": "server/routes/me.js",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET /api/me takes the user-controlled query parameter `id`, JSON.parses it and passes the resulting object directly as the MongoDB filter: User.findOne({_id: JSON.parse(decodeURI(req.query.id))}). An attacker can inject operator objects such as {\"$gt\":\"000000000000000000000000\"} to match arbitrary documents and read any user record, including the admin's bcrypt password hash returned in the response.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data-exposure-password",
+      "path": "server/routes/me.js",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The /api/me handler returns the full Mongoose User document (res.send({user})), which includes the bcrypt `password` hash. Combined with the query-id NoSQL injection above this leaks other users' password hashes; even the normal branch leaks the current user's own hash. Similar full-document sends with the password hash occur in auth.js:16, adminAuth.js:22 and users.js:43.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-522: Insufficiently Protected Credentials",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.weak-password-reset-otp-bruteforce",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 93,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 109,
+        "col": 10,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Password reset verification POST /api/users/verify is unauthenticated and has no rate limiting, attempt limiting, or expiry enforcement in the query (the latest Token row is used regardless of age, and only ~9000 possible 4-digit codes exist). An attacker can brute-force the OTP (line 97 comparison) for a known userId and set an arbitrary password, taking over the account.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.weak-otp-generation",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 74,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 74,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Password reset OTP is generated with Math.random() (not cryptographically secure) producing only 4 digits (1000-9999). The token is also placed directly in a URL sent over plain http (line 84) using the user-controlled Host header, enabling password-reset poisoning and predictable/guessable tokens.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator",
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.missing-auth-dev-userlist",
+      "path": "server/routes/usersDev.js",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The development user listing GET /api/users (mounted on the appDev vhost 'dev.localhost' in startup/routes.js:21) requires NO authentication and returns every User document including bcrypt password hashes. An attacker simply sends Host: dev.localhost to dump all users and their password hashes.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.web-cache-deception",
+      "path": "server/middleware/cache.js",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 10,
+        "offset": 0
+      },
+      "extra": {
+        "message": "In me.js:8 cacheRoute runs BEFORE the auth middleware for the /api/me router.get(/.*/, cacheRoute, auth, ...). Responses containing private user profile data are cached in a global node-cache keyed only by req.originalUrl for any URL ending in .css/.js/.png. After user A hits e.g. /api/me/anything.css, ANY subsequent (unauthenticated) request for the same URL is served the cached private JSON of user A from cache.has() \u2014 authentication bypass via web cache deception (CWE-525), leaking personal data across users.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-525: Use of Web Cache Containing Sensitive Information",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.missing-function-level-authz-authors",
+      "path": "server/routes/authors.js",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 45,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST/PUT/DELETE /api/authors require only the generic `auth` middleware, not the `admin` middleware. Any authenticated non-admin user can create, modify, and delete authors (destroying data referenced by books) \u2014 broken function level authorization (CWE-862). Admin-only UI routes (App.js) are not an access control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.missing-function-level-authz-books",
+      "path": "server/routes/books.js",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST/PUT/DELETE /api/books require only the generic `auth` middleware and never check the admin role or object ownership. Any authenticated non-admin user can add, edit, or delete arbitrary books (CWE-862 broken function level authorization).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.stored-xss-profile",
+      "path": "client/src/components/profile.jsx",
+      "start": {
+        "line": 38,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 38,
+        "col": 85,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The profile view renders the user-controlled `name` field through dangerouslySetInnerHTML without sanitization. Registration/update accepts arbitrary HTML (server/routes/users.js:33,58), so an attacker can set a name such as <img src=x onerror=alert(document.cookie)> and trigger stored XSS in the browser of every victim who visits /profile/:userName (profile pages are reachable by any authenticated user).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.reflected-xss-about",
+      "path": "client/src/components/about.jsx",
+      "start": {
+        "line": 67,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 67,
+        "col": 100,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The subscription 'thank you' message is rendered with dangerouslySetInnerHTML using data.email. The email is taken from the ?email= URL parameter (line 18), submitted to a third-party endpoint, and echoed back into the DOM unescaped (lines 41 and 67). Visiting /about?email=<img src=x onerror=alert(1)> executes attacker script in the victim's browser \u2014 reflected XSS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.username-enumeration-login",
+      "path": "server/routes/auth.js",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "When the username exists but the password is wrong, the login endpoint returns the target's user._id inside the error object, whereas a nonexistent username yields a plain message. This enables username/account enumeration and leaks a valid ObjectId for further attacks (e.g. NoSQL injection on /api/me). The full user document including the bcrypt hash is also returned on success (line 16).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-204: Observable Response Discrepancy",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.regex-dos",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 20,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The regex /([a-zA-Z0-9]+)+$/ used to validate the :name route parameter contains a nested quantifier ((x+)+) and is applied to attacker-controlled URL input. A long alphanumeric prefix followed by a non-matching character (e.g. many 'a's then '-') causes catastrophic backtracking, enabling a denial of service (ReDoS).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1333: Inefficient Regular Expression Complexity"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-log-exposure",
+      "path": "server/routes/log.js",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET /api/logs serves the raw server logfile (server/logfile.log) to any unauthenticated caller. Server logs may disclose internal error details, stack traces, database/connection strings and other sensitive operational information (CWE-532).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-crypto-key",
+      "path": "server/cert/private_key.key",
+      "start": {
+        "line": 1,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The RSA private signing key used to mint RS256 auth tokens is committed to the repository (server/cert/private_key.key) and additionally its public counterpart is served to anyone via GET /api/system/key (server/routes/system.js:7). Anyone with the private key \u2014 or using the public key to forge an HS256 token because the middleware accepts HS256 (auth.js:10) \u2014 can mint arbitrary valid tokens, including role:ADMIN.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key",
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.permissive-cors",
+      "path": "server/startup/routes.js",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "app.use(cors(corsOptions)) is applied globally with default settings, which reflects any Origin and allows credentials, combined with exposing the X-Auth-Token header. Any malicious website can make authenticated cross-origin requests and read the token from the exposed header on browsers that honor it \u2014 permissive CORS security misconfiguration.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-16: Configuration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}
