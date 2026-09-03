@@ -38,8 +38,8 @@ unchanged, so per-language Python scores remain comparable.
 > **Language coverage:** Python (Flask, Django, FastAPI, aiohttp, Tornado) and
 > TypeScript/JavaScript (Express, Next.js, NestJS + Angular, Remix, Fastify + Vue,
 > React, Koa). Java is the next planned language. The leaderboard shows an
-> overall score plus one tab per language; scanners that only cover one language
-> are flagged as *language-limited* on the overall tab.
+> overall score plus one tab per language. The overall tab ranks only scanners that
+> covered every language; a single-language run appears on its language tab.
 
 | Corpus | Repos | Vulns | FP Traps | Non-scoring | Authorship |
 |---|---:|---:|---:|---:|---|

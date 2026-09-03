@@ -118,7 +118,7 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
         "Kolega DevSec Platform",
     ),
     "kolega-devsec-max-v0.1.0": (
-        "Kolega DevSec Max V0.1.0 (TS/JS)",
+        "Kolega DevSec Max V0.1.0",
         "sec",
         "Kolega DevSec Platform",
     ),
@@ -278,12 +278,12 @@ SCANNER_PROVIDERS: dict[str, str] = {
 # the version label. HTML allowed.
 SCANNER_NOTES: dict[str, str] = {
     "kolega-devsec-max-v0.1.0": (
-        "<strong>TypeScript/JavaScript only.</strong> This run covers the 74 pinned "
-        "TS/JS repositories introduced in 3.0.0 and none of the Python corpus, so it "
-        "appears on the Overall tab as language-limited and is only directly comparable "
-        "with other scanners on the TypeScript/JS tab. Hybrid deterministic + LLM-review "
-        "scan; the 74 runs cost $14.56 in total at off-peak API rates. Ground truth was "
-        "never supplied to the scanner."
+        "<strong>Full 140-repository coverage.</strong> Hybrid deterministic + LLM-review "
+        "scan over the 66 Python and 74 TypeScript/JavaScript repositories. The Python "
+        "results are the V0.0.1 run published in 2.1.0 (unchanged; the scanner's Python "
+        "path did not change between the two versions); the TS/JS results are the 3.0.0 "
+        "run. Cost is $17.73 in total at off-peak API rates: $3.17 for Python and $14.56 "
+        "for TS/JS. Ground truth was never supplied to the scanner."
     ),
     "claude-opus-5-cc-agentic-v1": (
         "<strong>Claude Code harness; post-hoc v2 scoring.</strong> Claude Opus 5 "
@@ -378,11 +378,11 @@ def scanners_from_aggregates(
 ) -> list[dict]:
     """Leaderboard rows for one tab.
 
-    Coverage is judged per language: a scanner is kept on a tab if it covered at
-    least COVERAGE_THRESHOLD of the tab's repos in at least one language group, and
-    `langs` lists the groups it did cover. On a single-language tab this is the
-    old whole-tab rule; on the Overall tab it keeps a Python-only scanner visible
-    (flagged as language-limited) instead of silently dropping it.
+    Coverage is judged per language: a scanner is kept on a tab only if it covered
+    at least COVERAGE_THRESHOLD of the tab's repos in EVERY language group the tab
+    contains. On a single-language tab this is the old whole-tab rule; on the
+    Overall tab it means a Python-only run is not ranked against a 140-repo run —
+    it appears on the Python tab instead.
     """
     out = []
     languages = languages or {}
@@ -398,8 +398,8 @@ def scanners_from_aggregates(
         cost_per_100k = (a.get("cost", {}).get("cost_per_100_loc", 0) or 0) * 1000
         COST_OVERRIDES = {
             "kolega-devsec-core-v0.0.1": 5.69,
-            "kolega-devsec-max-v0.0.1": 2.37,
-            "kolega-devsec-max-v0.1.0": 2.20,  # $14.56 over 660,941 TS/JS LOC (ground-truth loc), off-peak rates
+            "kolega-devsec-max-v0.0.1": 2.37,  # retired slug: Python results now live under v0.1.0
+            "kolega-devsec-max-v0.1.0": 2.23,  # $17.73 ($3.17 py + $14.56 ts) over 794,723 LOC, off-peak rates
         }
         if slug in COST_OVERRIDES:
             cost_val = COST_OVERRIDES[slug]
@@ -483,9 +483,10 @@ def scanners_from_aggregates(
                 "langs": covered,
                 # full: covered every language group present on this tab
                 "full": len(covered) == len(lang_cov) if lang_cov else True,
-                # partial: covered fewer than COVERAGE_THRESHOLD of this tab's repos in
-                # every language — score is not comparable, dropped from the tab
-                "partial": not covered,
+                # partial: did not cover every language group on this tab (or fewer
+                # than COVERAGE_THRESHOLD of its repos) — score is not comparable
+                # with full-coverage runs, so the row is dropped from this tab
+                "partial": not covered or (bool(lang_cov) and len(covered) != len(lang_cov)),
             }
         )
     # entries below the coverage threshold are dropped from this tab entirely —
@@ -1065,7 +1066,11 @@ def main() -> None:
     scanners, repos_total = build_scanners(data)
     tabs, tab_totals = build_tab_datasets(data, scanners, repos_total)
     cwe = build_cwe(data)
+    # "scanners tested" counts every scanner ranked on any tab, not just the
+    # full-coverage rows on the Overall tab
+    ranked = {sc["slug"] for rows in tabs.values() for sc in rows}
     dataset = dataset_stats(data, scanners, repos_total)
+    dataset["scanners"] = len(ranked)
 
     REPORTS.mkdir(exist_ok=True)
     (REPORTS / "realvuln-data.js").write_text(
@@ -1187,6 +1192,10 @@ def main() -> None:
     # reskin-styled per-scanner deep-dive pages (reports/scanners/<slug>.html).
     # Generated before the HTML copy below so the static scanner index (and the
     # sitemap) see the pages produced by *this* build, not the previous one.
+    # clear pages from previous builds first so a retired slug cannot linger in
+    # the scanner index, sitemap or llms.txt
+    for stale in (REPORTS / "scanners").glob("*.html"):
+        stale.unlink()
     try:
         import build_detail_pages
 
@@ -1194,8 +1203,14 @@ def main() -> None:
     except Exception as e:  # never block the main build on detail-page generation
         print(f"  WARNING: detail-page generation skipped: {e}")
 
-    # static crawlable index of the per-scanner pages (see scanner_index_html)
-    tokens["{{SCANNER_INDEX}}"] = scanner_index_html(scanners)
+    # static crawlable index of the per-scanner pages (see scanner_index_html):
+    # every scanner ranked on any tab, ordered by its best tab score
+    ranked_rows: dict[str, dict] = {}
+    for rows in tabs.values():
+        for sc in rows:
+            if sc["slug"] not in ranked_rows or sc["f3s"] > ranked_rows[sc["slug"]]["f3s"]:
+                ranked_rows[sc["slug"]] = sc
+    tokens["{{SCANNER_INDEX}}"] = scanner_index_html(list(ranked_rows.values()))
 
     # copy static site source into reports/, replacing old dashboard.html
     for src in sorted(SITE_SRC.iterdir()):

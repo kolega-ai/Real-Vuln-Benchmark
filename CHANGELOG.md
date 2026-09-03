@@ -19,8 +19,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   176 entries in this release (all TS/JS).
 - **Per-language leaderboards**: the homepage and dashboard now carry Overall / Python /
   TypeScript-JS tabs crossed with the All / Human Authored / Vibe Coded authorship tabs.
-  Scanners that only cover one language are flagged as language-limited on the Overall
-  tab; per-language tabs are like-for-like.
+  The Overall tab ranks only scanners that covered every language; a single-language
+  run appears on its language tab, so every ranking is like-for-like.
 - New authorship models for the LLM-generated corpus: DeepSeek V4 Pro and DeepSeek V4 Flash.
 - `build_manifest.py` regenerates `benchmark-manifest.json` from ground truth
   (`--check` fails when it is stale); manifest schema 3.0 adds per-language totals,
@@ -30,7 +30,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `dashboard.py --min-coverage` and per-language tab aggregates (`tab_aggregates`,
   `tab_repos`, `languages` in `reports/dashboard.json`).
 - Semgrep (`--config auto`, OSS) results for all 74 TS/JS repositories; Kolega DevSec Max
-  V0.1.0 results for the TS/JS corpus.
+  V0.1.0 results for the TS/JS corpus. The Python results previously published under
+  `kolega-devsec-max-v0.0.1` now live under `kolega-devsec-max-v0.1.0` (same scanner,
+  unchanged results), giving it full 140-repository coverage; the `v0.0.1` slug is retired
+  and remains in the frozen 2.1.0 release.
 - `source_layout` ground-truth field for repositories whose source is not checked in as a
   plain tree (`realvuln-xvna` ships `xvna.zip`).
 

@@ -273,7 +273,7 @@
     state.tab = tab;
     SC = BY_TAB[tab];
     var note = document.getElementById('lang-note');
-    if (note) note.hidden = !(state.lang === 'all' && SC.some(function (s) { return s.full === false; }));
+    if (note) note.hidden = !(state.lang === 'all' && Object.keys(LANG_LABELS).length > 1);
     rerenderAll();
   }
   var langHost = document.getElementById('lang-tabs');
@@ -306,7 +306,7 @@
       switchTab();
     });
   });
-  (function () { var note = document.getElementById('lang-note'); if (note) note.hidden = !SC.some(function (s) { return s.full === false; }); })();
+  (function () { var note = document.getElementById('lang-note'); if (note) note.hidden = !(state.lang === 'all' && Object.keys(LANG_LABELS).length > 1); })();
 
   document.querySelectorAll('.metric-toggle [data-metric]').forEach(function (btn) {
     btn.addEventListener('click', function () {
