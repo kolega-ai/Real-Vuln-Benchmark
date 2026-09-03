@@ -530,6 +530,21 @@ def build_tab_datasets(
             continue
         tabs[key] = scanners_from_aggregates(ag, n, languages)
         totals[key] = n
+    # On cross-language tabs ("all", "intentional", "vibe") attach each row's
+    # per-language F3 [standard, strict] from the matching single-language tab,
+    # so the Overall table can show the Python and TS/JS scores side by side.
+    for key, rows in tabs.items():
+        if ":" in key or key in languages:
+            continue
+        for sc in rows:
+            lf: dict[str, list[float]] = {}
+            for lang in languages:
+                lk = lang if key == "all" else f"{lang}:{key}"
+                for other in tabs.get(lk, []):
+                    if other["slug"] == sc["slug"]:
+                        lf[lang] = [other["f3"], other["f3s"]]
+                        break
+            sc["lf"] = lf
     return tabs, totals
 
 
@@ -860,6 +875,8 @@ def emit_data_js(
         "sd",
         "langs",
         "full",
+        # lf: per-language F3 [standard, strict] on cross-language tabs
+        "lf",
     ]
     for s in scanners:
         parts = ", ".join(f"{k}: {js_value(s.get(k))}" for k in keys)

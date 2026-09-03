@@ -40,6 +40,9 @@
   function activeF(s) { return val(s, state.metric); }
   function on(s) { return state.cats[s.cat]; }
   function fmt(v) { return v.toFixed(1); }
+  // per-language F3 (only present on cross-language tabs): [standard, strict]
+  function langF(s, lk) { var v = s.lf && s.lf[lk]; return v ? v[state.mode === 'strict' ? 1 : 0] : null; }
+  function langCols() { return state.lang === 'all'; }
   function leaderName() { var r = SC.filter(function (s) { return !s.partial; }); if (!r.length) r = SC; return r.reduce(function (m, s) { return activeF(s) > activeF(m) ? s : m; }, r[0]).name; }
   // explicit vendor-site link on the tag line, labeled with the domain
   function extLink(s) {
@@ -97,6 +100,7 @@
       if (k === 'fp') return dir * ((a.fp || 0) - (b.fp || 0));
       if (k === 'fptp') { var ar = a.tp ? a.fp / a.tp : Infinity, br = b.tp ? b.fp / b.tp : Infinity; return dir * (ar - br); }
       if (k === 'recall') return dir * (val(a, 'rec') - val(b, 'rec'));
+      if (k.indexOf('lf:') === 0) { var la = langF(a, k.slice(3)), lb = langF(b, k.slice(3)); return dir * ((la == null ? -1 : la) - (lb == null ? -1 : lb)); }
       return dir * (val(a, k) - val(b, k));
     });
     var ranked = SC.filter(function (s) { return !s.partial; });
@@ -120,6 +124,7 @@
         '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' + langBadges(s) +
           '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
+        (langCols() ? ['python', 'tsjs'].map(function (lk) { var v = langF(s, lk); return '<td class="lang-col">' + (v == null ? '<span class="dim">—</span>' : fmt(v)) + '</td>'; }).join('') : '') +
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
         '<td title="Real vulnerabilities found (true positives)">' + (s.tp == null ? '—' : s.tp.toLocaleString()) + '</td>' +
         '<td title="False positives — flagged but not a real vulnerability">' + (s.fp == null ? '—' : s.fp.toLocaleString()) + '</td>' +
@@ -131,6 +136,7 @@
         '<td class="dim" title="API spend per 100 real vulnerabilities found">' + (s.cpv == null ? '—' : s.cpv === 0 ? 'Free' : '$' + s.cpv.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})) + '</td>';
       tbody.appendChild(tr);
     });
+    document.querySelectorAll('#dlb th.lang-col').forEach(function (th) { th.hidden = !langCols(); });
     var mth = document.querySelector('#dlb th.metric-th');
     if (mth) { mth.setAttribute('data-key', state.metric); mth.firstChild.nodeValue = METRIC_LABEL[state.metric] + ' '; }
 

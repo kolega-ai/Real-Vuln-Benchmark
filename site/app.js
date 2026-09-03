@@ -26,6 +26,12 @@
   function val(s, base) { return s[mk(base)]; }
   function activeF(s) { return val(s, state.metric); }
   function fmt(v) { return v.toFixed(1); }
+  // per-language F3 (only present on cross-language tabs): [standard, strict]
+  function langF(s, lk) { var v = s.lf && s.lf[lk]; return v ? v[state.mode === 'strict' ? 1 : 0] : null; }
+  function langCols() { return lang === 'all'; }
+  function toggleLangCols(table) {
+    table.querySelectorAll('th.lang-col').forEach(function (th) { th.hidden = !langCols(); });
+  }
   // explicit vendor-site link on the tag line, labeled with the domain
   function extLink(s) {
     if (!s.url) return '';
@@ -35,7 +41,33 @@
 
   var tbody = document.getElementById('lb-body');
 
+  // tier cards follow the selected leaderboard (fully-covered rows only)
+  var TG_EX = {
+    sec: function (g) { return 'recall to ' + Math.max.apply(null, g.map(function (s) { return val(s, 'rec'); })).toFixed(2) + '<br>breadth-driven'; },
+    llm: function (g) { return 'range ' + fmt(Math.min.apply(null, g.map(activeF))) + '\u2013' + fmt(Math.max.apply(null, g.map(activeF))) + '<br>high variance'; },
+    rule: function (g) { return 'recall \u2264 ' + Math.max.apply(null, g.map(function (s) { return val(s, 'rec'); })).toFixed(2) + '<br>syntactic only'; }
+  };
+  function renderTiers() {
+    var box = document.getElementById('tier-glance');
+    if (!box) return;
+    var ranked = SC.filter(function (s) { return !s.partial; });
+    box.querySelectorAll('.tg-row').forEach(function (row) {
+      var cat = row.getAttribute('data-cat');
+      var g = ranked.filter(function (s) { return s.cat === cat; });
+      var n = row.querySelector('[data-tg="n"]'), best = row.querySelector('[data-tg="best"]'), ex = row.querySelector('[data-tg="ex"]');
+      n.textContent = g.length;
+      var unit = row.querySelector('[data-tg="unit"]'); unit.textContent = g.length === 1 ? unit.getAttribute('data-one') : unit.getAttribute('data-one') + 's';
+      row.classList.toggle('empty', !g.length);
+      if (!g.length) { best.textContent = '\u2014'; ex.innerHTML = 'no full-coverage run<br>on this leaderboard'; return; }
+      best.textContent = fmt(Math.max.apply(null, g.map(activeF)));
+      ex.innerHTML = TG_EX[cat](g);
+    });
+    var cap = document.getElementById('tier-cap');
+    if (cap) cap.textContent = 'Tier figures follow the selected leaderboard (' + (LANG_LABELS[lang] || lang) + ', ' + REPO_TOTAL + ' repositories, ' + ranked.length + ' scanner' + (ranked.length === 1 ? '' : 's') + ').';
+  }
+
   function render() {
+    renderTiers();
     if (!tbody) return;
     var rows = SC.slice();
     var k = state.sortKey, dir = state.sortDir;
@@ -47,6 +79,7 @@
       if (k === 'repos') return dir * (a.repos - b.repos);
       if (k === 'cost') { var ac = a.cost == null ? -1 : a.cost, bc = b.cost == null ? -1 : b.cost; return dir * (ac - bc); }
       if (k === 'recall') return dir * (val(a, 'rec') - val(b, 'rec'));
+      if (k.indexOf('lf:') === 0) { var lk = k.slice(3), av = langF(a, lk), bv = langF(b, lk); return dir * ((av == null ? -1 : av) - (bv == null ? -1 : bv)); }
       return dir * (val(a, k) - val(b, k)); // f2 / f3
     });
 
@@ -73,6 +106,7 @@
         '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' + langBadges(s) +
           '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
+        (langCols() ? ['python', 'tsjs'].map(function (lk) { var v = langF(s, lk); return '<td class="lang-col">' + (v == null ? '<span class="dim">—</span>' : fmt(v)) + '</td>'; }).join('') : '') +
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/' + REPO_TOTAL + '</span></td>' +
@@ -80,6 +114,7 @@
       tbody.appendChild(tr);
     });
 
+    toggleLangCols(document.querySelector('table.lb'));
     var mth = document.querySelector('table.lb th.metric-th');
     if (mth) { mth.setAttribute('data-key', state.metric); mth.firstChild.nodeValue = METRIC_LABEL[state.metric] + ' '; }
 
