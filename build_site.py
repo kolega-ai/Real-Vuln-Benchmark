@@ -95,8 +95,17 @@ def copy_journal_dir(src_dir: Path, bust, tokens: dict[str, str]) -> None:
 
 
 def inject_canonical(html: str, name: str) -> str:
-    """Insert <link rel="canonical"> before </head>. Idempotent."""
+    """Insert <link rel="canonical"> before </head>. Idempotent.
+
+    Pages that declare ``noindex`` are skipped: Google treats "drop this page"
+    and "rank this other page in its place" as conflicting signals and may
+    discard the canonical outright, which lands the page in Search Console's
+    "Duplicate without user-selected canonical" bucket. ``noindex`` alone says
+    what those pages mean.
+    """
     if 'rel="canonical"' in html or "</head>" not in html:
+        return html
+    if "noindex" in html:
         return html
     tag = f'<link rel="canonical" href="{canonical_url(name)}" />\n'
     return html.replace("</head>", tag + "</head>", 1)

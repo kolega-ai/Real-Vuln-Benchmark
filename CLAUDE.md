@@ -44,7 +44,7 @@ python score.py --repo realvuln-VAmPI --scanner semgrep
 - `scan-results/{repo}/{scanner}/results.json` — Semgrep-format scanner output
 - `config/cwe-families.json` — CWE groupings for per-category metrics
 - `site/` — source for the public website (HTML pages, `styles.css`, `dashboard.css`, `app.js`, `dashboard.js`); `{{TOKEN}}` placeholders are filled by `build_site.py`
-- `reports/` — deploy directory served by a single Cloudflare Worker (`reports/wrangler.jsonc`, `assets.directory: "."`) at **realvuln.com**. The *latest* built site (`index.html`, `dashboard.html`, assets, `realvuln-data.js`) lives at the top level (tracked); per-repo subdirs and large JSON are gitignored. Build with `make dashboard` (rescore + build) or `make site` (build only)
+- `reports/` — deploy directory served at **realvuln.com** by CloudFront over an S3 origin, pushed by `.github/workflows/deploy-dashboard.yml` on any `reports/**` change to `main`. (`reports/wrangler.jsonc` configures an alternative local `wrangler deploy` and does *not* serve the live site — see `reports/.assetsignore`.) The *latest* built site (`index.html`, `dashboard.html`, assets, `realvuln-data.js`) lives at the top level (tracked); per-repo subdirs and large JSON are gitignored. Build with `make dashboard` (rescore + build) or `make site` (build only)
 - `reports/v/<version>/` — **immutable per-version snapshots** served at `realvuln.com/v/<version>/`. Written once by `release.py`, never regenerated, and tracked in git so they stay permanent (the paper cites `realvuln.com/v/1.0.0/`). `reports/versions.json` indexes them and drives the dashboard's version switcher (`site/versions.js`)
 
 ## Versioning / Releasing
@@ -54,13 +54,36 @@ The live site keeps **latest at `/`** and **every past release frozen under `/v/
 ```bash
 make dashboard               # rescore + build the new version into reports/ root
 make release VERSION=2.0.0   # freeze reports/ root -> reports/v/2.0.0/, update versions.json
-# review reports/, then deploy with wrangler (needs explicit user approval to push/deploy)
+# review reports/, then push to main — the deploy workflow ships it (needs explicit user approval to push/deploy)
 make versions                # rebuild reports/versions.json from existing snapshots only
 ```
 
 - `release.py` refuses to overwrite an existing `reports/v/<version>/` (a frozen release is immutable; `--force` overrides).
 - `build_site.py` warns if the version currently in `reports/` was never frozen — freeze it before rebuilding or it is lost.
 - The brand version label comes from `benchmark_version` in `dashboard.json` via the `{{VERSION}}` token; `site/versions.js` upgrades it into a dropdown at runtime.
+
+## Search Indexing
+
+Three invariants keep the frozen snapshots out of search results without stranding the URLs the paper cites. Breaking any of them shows up in Search Console within a few weeks.
+
+**Never pair `noindex` with `rel="canonical"`.** Google reads them as contradictory — "drop this page" against "rank that one instead" — and resolves the conflict by discarding the canonical, which files the page under *Duplicate without user-selected canonical* rather than under *noindex*. Frozen snapshots and `llm-benchmark-dashboard.html` carry `noindex,follow` **only**; `build_site.py:inject_canonical` skips any page declaring `noindex`, and `release.py:inject_archive_seo` strips canonicals unconditionally so a rerun of `backfill_archive_seo.py` repairs older snapshots.
+
+**Never link a URL the deploy does not contain.** The S3 origin answers a missing key with **403, not 404**, and Search Console treats a 403 as *Blocked due to access forbidden* — a soft block it retries indefinitely instead of dropping the URL. `release.py:absolutise_asset_links` exists for exactly this: `assets/` is not snapshotted, so snapshot links to the paper PDF are rewritten to the live absolute URL.
+
+**Missing URLs must answer 404.** This needs a one-time CloudFront change that is *not* in this repo (there is no IaC; the distribution is managed in the console). Without it, every retired scanner page keeps accumulating in the 403 bucket:
+
+```bash
+# Map the S3 origin's 403 onto a real 404 served from /404.html (built from site/404.html).
+aws cloudfront get-distribution-config --id "$DIST_ID" > dist.json   # keep the ETag it prints
+# In dist.json, set DistributionConfig.CustomErrorResponses to:
+#   Quantity 2, Items = [
+#     {ErrorCode: 403, ResponsePagePath: "/404.html", ResponseCode: "404", ErrorCachingMinTTL: 300},
+#     {ErrorCode: 404, ResponsePagePath: "/404.html", ResponseCode: "404", ErrorCachingMinTTL: 300}]
+aws cloudfront update-distribution --id "$DIST_ID" \
+  --distribution-config file://config.json --if-match "$ETAG"
+```
+
+Verify with `curl -sI https://realvuln.com/nonexistent-xyz.html | head -1` — it must say `404`, not `403`. Apply to both distributions if `AWS_SECONDARY_CLOUDFRONT_DISTRIBUTION_ID` is set.
 
 ## Critical Domain Concepts
 
