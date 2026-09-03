@@ -33,7 +33,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   stored session output for runs that failed only on validation.
 - `dashboard.py --min-coverage` and per-language tab aggregates (`tab_aggregates`,
   `tab_repos`, `languages` in `reports/dashboard.json`).
-- Semgrep (`--config auto`, OSS) and DeepSeek V4 Flash (agentic-v1, one run per repository,
+- Semgrep (`--config auto`, OSS), DeepSeek V4 Flash and DeepSeek V4 Pro (agentic-v1, one run per repository,
   TS/JS prompt variant `prompts/system-prompt-tsjs.md`) results for all 74 TS/JS
   repositories; Kolega DevSec Max V0.1.0 results for the TS/JS corpus. The Python results previously published under
   `kolega-devsec-max-v0.0.1` now live under `kolega-devsec-max-v0.1.0` (same scanner,

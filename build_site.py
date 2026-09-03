@@ -308,8 +308,15 @@ SCANNER_NOTES: dict[str, str] = {
         "<strong>Locally hosted.</strong> Open-weight GGUF (Q4_K_M) via Ollama on one "
         "RTX PRO 6000, standard agentic-v1 harness. Cost $0 (self-hosted)."
     ),
+    "deepseek-v4-pro-agentic-v1": (
+        "<strong>Full coverage.</strong> The Python results are the 2.1.0 runs, "
+        "unchanged. The 74 TypeScript / JS repositories were scanned once each on "
+        "2026-09-03 through the standard agentic-v1 harness with the same TS/JS prompt "
+        'as DeepSeek V4 Flash (prompt hash <span class="mono">sha256:45a1200d61e6</span>), '
+        "for $3.85 in total at off-peak rates; all 74 runs validated first time."
+    ),
     "deepseek-v4-flash-agentic-v1": (
-        "<strong>Full coverage.</strong> The only third-party LLM scanner to date to "
+        "<strong>Full coverage.</strong> One of two third-party LLM scanners to date to "
         "cover both languages. The Python results are the 2.1.0 runs, unchanged "
         "(three runs per repository). The 74 TypeScript / JS repositories were "
         "scanned once each on 2026-09-03 through the standard agentic-v1 harness with "
