@@ -308,6 +308,15 @@ SCANNER_NOTES: dict[str, str] = {
         "<strong>Locally hosted.</strong> Open-weight GGUF (Q4_K_M) via Ollama on one "
         "RTX PRO 6000, standard agentic-v1 harness. Cost $0 (self-hosted)."
     ),
+    "gpt-5.6-sol-codex-cli": (
+        "<strong>Full coverage; subscription-metered.</strong> Runs through the Codex CLI "
+        "authenticated against a ChatGPT subscription session rather than a metered OpenAI API "
+        "key, at <span class=\"mono\">model_reasoning_effort=high</span>. The cost shown is Codex's "
+        "self-reported token-cost estimate, not billed spend — the same convention already used "
+        "for this scanner's Python results. The 74 TypeScript / JS repositories were scanned once "
+        "each on 2026-09-04 with the same TS/JS prompt as the DeepSeek runs (prompt hash "
+        '<span class="mono">sha256:45a1200d61e6</span>); all 74 validated first time.'
+    ),
     "deepseek-v4-pro-agentic-v1": (
         "<strong>Full coverage.</strong> The Python results are the 2.1.0 runs, "
         "unchanged. The 74 TypeScript / JS repositories were scanned once each on "

@@ -46,6 +46,7 @@ from harness.cost_calculator import calculate_cost_tiered, estimate_total_cost
 from harness.metrics_collector import RunMetrics, save_metrics
 from harness.output_validator import validate_output, save_validated_output
 from harness.prompt_builder import PromptInfo, build_prompt, load_cwe_families
+from run_agentic import LANGUAGES
 
 logging.basicConfig(
     level=logging.INFO,
@@ -108,9 +109,9 @@ def load_model_config(name: str) -> dict:
     return data["models"][name]
 
 
-def clone_or_find_repo(repo_slug: str) -> Path | None:
+def clone_or_find_repo(repo_slug: str, repos_dir: Path | None = None) -> Path | None:
     """Find or clone the repo for analysis."""
-    repos_dir = PROJECT_ROOT / "repos"
+    repos_dir = repos_dir or PROJECT_ROOT / "repos"
     repo_path = repos_dir / repo_slug
     if repo_path.is_dir():
         return repo_path
@@ -226,6 +227,8 @@ def run_one_codex(
     prompt_version: str = "",
     prompt_label: str = "",
     benchmark_metadata: dict | None = None,
+    lang_files: str = "Python files",
+    effort: str | None = None,
 ) -> dict:
     """Run one agentic evaluation using the Codex CLI."""
     model_id = model_config["model_id"]
@@ -259,8 +262,8 @@ def run_one_codex(
         f"{system_prompt}\n\n"
         f"The repository to audit is in the current directory.\n\n"
         f"You MUST follow these steps IN ORDER:\n"
-        f"1. List all Python files in this repo\n"
-        f"2. Read each Python file to understand the code\n"
+        f"1. List all {lang_files} in this repo\n"
+        f"2. Read each of those files to understand the code\n"
         f"3. Look for SQL injection, XSS, command injection, path traversal, etc.\n"
         f"4. ONLY after reading ALL files, output your findings\n\n"
         f"CRITICAL: The example JSON in the prompt above is just a FORMAT TEMPLATE.\n"
@@ -298,6 +301,7 @@ def run_one_codex(
                 "--skip-git-repo-check",
                 "-s", "read-only",
                 "-m", model_id,
+                *(["-c", f"model_reasoning_effort={effort}"] if effort else []),
                 "-",
             ],
             timeout=timeout,
@@ -381,6 +385,18 @@ def main() -> int:
                         help="Hard stop if cumulative cost exceeds this USD amount (default: $50)")
     parser.add_argument("--prompt-template", type=Path, default=None, help="Path to prompt template")
     parser.add_argument("--prompt-label", type=str, default="", help="Human-readable prompt label")
+    parser.add_argument(
+        "--language", choices=sorted(LANGUAGES), default="python",
+        help="Corpus language: picks the file-listing wording (default: python)",
+    )
+    parser.add_argument(
+        "--repos-dir", type=Path, default=None,
+        help="Directory of repo checkouts (default: <root>/repos)",
+    )
+    parser.add_argument(
+        "--effort", choices=["low", "medium", "high", "xhigh", "max", "minimal"], default=None,
+        help="Codex -c model_reasoning_effort=<level>",
+    )
     args = parser.parse_args()
 
     # Verify codex is installed
@@ -443,7 +459,7 @@ def main() -> int:
     # Pre-clone all repos
     repo_paths: dict[str, Path] = {}
     for repo_slug in repos:
-        repo_path = clone_or_find_repo(repo_slug)
+        repo_path = clone_or_find_repo(repo_slug, args.repos_dir)
         if repo_path is None:
             logger.warning("Skipping %s — repo not found", repo_slug)
             continue
@@ -474,6 +490,8 @@ def main() -> int:
             prompt_version=prompt_info.version_hash,
             prompt_label=prompt_info.label,
             benchmark_metadata=benchmark_metadata,
+            lang_files=LANGUAGES[args.language]["files"],
+            effort=args.effort,
         )
         return repo_slug, run_id, result
 
