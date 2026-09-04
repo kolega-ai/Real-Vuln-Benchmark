@@ -43,6 +43,49 @@ from harness.metrics_collector import RunMetrics, save_metrics
 from harness.output_validator import validate_output, save_validated_output
 from harness.prompt_builder import PromptInfo, build_prompt, load_cwe_families
 
+import sqlite3
+
+_OPENCODE_DB = Path.home() / ".local/share/opencode/opencode.db"
+
+
+def _session_text_fallback(directory: str, after_epoch_s: float) -> str | None:
+    """Re-assemble the model's final text from OpenCode's own session store.
+
+    The streaming ``--format json`` event parser above only concatenates
+    ``type: "text"`` event deltas; some providers (observed: GLM-5.3,
+    Abliterated Large V2) emit those events in a shape that loses or
+    reorders text, corrupting what would otherwise be valid JSON. OpenCode's
+    sqlite session log keeps the complete, correctly-ordered assistant text
+    regardless, so re-reading it here recovers the run without spending
+    anything extra (mirrors ``salvage_from_opencode.py``, inlined so a
+    corrupted capture self-heals instead of requiring a manual pass).
+    """
+    if not _OPENCODE_DB.exists():
+        return None
+    try:
+        conn = sqlite3.connect(str(_OPENCODE_DB))
+        ses = conn.execute(
+            "select id from session where directory=? and time_created>=? "
+            "order by time_created desc limit 1",
+            (directory, after_epoch_s * 1000),
+        ).fetchone()
+        if not ses:
+            return None
+        rows = conn.execute(
+            "select p.data from part p join message m on m.id=p.message_id "
+            "where p.session_id=? and json_extract(p.data,'$.type')='text' "
+            "and json_extract(m.data,'$.role')='assistant' order by p.time_created",
+            (ses[0],),
+        ).fetchall()
+        return "".join(json.loads(r[0])["text"] for r in rows) or None
+    except (sqlite3.Error, json.JSONDecodeError, KeyError, OSError):
+        return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -302,6 +345,21 @@ def run_one_agentic(
 
     # Validate output — extract JSON from the agent's response
     validation = validate_output(raw_output)
+
+    salvaged_from_session = False
+    if not validation.valid or validation.data is None:
+        fallback_text = _session_text_fallback(str(repo_path), start)
+        if fallback_text is not None:
+            fallback_validation = validate_output(fallback_text)
+            if fallback_validation.valid and fallback_validation.data is not None:
+                validation = fallback_validation
+                salvaged_from_session = True
+
+    if salvaged_from_session:
+        logger.info(
+            "%s run-%d: recovered from OpenCode session store (stream capture lost/mangled the text)",
+            repo_slug, run_id,
+        )
 
     if not validation.valid or validation.data is None:
         logger.warning(
