@@ -16,8 +16,8 @@
   var CWE = [
     { label: "SQL injection", cwe: "CWE-89", llm: 96, rule: 31 },
     { label: "Command / OS injection", cwe: "CWE-77 \u00b7 78", llm: 100, rule: 90 },
-    { label: "Insecure deserialization", cwe: "CWE-502", llm: 98, rule: 92 },
-    { label: "Cross-site scripting", cwe: "CWE-79", llm: 88, rule: 20 },
+    { label: "Insecure deserialization", cwe: "CWE-502", llm: 100, rule: 92 },
+    { label: "Cross-site scripting", cwe: "CWE-79", llm: 92, rule: 20 },
     { label: "Code injection / RFI", cwe: "CWE-94 \u00b7 98", llm: 100, rule: 94 },
   ];
 
@@ -63,6 +63,7 @@
     ],
       "tsjs": [
       { name: "Kolega DevSec Max V0.1.0", slug: "kolega-devsec-max-v0.1.0", cat: "sec", ver: "Kolega DevSec Platform", url: "https://kolega.ai/devsec", repos: 74, f2: 75.5, f2s: 75.5, f3: 82.7, f3s: 82.7, rec: 0.915, recs: 0.915, tp: 2045, fp: 2556, prec: 0.445, cost: 2.4, cpv: 0.71, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
+      { name: "Daybreak Blue", slug: "gpt-daybreak-blue-codex-cli", cat: "llm", ver: "codex-cli", url: "https://developers.openai.com/api/docs/models/gpt-daybreak-blue-latest", repos: 74, f2: 75.9, f2s: 75.9, f3: 79.2, f3s: 79.2, rec: 0.828, recs: 0.828, tp: 1851, fp: 1394, prec: 0.57, cost: null, cpv: null, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
       { name: "GPT-5.6 Sol", slug: "gpt-5.6-sol-codex-cli", cat: "llm", ver: "codex-cli", url: "https://openai.com/", repos: 74, f2: 69.2, f2s: 69.2, f3: 72.1, f3s: 72.1, rec: 0.754, recs: 0.754, tp: 1686, fp: 1558, prec: 0.52, cost: 90, cpv: 32.37, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
       { name: "DeepSeek V4 Flash", slug: "deepseek-v4-flash-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://www.deepseek.com", repos: 74, f2: 34.3, f2s: 34.3, f3: 33.5, f3s: 33.5, rec: 0.328, recs: 0.328, tp: 734, fp: 1031, prec: 0.416, cost: 0.4, cpv: 0.32, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
       { name: "DeepSeek V4 Pro", slug: "deepseek-v4-pro-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://www.deepseek.com", repos: 74, f2: 28.7, f2s: 28.7, f3: 27.5, f3s: 27.5, rec: 0.263, recs: 0.263, tp: 589, fp: 715, prec: 0.452, cost: 0.6, cpv: 0.65, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
@@ -106,6 +107,7 @@
       { name: "SonarQube", slug: "sonarqube", cat: "rule", ver: "community", url: "https://www.sonarsource.com/products/sonarqube/", repos: 26, f2: 7.6, f2s: 7.6, f3: 6.9, f3s: 6.9, rec: 0.063, recs: 0.063, tp: 44, fp: 28, prec: 0.611, cost: null, cpv: null, est: false, sd: null, langs: ["python"], full: true, lf: null },
     ],
       "tsjs:intentional": [
+      { name: "Daybreak Blue", slug: "gpt-daybreak-blue-codex-cli", cat: "llm", ver: "codex-cli", url: "https://developers.openai.com/api/docs/models/gpt-daybreak-blue-latest", repos: 24, f2: 78.2, f2s: 78.2, f3: 81.4, f3s: 81.4, rec: 0.849, recs: 0.849, tp: 454, fp: 307, prec: 0.597, cost: null, cpv: null, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
       { name: "Kolega DevSec Max V0.1.0", slug: "kolega-devsec-max-v0.1.0", cat: "sec", ver: "Kolega DevSec Platform", url: "https://kolega.ai/devsec", repos: 24, f2: 72.6, f2s: 72.6, f3: 79.1, f3s: 79.1, rec: 0.869, recs: 0.869, tp: 465, fp: 597, prec: 0.438, cost: 2.4, cpv: 3.13, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
       { name: "GPT-5.6 Sol", slug: "gpt-5.6-sol-codex-cli", cat: "llm", ver: "codex-cli", url: "https://openai.com/", repos: 24, f2: 68.6, f2s: 68.6, f3: 71.3, f3s: 71.3, rec: 0.742, recs: 0.742, tp: 397, fp: 356, prec: 0.527, cost: 74, cpv: 25.27, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
       { name: "DeepSeek V4 Pro", slug: "deepseek-v4-pro-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://www.deepseek.com", repos: 24, f2: 31.8, f2s: 31.8, f3: 30.9, f3s: 30.9, rec: 0.301, recs: 0.301, tp: 161, fp: 230, prec: 0.412, cost: 0.6, cpv: 0.53, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
@@ -151,6 +153,7 @@
     ],
       "tsjs:vibe": [
       { name: "Kolega DevSec Max V0.1.0", slug: "kolega-devsec-max-v0.1.0", cat: "sec", ver: "Kolega DevSec Platform", url: "https://kolega.ai/devsec", repos: 50, f2: 76.4, f2s: 76.4, f3: 83.8, f3s: 83.8, rec: 0.929, recs: 0.929, tp: 1580, fp: 1959, prec: 0.447, cost: 2.4, cpv: 0.92, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
+      { name: "Daybreak Blue", slug: "gpt-daybreak-blue-codex-cli", cat: "llm", ver: "codex-cli", url: "https://developers.openai.com/api/docs/models/gpt-daybreak-blue-latest", repos: 50, f2: 75.2, f2s: 75.2, f3: 78.5, f3s: 78.5, rec: 0.821, recs: 0.821, tp: 1397, fp: 1087, prec: 0.562, cost: null, cpv: null, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
       { name: "GPT-5.6 Sol", slug: "gpt-5.6-sol-codex-cli", cat: "llm", ver: "codex-cli", url: "https://openai.com/", repos: 50, f2: 69.3, f2s: 69.3, f3: 72.4, f3s: 72.4, rec: 0.758, recs: 0.758, tp: 1289, fp: 1202, prec: 0.518, cost: 94, cpv: 34.55, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
       { name: "DeepSeek V4 Flash", slug: "deepseek-v4-flash-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://www.deepseek.com", repos: 50, f2: 35.7, f2s: 35.7, f3: 34.9, f3s: 34.9, rec: 0.341, recs: 0.341, tp: 580, fp: 750, prec: 0.436, cost: 0.4, cpv: 0.33, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
       { name: "DeepSeek V4 Pro", slug: "deepseek-v4-pro-agentic-v1", cat: "llm", ver: "agentic-v1", url: "https://www.deepseek.com", repos: 50, f2: 27.7, f2s: 27.7, f3: 26.4, f3s: 26.4, rec: 0.252, recs: 0.252, tp: 428, fp: 485, prec: 0.469, cost: 0.6, cpv: 0.7, est: false, sd: null, langs: ["tsjs"], full: true, lf: null },
@@ -166,6 +169,6 @@
     CAT_LABEL: { sec: 'Security-Specialized', llm: 'General-Purpose LLM', rule: 'Rule-Based SAST' },
     CAT_SHORT: { sec: 'Sec.-spec.', llm: 'GP-LLM', rule: 'Rule SAST' },
     COL: { sec: '#cfa45c', llm: '#7e9fc4', rule: '#8c8478' },
-    DATASET: { repos: 140, vulns: 4138, traps: 280, loc: 741034, scanners: 28, families: 18 }
+    DATASET: { repos: 140, vulns: 4138, traps: 280, loc: 741034, scanners: 29, families: 18 }
   };
 })();

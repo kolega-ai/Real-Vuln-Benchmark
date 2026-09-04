@@ -31,11 +31,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `run_agentic.py --language tsjs --repos-dir`; the output validator repairs invalid JSON
   escapes before falling back to LLM repair; `salvage_from_opencode.py` re-validates
   stored session output for runs that failed only on validation.
+- `run_codex.py` and `run_agentic_claude_code.py` gain `--language`/`--repos-dir`/`--effort`;
+  `RunMetrics.reasoning_effort` records the setting per run. (The Codex CLI silently persists a
+  `-c` override into `~/.codex/config.toml` as its new default, so the setting must be recorded
+  per run rather than inferred from config afterward.)
 - `dashboard.py --min-coverage` and per-language tab aggregates (`tab_aggregates`,
   `tab_repos`, `languages` in `reports/dashboard.json`).
 - Semgrep (`--config auto`, OSS), DeepSeek V4 Flash, DeepSeek V4 Pro (agentic-v1, one run per repository,
-  TS/JS prompt variant `prompts/system-prompt-tsjs.md`) and GPT-5.6 Sol (codex-cli,
-  `model_reasoning_effort=high`, same TS/JS prompt) results for all 74 TS/JS
+  TS/JS prompt variant `prompts/system-prompt-tsjs.md`), GPT-5.6 Sol and Daybreak Blue (codex-cli,
+  `model_reasoning_effort=high`, same TS/JS prompt; Daybreak Blue is an OpenAI Codex alias that
+  currently resolves to the same weights as GPT-5.6 Sol under different system instructions, and
+  scores far higher on the same repos and effort level) results for all 74 TS/JS
   repositories; Kolega DevSec Max V0.1.0 results for the TS/JS corpus. The Python results previously published under
   `kolega-devsec-max-v0.0.1` now live under `kolega-devsec-max-v0.1.0` (same scanner,
   unchanged results), giving it full 140-repository coverage; the `v0.0.1` slug is retired
