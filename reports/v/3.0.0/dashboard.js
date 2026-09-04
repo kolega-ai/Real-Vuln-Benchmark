@@ -126,14 +126,9 @@
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         (langCols() ? ['python', 'tsjs'].map(function (lk) { var v = langF(s, lk); return '<td class="lang-col">' + (v == null ? '<span class="dim">—</span>' : fmt(v)) + '</td>'; }).join('') : '') +
         '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
-        '<td title="Real vulnerabilities found (true positives)">' + (s.tp == null ? '—' : s.tp.toLocaleString()) + '</td>' +
-        '<td title="False positives — flagged but not a real vulnerability">' + (s.fp == null ? '—' : s.fp.toLocaleString()) + '</td>' +
-        '<td title="False positives per true positive (FP ÷ TP) — lower is better">' + (s.tp ? (s.fp / s.tp).toFixed(2) : '—') + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
-        '<td title="Noise — share of findings that were false alarms (100% − precision)">' + (100 - s.prec * 100).toFixed(1) + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/' + total + '</span></td>' +
-        '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : ' title="API spend per 100,000 lines of code scanned"') + '>' + (s.cost == null ? '—' : s.cost === 0 ? 'Free' : (s.est ? '~$' : '$') + (s.cost < 10 ? s.cost.toFixed(2) : s.cost.toLocaleString())) + '</td>' +
-        '<td class="dim" title="API spend per 100 real vulnerabilities found">' + (s.cpv == null ? '—' : s.cpv === 0 ? 'Free' : '$' + s.cpv.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})) + '</td>';
+        '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + (s.cost < 10 ? s.cost.toFixed(2) : s.cost.toFixed(0))) + '</td>';
       tbody.appendChild(tr);
     });
     document.querySelectorAll('#dlb th.lang-col').forEach(function (th) { th.hidden = !langCols(); });
