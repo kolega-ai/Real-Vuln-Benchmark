@@ -267,6 +267,7 @@ def run_one(
         agent_steps=usage["agent_steps"],
         prompt_version=prompt_version,
         prompt_label=prompt_label,
+        reasoning_effort=effort or "",
         benchmark_version=benchmark_metadata.get("benchmark_version", ""),
         ground_truth_version=benchmark_metadata.get("ground_truth_version", ""),
         ground_truth_content_hash=current_gt_hash,
