@@ -1,0 +1,156 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "service/search.js",
+      "start": {
+        "line": 6,
+        "col": 3,
+        "offset": 149
+      },
+      "end": {
+        "line": 6,
+        "col": 86,
+        "offset": 232
+      },
+      "extra": {
+        "message": "User-controlled search text is concatenated directly into a SQL query string passed to db.all(). searchText originates from req.body.searchText in routes/search.js:11 (POST /search) and req.query.searchText in routes/api.js:7 (GET /api/search), and is interpolated into the SQL string at service/search.js:6 without parameterization (the parameterized version is commented out on line 7). An attacker can inject arbitrary SQL, e.g. a searchText of \"' UNION SELECT id, username, password FROM user --\" exfiltrates the plaintext usernames and passwords stored in the user table, or \"%' OR 1=1 --\" dumps every row.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.cross-site-scripting",
+      "path": "views/searchResult.pug",
+      "start": {
+        "line": 4,
+        "col": 3,
+        "offset": 32
+      },
+      "end": {
+        "line": 4,
+        "col": 42,
+        "offset": 71
+      },
+      "extra": {
+        "message": "Reflected cross-site scripting via unescaped template output. views/searchResult.pug line 4 uses the unescaped interpolation operator (h1!= 'Search Results for: ' + searchText), so the user-supplied searchText submitted through the POST /search form (routes/search.js:11, rendered via res.render('searchResult', ret) at routes/search.js:17) is emitted as raw HTML. A payload such as <img src=x onerror=alert(document.cookie)> executes in the victim's browser, enabling session/cookie theft and other script-driven attacks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting (XSS)')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-credential",
+      "path": "bootstrapdb.js",
+      "start": {
+        "line": 43,
+        "col": 28,
+        "offset": 1251
+      },
+      "end": {
+        "line": 43,
+        "col": 44,
+        "offset": 1267
+      },
+      "extra": {
+        "message": "Hardcoded database credentials stored in plaintext. bootstrapdb.js line 43 seeds the admin account with the hardcoded password 'S3cr37P@$$w0rD!', and lines 44-46 seed 'user1'/'bad_password', 'user2'/'worse', and 'user3'/'fail'. The passwords are inserted unhashed (the INSERT INTO user statement at line 38 performs no password hashing), and the seeded database file db/vulny.db is committed to the repository, so anyone with access to the source knows every account credential.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-256: Plaintext Storage of a Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.information-disclosure.stack-trace-exposure",
+      "path": "views/error.pug",
+      "start": {
+        "line": 6,
+        "col": 7,
+        "offset": 69
+      },
+      "end": {
+        "line": 6,
+        "col": 20,
+        "offset": 82
+      },
+      "extra": {
+        "message": "The error page renders the full error stack trace to remote clients. views/error.pug line 6 outputs `pre #{error.stack}`, and the guard in app.js:42 only suppresses the error object when the environment is not 'development'. NODE_ENV is never set to production anywhere (not in bin/www, package.json, or the Dockerfile), so the Express default of 'development' is active in deployment and any 500 error (e.g. one triggered via the SQL injection in service/search.js) leaks internal stack traces, file system paths, and framework details to attackers.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.information-disclosure.error-detail-response",
+      "path": "routes/api.js",
+      "start": {
+        "line": 12,
+        "col": 7,
+        "offset": 413
+      },
+      "end": {
+        "line": 12,
+        "col": 19,
+        "offset": 425
+      },
+      "extra": {
+        "message": "Raw internal error object returned to the client. When the database query fails, routes/api.js line 12 responds with res.json(err), serializing the sqlite3 error object (error codes, database error details, and message content) directly to the remote caller instead of a sanitized, generic error response. Combined with the SQL injection in service/search.js:6, malformed injected queries cause database error details to be disclosed to the attacker, aiding further exploitation.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.logging.log-injection",
+      "path": "routes/api.js",
+      "start": {
+        "line": 8,
+        "col": 3,
+        "offset": 260
+      },
+      "end": {
+        "line": 9,
+        "col": 42,
+        "offset": 324
+      },
+      "extra": {
+        "message": "User-controlled input is written to application logs without sanitization. routes/api.js lines 8-9 log the entire req.query object and the searchText value verbatim via console.log. An attacker can submit a searchText containing newline characters or forged log entries, allowing log forging/corruption of the application's output logs, which undermines audit trails and log-based monitoring.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}
