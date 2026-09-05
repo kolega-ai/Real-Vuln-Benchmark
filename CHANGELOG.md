@@ -42,7 +42,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `model_reasoning_effort=high`, same TS/JS prompt; Daybreak Blue is an OpenAI Codex alias that
   currently resolves to the same weights as GPT-5.6 Sol under different system instructions, and
   scores far higher on the same repos and effort level) results for all 74 TS/JS
-  repositories; Kolega DevSec Max V0.1.0 results for the TS/JS corpus. The Python results previously published under
+  repositories; Kolega DevSec Max V0.1.0 results for the TS/JS corpus.
+- GPT-5.6 Sol's Python results re-run at `model_reasoning_effort=high` (66/66), replacing figures
+  that had silently run at Codex's ambient default: F3 53.9 -> 77.8, Overall 64.1 -> 74.7. The Python results previously published under
   `kolega-devsec-max-v0.0.1` now live under `kolega-devsec-max-v0.1.0` (same scanner,
   unchanged results), giving it full 140-repository coverage; the `v0.0.1` slug is retired
   and remains in the frozen 2.1.0 release.

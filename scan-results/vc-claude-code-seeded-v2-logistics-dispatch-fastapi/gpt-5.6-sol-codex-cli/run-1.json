@@ -2,12 +2,12 @@
   "version": "1.0.0",
   "results": [
     {
-      "check_id": "python.security.credentials.hardcoded-database-credentials",
+      "check_id": "python.security.credentials.hardcoded-database-password",
       "path": "backend/app/config.py",
       "start": {
         "line": 8,
-        "col": 1,
-        "offset": 219
+        "col": 5,
+        "offset": 223
       },
       "end": {
         "line": 8,
@@ -15,7 +15,7 @@
         "offset": 308
       },
       "extra": {
-        "message": "The default database URL contains hardcoded PostgreSQL credentials (dispatch:dispatch). Deployments that do not override this setting use publicly known credentials.",
+        "message": "The runtime configuration falls back to a database URL containing the hardcoded username and password dispatch:dispatch when DATABASE_URL is unset.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
@@ -27,12 +27,12 @@
       }
     },
     {
-      "check_id": "python.security.crypto.hardcoded-secret-key",
+      "check_id": "python.security.crypto.hardcoded-key",
       "path": "backend/app/config.py",
       "start": {
         "line": 9,
-        "col": 1,
-        "offset": 309
+        "col": 5,
+        "offset": 313
       },
       "end": {
         "line": 9,
@@ -40,11 +40,11 @@
         "offset": 388
       },
       "extra": {
-        "message": "A fixed application secret is used by default. Because security.hash_token uses this value as its HMAC key, an unmodified deployment has a publicly known key protecting session, API-key, and password-reset token hashes.",
-        "severity": "WARNING",
+        "message": "A publicly known default cryptographic key is used by hash_token() whenever SECRET_KEY is not configured, eliminating deployment-specific key separation.",
+        "severity": "INFO",
         "metadata": {
           "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
+            "CWE-321: Use of Hard-coded Cryptographic Key"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -52,12 +52,12 @@
       }
     },
     {
-      "check_id": "python.security.cookies.secure-flag-disabled",
+      "check_id": "python.security.cookie.missing-secure-default",
       "path": "backend/app/config.py",
       "start": {
         "line": 13,
-        "col": 1,
-        "offset": 496
+        "col": 5,
+        "offset": 500
       },
       "end": {
         "line": 13,
@@ -65,7 +65,7 @@
         "offset": 527
       },
       "extra": {
-        "message": "Session cookies are insecure by default because cookie_secure is False and auth._set_session_cookie passes this setting to the Secure attribute. An unmodified deployment can transmit authentication cookies over plaintext HTTP.",
+        "message": "Session cookies default to Secure=False, allowing bearer session tokens to be transmitted over plaintext HTTP when the deployment does not override this setting.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
@@ -77,12 +77,37 @@
       }
     },
     {
-      "check_id": "python.security.credentials.password-reset-token-logged",
+      "check_id": "python.security.auth.missing-login-throttling",
       "path": "backend/app/routers/auth.py",
       "start": {
-        "line": 212,
+        "line": 100,
         "col": 1,
-        "offset": 7565
+        "offset": 2873
+      },
+      "end": {
+        "line": 118,
+        "col": 81,
+        "offset": 3753
+      },
+      "extra": {
+        "message": "The login endpoint performs password verification without rate limiting, failed-attempt tracking, or account lockout, permitting unlimited online password guesses.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.exposure.password-reset-token-log",
+      "path": "backend/app/routers/auth.py",
+      "start": {
+        "line": 199,
+        "col": 9,
+        "offset": 6938
       },
       "end": {
         "line": 212,
@@ -90,7 +115,7 @@
         "offset": 7651
       },
       "extra": {
-        "message": "A live password-reset token and its associated email address are written in plaintext to password_reset_tokens.log. Anyone able to read that file can reset the account before the token expires.",
+        "message": "A raw password-reset token and its account email are appended to password_reset_tokens.log. Anyone who obtains this file can use an unexpired token to take over the account.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -102,124 +127,49 @@
       }
     },
     {
-      "check_id": "python.security.ssrf.redirect-bypass",
-      "path": "backend/app/webhooks.py",
+      "check_id": "python.security.dos.password-reset-log-growth",
+      "path": "backend/app/routers/auth.py",
       "start": {
-        "line": 89,
+        "line": 184,
         "col": 1,
-        "offset": 3182
+        "offset": 6265
       },
       "end": {
-        "line": 89,
-        "col": 69,
-        "offset": 3250
+        "line": 212,
+        "col": 87,
+        "offset": 7651
       },
       "extra": {
-        "message": "Webhook delivery validates only the initial URL and then calls urlopen(), which follows redirects automatically. An attacker-controlled public endpoint can redirect the request to a loopback, private, or link-local address, bypassing _is_safe_url.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-918: Server-Side Request Forgery (SSRF)"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.ssrf.redirect-bypass-test-webhook",
-      "path": "backend/app/webhooks.py",
-      "start": {
-        "line": 125,
-        "col": 1,
-        "offset": 4916
-      },
-      "end": {
-        "line": 125,
-        "col": 65,
-        "offset": 4980
-      },
-      "extra": {
-        "message": "The test-webhook path passes a validated initial URL to urlopen(), which follows attacker-controlled redirects without revalidating the destination. This permits requests to private or link-local services.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-918: Server-Side Request Forgery (SSRF)"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.errors.internal-information-exposure",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 27,
-        "col": 1,
-        "offset": 939
-      },
-      "end": {
-        "line": 27,
-        "col": 124,
-        "offset": 1062
-      },
-      "extra": {
-        "message": "The endpoint returns the exception text and exception class to the client. The generated exception embeds attacker input and the server's private export-directory path, disclosing internal filesystem information.",
+        "message": "The unauthenticated password-reset endpoint has no request limit and appends to a local file for every request targeting a valid account, allowing repeated requests to consume disk space.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-209: Generation of Error Message Containing Sensitive Information"
+            "CWE-400: Uncontrolled Resource Consumption"
           ],
-          "confidence": "HIGH",
+          "confidence": "MEDIUM",
           "category": "security"
         }
       }
     },
     {
-      "check_id": "python.security.logging.credentials-and-request-body",
-      "path": "backend/app/dispatch_operations.py",
+      "check_id": "python.security.authorization.customer-list",
+      "path": "backend/app/routers/customers.py",
       "start": {
-        "line": 33,
+        "line": 22,
         "col": 1,
-        "offset": 1282
-      },
-      "end": {
-        "line": 33,
-        "col": 109,
-        "offset": 1390
-      },
-      "extra": {
-        "message": "The complete request body and Authorization header are written to warning logs. Payload secrets, bearer tokens, and other sensitive manifest data can consequently be recovered from logs.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-532: Insertion of Sensitive Information into Log File"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.redirect.user-controlled-url",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 39,
-        "col": 1,
-        "offset": 1558
+        "offset": 662
       },
       "end": {
         "line": 39,
-        "col": 34,
-        "offset": 1591
+        "col": 88,
+        "offset": 1426
       },
       "extra": {
-        "message": "The user-controlled lane parameter is passed directly to RedirectResponse without restricting it to a local path or trusted origin. This creates an open redirect to arbitrary attacker-controlled sites.",
+        "message": "Only customer-role users are scoped in this endpoint. Any field worker can list every customer, including contact details, notes, and linked user IDs, regardless of assigned jobs.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+            "CWE-862: Missing Authorization"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -227,99 +177,24 @@
       }
     },
     {
-      "check_id": "python.security.deserialization.pickle-untrusted-data",
-      "path": "backend/app/dispatch_operations.py",
+      "check_id": "python.security.authorization.customer-idor",
+      "path": "backend/app/routers/customers.py",
       "start": {
-        "line": 61,
+        "line": 70,
         "col": 1,
-        "offset": 2391
-      },
-      "end": {
-        "line": 61,
-        "col": 31,
-        "offset": 2421
-      },
-      "extra": {
-        "message": "Raw request-body or query-string data is passed to pickle.loads(). A crafted pickle can invoke arbitrary callables during deserialization and execute code with the application's privileges.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-502: Deserialization of Untrusted Data"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.path-traversal.arbitrary-json-write",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 71,
-        "col": 1,
-        "offset": 2818
-      },
-      "end": {
-        "line": 71,
-        "col": 139,
-        "offset": 2956
-      },
-      "extra": {
-        "message": "The ref query/body value is incorporated into a filesystem path without validation or containment checking before write_text(). Values containing ../ can escape BASE_EXPORT_DIR and overwrite arbitrary JSON-named files accessible to the process.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.injection.eval-untrusted-expression",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 76,
-        "col": 1,
-        "offset": 3135
+        "offset": 2538
       },
       "end": {
         "line": 76,
-        "col": 72,
-        "offset": 3206
+        "col": 13,
+        "offset": 2937
       },
       "extra": {
-        "message": "The expr query parameter is evaluated as Python code. Removing __builtins__ is not a safe sandbox because Python object traversal can recover powerful classes and reach code-execution primitives.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.dos.unbounded-list-allocation",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 81,
-        "col": 1,
-        "offset": 3386
-      },
-      "end": {
-        "line": 81,
-        "col": 62,
-        "offset": 3447
-      },
-      "extra": {
-        "message": "The attacker-controlled count parameter is used directly as the size of a materialized list without an upper bound. A large value can exhaust server memory and CPU.",
+        "message": "_ensure_customer_visible() restricts only customer-role users, so a field worker can supply any customer_id and retrieve that customer's contact information and private notes.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-770: Allocation of Resources Without Limits or Throttling"
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -327,220 +202,170 @@
       }
     },
     {
-      "check_id": "python.security.xss.jinja-safe-filter",
-      "path": "backend/app/dispatch_operations.py",
+      "check_id": "python.security.authorization.customer-location-idor",
+      "path": "backend/app/routers/customers.py",
       "start": {
+        "line": 132,
+        "col": 1,
+        "offset": 5155
+      },
+      "end": {
+        "line": 138,
+        "col": 153,
+        "offset": 5719
+      },
+      "extra": {
+        "message": "Field workers are not restricted to customers associated with their assigned jobs and can enumerate any customer's service addresses, coordinates, and location notes.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.cross-region-location-create",
+      "path": "backend/app/routers/customers.py",
+      "start": {
+        "line": 141,
+        "col": 1,
+        "offset": 5722
+      },
+      "end": {
+        "line": 172,
+        "col": 16,
+        "offset": 7132
+      },
+      "extra": {
+        "message": "A dispatcher can create a service location for any customer in any region because payload.region_id is validated for existence but never checked against the dispatcher's assigned regions.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.worker-list-region-bypass",
+      "path": "backend/app/routers/workers.py",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 365
+      },
+      "end": {
+        "line": 36,
+        "col": 51,
+        "offset": 1235
+      },
+      "extra": {
+        "message": "Dispatcher queries are not constrained by dispatcher_region_ids(), allowing a region-scoped dispatcher to enumerate workers, employee codes, certifications, and availability in every region.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.worker-idor",
+      "path": "backend/app/routers/workers.py",
+      "start": {
+        "line": 70,
+        "col": 1,
+        "offset": 2659
+      },
+      "end": {
+        "line": 83,
+        "col": 13,
+        "offset": 3295
+      },
+      "extra": {
+        "message": "The object-level check applies only to field workers. A dispatcher can provide the ID of a worker outside their assigned regions and retrieve the complete worker record.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.route-create-cross-region-worker",
+      "path": "backend/app/routers/routes.py",
+      "start": {
+        "line": 75,
+        "col": 5,
+        "offset": 2380
+      },
+      "end": {
+        "line": 84,
+        "col": 37,
+        "offset": 2816
+      },
+      "extra": {
+        "message": "Route creation verifies the route's region but only checks that worker_id exists. A dispatcher can assign an out-of-region worker, exposing route and stop information across the region boundary.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.route-update-cross-region-worker",
+      "path": "backend/app/routers/routes.py",
+      "start": {
+        "line": 124,
+        "col": 5,
+        "offset": 4318
+      },
+      "end": {
+        "line": 136,
+        "col": 44,
+        "offset": 4876
+      },
+      "extra": {
+        "message": "Route updates assign an arbitrary existing worker without verifying that the worker belongs to the route's region, allowing cross-region data exposure.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.public-status-bypass",
+      "path": "backend/app/routers/public_api.py",
+      "start": {
+        "line": 52,
+        "col": 1,
+        "offset": 1671
+      },
+      "end": {
         "line": 87,
-        "col": 1,
-        "offset": 3649
-      },
-      "end": {
-        "line": 87,
-        "col": 57,
-        "offset": 3705
+        "col": 16,
+        "offset": 3497
       },
       "extra": {
-        "message": "The card query parameter is rendered into an HTML response through Jinja's safe filter, explicitly disabling escaping. An attacker can inject executable HTML or JavaScript.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.credentials.hardcoded-verification-codes",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 92,
-        "col": 1,
-        "offset": 3893
-      },
-      "end": {
-        "line": 92,
-        "col": 47,
-        "offset": 3939
-      },
-      "extra": {
-        "message": "Verification codes used to authorize known handles are hardcoded in source. Anyone with repository access knows the required verifier values.",
-        "severity": "INFO",
-        "metadata": {
-          "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.cors.reflected-origin-with-credentials",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 103,
-        "col": 1,
-        "offset": 4415
-      },
-      "end": {
-        "line": 104,
-        "col": 66,
-        "offset": 4539
-      },
-      "extra": {
-        "message": "The endpoint reflects an arbitrary Origin into Access-Control-Allow-Origin and simultaneously enables credentials. This trusts any requesting web origin and can expose authenticated responses cross-origin.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.template-injection.jinja",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 110,
-        "col": 1,
-        "offset": 4738
-      },
-      "end": {
-        "line": 110,
-        "col": 52,
-        "offset": 4789
-      },
-      "extra": {
-        "message": "The fragment query parameter is concatenated into Jinja template source and rendered in a non-sandboxed environment. Crafted template expressions can traverse Python objects and execute server-side code.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.path-traversal.arbitrary-file-write",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 118,
-        "col": 1,
-        "offset": 5099
-      },
-      "end": {
-        "line": 118,
-        "col": 29,
-        "offset": 5127
-      },
-      "extra": {
-        "message": "The name query parameter is appended to BASE_EXPORT_DIR without sanitization or a resolved-path containment check before write_bytes(). Traversal components permit arbitrary file writes outside the export directory.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.random.weak-security-token",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 125,
-        "col": 1,
-        "offset": 5386
-      },
-      "end": {
-        "line": 125,
-        "col": 67,
-        "offset": 5452
-      },
-      "extra": {
-        "message": "The endpoint generates a value described as a nonce using Python's predictable random module rather than a cryptographically secure generator. Such values must not be used for authentication or replay protection.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.injection.nosql-mongodb-operator",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 133,
-        "col": 1,
-        "offset": 5725
-      },
-      "end": {
-        "line": 133,
-        "col": 108,
-        "offset": 5832
-      },
-      "extra": {
-        "message": "An attacker-controlled JSON object is passed directly to MongoDB find_one(). MongoDB operators such as $ne, $regex, or $where can alter query semantics and bypass intended record selection.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.headers.disabled-browser-protections",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 139,
-        "col": 1,
-        "offset": 6034
-      },
-      "end": {
-        "line": 140,
-        "col": 53,
-        "offset": 6135
-      },
-      "extra": {
-        "message": "The response explicitly disables legacy XSS protection and overrides the application's default Content-Security-Policy with an empty value, removing browser-side defense-in-depth.",
-        "severity": "INFO",
-        "metadata": {
-          "cwe": [
-            "CWE-693: Protection Mechanism Failure"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.authorization.client-controlled-role-cookie",
-      "path": "backend/app/dispatch_operations.py",
-      "start": {
-        "line": 145,
-        "col": 1,
-        "offset": 6285
-      },
-      "end": {
-        "line": 147,
-        "col": 80,
-        "offset": 6447
-      },
-      "extra": {
-        "message": "Elevated payroll and casework access is granted solely when a client-controlled cookie or header equals the literal string 'lead'. There is no signature, server-side identity binding, or role lookup, so any caller passing the operations gate can forge elevation.",
+        "message": "This duplicate status endpoint omits the field-worker restrictions enforced by jobs.change_status(). An assigned field worker authenticated by a session cookie can transition an assigned job to cancelled or a failed job back to assigned.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -552,12 +377,587 @@
       }
     },
     {
-      "check_id": "python.security.information-exposure.environment-and-path",
+      "check_id": "python.security.ssrf.webhook-redirect",
+      "path": "backend/app/webhooks.py",
+      "start": {
+        "line": 80,
+        "col": 9,
+        "offset": 2716
+      },
+      "end": {
+        "line": 89,
+        "col": 69,
+        "offset": 3250
+      },
+      "extra": {
+        "message": "When live webhooks are enabled, urlopen() follows redirects without validating each destination. A public webhook URL can redirect to loopback, private-network, or cloud-metadata addresses; separate DNS resolution also permits rebinding between validation and connection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.ssrf.webhook-test-redirect",
+      "path": "backend/app/webhooks.py",
+      "start": {
+        "line": 117,
+        "col": 5,
+        "offset": 4558
+      },
+      "end": {
+        "line": 125,
+        "col": 65,
+        "offset": 4980
+      },
+      "extra": {
+        "message": "The live test-webhook request validates only the initial URL. urlopen() follows an attacker-controlled redirect without reapplying the private-address check and is also vulnerable to DNS rebinding.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.exposure.verbose-error",
       "path": "backend/app/dispatch_operations.py",
       "start": {
-        "line": 153,
+        "line": 23,
         "col": 1,
-        "offset": 6638
+        "offset": 729
+      },
+      "end": {
+        "line": 27,
+        "col": 124,
+        "offset": 1062
+      },
+      "extra": {
+        "message": "The endpoint returns the raw exception text and exception type, disclosing the configured internal export-directory path to the caller.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.logging.sensitive-request-data",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 32,
+        "col": 5,
+        "offset": 1213
+      },
+      "end": {
+        "line": 33,
+        "col": 109,
+        "offset": 1390
+      },
+      "extra": {
+        "message": "The complete request body and Authorization header are written verbatim to application logs, exposing bearer tokens, Basic credentials, API keys, and submitted sensitive data to log readers.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.redirect.open-redirect",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 38,
+        "col": 1,
+        "offset": 1470
+      },
+      "end": {
+        "line": 39,
+        "col": 34,
+        "offset": 1591
+      },
+      "extra": {
+        "message": "The caller-controlled lane parameter is used directly as the RedirectResponse destination, allowing redirects to arbitrary external sites.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.validation.ledger-manipulation",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 43,
+        "col": 5,
+        "offset": 1724
+      },
+      "end": {
+        "line": 48,
+        "col": 18,
+        "offset": 1971
+      },
+      "extra": {
+        "message": "The endpoint accepts negative amounts and arbitrary state values. Subtracting a negative amount increases the balance beyond its limit while the caller can retain an approved state.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-20: Improper Input Validation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.deserialization.pickle",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 54,
+        "col": 5,
+        "offset": 2146
+      },
+      "end": {
+        "line": 61,
+        "col": 31,
+        "offset": 2421
+      },
+      "extra": {
+        "message": "Attacker-controlled request or query data is passed to pickle.loads(). A crafted pickle can invoke arbitrary Python callables and execute code with the application's privileges.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.path-traversal.export-stash",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 68,
+        "col": 5,
+        "offset": 2653
+      },
+      "end": {
+        "line": 71,
+        "col": 139,
+        "offset": 2956
+      },
+      "extra": {
+        "message": "The ref query or JSON value is embedded in a filesystem path without containment validation. Absolute paths or ../ segments allow writing JSON outside BASE_EXPORT_DIR.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.storage.cleartext-pii",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 71,
+        "col": 5,
+        "offset": 2822
+      },
+      "end": {
+        "line": 71,
+        "col": 139,
+        "offset": 2956
+      },
+      "extra": {
+        "message": "User-supplied Social Security and payment-card numbers are persisted in a plaintext JSON file without encryption or restrictive file permissions.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.eval",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 75,
+        "col": 1,
+        "offset": 3033
+      },
+      "end": {
+        "line": 76,
+        "col": 72,
+        "offset": 3206
+      },
+      "extra": {
+        "message": "The expr query parameter is evaluated as Python code. Removing __builtins__ does not provide a sandbox because Python object traversal can recover dangerous globals and execute commands.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.dos.unbounded-row-allocation",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 80,
+        "col": 1,
+        "offset": 3277
+      },
+      "end": {
+        "line": 82,
+        "col": 26,
+        "offset": 3473
+      },
+      "extra": {
+        "message": "The unbounded count parameter controls the size of a materialized list. A very large value can exhaust server memory and CPU.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-789: Memory Allocation with Excessive Size Value"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.unsafe-jinja-output",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 85,
+        "col": 1,
+        "offset": 3515
+      },
+      "end": {
+        "line": 88,
+        "col": 30,
+        "offset": 3735
+      },
+      "extra": {
+        "message": "The card query parameter is explicitly marked safe and returned as HTML, allowing attacker-controlled markup and script-capable content to be inserted into the response.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.credentials.hardcoded-verifiers",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 92,
+        "col": 5,
+        "offset": 3897
+      },
+      "end": {
+        "line": 92,
+        "col": 47,
+        "offset": 3939
+      },
+      "extra": {
+        "message": "Static four-digit verifier credentials are embedded in source and used for identity verification. Any caller who knows the source or guesses these values can pass the verifier check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.handle-enumeration",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 92,
+        "col": 5,
+        "offset": 3897
+      },
+      "end": {
+        "line": 96,
+        "col": 73,
+        "offset": 4149
+      },
+      "extra": {
+        "message": "Unknown handles return HTTP 404 while known handles with an incorrect verifier return HTTP 403, allowing callers to enumerate valid identities.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-204: Observable Response Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.cors.reflected-credentials-origin",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 101,
+        "col": 5,
+        "offset": 4323
+      },
+      "end": {
+        "line": 104,
+        "col": 66,
+        "offset": 4541
+      },
+      "extra": {
+        "message": "The endpoint reflects any Origin value while enabling credentialed cross-origin access, creating a permissive cross-domain policy if the request reaches this handler.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.server-side-template",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 108,
+        "col": 1,
+        "offset": 4603
+      },
+      "end": {
+        "line": 111,
+        "col": 30,
+        "offset": 4819
+      },
+      "extra": {
+        "message": "The fragment query parameter is concatenated into Jinja template source and rendered. Crafted Jinja expressions can traverse Python objects and execute arbitrary server-side code.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.dos.unbounded-upload-body",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 115,
+        "col": 5,
+        "offset": 4982
+      },
+      "end": {
+        "line": 115,
+        "col": 32,
+        "offset": 5009
+      },
+      "extra": {
+        "message": "The endpoint buffers the complete request body without a size limit and subsequently writes it to disk, permitting memory and disk exhaustion.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.path-traversal.upload-name",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 116,
+        "col": 5,
+        "offset": 5014
+      },
+      "end": {
+        "line": 118,
+        "col": 29,
+        "offset": 5127
+      },
+      "extra": {
+        "message": "The caller-controlled name is joined to BASE_EXPORT_DIR without sanitization or containment checks. Absolute paths and ../ segments permit arbitrary file writes with attacker-controlled bytes.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.random.weak-nonce",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 123,
+        "col": 5,
+        "offset": 5318
+      },
+      "end": {
+        "line": 125,
+        "col": 67,
+        "offset": 5452
+      },
+      "extra": {
+        "message": "The nonce-like code is generated with Python's predictable Mersenne Twister PRNG rather than a cryptographically secure generator.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.dos.unbounded-nonce-length",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 122,
+        "col": 1,
+        "offset": 5224
+      },
+      "end": {
+        "line": 126,
+        "col": 26,
+        "offset": 5478
+      },
+      "extra": {
+        "message": "The unbounded length query parameter controls loop iterations and output allocation. A very large value can exhaust CPU and memory.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-789: Memory Allocation with Excessive Size Value"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.nosql",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 131,
+        "col": 5,
+        "offset": 5651
+      },
+      "end": {
+        "line": 133,
+        "col": 108,
+        "offset": 5832
+      },
+      "extra": {
+        "message": "An arbitrary JSON object is passed directly to MongoDB find_one(). Attackers can inject query operators such as $ne, $or, or $where to alter query semantics and access unintended records.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.headers.disabled-csp",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 139,
+        "col": 5,
+        "offset": 6038
+      },
+      "end": {
+        "line": 140,
+        "col": 53,
+        "offset": 6133
+      },
+      "extra": {
+        "message": "This response explicitly replaces the application's Content-Security-Policy with an empty value, bypassing the global middleware's setdefault-based CSP protection.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-693: Protection Mechanism Failure"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.client-controlled-badge",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 145,
+        "col": 5,
+        "offset": 6289
+      },
+      "end": {
+        "line": 147,
+        "col": 75,
+        "offset": 6470
+      },
+      "extra": {
+        "message": "A caller can set ops_badge or X-Ops-Badge to the literal value lead and receive elevated payroll and casework access without any signature, server-side lookup, or role verification.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.exposure.internal-environment",
+      "path": "backend/app/dispatch_operations.py",
+      "start": {
+        "line": 152,
+        "col": 5,
+        "offset": 6622
       },
       "end": {
         "line": 153,
@@ -565,8 +965,8 @@
         "offset": 6735
       },
       "extra": {
-        "message": "The trace endpoint unconditionally exposes the deployment environment value and private export-directory path, providing internal configuration and filesystem information to clients.",
-        "severity": "WARNING",
+        "message": "The endpoint discloses the deployment environment and internal export-directory path, information that assists targeting and exploitation of the file-write endpoints.",
+        "severity": "INFO",
         "metadata": {
           "cwe": [
             "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
@@ -580,9 +980,9 @@
       "check_id": "python.security.xml.external-entity",
       "path": "backend/app/dispatch_operations.py",
       "start": {
-        "line": 159,
-        "col": 1,
-        "offset": 6976
+        "line": 158,
+        "col": 5,
+        "offset": 6895
       },
       "end": {
         "line": 159,
@@ -590,36 +990,11 @@
         "offset": 7032
       },
       "extra": {
-        "message": "Untrusted request XML is parsed with DTD loading, external entity resolution, and network access enabled. A crafted document can read local files or issue server-side network requests through external entities.",
+        "message": "Attacker-controlled XML is parsed with DTD loading, entity resolution, and network access enabled. External entities can read local files, issue internal network requests, or consume excessive resources.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
             "CWE-611: Improper Restriction of XML External Entity Reference"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.credentials.hardcoded-demo-password",
-      "path": "backend/seed.py",
-      "start": {
-        "line": 33,
-        "col": 1,
-        "offset": 819
-      },
-      "end": {
-        "line": 33,
-        "col": 31,
-        "offset": 849
-      },
-      "extra": {
-        "message": "A single hardcoded password is assigned to every seeded administrator, dispatcher, worker, and customer account. If seed data is used in a reachable environment, all accounts are immediately compromised.",
-        "severity": "INFO",
-        "metadata": {
-          "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
           ],
           "confidence": "HIGH",
           "category": "security"

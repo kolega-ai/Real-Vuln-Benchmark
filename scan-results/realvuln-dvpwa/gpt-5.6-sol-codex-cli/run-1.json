@@ -5,17 +5,17 @@
       "check_id": "python.security.injection.sql-injection",
       "path": "sqli/dao/student.py",
       "start": {
-        "line": 43,
+        "line": 42,
         "col": 1,
-        "offset": 1265
+        "offset": 1221
       },
       "end": {
-        "line": 43,
-        "col": 53,
-        "offset": 1317
+        "line": 45,
+        "col": 33,
+        "offset": 1391
       },
       "extra": {
-        "message": "The attacker-controlled student name from POST /students/ is interpolated into an SQL statement using Python string formatting before cursor.execute() is called, allowing arbitrary SQL injection.",
+        "message": "Student.create() interpolates the attacker-controlled student name directly into an SQL statement before passing it to cur.execute(). POST /students/ supplies this value from request form data, allowing arbitrary SQL injection.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -40,11 +40,11 @@
         "offset": 702
       },
       "extra": {
-        "message": "Stored review_text submitted through the review endpoint is rendered without escaping. Jinja2 autoescaping is globally disabled in sqli/app.py:35, allowing persistent JavaScript execution.",
+        "message": "Attacker-controlled review_text stored by Review.create() is rendered without escaping. Because Jinja2 autoescaping is explicitly disabled in sqli/app.py:35, submitting a review containing HTML or JavaScript causes persistent XSS on the course page.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-79: Cross-Site Scripting"
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -52,24 +52,24 @@
       }
     },
     {
-      "check_id": "python.security.xss.stored-course-fields",
-      "path": "sqli/templates/course.jinja2",
+      "check_id": "python.security.xss.stored-course",
+      "path": "sqli/templates/courses.jinja2",
       "start": {
-        "line": 14,
+        "line": 17,
         "col": 1,
-        "offset": 368
+        "offset": 411
       },
       "end": {
-        "line": 15,
-        "col": 36,
-        "offset": 435
+        "line": 18,
+        "col": 80,
+        "offset": 525
       },
       "extra": {
-        "message": "Attacker-controlled course title and description fields are rendered without escaping while Jinja2 autoescaping is disabled, allowing stored XSS.",
+        "message": "Course title and description values accepted from POST /courses/ are rendered without escaping while Jinja2 autoescaping is disabled. An attacker can persist JavaScript that executes when course lists or course and student detail pages are viewed.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-79: Cross-Site Scripting"
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -77,7 +77,7 @@
       }
     },
     {
-      "check_id": "python.security.xss.stored-student-name",
+      "check_id": "python.security.xss.stored-student",
       "path": "sqli/templates/students.jinja2",
       "start": {
         "line": 16,
@@ -90,11 +90,11 @@
         "offset": 426
       },
       "extra": {
-        "message": "Attacker-controlled student names are rendered without escaping while Jinja2 autoescaping is disabled, allowing stored XSS in the student listing.",
+        "message": "Student names accepted by POST /students/ are rendered without escaping while Jinja2 autoescaping is disabled. A name containing HTML or JavaScript therefore produces persistent XSS on the student-list page.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-79: Cross-Site Scripting"
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -102,7 +102,7 @@
       }
     },
     {
-      "check_id": "python.security.auth.missing-student-create-authentication",
+      "check_id": "python.security.auth.missing-student-creation-authentication",
       "path": "sqli/views.py",
       "start": {
         "line": 57,
@@ -115,7 +115,7 @@
         "offset": 1790
       },
       "extra": {
-        "message": "POST /students/ creates a student without any authentication check, although the corresponding form is shown only to authenticated users. An unauthenticated request can invoke Student.create() directly.",
+        "message": "The students handler performs Student.create() for every POST request without @authorize() or an equivalent server-side authentication check. Although the form is only displayed to authenticated users, an unauthenticated attacker can directly create student records.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -127,7 +127,7 @@
       }
     },
     {
-      "check_id": "python.security.auth.missing-course-create-authorization",
+      "check_id": "python.security.auth.missing-course-creation-authorization",
       "path": "sqli/views.py",
       "start": {
         "line": 89,
@@ -135,12 +135,12 @@
         "offset": 2842
       },
       "end": {
-        "line": 89,
+        "line": 90,
         "col": 53,
-        "offset": 2894
+        "offset": 2947
       },
       "extra": {
-        "message": "POST /courses/ creates courses without server-side authentication or administrator authorization. The UI's administrator-only condition is not an access-control boundary.",
+        "message": "Course creation lacks any server-side authentication or administrator authorization check. The template only hides the form from non-administrators, so unauthenticated and non-admin callers can directly submit POST /courses/ and create courses.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -160,12 +160,12 @@
         "offset": 5088
       },
       "end": {
-        "line": 151,
-        "col": 55,
-        "offset": 5142
+        "line": 152,
+        "col": 42,
+        "offset": 5184
       },
       "extra": {
-        "message": "The grade-evaluation endpoint calls Mark.create() without authentication or administrator authorization, allowing unauthenticated attackers to assign grades to arbitrary student and course IDs.",
+        "message": "The evaluate handler writes student grades without @authorize(ensure_admin=True) or any inline authorization check. The UI presents this operation only to administrators, but any unauthenticated or non-admin caller can directly submit arbitrary grades.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -177,32 +177,7 @@
       }
     },
     {
-      "check_id": "python.security.auth.missing-grade-record-authentication",
-      "path": "sqli/views.py",
-      "start": {
-        "line": 71,
-        "col": 1,
-        "offset": 2221
-      },
-      "end": {
-        "line": 71,
-        "col": 61,
-        "offset": 2281
-      },
-      "extra": {
-        "message": "The student detail endpoint retrieves and displays the complete grade history for an attacker-selected student ID without requiring authentication, permitting enumeration of academic records.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-306: Missing Authentication for Critical Function"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.csrf.disabled-middleware",
+      "check_id": "python.security.csrf.disabled-protection",
       "path": "sqli/app.py",
       "start": {
         "line": 27,
@@ -215,36 +190,11 @@
         "offset": 859
       },
       "extra": {
-        "message": "The CSRF validation middleware is commented out. Generated form tokens are therefore never verified, leaving all state-changing POST handlers, including logout, vulnerable to cross-site request forgery.",
+        "message": "The CSRF validation middleware is commented out. Hidden CSRF fields are generated in templates but never validated, allowing cross-site requests to invoke state-changing POST endpoints, including authenticated logout.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-352: Cross-Site Request Forgery"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.cookie.missing-httponly",
-      "path": "sqli/middlewares.py",
-      "start": {
-        "line": 20,
-        "col": 1,
-        "offset": 671
-      },
-      "end": {
-        "line": 20,
-        "col": 57,
-        "offset": 727
-      },
-      "extra": {
-        "message": "RedisStorage explicitly creates the session cookie with httponly=False. Browser JavaScript can read the authentication cookie, enabling session theft through the confirmed XSS vulnerabilities.",
-        "severity": "INFO",
-        "metadata": {
-          "cwe": [
-            "CWE-1004: Sensitive Cookie Without HttpOnly Flag"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -265,11 +215,36 @@
         "offset": 1307
       },
       "extra": {
-        "message": "Successful login adds user_id to the existing session without invalidating or rotating its identifier. An attacker who fixes or obtains the pre-login session ID can reuse it after the victim authenticates.",
-        "severity": "WARNING",
+        "message": "Successful login adds user_id to the existing anonymous session without invalidating or rotating its session identifier. An attacker who fixes or obtains that pre-authentication identifier can reuse it after the victim logs in and hijack the authenticated session.",
+        "severity": "ERROR",
         "metadata": {
           "cwe": [
             "CWE-384: Session Fixation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.cookie.missing-httponly",
+      "path": "sqli/middlewares.py",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 671
+      },
+      "end": {
+        "line": 20,
+        "col": 57,
+        "offset": 727
+      },
+      "extra": {
+        "message": "RedisStorage explicitly creates the session cookie with httponly=False. Client-side JavaScript can read the session identifier; the confirmed stored XSS vulnerabilities can therefore steal sessions and enable account hijacking.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without HttpOnly Flag"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -290,11 +265,62 @@
         "offset": 1239
       },
       "extra": {
-        "message": "Passwords are verified using a single unsalted MD5 digest. MD5 is a fast, unsuitable password-hashing function and permits efficient offline cracking and rainbow-table attacks.",
+        "message": "Passwords are hashed using a single unsalted MD5 operation. MD5 is extremely fast and provides no work factor or per-user salt, making recovered password hashes susceptible to rainbow-table and high-speed brute-force attacks.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort",
+            "CWE-759: Use of a One-Way Hash without a Salt"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.unrestricted-login-attempts",
+      "path": "sqli/views.py",
+      "start": {
+        "line": 36,
+        "col": 1,
+        "offset": 998
+      },
+      "end": {
+        "line": 45,
+        "col": 58,
+        "offset": 1408
+      },
+      "extra": {
+        "message": "The login handler accepts and verifies an unlimited number of username/password attempts. There is no per-account or per-client throttling, delay, lockout, or attempt counter, enabling automated password guessing against all accounts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.exposure.debug-error-details",
+      "path": "sqli/app.py",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 755
+      },
+      "end": {
+        "line": 24,
+        "col": 20,
+        "offset": 774
+      },
+      "extra": {
+        "message": "The network-facing aiohttp application is unconditionally initialized in debug mode. Unhandled exceptions, which can be triggered through malformed POST data such as omitted required fields, return detailed traceback information and expose internal file paths and implementation details.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -315,8 +341,8 @@
         "offset": 172
       },
       "extra": {
-        "message": "The database fixtures create an enabled administrator account with the publicly known username and password superadmin. Deployments loading these fixtures are immediately accessible with default administrative credentials.",
-        "severity": "ERROR",
+        "message": "The database initialization migration creates an enabled administrator account with the hardcoded username and password superadmin. Dockerfile.db installs this migration into the normal database initialization path, so every deployment receives publicly known administrator credentials.",
+        "severity": "INFO",
         "metadata": {
           "cwe": [
             "CWE-798: Use of Hard-coded Credentials"
@@ -340,61 +366,11 @@
         "offset": 41
       },
       "extra": {
-        "message": "The application's default configuration contains the hardcoded PostgreSQL password 'postgres'. The same configuration is copied into the application image and the database port is published by docker-compose.",
+        "message": "The default configuration loaded by sqli/app.py contains the hardcoded PostgreSQL password 'postgres'. Committing and reusing this credential exposes the database wherever the default configuration is deployed.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
             "CWE-798: Use of Hard-coded Credentials"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.error.internal-object-disclosure",
-      "path": "sqli/templates/errors/50x.jinja2",
-      "start": {
-        "line": 6,
-        "col": 1,
-        "offset": 176
-      },
-      "end": {
-        "line": 6,
-        "col": 36,
-        "offset": 211
-      },
-      "extra": {
-        "message": "The HTTP 5xx error page renders the exception object's complete __dict__, disclosing internal exception attributes and implementation details to remote clients.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-209: Generation of Error Message Containing Sensitive Information"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.auth.missing-login-rate-limit",
-      "path": "sqli/views.py",
-      "start": {
-        "line": 40,
-        "col": 1,
-        "offset": 1154
-      },
-      "end": {
-        "line": 45,
-        "col": 58,
-        "offset": 1408
-      },
-      "extra": {
-        "message": "The login handler performs unrestricted username/password verification with no attempt counter, delay, lockout, or rate-limiting control, permitting automated credential brute-force attacks.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
           ],
           "confidence": "HIGH",
           "category": "security"

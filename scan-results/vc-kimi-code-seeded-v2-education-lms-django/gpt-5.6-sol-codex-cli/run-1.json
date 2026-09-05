@@ -2,20 +2,20 @@
   "version": "1.0.0",
   "results": [
     {
-      "check_id": "python.django.auth.self-assigned-privileged-role",
+      "check_id": "python.security.authorization.self-registration-privilege-escalation",
       "path": "core/forms.py",
       "start": {
         "line": 16,
-        "col": 5,
-        "offset": 570
+        "col": 1,
+        "offset": 566
       },
       "end": {
-        "line": 16,
-        "col": 75,
-        "offset": 640
+        "line": 20,
+        "col": 100,
+        "offset": 778
       },
       "extra": {
-        "message": "The public signup form exposes every User role, including school_admin. signup() saves the selected role without overriding it, allowing unauthenticated users to create administrator accounts.",
+        "message": "The public signup form exposes the complete User.ROLE_CHOICES field, including school_admin, and the signup view saves that value without approval. An anonymous attacker can register directly as a school administrator.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -27,12 +27,87 @@
       }
     },
     {
-      "check_id": "python.django.authz.assignment-arbitrary-cohort",
+      "check_id": "python.security.logging.untrusted-forwarded-ip",
       "path": "core/views.py",
       "start": {
-        "line": 316,
-        "col": 13,
-        "offset": 12367
+        "line": 45,
+        "col": 1,
+        "offset": 1552
+      },
+      "end": {
+        "line": 48,
+        "col": 43,
+        "offset": 1734
+      },
+      "extra": {
+        "message": "HTTP_X_FORWARDED_FOR is trusted without verifying that the request came through a trusted proxy. Attackers can supply arbitrary valid IP addresses and falsify the source IP recorded in security audit logs.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-345: Insufficient Verification of Data Authenticity"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.public-unpublished-courses",
+      "path": "core/views.py",
+      "start": {
+        "line": 65,
+        "col": 1,
+        "offset": 2174
+      },
+      "end": {
+        "line": 69,
+        "col": 48,
+        "offset": 2406
+      },
+      "extra": {
+        "message": "The unauthenticated course catalog starts from Course.objects.all(), exposing draft and archived courses unless the visitor voluntarily filters them out. Unpublished course metadata can therefore be enumerated publicly.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.student-draft-assignment-access",
+      "path": "core/views.py",
+      "start": {
+        "line": 229,
+        "col": 1,
+        "offset": 8331
+      },
+      "end": {
+        "line": 235,
+        "col": 138,
+        "offset": 8774
+      },
+      "extra": {
+        "message": "Student access checks only active enrollment and never requires the assignment to be published. An enrolled student can enumerate assignment IDs and read draft or archived assignment instructions and rubrics.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.unscoped-assignment-create",
+      "path": "core/views.py",
+      "start": {
+        "line": 311,
+        "col": 1,
+        "offset": 12131
       },
       "end": {
         "line": 318,
@@ -40,11 +115,11 @@
         "offset": 12482
       },
       "extra": {
-        "message": "An instructor can submit AssignmentForm fields selecting any course and cohort. The create handler saves them without verifying that the instructor belongs to the selected cohort, allowing unauthorized assignment creation in other instructors' cohorts.",
+        "message": "Any instructor may submit AssignmentForm and save an assignment for arbitrary course and cohort values. No check verifies that the instructor is assigned to the selected cohort, allowing cross-cohort modification.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-862: Missing Authorization"
+            "CWE-863: Incorrect Authorization"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -52,20 +127,120 @@
       }
     },
     {
-      "check_id": "python.django.authz.discussion-course-bypass",
+      "check_id": "python.security.authorization.assignment-scope-rebinding",
       "path": "core/views.py",
       "start": {
-        "line": 492,
-        "col": 5,
-        "offset": 19905
+        "line": 329,
+        "col": 1,
+        "offset": 12909
       },
       "end": {
-        "line": 492,
-        "col": 218,
-        "offset": 20118
+        "line": 339,
+        "col": 24,
+        "offset": 13359
       },
       "extra": {
-        "message": "Every user with an instructor or teaching-assistant role is authorized to post in every course discussion, without checking assignment to that course or cohort.",
+        "message": "Authorization is checked against the assignment's original cohort before binding an unrestricted AssignmentForm. An authorized instructor can then change the course or cohort to one they do not teach and save it.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.csrf.assignment-status-get",
+      "path": "core/views.py",
+      "start": {
+        "line": 367,
+        "col": 1,
+        "offset": 14504
+      },
+      "end": {
+        "line": 368,
+        "col": 22,
+        "offset": 14556
+      },
+      "extra": {
+        "message": "Assignment status is modified by a view accepting GET requests. Django's CSRF middleware does not protect GET, so an attacker can induce a logged-in instructor or administrator to publish, close, or archive an assignment.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.csrf.grade-release-get",
+      "path": "core/views.py",
+      "start": {
+        "line": 430,
+        "col": 1,
+        "offset": 17144
+      },
+      "end": {
+        "line": 434,
+        "col": 28,
+        "offset": 17297
+      },
+      "extra": {
+        "message": "A GET request permanently releases a grade and changes the submission status. Because the endpoint is not restricted to POST, a cross-site navigation can trigger this action with the victim's session.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.csrf.resubmission-request-get",
+      "path": "core/views.py",
+      "start": {
+        "line": 457,
+        "col": 1,
+        "offset": 18388
+      },
+      "end": {
+        "line": 458,
+        "col": 22,
+        "offset": 18454
+      },
+      "extra": {
+        "message": "The resubmission endpoint changes submission state through an unprotected GET request. An attacker can make a logged-in instructor or teaching assistant request resubmission without their consent.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.discussion-list-missing-check",
+      "path": "core/views.py",
+      "start": {
+        "line": 473,
+        "col": 1,
+        "offset": 18973
+      },
+      "end": {
+        "line": 480,
+        "col": 218,
+        "offset": 19613
+      },
+      "extra": {
+        "message": "The discussion list requires login but performs no course enrollment or staff-assignment authorization check before returning every thread for a course, including hidden and cohort-specific thread metadata.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -77,21 +252,71 @@
       }
     },
     {
-      "check_id": "python.django.authz.discussion-cross-cohort-access",
+      "check_id": "python.security.authorization.unscoped-discussion-create",
       "path": "core/views.py",
       "start": {
-        "line": 514,
-        "col": 5,
-        "offset": 20944
+        "line": 491,
+        "col": 1,
+        "offset": 19848
       },
       "end": {
-        "line": 514,
-        "col": 218,
-        "offset": 21157
+        "line": 501,
+        "col": 26,
+        "offset": 20436
       },
       "extra": {
-        "message": "Discussion access is authorized using enrollment in any cohort for the course rather than the thread's cohort. This permits students from one cohort to access threads belonging to another cohort; all instructors and teaching assistants also bypass course membership checks.",
-        "severity": "WARNING",
+        "message": "All users with instructor or teaching-assistant roles are allowed to create discussions for any course. The code does not verify that staff are assigned to a cohort belonging to the selected course.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.discussion-cohort-bypass",
+      "path": "core/views.py",
+      "start": {
+        "line": 512,
+        "col": 1,
+        "offset": 20857
+      },
+      "end": {
+        "line": 516,
+        "col": 39,
+        "offset": 21217
+      },
+      "extra": {
+        "message": "Discussion access is authorized only by broad role or enrollment in any cohort for the course. It ignores thread.cohort and thread.status, allowing unassigned staff and students from another cohort to read cohort-specific or hidden discussions.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.cross-thread-parent-idor",
+      "path": "core/views.py",
+      "start": {
+        "line": 527,
+        "col": 1,
+        "offset": 21611
+      },
+      "end": {
+        "line": 530,
+        "col": 27,
+        "offset": 21801
+      },
+      "extra": {
+        "message": "The user-controlled parent_id is resolved globally without verifying that the parent belongs to the current thread. A user can attach a reply to a comment in another course, causing unauthorized cross-course content injection when that parent's replies are rendered.",
+        "severity": "ERROR",
         "metadata": {
           "cwe": [
             "CWE-639: Authorization Bypass Through User-Controlled Key"
@@ -102,24 +327,24 @@
       }
     },
     {
-      "check_id": "python.django.authz.cross-thread-comment-parent",
+      "check_id": "python.security.authorization.discussion-moderation-scope",
       "path": "core/views.py",
       "start": {
-        "line": 529,
-        "col": 17,
-        "offset": 21707
+        "line": 546,
+        "col": 1,
+        "offset": 22329
       },
       "end": {
-        "line": 529,
-        "col": 84,
-        "offset": 21774
+        "line": 552,
+        "col": 39,
+        "offset": 22852
       },
       "extra": {
-        "message": "parent_id is resolved globally without requiring the parent comment to belong to the current thread. An authorized user can create cross-thread comment relationships using another thread's comment ID.",
-        "severity": "WARNING",
+        "message": "Moderation authorization checks whether staff are assigned to any cohort for the course, not the thread's specific cohort. Staff assigned to one cohort can moderate another cohort's threads.",
+        "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-639: Authorization Bypass Through User-Controlled Key"
+            "CWE-863: Incorrect Authorization"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -127,20 +352,95 @@
       }
     },
     {
-      "check_id": "python.django.authz.ta-grade-export-idor",
+      "check_id": "python.security.csrf.discussion-moderation-get",
       "path": "core/views.py",
       "start": {
-        "line": 785,
-        "col": 5,
-        "offset": 32453
+        "line": 554,
+        "col": 1,
+        "offset": 22854
+      },
+      "end": {
+        "line": 556,
+        "col": 22,
+        "offset": 22963
+      },
+      "extra": {
+        "message": "Thread moderation state is changed through GET requests. A malicious page can cause an authenticated moderator to pin, lock, hide, or reopen a thread.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.csrf.account-toggle-get",
+      "path": "core/views.py",
+      "start": {
+        "line": 605,
+        "col": 1,
+        "offset": 24853
+      },
+      "end": {
+        "line": 607,
+        "col": 16,
+        "offset": 24968
+      },
+      "extra": {
+        "message": "The administrative account-enable/disable operation is performed via GET and lacks CSRF enforcement. An attacker can induce a school administrator to disable or reactivate another account.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.credentials.default-import-password",
+      "path": "core/views.py",
+      "start": {
+        "line": 757,
+        "col": 1,
+        "offset": 31006
+      },
+      "end": {
+        "line": 757,
+        "col": 81,
+        "offset": 31086
+      },
+      "extra": {
+        "message": "CSV-imported users receive the known password changeme123 when the password column is omitted. Accounts are activated without forcing a password change, enabling unauthorized login with the documented source-level default.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.ta-grade-export-idor",
+      "path": "core/views.py",
+      "start": {
+        "line": 782,
+        "col": 1,
+        "offset": 32257
       },
       "end": {
         "line": 786,
-        "col": 40,
-        "offset": 32605
+        "col": 39,
+        "offset": 32604
       },
       "extra": {
-        "message": "The grade export verifies cohort membership for instructors but performs no equivalent membership check for teaching assistants. Any teaching assistant can export student identities, grades, and feedback from any cohort by changing cohort_pk.",
+        "message": "Cohort membership is checked for instructors but not teaching assistants. Any teaching assistant can supply another cohort ID and export that cohort's student names, grades, feedback, and submission status.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -152,20 +452,20 @@
       }
     },
     {
-      "check_id": "python.django.response.csv-formula-injection",
+      "check_id": "python.security.injection.csv-grade-export",
       "path": "core/views.py",
       "start": {
         "line": 794,
-        "col": 9,
-        "offset": 32990
+        "col": 1,
+        "offset": 33070
       },
       "end": {
         "line": 802,
         "col": 11,
-        "offset": 33329
+        "offset": 33393
       },
       "extra": {
-        "message": "Attacker-controlled names, assignment titles, and grade feedback are written directly to a downloadable CSV. Values beginning with spreadsheet formula characters can execute formulas when staff open the export.",
+        "message": "Spreadsheet-controlled values, including student display names and grade feedback, are written to CSV without neutralizing leading formula characters. A malicious value beginning with =, +, -, or @ can execute as a formula when the export is opened.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -177,12 +477,37 @@
       }
     },
     {
-      "check_id": "python.django.upload.unrestricted-file-type",
+      "check_id": "python.security.injection.csv-submission-export",
+      "path": "core/views.py",
+      "start": {
+        "line": 817,
+        "col": 1,
+        "offset": 34098
+      },
+      "end": {
+        "line": 826,
+        "col": 11,
+        "offset": 34455
+      },
+      "extra": {
+        "message": "User-controlled student display names are written directly into an administrator-facing CSV report. Formula-prefixed names can trigger spreadsheet formula execution when the report is opened.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1236: Improper Neutralization of Formula Elements in a CSV File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.upload.unrestricted-file-type",
       "path": "core/views.py",
       "start": {
         "line": 838,
-        "col": 9,
-        "offset": 34801
+        "col": 1,
+        "offset": 34793
       },
       "end": {
         "line": 847,
@@ -190,7 +515,7 @@
         "offset": 35146
       },
       "extra": {
-        "message": "The upload endpoint passes request.FILES directly to Resource.objects.create(). Django model save does not invoke FileExtensionValidator, so arbitrary file types can be stored despite the validator declared on Resource.file.",
+        "message": "Uploaded files are saved with Resource.objects.create() rather than a validated form or full_clean(). Django model validators are not run by save(), so the Resource FileExtensionValidator is bypassed and arbitrary file types can be stored.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -202,12 +527,37 @@
       }
     },
     {
-      "check_id": "python.django.authz.resource-download-idor",
+      "check_id": "python.security.dos.unbounded-file-upload",
+      "path": "core/views.py",
+      "start": {
+        "line": 838,
+        "col": 1,
+        "offset": 34793
+      },
+      "end": {
+        "line": 847,
+        "col": 10,
+        "offset": 35146
+      },
+      "extra": {
+        "message": "The authenticated upload endpoint imposes no per-file size limit or storage quota before persisting the upload. Repeated or very large uploads can exhaust server disk space.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.resource-download-idor",
       "path": "core/views.py",
       "start": {
         "line": 857,
-        "col": 5,
-        "offset": 35546
+        "col": 1,
+        "offset": 35542
       },
       "end": {
         "line": 865,
@@ -215,7 +565,7 @@
         "offset": 36263
       },
       "extra": {
-        "message": "The resource authorization logic denies only some students and instructors. Any teaching assistant can download any resource, and any authenticated user can download resources with no course, by supplying the resource ID.",
+        "message": "Download authorization is conditional on resource.course. Resources created by file_upload have no course, so any authenticated user can download another user's upload by ID. Teaching assistants also bypass all course-assignment checks for course-linked resources.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -227,12 +577,137 @@
       }
     },
     {
-      "check_id": "python.security.auth.missing-authentication",
+      "check_id": "python.security.storage.plaintext-api-key",
+      "path": "core/views.py",
+      "start": {
+        "line": 904,
+        "col": 1,
+        "offset": 37613
+      },
+      "end": {
+        "line": 905,
+        "col": 23,
+        "offset": 37674
+      },
+      "extra": {
+        "message": "Generated API bearer keys are assigned directly to the database-backed key field and saved without hashing. A database read or application data leak would disclose immediately usable API credentials.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.csrf.notification-state-get",
+      "path": "core/views.py",
+      "start": {
+        "line": 933,
+        "col": 1,
+        "offset": 38594
+      },
+      "end": {
+        "line": 934,
+        "col": 32,
+        "offset": 38674
+      },
+      "extra": {
+        "message": "Viewing the notifications endpoint marks every unread notification as read through a GET request. A cross-site navigation can silently clear a victim's unread notifications.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.credentials.hardcoded-django-secret",
+      "path": "lms/settings.py",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 133
+      },
+      "end": {
+        "line": 9,
+        "col": 76,
+        "offset": 208
+      },
+      "extra": {
+        "message": "Django falls back to a public, hardcoded SECRET_KEY when the environment variable is absent, even though DEBUG defaults to false. Deployments missing that variable use a predictable key for Django signing and token operations.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.upload.unrestricted-internal-file",
+      "path": "lms/course_operations.py",
+      "start": {
+        "line": 31,
+        "col": 1,
+        "offset": 804
+      },
+      "end": {
+        "line": 37,
+        "col": 77,
+        "offset": 1157
+      },
+      "extra": {
+        "message": "The internal spool endpoint stores arbitrary uploaded or request-body content without validating type, extension, size, or expected format. A holder of the shared operations token can place arbitrary files in the server's incoming directory.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.validation.unbounded-roster-delta",
+      "path": "lms/course_operations.py",
+      "start": {
+        "line": 44,
+        "col": 1,
+        "offset": 1302
+      },
+      "end": {
+        "line": 46,
+        "col": 120,
+        "offset": 1603
+      },
+      "extra": {
+        "message": "The endpoint converts an attacker-controlled delta directly to float and reports it as applied without range or finiteness validation. Negative, infinite, NaN, or arbitrarily large roster deltas are accepted as approved values.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-20: Improper Input Validation"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authentication.public-operations-data",
       "path": "lms/course_operations.py",
       "start": {
         "line": 50,
         "col": 1,
-        "offset": 1647
+        "offset": 1642
       },
       "end": {
         "line": 52,
@@ -240,7 +715,7 @@
         "offset": 1865
       },
       "extra": {
-        "message": "course_grade_file_096 has no authentication or internal-token check and exposes an operational memo containing renewal, payment, and owner-contact information.",
+        "message": "Unlike adjacent operations endpoints, this route has no authentication gate and anonymously returns internal course counts and an operations memo concerning renewal, payment, and owner-contact information.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -256,7 +731,7 @@
       "path": "lms/course_operations.py",
       "start": {
         "line": 57,
-        "col": 5,
+        "col": 1,
         "offset": 1958
       },
       "end": {
@@ -265,7 +740,7 @@
         "offset": 2053
       },
       "extra": {
-        "message": "A request-controlled lane value is passed directly to redirect(), allowing an authenticated internal caller or compromised token to redirect users to an arbitrary external URL.",
+        "message": "A URL supplied through the lane GET or POST parameter is passed directly to redirect(). External HTTP or HTTPS URLs are accepted, enabling phishing redirects through the trusted application origin.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -277,12 +752,12 @@
       }
     },
     {
-      "check_id": "python.security.deserialization.pickle",
+      "check_id": "python.security.deserialization.untrusted-pickle",
       "path": "lms/course_operations.py",
       "start": {
         "line": 65,
-        "col": 5,
-        "offset": 2176
+        "col": 1,
+        "offset": 2182
       },
       "end": {
         "line": 70,
@@ -290,7 +765,7 @@
         "offset": 2408
       },
       "extra": {
-        "message": "Attacker-controlled request-body or blob data is passed to pickle.loads(). A caller possessing the internal token can execute arbitrary Python code during deserialization.",
+        "message": "Attacker-controlled request-body or blob parameter bytes are passed to pickle.loads(). A crafted pickle can execute arbitrary Python code with the Django process's privileges.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -302,12 +777,37 @@
       }
     },
     {
-      "check_id": "python.security.path-traversal.arbitrary-file-write",
+      "check_id": "python.security.mass-assignment.protected-workset-fields",
+      "path": "lms/course_operations.py",
+      "start": {
+        "line": 77,
+        "col": 1,
+        "offset": 2569
+      },
+      "end": {
+        "line": 82,
+        "col": 33,
+        "offset": 2853
+      },
+      "extra": {
+        "message": "An unfiltered JSON or POST dictionary overwrites the complete workset, including protected role, tier, approved, and balance fields. Callers can return attacker-selected privileged state as approved workset data.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.path-traversal.arbitrary-json-write",
       "path": "lms/course_operations.py",
       "start": {
         "line": 87,
-        "col": 5,
-        "offset": 2944
+        "col": 1,
+        "offset": 2946
       },
       "end": {
         "line": 90,
@@ -315,7 +815,7 @@
         "offset": 3232
       },
       "extra": {
-        "message": "The request-controlled ref is interpolated into a filesystem path without containment validation. Values containing ../ can escape private_exports and write a JSON file at an attacker-selected location.",
+        "message": "The ref query parameter is interpolated into a pathlib path without containment validation. Values containing ../ escape BASE_EXPORT_DIR, after which parent directories are created and attacker-controlled JSON is written outside the intended directory.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -327,24 +827,24 @@
       }
     },
     {
-      "check_id": "python.django.cookie.missing-security-attributes",
+      "check_id": "python.security.storage.cleartext-personal-data",
       "path": "lms/course_operations.py",
       "start": {
-        "line": 98,
-        "col": 5,
-        "offset": 3491
+        "line": 90,
+        "col": 1,
+        "offset": 3086
       },
       "end": {
-        "line": 98,
-        "col": 48,
-        "offset": 3534
+        "line": 90,
+        "col": 147,
+        "offset": 3232
       },
       "extra": {
-        "message": "portal_crumb is set without Secure, HttpOnly, or SameSite attributes, allowing transport over plaintext connections and increasing script-access and cross-site request risks.",
-        "severity": "INFO",
+        "message": "Social-security and payment-card values are serialized directly into a plaintext filesystem file. No encryption or field protection is applied to this explicitly sensitive data.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-614: Sensitive Cookie in HTTPS Session Without Secure Attribute"
+            "CWE-312: Cleartext Storage of Sensitive Information"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -352,20 +852,71 @@
       }
     },
     {
-      "check_id": "python.security.credentials.hardcoded-verifiers",
+      "check_id": "python.security.cookie.missing-security-flags",
       "path": "lms/course_operations.py",
       "start": {
-        "line": 111,
-        "col": 5,
-        "offset": 4019
+        "line": 96,
+        "col": 1,
+        "offset": 3371
       },
       "end": {
-        "line": 111,
-        "col": 47,
-        "offset": 4061
+        "line": 98,
+        "col": 48,
+        "offset": 3534
       },
       "extra": {
-        "message": "Identity verifier values are hardcoded in application source. Anyone with source access can obtain the valid verifier for each known handle.",
+        "message": "The portal_crumb state cookie is set without Secure, HttpOnly, or SameSite attributes. It can be exposed to client-side scripts and may be transmitted without the intended cross-site and transport restrictions.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without HttpOnly Flag",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without Secure Attribute"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authentication.identity-operation-missing-auth",
+      "path": "lms/course_operations.py",
+      "start": {
+        "line": 102,
+        "col": 1,
+        "offset": 3595
+      },
+      "end": {
+        "line": 104,
+        "col": 84,
+        "offset": 3830
+      },
+      "extra": {
+        "message": "The identity-operation endpoint is publicly routed but has neither _wrk_gate nor Django authentication. Anonymous callers can submit arbitrary handles and channels to an operation reported as queued.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.credentials.hardcoded-identity-verifiers",
+      "path": "lms/course_operations.py",
+      "start": {
+        "line": 109,
+        "col": 1,
+        "offset": 3925
+      },
+      "end": {
+        "line": 115,
+        "col": 68,
+        "offset": 4261
+      },
+      "extra": {
+        "message": "Identity verifier values are hardcoded in application source and compared directly against requests. Anyone with source access knows the verifier for each handle and can satisfy this authorization step.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
@@ -377,12 +928,12 @@
       }
     },
     {
-      "check_id": "python.django.cors.reflected-origin-with-credentials",
+      "check_id": "python.security.cors.arbitrary-origin-with-credentials",
       "path": "lms/course_operations.py",
       "start": {
         "line": 121,
-        "col": 5,
-        "offset": 4417
+        "col": 1,
+        "offset": 4402
       },
       "end": {
         "line": 124,
@@ -390,7 +941,7 @@
         "offset": 4608
       },
       "extra": {
-        "message": "The endpoint reflects an arbitrary Origin header into Access-Control-Allow-Origin while enabling credentials. A malicious origin can therefore make credentialed cross-origin requests and read responses.",
+        "message": "The request Origin is reflected verbatim into Access-Control-Allow-Origin while Access-Control-Allow-Credentials is true. This creates an origin-trusting CORS policy for clients that send browser credentials to the endpoint.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -402,20 +953,45 @@
       }
     },
     {
-      "check_id": "python.security.template-injection.jinja2",
+      "check_id": "python.security.headers.xss-protection-disabled",
+      "path": "lms/course_operations.py",
+      "start": {
+        "line": 130,
+        "col": 1,
+        "offset": 4720
+      },
+      "end": {
+        "line": 132,
+        "col": 45,
+        "offset": 4853
+      },
+      "extra": {
+        "message": "This response explicitly disables legacy browser XSS filtering and emits an empty Content-Security-Policy, removing response-level script execution restrictions.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-693: Protection Mechanism Failure"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.server-side-template-injection",
       "path": "lms/course_operations.py",
       "start": {
         "line": 139,
-        "col": 5,
-        "offset": 5001
+        "col": 1,
+        "offset": 4997
       },
       "end": {
-        "line": 140,
-        "col": 52,
-        "offset": 5106
+        "line": 141,
+        "col": 56,
+        "offset": 5162
       },
       "extra": {
-        "message": "The request-controlled fragment is concatenated into Jinja template source and rendered. Jinja expressions can access Python object internals, enabling server-side template injection and potentially arbitrary code execution.",
+        "message": "The fragment query parameter is concatenated into Jinja template source and rendered. A crafted Jinja expression can traverse template globals and execute arbitrary Python or operating-system commands.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -427,20 +1003,20 @@
       }
     },
     {
-      "check_id": "python.security.auth.client-controlled-role",
+      "check_id": "python.security.authorization.client-controlled-badge",
       "path": "lms/course_operations.py",
       "start": {
         "line": 146,
-        "col": 5,
-        "offset": 5249
+        "col": 1,
+        "offset": 5254
       },
       "end": {
-        "line": 148,
-        "col": 96,
-        "offset": 5438
+        "line": 149,
+        "col": 46,
+        "offset": 5499
       },
       "extra": {
-        "message": "Elevated access is granted solely when the client-controlled ops_badge cookie or header equals the public constant 'lead'. A caller passing the internal gate can forge this value to access payroll and casework data.",
+        "message": "Elevated payroll and casework access is granted solely when a caller-controlled cookie or header equals lead. Any holder of the base operations token can forge this badge and elevate privileges.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -452,12 +1028,12 @@
       }
     },
     {
-      "check_id": "python.security.injection.command-injection",
+      "check_id": "python.security.injection.os-command-injection",
       "path": "lms/course_operations.py",
       "start": {
         "line": 155,
-        "col": 5,
-        "offset": 5617
+        "col": 1,
+        "offset": 5613
       },
       "end": {
         "line": 156,
@@ -465,11 +1041,11 @@
         "offset": 5705
       },
       "extra": {
-        "message": "The host query parameter is concatenated into an os.system() shell command. Shell metacharacters allow arbitrary operating-system command execution.",
+        "message": "The host query parameter is concatenated into a shell command passed to os.system(). Shell metacharacters allow arbitrary command execution with the Django process's privileges.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-78: Improper Neutralization of Special Elements used in an OS Command"
+            "CWE-78: Improper Neutralization of Special Elements Used in an OS Command"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -481,8 +1057,8 @@
       "path": "lms/course_operations.py",
       "start": {
         "line": 163,
-        "col": 5,
-        "offset": 5881
+        "col": 1,
+        "offset": 5877
       },
       "end": {
         "line": 165,
@@ -490,7 +1066,7 @@
         "offset": 6090
       },
       "extra": {
-        "message": "An arbitrary JSON object supplied by the caller is passed directly to MongoDB find_one(). Attackers can inject MongoDB query operators to alter query semantics and access unintended records.",
+        "message": "An attacker-controlled JSON object is passed directly to MongoDB find_one(). MongoDB operators such as $ne, $regex, and $where can alter query semantics and expose records outside the intended selection.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -502,12 +1078,12 @@
       }
     },
     {
-      "check_id": "python.security.tls.disabled-certificate-validation",
+      "check_id": "python.security.tls.certificate-verification-disabled",
       "path": "lms/course_operations.py",
       "start": {
         "line": 173,
-        "col": 5,
-        "offset": 6302
+        "col": 1,
+        "offset": 6298
       },
       "end": {
         "line": 174,
@@ -515,7 +1091,7 @@
         "offset": 6401
       },
       "extra": {
-        "message": "The outbound HTTPS request uses ssl._create_unverified_context(), disabling certificate validation and allowing man-in-the-middle interception or response modification.",
+        "message": "The outbound HTTPS request uses ssl._create_unverified_context(), explicitly disabling certificate and hostname verification. A network-positioned attacker can impersonate the configured partner endpoint.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -527,12 +1103,12 @@
       }
     },
     {
-      "check_id": "python.security.xml.xxe",
+      "check_id": "python.security.xml.external-entity",
       "path": "lms/course_operations.py",
       "start": {
         "line": 181,
-        "col": 5,
-        "offset": 6591
+        "col": 1,
+        "offset": 6587
       },
       "end": {
         "line": 182,
@@ -540,7 +1116,7 @@
         "offset": 6720
       },
       "extra": {
-        "message": "Untrusted request XML is parsed with DTD loading, external entity resolution, and network access enabled. Crafted XML can read local files, perform server-side requests, or exhaust resources.",
+        "message": "Attacker-controlled XML is parsed with DTD loading, external entity resolution, and network access enabled. Crafted documents can trigger local-file access, server-side network requests, or entity-expansion denial of service.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -552,99 +1128,24 @@
       }
     },
     {
-      "check_id": "python.security.info-exposure.internal-path",
+      "check_id": "python.security.exposure.internal-debug-information",
       "path": "lms/course_operations.py",
       "start": {
-        "line": 189,
-        "col": 5,
-        "offset": 6880
+        "line": 188,
+        "col": 1,
+        "offset": 6856
       },
       "end": {
         "line": 190,
         "col": 33,
-        "offset": 7025
+        "offset": 7024
       },
       "extra": {
-        "message": "The trace endpoint discloses the active Django settings module and absolute private export directory, revealing internal deployment details useful for further attacks.",
-        "severity": "WARNING",
+        "message": "The endpoint discloses the Django settings module and an absolute server filesystem path. This internal configuration information assists reconnaissance and exploitation by any holder of the shared operations token.",
+        "severity": "INFO",
         "metadata": {
           "cwe": [
             "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.django.config.hardcoded-secret-key",
-      "path": "lms/settings.py",
-      "start": {
-        "line": 9,
-        "col": 1,
-        "offset": 133
-      },
-      "end": {
-        "line": 9,
-        "col": 76,
-        "offset": 208
-      },
-      "extra": {
-        "message": "Django falls back to a known hardcoded SECRET_KEY when the environment variable is absent. A deployment using this fallback permits forgery of cryptographically signed Django data.",
-        "severity": "INFO",
-        "metadata": {
-          "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.django.config.hardcoded-database-credentials",
-      "path": "lms/settings.py",
-      "start": {
-        "line": 56,
-        "col": 1,
-        "offset": 1651
-      },
-      "end": {
-        "line": 56,
-        "col": 100,
-        "offset": 1750
-      },
-      "extra": {
-        "message": "The application contains default PostgreSQL credentials in its production settings. Deployments without DATABASE_URL use the publicly known lms_user/lms_pass credentials.",
-        "severity": "INFO",
-        "metadata": {
-          "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.credentials.hardcoded-demo-passwords",
-      "path": "core/management/commands/seed.py",
-      "start": {
-        "line": 25,
-        "col": 13,
-        "offset": 632
-      },
-      "end": {
-        "line": 28,
-        "col": 165,
-        "offset": 1294
-      },
-      "extra": {
-        "message": "The seed command creates privileged and unprivileged accounts with hardcoded, documented passwords, including a school_admin account. Running this command in a reachable environment creates predictable credentials.",
-        "severity": "INFO",
-        "metadata": {
-          "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
           ],
           "confidence": "HIGH",
           "category": "security"

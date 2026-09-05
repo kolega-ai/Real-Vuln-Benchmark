@@ -314,10 +314,18 @@ SCANNER_NOTES: dict[str, str] = {
     "gpt-5.6-sol-codex-cli": (
         "<strong>Full coverage; subscription-metered.</strong> Runs through the Codex CLI "
         "authenticated against a ChatGPT subscription session rather than a metered OpenAI API "
-        "key, at <span class=\"mono\">model_reasoning_effort=high</span>. The cost shown is Codex's "
-        "self-reported token-cost estimate, not billed spend — the same convention already used "
-        "for this scanner's Python results. The 74 TypeScript / JS repositories were scanned once "
-        "each on 2026-09-04 with the same TS/JS prompt as the DeepSeek runs (prompt hash "
+        "key, at <span class=\"mono\">model_reasoning_effort=high</span> on both languages. The cost "
+        "shown is Codex's self-reported token-cost estimate, not billed spend. "
+        "<br><br>"
+        "<strong>The Python figure was re-run.</strong> Our Codex runner had no reasoning-effort "
+        "control at all until the TS/JS work in this release, so the original Python campaign ran "
+        "at whatever Codex's ambient default was (unrecorded) rather than high. Re-running all 66 "
+        "Python repositories at high on 2026-09-05 moved F3 from 53.9 to 77.8 (recall 48.3% to "
+        "78.7%, precision 78.5% to 70.6%) — confirming the mismatch, not the corpus, explained "
+        "most of the earlier Python/TS-JS gap. The run was interrupted twice by the Codex/ChatGPT "
+        "subscription's usage limit and resumed after each reset; every repository is now scored "
+        "at the same effort level. The 74 TypeScript / JS repositories were scanned once each on "
+        "2026-09-04 with the same TS/JS prompt as the DeepSeek runs (prompt hash "
         '<span class="mono">sha256:45a1200d61e6</span>); all 74 validated first time.'
     ),
     "gpt-daybreak-blue-codex-cli": (
