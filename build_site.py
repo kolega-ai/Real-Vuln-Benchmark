@@ -145,6 +145,7 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
     "gpt-5.5-agentic-v1": ("GPT-5.5", "llm", "agentic-v1"),
     "gpt-5.6-luna-codex-cli": ("GPT-5.6 Luna", "llm", "codex-cli"),
     "gpt-5.6-terra-codex-cli": ("GPT-5.6 Terra", "llm", "codex-cli"),
+    "gpt-6-astra-codex-cli": ("GPT-6 Astra", "llm", "codex-cli"),
     "gpt-5.6-sol-codex-cli": ("GPT-5.6 Sol", "llm", "codex-cli"),
     "gpt-daybreak-blue-codex-cli": ("Daybreak Blue", "llm", "codex-cli"),
     "glm-5.2-agentic-v1": ("GLM-5.2", "llm", "agentic-v1"),
@@ -194,6 +195,7 @@ SCANNER_URLS: dict[str, str] = {
     "gpt-5.5-agentic-v1": "https://openai.com/index/introducing-gpt-5-5/",
     "gpt-5.6-luna-codex-cli": "https://openai.com/",
     "gpt-5.6-terra-codex-cli": "https://openai.com/",
+    "gpt-6-astra-codex-cli": "https://openai.com/index/gpt-6-astra/",
     "gpt-5.6-sol-codex-cli": "https://openai.com/",
     "gpt-daybreak-blue-codex-cli": "https://developers.openai.com/api/docs/models/gpt-daybreak-blue-latest",
     "glm-5.2-agentic-v1": "https://docs.z.ai/guides/llm/glm-5.2",
@@ -241,6 +243,7 @@ SCANNER_PROVIDERS: dict[str, str] = {
     "gpt-5.5-agentic-v1": "OpenAI",
     "gpt-5.6-luna-codex-cli": "OpenAI",
     "gpt-5.6-terra-codex-cli": "OpenAI",
+    "gpt-6-astra-codex-cli": "OpenAI",
     "gpt-5.6-sol-codex-cli": "OpenAI",
     "gpt-daybreak-blue-codex-cli": "OpenAI",
     "glm-5.2-agentic-v1": "Z.ai",
@@ -310,6 +313,18 @@ SCANNER_NOTES: dict[str, str] = {
     "qwen3.6-35b-agentic-v1": (
         "<strong>Locally hosted.</strong> Open-weight GGUF (Q4_K_M) via Ollama on one "
         "RTX PRO 6000, standard agentic-v1 harness. Cost $0 (self-hosted)."
+    ),
+    "gpt-6-astra-codex-cli": (
+        "<strong>Python only so far.</strong> GPT-6 Astra, OpenAI's newest flagship "
+        "(\"our most capable model for complex, demanding work\"), run through the Codex "
+        "CLI at <span class=\"mono\">high</span> reasoning effort, the same setting used for "
+        "Sol and Daybreak Blue. All 66 Python repositories completed cleanly with zero "
+        "failures on 2026-09-06: F3 49.4, well below both GPT-5.6 Sol (77.8) and Daybreak "
+        "Blue (80.0) at the identical effort level and prompt \u2014 OpenAI's newest and most "
+        "expensive model (2.5\u00d7 Sol's price) is not the strongest one on this benchmark. "
+        "The TypeScript / JS run was interrupted by the Codex/ChatGPT subscription's usage "
+        "limit after 6 of 74 repositories (reset 2026-09-12); it will complete once that "
+        "resets, and Astra is not ranked on the Overall tab until both languages finish."
     ),
     "gpt-5.6-sol-codex-cli": (
         "<strong>Full coverage; subscription-metered.</strong> Runs through the Codex CLI "

@@ -48,7 +48,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Daybreak Blue Python results (66/66, `model_reasoning_effort=high`), completing its coverage to
   all 140 repositories: F3 80.0 Python, 79.2 TS/JS, 79.5 Overall -- second only to Kolega DevSec
   Max V0.1.0 and ahead of GPT-5.6 Sol on every figure despite OpenAI's docs saying the two share
-  the same underlying weights. The Python results previously published under
+  the same underlying weights.
+- GPT-6 Astra (codex-cli, `model_reasoning_effort=high`) Python results: 66/66, zero failures,
+  F3 49.4 -- notably below both GPT-5.6 Sol (77.8) and Daybreak Blue (80.0) at the identical
+  effort and prompt. TS/JS run stopped at 6/74 (Codex/ChatGPT usage limit, resets 2026-09-12);
+  not yet ranked on any tab pending full coverage.
+- `run_codex.py --effort` accepts `ultra` (Codex's sixth reasoning level, above `max`). The Python results previously published under
   `kolega-devsec-max-v0.0.1` now live under `kolega-devsec-max-v0.1.0` (same scanner,
   unchanged results), giving it full 140-repository coverage; the `v0.0.1` slug is retired
   and remains in the frozen 2.1.0 release.

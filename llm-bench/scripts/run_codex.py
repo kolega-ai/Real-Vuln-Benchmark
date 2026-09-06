@@ -396,7 +396,7 @@ def main() -> int:
         help="Directory of repo checkouts (default: <root>/repos)",
     )
     parser.add_argument(
-        "--effort", choices=["low", "medium", "high", "xhigh", "max", "minimal"], default=None,
+        "--effort", choices=["low", "medium", "high", "xhigh", "max", "ultra", "minimal"], default=None,
         help="Codex -c model_reasoning_effort=<level>",
     )
     args = parser.parse_args()
