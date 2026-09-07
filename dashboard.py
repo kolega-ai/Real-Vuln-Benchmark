@@ -362,6 +362,11 @@ def compute_aggregates(
         max_num_runs = 1
         # Strict mode
         strict_tp = strict_fp = strict_fn = strict_tn = 0
+        # Per-severity totals (scored repos only -- a failed repo's missed
+        # vulns are not broken out by severity here, so this is an
+        # optimistic-mode-only breakdown even when the headline metric is
+        # strict; investigative feature, not the ranking metric).
+        sev_totals: dict[str, dict[str, int]] = {}
 
         for repo in grid:
             cell = grid[repo].get(scanner)
@@ -377,6 +382,11 @@ def compute_aggregates(
                 strict_fp += cell["fp"]
                 strict_fn += cell["fn"]
                 strict_tn += cell["tn"]
+                for sev, sd in (cell.get("per_severity") or {}).items():
+                    bucket = sev_totals.setdefault(sev, {"tp": 0, "fp": 0, "fn": 0})
+                    bucket["tp"] += sd.get("tp", 0)
+                    bucket["fp"] += sd.get("fp", 0)
+                    bucket["fn"] += sd.get("fn", 0)
             else:
                 # Failed — strict mode counts all vulns as missed
                 strict_fn += repo_vuln_counts.get(repo, 0)
@@ -426,6 +436,7 @@ def compute_aggregates(
                     sum(f2_scores) / len(f2_scores), 1
                 ) if f2_scores else 0.0,
             },
+            "per_severity": sev_totals,
             "repos_scored": len(f2_scores),
             "repos_total": len(grid),
             "f2_stddev": round(statistics.stdev(f2_scores), 1) if len(f2_scores) >= 2 else 0.0,

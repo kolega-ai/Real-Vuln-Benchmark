@@ -555,6 +555,12 @@ def scanners_from_aggregates(
                 "fp": micro.get("fp", 0) or 0,
                 # fn: real vulnerabilities missed (false negatives, micro)
                 "fn": micro.get("fn", 0) or 0,
+                # sev: per-severity [tp, fp, fn] for the investigative severity
+                # filter -- optimistic-mode only (see dashboard.py comment).
+                "sev": {
+                    sev: [d.get("tp", 0), d.get("fp", 0), d.get("fn", 0)]
+                    for sev, d in (a.get("per_severity") or {}).items()
+                },
                 "prec": round3(micro["precision"]),
                 # cost: per-100k-LOC spend; 0 = Free, null = no published price, else fixed/metered $
                 "cost": cost_val,
@@ -956,6 +962,7 @@ def emit_data_js(
         "tp",
         "fp",
         "fn",
+        "sev",
         "prec",
         "cost",
         "cpv",

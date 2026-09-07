@@ -24,7 +24,36 @@
   var METRIC_LABEL = { f2: 'F2', f3: 'F3' };
   function mk(base) { return state.mode === 'strict' ? base + 's' : base; }   // metric/recall key for mode
   function val(s, base) { return s[mk(base)]; }
-  function activeF(s) { return val(s, state.metric); }
+
+  // ---- severity filter (investigative): affects TP/FN-derived numbers only,
+  // never precision/FP (false positives carry no ground-truth severity) ----
+  var ALL_SEV = ['critical', 'high', 'medium', 'low'];
+  var sevSel = { critical: true, high: true, medium: true, low: true };
+  function sevAllOn() { return ALL_SEV.every(function (k) { return sevSel[k]; }); }
+  function sevAgg(s) {
+    if (!s.sev) return null;
+    var tp = 0, fn = 0, any = false;
+    ALL_SEV.forEach(function (k) {
+      if (!sevSel[k]) return;
+      var d = s.sev[k]; if (!d) return;
+      any = true; tp += d[0]; fn += d[2];
+    });
+    return any ? { tp: tp, fn: fn } : { tp: 0, fn: 0 };
+  }
+  function effFn(s) {
+    if (sevAllOn() || !s.sev) return s.fn || 0;
+    return sevAgg(s).fn;
+  }
+  function effF3(s) {
+    if (sevAllOn() || !s.sev) return val(s, state.metric);
+    var agg = sevAgg(s), fp = s.fp || 0;
+    var p = (agg.tp + fp) > 0 ? agg.tp / (agg.tp + fp) : 0;
+    var r = (agg.tp + agg.fn) > 0 ? agg.tp / (agg.tp + agg.fn) : 0;
+    var beta2 = state.metric === 'f2' ? 4 : 9;
+    var denom = beta2 * p + r;
+    return denom === 0 ? 0 : (100 * (1 + beta2) * p * r / denom);
+  }
+  function activeF(s) { return effF3(s); }
   function fmt(v) { return v.toFixed(1); }
   // per-language F3 (only present on cross-language tabs): [standard, strict]
   function langF(s, lk) { var v = s.lf && s.lf[lk]; return v ? v[state.mode === 'strict' ? 1 : 0] : null; }
@@ -78,7 +107,7 @@
       if (k === 'prec') return dir * (a.prec - b.prec);
       if (k === 'repos') return dir * (a.repos - b.repos);
       if (k === 'cost') { var ac = a.cost == null ? -1 : a.cost, bc = b.cost == null ? -1 : b.cost; return dir * (ac - bc); }
-      if (k === 'fn') return dir * ((a.fn || 0) - (b.fn || 0));
+      if (k === 'fn') return dir * (effFn(a) - effFn(b));
       if (k.indexOf('lf:') === 0) { var lk = k.slice(3), av = langF(a, lk), bv = langF(b, lk); return dir * ((av == null ? -1 : av) - (bv == null ? -1 : bv)); }
       return dir * (val(a, k) - val(b, k)); // f2 / f3
     });
@@ -107,7 +136,7 @@
           '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         (langCols() ? ['python', 'tsjs'].map(function (lk) { var v = langF(s, lk); return '<td class="lang-col">' + (v == null ? '<span class="dim">—</span>' : fmt(v)) + '</td>'; }).join('') : '') +
-        '<td title="real vulnerabilities missed (false negatives)">' + (s.fn || 0) + '</td>' +
+        '<td title="real vulnerabilities missed (false negatives)' + (sevAllOn() ? '' : ' — filtered to selected severities') + '">' + effFn(s) + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/' + REPO_TOTAL + '</span></td>' +
         '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + (s.cost < 10 ? s.cost.toFixed(2) : s.cost.toFixed(0))) + '</td>';
@@ -161,6 +190,12 @@
       if (state.sortKey === key) state.sortDir *= -1;
       else { state.sortKey = key; state.sortDir = key === 'name' ? 1 : -1; }
       render();
+    });
+  });
+  document.querySelectorAll('#sev-filter input[data-sev]').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      sevSel[cb.getAttribute('data-sev')] = cb.checked;
+      render(); if (typeof renderScatter === 'function') renderScatter();
     });
   });
   render();
