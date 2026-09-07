@@ -552,6 +552,8 @@ def scanners_from_aggregates(
                 "tp": micro.get("tp", 0) or 0,
                 # fp: false positives (flagged but not a real vuln, micro)
                 "fp": micro.get("fp", 0) or 0,
+                # fn: real vulnerabilities missed (false negatives, micro)
+                "fn": micro.get("fn", 0) or 0,
                 "prec": round3(micro["precision"]),
                 # cost: per-100k-LOC spend; 0 = Free, null = no published price, else fixed/metered $
                 "cost": cost_val,
@@ -952,6 +954,7 @@ def emit_data_js(
         "recs",
         "tp",
         "fp",
+        "fn",
         "prec",
         "cost",
         "cpv",

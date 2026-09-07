@@ -78,7 +78,7 @@
       if (k === 'prec') return dir * (a.prec - b.prec);
       if (k === 'repos') return dir * (a.repos - b.repos);
       if (k === 'cost') { var ac = a.cost == null ? -1 : a.cost, bc = b.cost == null ? -1 : b.cost; return dir * (ac - bc); }
-      if (k === 'recall') return dir * (val(a, 'rec') - val(b, 'rec'));
+      if (k === 'fn') return dir * ((a.fn || 0) - (b.fn || 0));
       if (k.indexOf('lf:') === 0) { var lk = k.slice(3), av = langF(a, lk), bv = langF(b, lk); return dir * ((av == null ? -1 : av) - (bv == null ? -1 : bv)); }
       return dir * (val(a, k) - val(b, k)); // f2 / f3
     });
@@ -107,7 +107,7 @@
           '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         (langCols() ? ['python', 'tsjs'].map(function (lk) { var v = langF(s, lk); return '<td class="lang-col">' + (v == null ? '<span class="dim">—</span>' : fmt(v)) + '</td>'; }).join('') : '') +
-        '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
+        '<td title="missed / (found + missed)">' + (s.fn || 0) + ' <span class="dim">of ' + ((s.tp||0)+(s.fn||0)) + '</span></td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/' + REPO_TOTAL + '</span></td>' +
         '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + (s.cost < 10 ? s.cost.toFixed(2) : s.cost.toFixed(0))) + '</td>';
