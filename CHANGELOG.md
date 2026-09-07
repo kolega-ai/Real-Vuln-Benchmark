@@ -56,6 +56,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   all 140 repositories: F3 80.0 Python, 79.2 TS/JS, 79.5 Overall -- second only to Kolega DevSec
   Max V0.1.0 and ahead of GPT-5.6 Sol on every figure despite OpenAI's docs saying the two share
   the same underlying weights.
+- GPT-6 Astra TS/JS results (73/74, `model_reasoning_effort=high`), completing its coverage to
+  139/140 repositories: F3 53.5 TS/JS, 51.7 Overall -- OpenAI's newest, most expensive model
+  (2.5x Sol's rate) ranks fourth, behind both older Codex-family models at the same effort.
 - GPT-6 Astra (codex-cli, `model_reasoning_effort=high`) Python results: 66/66, zero failures,
   F3 49.4 -- notably below both GPT-5.6 Sol (77.8) and Daybreak Blue (80.0) at the identical
   effort and prompt. TS/JS run stopped at 6/74 (Codex/ChatGPT usage limit, resets 2026-09-12);

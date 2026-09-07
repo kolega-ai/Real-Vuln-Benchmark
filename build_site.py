@@ -315,16 +315,17 @@ SCANNER_NOTES: dict[str, str] = {
         "RTX PRO 6000, standard agentic-v1 harness. Cost $0 (self-hosted)."
     ),
     "gpt-6-astra-codex-cli": (
-        "<strong>Python only so far.</strong> GPT-6 Astra, OpenAI's newest flagship "
+        "<strong>Full coverage (139/140).</strong> GPT-6 Astra, OpenAI's newest flagship "
         "(\"our most capable model for complex, demanding work\"), run through the Codex "
         "CLI at <span class=\"mono\">high</span> reasoning effort, the same setting used for "
-        "Sol and Daybreak Blue. All 66 Python repositories completed cleanly with zero "
-        "failures on 2026-09-06: F3 49.4, well below both GPT-5.6 Sol (77.8) and Daybreak "
-        "Blue (80.0) at the identical effort level and prompt \u2014 OpenAI's newest and most "
-        "expensive model (2.5\u00d7 Sol's price) is not the strongest one on this benchmark. "
-        "The TypeScript / JS run was interrupted by the Codex/ChatGPT subscription's usage "
-        "limit after 6 of 74 repositories (reset 2026-09-12); it will complete once that "
-        "resets, and Astra is not ranked on the Overall tab until both languages finish."
+        "Sol and Daybreak Blue. F3 49.4 on Python (66/66), 53.5 on TypeScript / JS (73/74, "
+        "one validation failure), Overall 51.7 \u2014 well below GPT-5.6 Sol (74.7) and "
+        "Daybreak Blue (79.5) at the identical effort level and prompt. OpenAI's newest and "
+        "most expensive model in this benchmark (2.5\u00d7 Sol's price) is not its strongest: "
+        "it lands fourth, behind two models built on an older, cheaper base. The TypeScript / "
+        "JS run was interrupted twice by the Codex/ChatGPT subscription's usage limit and "
+        "resumed after each reset; every repository not still failing validation is now "
+        "scored at the same effort as Python."
     ),
     "gpt-5.6-sol-codex-cli": (
         "<strong>Full coverage; subscription-metered.</strong> Runs through the Codex CLI "
