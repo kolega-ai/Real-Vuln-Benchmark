@@ -330,7 +330,9 @@ SCANNER_NOTES: dict[str, str] = {
         "<strong>Full coverage; subscription-metered.</strong> Runs through the Codex CLI "
         "authenticated against a ChatGPT subscription session rather than a metered OpenAI API "
         "key, at <span class=\"mono\">model_reasoning_effort=high</span> on both languages. The cost "
-        "shown is Codex's self-reported token-cost estimate, not billed spend. "
+        "shown is computed from Codex's reported token usage at OpenAI's published API rate for "
+        "this model ($4.00/$20.00 per 1M input/output tokens, short context) -- an accurate estimate "
+        "of what the run would cost if billed, not money actually charged on a subscription session. "
         "<br><br>"
         "<strong>The Python figure was re-run.</strong> Our Codex runner had no reasoning-effort "
         "control at all until the TS/JS work in this release, so the original Python campaign ran "
@@ -344,7 +346,7 @@ SCANNER_NOTES: dict[str, str] = {
         '<span class="mono">sha256:45a1200d61e6</span>); all 74 validated first time.'
     ),
     "gpt-daybreak-blue-codex-cli": (
-        "<strong>Full coverage.</strong> "
+        "<strong>Full coverage; subscription-metered.</strong> "
         '<span class="mono">gpt-daybreak-blue-latest</span> is an OpenAI Codex CLI alias that, '
         "per OpenAI's own model docs, currently resolves to the same underlying weights as "
         '<span class="mono">gpt-5.6-sol</span> — the difference is the Daybreak program\'s '
@@ -352,12 +354,13 @@ SCANNER_NOTES: dict[str, str] = {
         "Despite that, at matched <span class=\"mono\">high</span> reasoning effort it scores well "
         "above plain Sol on both languages (Python F3 80.0 vs 77.8, TS/JS F3 79.2 vs 72.1, Overall "
         "79.5 vs 74.7) and on a same-repo pilot the gap was starker still (F3 88.3 vs 57.1). Whatever "
-        "the Daybreak instructions change, it changes scanning behavior substantially. All 74 "
+        "the Daybreak instructions change, it changes scanning behavior substantially. OpenAI's "
+        "official Daybreak pricing card lists this alias at the identical rate as gpt-5.6-sol "
+        "($4.00/$20.00 per 1M input/output, short context), which is what the cost figure here uses -- "
+        "computed from Codex's reported token usage, not billed spend, same convention as Sol. All 74 "
         "TypeScript / JS repositories were scanned on 2026-09-04 with the TS/JS prompt (hash "
         '<span class="mono">sha256:45a1200d61e6</span>); all 66 Python repositories were scanned '
-        "on 2026-09-05 with the standard prompt. All 140 runs validated first time. No public "
-        "pricing is listed for this Daybreak alias, so cost is shown as unpriced (—) rather than "
-        "estimated."
+        "on 2026-09-05 with the standard prompt. All 140 runs validated first time."
     ),
     "deepseek-v4-pro-agentic-v1": (
         "<strong>Full coverage.</strong> The Python results are the 2.1.0 runs, "
