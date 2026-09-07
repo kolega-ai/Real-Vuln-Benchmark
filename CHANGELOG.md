@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Documentation
+- Dataset page and `compute_loc.py` document why TS/JS LOC (607,252) runs well
+  ahead of Python's (133,782) at a similar repo count: LOC is counted per
+  repo's declared language, and a Django/Flask app's HTML templates/static
+  assets are real frontend code that is not `.py` and so is not counted,
+  while a Next.js/Vue app's frontend is itself `.tsx`/`.vue` and is.
+
 ## [3.0.0] - 2026-09-02
 
 ### Added

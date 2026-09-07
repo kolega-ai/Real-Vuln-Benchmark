@@ -44,6 +44,12 @@ SKIP_DIRS = {
 }
 
 # language (GT `language`) -> source extensions counted
+# Counted per repo's declared `language`, not its actual tech stack: a Django/
+# Flask app's HTML templates and static assets are real frontend code but are
+# not `.py`, so they are not counted, while a Next.js/Vue app's frontend is
+# itself .tsx/.vue and is fully counted. This is why TS/JS totals run well
+# ahead of Python's at a similar repo count -- an asymmetry in what counts as
+# "code" per language, not a difference in how much frontend each corpus has.
 LANG_EXTS = {
     "python": (".py",),
     "typescript": (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue"),
