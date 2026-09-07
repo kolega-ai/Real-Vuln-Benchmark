@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 from datetime import date
@@ -25,6 +26,42 @@ from scorer.matcher import is_non_scoring
 ROOT = Path(__file__).resolve().parent
 SITE_SRC = ROOT / "site"
 REPORTS = ROOT / "reports"
+
+
+def _load_dotenv_flag(name: str) -> str | None:
+    """Read NAME from the process env, falling back to a plain KEY=VALUE
+    line in .env (no python-dotenv dependency, no env-var clobbering)."""
+    if name in os.environ:
+        return os.environ[name]
+    env_file = ROOT / ".env"
+    if not env_file.exists():
+        return None
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if line.startswith(f"{name}="):
+            return line.split("=", 1)[1].strip()
+    return None
+
+
+# Feature flags: default OFF, opt in via env var or .env. Each flag maps to
+# the id of a `hidden` element in the site templates whose `hidden` attribute
+# is stripped at build time when the flag is on.
+FEATURE_FLAGS = {
+    "SHOW_SEVERITY_FILTERS": "sev-filter",
+}
+
+
+def apply_feature_flags(html: str) -> str:
+    for env_name, elem_id in FEATURE_FLAGS.items():
+        if (_load_dotenv_flag(env_name) or "").strip().upper() != "TRUE":
+            continue
+        html = re.sub(
+            r'(<[^>]*\bid="' + re.escape(elem_id) + r'"[^>]*)\bhidden\b\s*',
+            r"\1",
+            html,
+            count=1,
+        )
+    return html
 
 # Google Analytics 4 measurement ID for realvuln.com. Injected into every page's
 # <head> at build time (see inject_analytics) so the tag lives in one place
@@ -1354,6 +1391,7 @@ def main() -> None:
             text = inject_analytics(text)
             text = inject_canonical(text, src.name)
             text = bust(text)
+            text = apply_feature_flags(text)
             dst.write_text(text)
         else:
             shutil.copy2(src, dst)
