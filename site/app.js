@@ -22,6 +22,8 @@
   var state = { metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1 };
 
   var METRIC_LABEL = { f2: 'F2', f3: 'F3' };
+  var EFFORT_ORDER = { minimal: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5, ultra: 6 };
+  function EFFORT_RANK(e) { return e in EFFORT_ORDER ? EFFORT_ORDER[e] : -1; }
   function mk(base) { return state.mode === 'strict' ? base + 's' : base; }   // metric/recall key for mode
   function val(s, base) { return s[mk(base)]; }
 
@@ -114,6 +116,7 @@
       if (!a.partial !== !b.partial) return a.partial ? 1 : -1;
       if (k === 'name') return dir * a.name.localeCompare(b.name);
       if (k === 'fp') return dir * ((a.fp || 0) - (b.fp || 0));
+      if (k === 'effort') return dir * (EFFORT_RANK(a.effort) - EFFORT_RANK(b.effort));
       if (k === 'repos') return dir * (a.repos - b.repos);
       if (k === 'cost') { var ac = a.cost == null ? -1 : a.cost, bc = b.cost == null ? -1 : b.cost; return dir * (ac - bc); }
       if (k === 'fn') return dir * (effFn(a) - effFn(b));
@@ -147,6 +150,7 @@
         (langCols() ? ['python', 'tsjs'].map(function (lk) { var v = langF(s, lk); return '<td class="lang-col">' + (v == null ? '<span class="dim">—</span>' : fmt(v)) + '</td>'; }).join('') : '') +
         '<td title="real vulnerabilities missed (false negatives)' + (sevAllOn() ? '' : ' — filtered to selected severities') + '">' + effFn(s) + (sevFilterVisible() ? ' <span class="dim">of ' + effTotal(s) + '</span>' : '') + '</td>' +
         '<td title="findings that did not match a real vulnerability (false positives)">' + (s.fp || 0) + '</td>' +
+        '<td class="dim">' + (s.effort ? s.effort : '<span class="dim">—</span>') + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/' + REPO_TOTAL + '</span></td>' +
         '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + (s.cost < 10 ? s.cost.toFixed(2) : s.cost.toFixed(0))) + '</td>';
       tbody.appendChild(tr);

@@ -274,6 +274,7 @@ def compute_scanner_metadata(
         "input_tokens": [], "output_tokens": [], "total_tokens": [],
         "wall_clock_seconds": [], "json_repairs": 0, "total_runs": 0,
         "exit_status_counts": defaultdict(int),
+        "reasoning_effort_counts": defaultdict(int),
     })
 
     for repo_dir in scan_dir.iterdir():
@@ -300,6 +301,9 @@ def compute_scanner_metadata(
                     s["total_runs"] += 1
                     status = d.get("exit_status", "unknown")
                     s["exit_status_counts"][status] += 1
+                    effort = d.get("reasoning_effort", "")
+                    if effort:
+                        s["reasoning_effort_counts"][effort] += 1
                 except (json.JSONDecodeError, OSError):
                     pass
 
@@ -310,11 +314,17 @@ def compute_scanner_metadata(
             result[scanner] = {"has_metrics": False}
             continue
         n = s["total_runs"]
+        effort_counts = s["reasoning_effort_counts"]
+        # mode across runs -- a scanner's effort should be one fixed setting
+        # for the whole campaign; a split vote usually means a handful of
+        # early runs predate the field being recorded, not a real mix.
+        effort = max(effort_counts, key=effort_counts.get) if effort_counts else None
         result[scanner] = {
             "has_metrics": True,
             "model": s["model"],
             "prompt_version": s["prompt_version"],
             "prompt_label": s["prompt_label"],
+            "reasoning_effort": effort,
             "avg_input_tokens": int(round(statistics.mean(s["input_tokens"]))),
             "avg_output_tokens": int(round(statistics.mean(s["output_tokens"]))),
             "avg_total_tokens": int(round(statistics.mean(s["total_tokens"]))),
@@ -2123,6 +2133,7 @@ def main() -> int:
         tab_costs = compute_scanner_costs(scan_dir, scanners, repo_loc, set(tab_repos[key]))
         for scanner, a in agg.items():
             a["cost"] = tab_costs.get(scanner, {})
+            a["metadata"] = scanner_metadata.get(scanner, {"has_metrics": False})
         _project_fable_cost(agg)
 
     _project_fable_cost(aggregates)

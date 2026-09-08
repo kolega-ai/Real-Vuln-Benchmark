@@ -610,6 +610,10 @@ def scanners_from_aggregates(
                     for sev, d in (a.get("per_severity") or {}).items()
                 },
                 "prec": round3(micro["precision"]),
+                # effort: reasoning/thinking effort level the scanner ran at
+                # (high/medium/low/...), where the underlying model exposes one;
+                # None for scanners with no such dial (rule-based, fixed models).
+                "effort": (a.get("metadata") or {}).get("reasoning_effort"),
                 # cost: per-100k-LOC spend; 0 = Free, null = no published price, else fixed/metered $
                 "cost": cost_val,
                 # cpv: cost per 100 vulnerabilities found (TP); 0 = Free, null = n/a
@@ -1012,6 +1016,7 @@ def emit_data_js(
         "fn",
         "sev",
         "prec",
+        "effort",
         "cost",
         "cpv",
         "est",
