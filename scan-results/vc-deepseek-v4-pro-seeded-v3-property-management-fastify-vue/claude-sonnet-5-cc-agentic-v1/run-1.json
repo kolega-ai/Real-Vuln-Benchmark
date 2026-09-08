@@ -1,0 +1,358 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection-pandoc-format",
+      "path": "backend/src/services/packet.service.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderLeasePacket() builds a shell command with execSync(`pandoc ${markdownPath} -o ${outputPath} --to=${outputFormat}`) where outputFormat is never validated. It is called from GET /api/export/lease-packet/:id (backend/src/routes/import-export.ts:242) with outputFormat taken directly from the x-packet-format request header. An attacker can send a header like 'pdf --to=pdf; touch /tmp/pwned #' or use shell metacharacters to execute arbitrary OS commands. Contrast with renderInspectionSummary() in the same file, which whitelists outputFormat against ALLOWED_SUMMARY_FORMATS before building the same command.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-imagemagick-scale",
+      "path": "backend/src/routes/units.ts",
+      "start": {
+        "line": 193,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 218,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportUnitFloorplanAtScale() builds `const cmd = \\`convert ${sourcePath} -resize ${scalePreset} ${outputPath}\\`` from the unvalidated :scalePreset URL param and runs it with spawn('bash', ['-c', cmd], { shell: true }). Any authenticated user can inject shell metacharacters via the scalePreset path segment (e.g. `200x200; rm -rf /`) to execute arbitrary OS commands. The sibling function printUnitFloorplanAtScale() on line 225 fixes this by resolving scalePreset against a fixed ALLOWED_FLOORPLAN_SCALES map and invoking spawn() with an argument array and shell:false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-staff-directory-search",
+      "path": "backend/src/services/directory.service.ts",
+      "start": {
+        "line": 49,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 52,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectory() builds an LDAP filter as `(cn=*${searchTerm}*)` with no escaping of LDAP special characters, then passes it to directoryClient.search(). It is reachable from GET /api/admin/staff-directory?q= (backend/src/routes/admin.ts:285-299, findColleaguesInDirectory), which passes the raw query-string value straight through. An attacker-controlled q value containing '*)(|(objectClass=*' or similar can alter the filter's logic (LDAP injection), potentially widening the search or bypassing intended filtering. The sibling function findStaffByCorporateEmail() in the same file correctly escapes user input via escapeLdapFilterValue() before building its filter.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.webhook-test-delivery",
+      "path": "backend/src/services/webhook.service.ts",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "runWebhookTestDelivery() performs a server-side fetch(url) where url is the fully attacker-controlled webhook URL a user registered via POST /api/webhooks (backend/src/routes/webhooks.ts:30-64, no host/IP validation). Triggering POST /api/webhooks/:id/test-delivery (webhooks.ts:87-105) makes the backend issue an HTTP request to any URL the caller chooses, including internal/private addresses (e.g. cloud metadata endpoints, internal services). Setting the x-integration-trace: 1 header additionally leaks the raw error message and stack trace (including the fetched URL) back to the caller, aiding SSRF exploitation/reconnaissance.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.listing-media-feed-sync",
+      "path": "backend/src/routes/properties.ts",
+      "start": {
+        "line": 259,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 282,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "syncListingMediaFromSyndicationFeed() takes an arbitrary feedUrl from the x-listing-feed-url request header and passes it directly to fetch(feedUrl) with no host validation, then returns up to 5000 chars of the response body to the caller. An authenticated property_admin/property_manager can use this to make the server issue requests to internal/private network endpoints and read back the response (SSRF with response reflection). The sibling function syncListingMediaFromVerifiedFeed() (line 288) fixes this by parsing the URL's hostname and checking it against an APPROVED_SYNDICATION_HOSTS allowlist before fetching.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal-branch-mirror",
+      "path": "backend/src/services/file.service.ts",
+      "start": {
+        "line": 63,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 76,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "mirrorDocumentToBranch() joins the attacker-controlled branchCode directly into a filesystem path: `path.join(path.resolve(ARCHIVE_DIR), branchCode)`, with no sanitization. It is called from POST /api/lease-documents/:id/branch-mirror (backend/src/routes/lease-documents.ts:153-184) with branchCode taken verbatim from the x-branch-code request header. A value like '../../../../etc' (or an absolute path) lets an authenticated property_admin/property_manager write the mirrored lease document file outside the intended archive directory. The sibling function mirrorPhotoToCategory() in the same file fixes this by reducing categoryLabel to `path.basename(categoryLabel)` before use.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-handlebars-ssti",
+      "path": "backend/src/services/notification.service.ts",
+      "start": {
+        "line": 34,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 41,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderCustomOfficeNotice() calls Handlebars.compile(officeTemplateBody) where officeTemplateBody is a fully attacker-supplied string from the request body of POST /api/notifications/office-notice/custom (backend/src/routes/notifications.ts:116-135, sendCustomOfficeNotice). Compiling and executing an untrusted Handlebars template is a server-side template injection: Handlebars templates can invoke arbitrary helpers and access object internals (e.g. via `{{#with}}`/`lookup` and constructor-chain gadgets), which is a well-known vector for property/prototype access and, in vulnerable Handlebars configurations, remote code execution. The sibling function renderStandardOfficeNotice() only ever compiles the fixed STANDARD_NOTICE_TEMPLATE and merely interpolates untrusted data as template variables.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.header-injection.csv-export-content-disposition",
+      "path": "backend/src/routes/import-export.ts",
+      "start": {
+        "line": 303,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 331,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportTicketsBatch() interpolates the raw batchLabel query parameter directly into the Content-Disposition response header: `attachment; filename=\"tickets-${label}\"`. Because batchLabel is never sanitized, a value containing CR/LF or other header-breaking characters can inject additional response headers or split the response (HTTP response header/splitting injection). The sibling function exportInspectionsBatch() (line 338) fixes this by stripping CR/LF and restricting the label to `[a-zA-Z0-9_-]` before using it in the header.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.missing-httponly-secure-attributes",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 273,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 278,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "handoffFrontDeskShift() issues the deskctx session-context cookie with `Set-Cookie: deskctx=${contextId}; Path=/` \u2014 no HttpOnly, Secure, or SameSite attributes. This cookie is a bearer credential for the frontDeskContexts map, so it is readable by any script on the page (XSS-exfiltrable) and can be sent over plain HTTP or in cross-site requests. The sibling handler handoffLobbyKioskShift() (line 326) sets the equivalent deskctx cookie with `HttpOnly; SameSite=Strict` and conditionally `Secure`, and pairFrontDeskTerminal() (line 352) has the same missing-attributes issue as this handler.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.missing-httponly-secure-attributes",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 249,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 251,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "grantDashboardReviewContext() sets the reviewContext session-context cookie with `Set-Cookie: reviewContext=${contextToken}; Path=/` \u2014 no HttpOnly, Secure, or SameSite flags, making the bearer token readable via client-side script and transmissible over plain HTTP. The sibling handler grantAuditReviewContext() (line 270) sets the equivalent auditContext cookie with `HttpOnly; Secure; SameSite=Strict`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.transport.cleartext-credentials-in-query-string",
+      "path": "backend/src/services/portal-sync.service.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "linkLegacyBillingAccount() sends the tenant's legacy-portal username and password as plaintext query-string parameters over an unencrypted `http://` connection: `fetch(\\`http://${LEGACY_BILLING_HOST}/api/link?user=...&pass=...&tenantId=...\\`)`. This exposes credentials to network eavesdroppers and to any logging (access logs, proxies, browser history equivalents) that records request URLs. It is reachable from POST /api/tenants/:id/legacy-billing-link (backend/src/routes/tenants.ts:176-199). The sibling function linkVendorPortalAccount() in the same file uses `https://` and sends credentials via a Basic Authorization header instead of the URL.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-319: Cleartext Transmission of Sensitive Information",
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.prototype-pollution-preferences-merge",
+      "path": "backend/src/routes/notifications.ts",
+      "start": {
+        "line": 96,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 109,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "registerNotificationDeliveryPreferences() merges the raw request body directly onto a stored object with `Object.assign(existing, request.body as Record<string, unknown>)`. Because request.body is attacker-controlled JSON, a payload containing an own `__proto__` key (e.g. `{\"__proto__\":{\"polluted\":true}}`) will be copied via Object.assign's [[Set]] semantics and reassign the prototype of the `existing` preferences object, and if `existing`'s prototype chain is later trusted for property lookups it can lead to unexpected behavior. No allowlist of accepted preference keys is applied before the merge.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.non-expiring-field-access-grant",
+      "path": "backend/src/routes/tickets.ts",
+      "start": {
+        "line": 457,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 481,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "grantVendorFieldAccess() (and the dispatchGrant issued in suggestTicketResponse() at line 435) signs a field-access JWT with `request.server.jwt.sign({ ticketId: id, vendorContactId, scope: 'field-access' })` and no `expiresIn` option, so the grant never expires and remains a valid bearer credential for that ticket indefinitely. The sibling function grantInspectorFieldAccess() (line 487-514) issues an equivalent field-access grant with `{ expiresIn: '30m' }`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfiguration.dev-cors-clickjacking-relaxation",
+      "path": "backend/src/routes/payments.ts",
+      "start": {
+        "line": 192,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 211,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "servePartnerPaymentWidget() removes X-Frame-Options, sets Content-Security-Policy to the literal string 'none' (which is not a valid CSP directive and effectively disables framing protection), and reflects the request's Origin header verbatim into Access-Control-Allow-Origin whenever NODE_ENV !== 'production'. This is reachable with no authentication (no preHandler on this route) and relies solely on an environment-variable check to disable protections, which is a fragile guard (e.g. a misconfigured or missing NODE_ENV in a non-prod-labeled deployment) that reopens clickjacking/cross-origin embedding for the payment widget.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

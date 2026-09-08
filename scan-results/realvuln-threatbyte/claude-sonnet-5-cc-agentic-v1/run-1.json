@@ -1,0 +1,311 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.flask.security.privilege-escalation-role-mass-assignment",
+      "path": "server/routes.py",
+      "start": {
+        "line": 187,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 196,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "In update_profile(), the 'role' and 'permissions' fields are taken directly from request.form and written to the users table with no check that the current session user is an admin (contrast with the API's /update-profile endpoint, which does gate these fields on role == 'admin'). Any authenticated user can POST role=admin&permissions=all to /update_profile and self-escalate to administrator, then abuse admin-gated functionality (e.g. api_v1 update-profile sensitive fields).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.injection.sql-injection-fstring",
+      "path": "server/routes.py",
+      "start": {
+        "line": 137,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 137,
+        "col": 110,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 'search' query parameter (request.args.get('search', '')) is interpolated directly into a SQL string via an f-string and executed with cursor.execute(s_query) instead of using parameter binding. An attacker can inject SQL via /dashboard?search=' UNION SELECT ... -- to read arbitrary data from the database (e.g. other users' password hashes).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.audit.unrestricted-file-upload-path-traversal",
+      "path": "server/routes.py",
+      "start": {
+        "line": 262,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 264,
+        "col": 35,
+        "offset": 0
+      },
+      "extra": {
+        "message": "In upload_file(), the attacker-controlled file.filename is used unsanitized (no werkzeug secure_filename(), no extension/content-type allow-list) as the target path via os.path.join(UPLOAD_FOLDER, filename) then file.save(filepath). A filename such as '../../server/routes.py' or an absolute path can escape UPLOAD_FOLDER and overwrite arbitrary files, and any file type (e.g. .py, .html, .js) can be uploaded and later served from /uploads/<filename>, enabling stored XSS or further compromise.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal",
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.audit.missing-authorization-delete-user",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 223,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 238,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "UserDelete.delete() has its @token_required authentication decorator commented out (lines 221-222), leaving DELETE /api/v1/delete-user/<user_id> completely unauthenticated and unauthorized. Any anonymous caller can delete any user account by ID (confirmed by the endpoint's own docstring describing it as a Broken Function Level Authorization vulnerability).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.audit.idor-unauthenticated-profile-read",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 152,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 170,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "UserProfile.get() has its @token_required decorator commented out and takes an arbitrary user_id query argument, returning username, email, country, role, and permissions for that user with no authentication or ownership check. Any unauthenticated caller can enumerate user_id values via GET /api/v1/profile?user_id=N to dump every user's PII and role/permissions (IDOR).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.audit.ssrf-fetch-arbitrary-url",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 249,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 254,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "ProfilePicture.post() takes 'picture_url' directly from the JSON body and passes it to requests.get(picture_url) with no scheme/host allow-list or block-list for private/link-local ranges. An attacker can supply URLs like http://169.254.169.254/latest/meta-data/ or http://localhost:<internal-port>/ to make the server fetch internal resources (SSRF), and the response body is written to disk and served back, enabling internal network reconnaissance/exfiltration.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.audit.missing-authentication-update-picture",
+      "path": "server/api/v1/api_v1.py",
+      "start": {
+        "line": 243,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 250,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "ProfilePicture.post() takes a 'username' field straight from the request body with no authentication/session check and no verification that the caller owns that account, so any anonymous caller can overwrite any other user's profile picture (and, combined with the SSRF sink, force the server to write attacker-chosen fetched content to disk for an arbitrary user).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.audit.hardcoded-secret-key",
+      "path": "server/config.py",
+      "start": {
+        "line": 7,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 7,
+        "col": 42,
+        "offset": 0
+      },
+      "extra": {
+        "message": "SECRET_KEY is a hardcoded, low-entropy string used both to sign Flask session cookies (server/__init__.py loads Config into app.config) and to sign/verify JWTs in api_v1.py (jwt.encode/jwt.decode with Config.SECRET_KEY). Since the key is fixed in source and never overridden from environment/secret storage, anyone with source access can forge valid session cookies or JWTs for any user (e.g. set session data with role=admin), fully bypassing authentication.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.audit.session-cookie-httponly-false",
+      "path": "server/config.py",
+      "start": {
+        "line": 6,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 6,
+        "col": 38,
+        "offset": 0
+      },
+      "extra": {
+        "message": "SESSION_COOKIE_HTTPONLY is explicitly set to False and is applied to the session cookie in run.py (app.config['SESSION_COOKIE_HTTPONLY'] = Config.SESSION_COOKIE_HTTPONLY). This makes the session cookie readable via document.cookie from JavaScript, so any XSS on the site (e.g. via the unrestricted file upload sink) can be used to steal session cookies directly.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.audit.debug-mode-enabled",
+      "path": "server/config.py",
+      "start": {
+        "line": 5,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 5,
+        "col": 17,
+        "offset": 0
+      },
+      "extra": {
+        "message": "DEBUG = True is used by run.py (debug_mode = Config.DEBUG; app.run(debug=debug_mode)) to launch the app with Flask/Werkzeug's interactive debugger enabled. If this configuration reaches a deployed instance, any unhandled exception exposes the Werkzeug debugger console, which allows arbitrary Python code execution by anyone who can reach the error page.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-215: Insertion of Sensitive Information Into Debugging Code",
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.audit.weak-password-hash-md5",
+      "path": "server/routes.py",
+      "start": {
+        "line": 403,
+        "col": 12,
+        "offset": 0
+      },
+      "end": {
+        "line": 403,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "custom_hash() hashes passwords with unsalted MD5 (hashlib.md5), which is fast to brute-force/rainbow-table and provides no salting. Passwords stored this way (see db/create_dummy_data.py and the signup/login flows that call custom_hash) are trivially recoverable if the users table is ever disclosed (e.g. via the SQL injection at routes.py:137).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.audit.missing-authentication-profile-pictures",
+      "path": "server/routes.py",
+      "start": {
+        "line": 307,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 309,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Unlike every other file-serving route in this module (/uploads/<filename>, /download/<filename>), profile_pictures() performs no 'username' in session check and no ownership check before calling send_from_directory, so any unauthenticated client can enumerate and view any user's uploaded profile picture by guessing/incrementing the numeric filename.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

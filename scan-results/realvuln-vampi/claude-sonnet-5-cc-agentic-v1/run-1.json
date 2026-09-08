@@ -1,0 +1,309 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.security.injection.sql-injection-raw-query",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 72,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 73,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "User.get_user() builds a raw SQL query by directly interpolating the `username` parameter into an f-string (`f\"SELECT * FROM users WHERE username = '{username}'\"`) which is then executed via db.session.execute(text(user_query)). The username originates from the URL path parameter in the /users/<username> endpoint (api_views/users.py get_by_username) with no sanitization or parameterization, allowing full SQL injection (e.g. UNION-based data exfiltration or auth bypass via crafted username like `' OR '1'='1`).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.broken-object-level-authorization",
+      "path": "api_views/books.py",
+      "start": {
+        "line": 50,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 58,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "In get_by_title(), when the vuln flag is enabled, the book lookup uses only the book_title supplied in the URL and does not verify that the requesting user (resp['sub']) owns the book. Any authenticated user can retrieve any other user's book, including the sensitive `secret_content` field, by guessing/enumerating book titles \u2014 a classic Broken Object Level Authorization / IDOR flaw.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.broken-function-level-authorization-password-update",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 186,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 192,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "update_password() takes the target `username` from the URL path rather than from the authenticated user's token subject when the vuln flag is enabled. Any authenticated user can supply any other user's username and overwrite their password (user = User.query.filter_by(username=username).first(); user.password = request_data.get('password')), leading to full account takeover of arbitrary accounts.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.mass-assignment-privilege-escalation",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 60,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 66,
+        "col": 71,
+        "offset": 0
+      },
+      "extra": {
+        "message": "register_user() honors an `admin` field supplied directly in the client's JSON registration body when the vuln flag is enabled (`if vuln and 'admin' in request_data: ... admin = True`). Any unauthenticated user registering a new account can set admin=True on themselves, achieving privilege escalation to administrator with no authorization check.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.missing-authentication-debug-endpoint",
+      "path": "api_views/main.py",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 27,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The debug() endpoint returns User.get_all_users_debug() with no authentication or authorization check at all. get_all_users_debug() (models/user_model.py:66-67) calls User.json_debug() which serializes every user's plaintext `password` and `admin` flag (models/user_model.py:58-59). Any unauthenticated caller can dump all users' plaintext credentials.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.plaintext-password-storage",
+      "path": "models/user_model.py",
+      "start": {
+        "line": 15,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 65,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `password` column stores user passwords as plain strings with no hashing (bcrypt/argon2/etc). register_user() (line 84-89) writes the raw password directly, and login_user() (api_views/users.py:93) compares it with a plaintext equality check `request_data.get('password') == user.password`. Any database compromise or the debug endpoint (see separate finding) exposes all user passwords in cleartext.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.hardcoded-weak-jwt-secret",
+      "path": "config.py",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 49,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The Flask SECRET_KEY used to sign/verify JWT auth tokens (models/user_model.py encode_auth_token/decode_auth_token, algorithm HS256) is hardcoded to the trivially guessable literal string 'random'. Anyone who knows or guesses this key can forge valid auth tokens for any username, including 'admin', completely bypassing authentication.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.audit.debug-mode-enabled",
+      "path": "app.py",
+      "start": {
+        "line": 17,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The Flask application is started with debug=True. If reached in a deployed setting, Flask's debugger exposes an interactive Werkzeug console on unhandled exceptions, allowing arbitrary Python code execution by anyone who can trigger an error.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code",
+            "CWE-215: Insertion of Sensitive Information Into Debugging Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.missing-authentication-user-listing",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 25,
+        "offset": 0
+      },
+      "extra": {
+        "message": "get_all_users() returns usernames and emails for every user in the system with no call to token_validator or any other authentication/authorization check, allowing unauthenticated enumeration of all accounts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.missing-authentication-user-lookup",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 45,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 49,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "get_by_username() performs no authentication check before returning user details for the requested username, allowing any unauthenticated caller to look up arbitrary user records (and, combined with the SQL injection in User.get_user, to exploit that injection without any credentials).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.audit.user-enumeration-login",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 101,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 106,
+        "col": 82,
+        "offset": 0
+      },
+      "extra": {
+        "message": "login_user() returns distinguishable error messages ('Password is not correct for the given username.' vs 'Username does not exist') when the vuln flag is enabled. This observable discrepancy allows an attacker to enumerate valid usernames by observing which error message is returned, aiding credential-stuffing/brute-force attacks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-203: Observable Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.dos.regex-denial-of-service",
+      "path": "api_views/users.py",
+      "start": {
+        "line": 143,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 146,
+        "col": 46,
+        "offset": 0
+      },
+      "extra": {
+        "message": "update_email() matches user-supplied email input against the pattern r\"^([0-9a-zA-Z]([-.\\w]*[0-9a-zA-Z])*@{1}([0-9a-zA-Z][-\\w]*[0-9a-zA-Z]\\.)+[a-zA-Z]{2,9})$\" using re.search. The nested quantifier `([-.\\w]*[0-9a-zA-Z])*` is vulnerable to catastrophic backtracking: a crafted email value (e.g. many repeated non-matching characters before an unmatched terminator) can cause exponential-time evaluation, exhausting CPU and causing a denial of service.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1333: Inefficient Regular Expression Complexity",
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

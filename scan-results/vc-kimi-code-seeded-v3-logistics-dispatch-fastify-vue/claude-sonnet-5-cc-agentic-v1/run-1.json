@@ -1,0 +1,810 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.code-injection-new-function",
+      "path": "backend/src/routes/service-types.ts",
+      "start": {
+        "line": 85,
+        "col": 15,
+        "offset": 0
+      },
+      "end": {
+        "line": 86,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "estimateServiceSurchargeCustom builds a `new Function('context', 'return ' + formula)` where `formula` comes directly from the `?formula=` query string. Any authenticated user (no role check) can supply an arbitrary JS expression, e.g. `constructor.constructor('return process')().mainModule.require('child_process').execSync(...)`, achieving remote code execution. The route `estimateServiceSurchargeStandard` (line 96) shows the intended safe fix using an allowlisted formula map.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-shell-spawn",
+      "path": "backend/src/routes/export.ts",
+      "start": {
+        "line": 23,
+        "col": 15,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderRouteSummaryDocument builds a shell command string using the unsanitized `template` query parameter and executes it with `spawn(cmd, { shell: true })`. An attacker can inject shell metacharacters (e.g. `?template=x; rm -rf / #`) to execute arbitrary OS commands.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-raw-interpolation",
+      "path": "backend/src/routes/incidents.ts",
+      "start": {
+        "line": 63,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 66,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getIncidentTrendBreakdown interpolates the `groupBy` and `keyword` query parameters directly into a raw SQL string executed via `db.execute(sql.raw(...))`. Both fields are attacker controlled with no escaping, allowing classic SQL injection (e.g. `keyword=' OR 1=1; DROP TABLE incidents;--`). The sibling `getIncidentSeverityBreakdown` shows the safe parameterized/identifier-escaped version.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xxe.external-entity-file-read",
+      "path": "backend/src/services/carrierManifest.ts",
+      "start": {
+        "line": 54,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 72,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "parseAcknowledgmentXml manually parses `<!ENTITY name SYSTEM \"path\">` declarations from carrier-supplied XML and reads the referenced path from disk with `fs.readFileSync`, then substitutes it into the document. Since `recordCarrierAcknowledgment` (routes.ts:133-143) lets any ops_admin/dispatcher store arbitrary `rawXml`, and `getCarrierAcknowledgmentSummary` (routes.ts:145-151) later calls this vulnerable parser, an attacker can read arbitrary files on the server via a crafted XXE payload. `parseAcknowledgmentXmlSafely` is the fixed twin that rejects DOCTYPE/ENTITY.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-body-override",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 209,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 212,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchJobsForCustomerPortal builds filter criteria as `{ customerId: customer.id, ...request.body }`. Because the spread of `request.body` comes after the enforced `customerId`, a customer can send a body containing `customerId` to override their own scoping and query/enumerate jobs belonging to other customers. The route `searchJobsForVerifiedCustomerPortal` is the fixed twin that hardcodes `eq(jobs.customerId, customer.id)`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-intake-form",
+      "path": "backend/src/routes/customers.ts",
+      "start": {
+        "line": 211,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 213,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyCustomerIntakeForm merges the raw request body over the full customer record with `Object.assign({}, customer, request.body)` and writes the result back to the database. A customer can include fields like `accountTier`, `userId`, or `bankAccountNumber` in the body to escalate their own account tier or reassign/hijack the customer record's linked user account. `submitVerifiedCustomerIntakeForm` is the fixed twin using a restrictive zod schema.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-cookie-draft",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 253,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 256,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resumeWorkerOnboardingDraft reads an attacker-settable `onboarding_draft` cookie, JSON.parses it with no schema validation, and writes it directly onto the worker record via `Object.assign({}, draft)`. Since `workers` includes sensitive columns like `terminalPasscodeHash`, a crafted cookie can overwrite the field used to authenticate shared-terminal logins (see auth.ts claimSharedTerminalSession), enabling account takeover. `resumeVerifiedWorkerOnboardingDraft` is the fixed twin that validates the draft against `onboardingDraftSchema`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.template-name",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 52,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 56,
+        "col": 62,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateJobPaperwork joins the unsanitized `templateName` (set via setJobPaperworkTemplate, which only requires a non-empty string) into `path.join(jobPaperworkDir, templateName)` with no containment check, allowing path traversal (e.g. `templateName=../../../../etc/passwd`) to read arbitrary files, which are then returned as HTML. `generateJobPaperworkSecure` is the fixed twin that resolves and validates the path stays under `baseDir`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.report-type-query",
+      "path": "backend/src/routes/proof-uploads.ts",
+      "start": {
+        "line": 78,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 80,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "retrieveJobCompletionCertificate builds `path.join(jobFolder, reportType)` from the unsanitized `reportType` query parameter and streams the resulting file back to the caller, allowing path traversal to read arbitrary files (e.g. `?reportType=../../../../etc/passwd`). `retrieveJobCompletionCertificateSecure` is the fixed twin that resolves the path and verifies it stays under `jobFolder`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.certification-filename",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 24,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 66,
+        "offset": 0
+      },
+      "extra": {
+        "message": "fetchWorkerCertificationRecord joins the raw `fileName` route parameter into `path.join(certificationsDir, fileName)` without sanitization, allowing path traversal to read arbitrary files on disk. `fetchWorkerCertificationRecordSecure` is the fixed twin that applies `path.basename(fileName)` first.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.report-label-archive",
+      "path": "backend/src/routes/export.ts",
+      "start": {
+        "line": 122,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 130,
+        "col": 47,
+        "offset": 0
+      },
+      "extra": {
+        "message": "archiveJobsReport takes `reportLabel` from the request body and writes to `path.join(archiveDir, \\`${reportLabel}.csv\\`)` with no sanitization, allowing path traversal to overwrite arbitrary files on the server (e.g. `reportLabel=../../etc/cron.d/evil`). `archiveIncidentsReport` shows the safe pattern using `path.basename(rawLabel)`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.upload.arbitrary-filename-branding-asset",
+      "path": "backend/src/routes/customers.ts",
+      "start": {
+        "line": 29,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 62,
+        "offset": 0
+      },
+      "extra": {
+        "message": "uploadCustomerBrandingAsset writes an uploaded file to `path.join(brandingDir, \\`${id}-${data.filename}\\`)` using the client-supplied filename verbatim, with no MIME-type or size restrictions and no path sanitization, allowing path traversal (e.g. a filename of `../../../server/index.js`) and unrestricted file upload into a publicly served static directory (`/branding/`). `uploadCustomerBrandingAssetValidated` is the fixed twin using a random UUID filename, MIME allowlist, and size cap.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal",
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.cookie-controlled-fetch",
+      "path": "backend/src/routes/proof-uploads.ts",
+      "start": {
+        "line": 37,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 71,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importProofFromDataSource reads a fully attacker-controllable `preferred_doc_source` cookie value and passes it directly to `fetch()` with no hostname allowlist or validation, unlike the equivalent flow in incidents.ts (importIncidentEvidenceFromSource) which validates the hostname against ALLOWED_EVIDENCE_HOSTS. This allows server-side request forgery against internal/private network endpoints.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.unauthenticated-endpoint",
+      "path": "backend/src/routes/routes.ts",
+      "start": {
+        "line": 90,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 109,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyCarrierStopStatusUpdate is registered with no `preHandler` (routes.ts:218 `fastify.post('/:id/carrier-stop-update', {}, ...)`), so it requires no authentication at all, and authorizes the write purely from the client-supplied `x-carrier-role` header and a `body.access` boolean the caller also controls. Any unauthenticated attacker can send `x-carrier-role: dispatcher` with `{\"access\":true}` to modify route stop ordering.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.header-based-authorization",
+      "path": "backend/src/routes/regions.ts",
+      "start": {
+        "line": 108,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 122,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "evaluateCarrierEscalationRequest is registered without any authentication preHandler (regions.ts:149) and grants `escalationGranted: true` if the client-supplied `x-escalation-role` header equals `ops_admin`, entirely bypassing real role/session checks. Any unauthenticated caller can spoof this header to obtain escalation. `evaluateCarrierEscalationRequestSecure` still uses the same flawed header-trust pattern but at least validates header types; the underlying design flaw of trusting a client header for authorization remains in the vulnerable variant used here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.jwt-signature-not-verified",
+      "path": "backend/src/services/carrierAuthority.ts",
+      "start": {
+        "line": 35,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 45,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readManifestAuthorityClaims decodes the token's header/payload and returns the claims without ever checking the signature segment against the expected HMAC, and also accepts `alg: none` tokens. It is used by applyManifestAuthorityStopUpdate (routes.ts:173-190) to authorize job status changes, so any caller can forge an arbitrary `x-manifest-authority` token (e.g. base64url-encode `{\"alg\":\"none\"}` and any `{routeId, scope}` payload with an empty signature) to update job statuses without real authorization. `verifyManifestAuthorityClaims` / applyVerifiedManifestAuthorityStopUpdate is the fixed twin using `timingSafeEqual` HMAC verification.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection-header",
+      "path": "backend/src/routes/routes.ts",
+      "start": {
+        "line": 72,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 74,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "lookupManifestShipments builds an XPath-like query by interpolating the unsanitized `x-manifest-status` request header directly into `manifest.find(\\`status=\"${statusFilter}\"\\`)`, which is implemented as a regex match in carrierManifest.ts. An attacker can inject regex/XPath metacharacters to alter the query logic or extract data outside the intended field. `lookupManifestShipmentsForAudit` is the fixed twin using `escapeXPathString`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection-query",
+      "path": "backend/src/routes/tracking.ts",
+      "start": {
+        "line": 116,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 119,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchShipmentServiceNotes interpolates the unsanitized `title` query parameter directly into `index.find(\\`<title>${title}\\`)`, which is implemented as a regex search over the XML index in serviceDocsIndex.ts. An attacker-supplied `title` containing regex/XPath metacharacters can alter the match logic. `searchShipmentServiceNotesSecure` is the fixed twin using `escapeXPathLiteral`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-header",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 64,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 65,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectory builds an LDAP filter by interpolating the unsanitized `x-search-term` request header directly into `(&(cn=*${term}*)(department=Dispatch))`. An attacker can inject LDAP filter metacharacters (e.g. `*)(department=*))(|(cn=*`) to bypass the department restriction or alter search semantics. `queryEmployeeDirectoryByEmail` is the fixed twin using `escapeLdapFilter`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.script-context-interpolation",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 147,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 153,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderJobPrintTicket interpolates `job.notes` (free-text, user-settable via the job notes field) directly into a `<script>` block without any escaping, allowing stored XSS by breaking out of the JS string literal (e.g. notes containing `\"; alert(document.cookie); //`). Compare to the analogous `renderIncidentPrintTicket` in incidents.ts which HTML-escapes the equivalent field before embedding it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-authentication",
+      "path": "backend/src/routes/regions.ts",
+      "start": {
+        "line": 144,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 144,
+        "col": 78,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `/:id/capacity-summary` route is registered with an empty options object (`{}`), so `getRegionCapacitySummary` runs with no authentication preHandler, exposing worker rosters and active job counts for any region to unauthenticated callers. The near-identical `getRegionCoverageReport` requires authentication plus a role check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.spoofable-role-header",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 293,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 298,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyDeviceGeofenceOverride authorizes a privileged worker-availability override based on the client-supplied `x-fleet-role` header equal to `ops_admin`, rather than `request.user.role`. Any authenticated user of any role can spoof this header (combined with an even-numbered deviceId, since checkDeviceEntitlement is a stub returning `deviceId % 2 === 0`) to perform an admin-only action. `applyDeviceGeofenceOverrideVerified` has the same fundamental flaw pattern but at least uses strict `===` checks; the underlying trust of a client header for role authorization is not remediated by type-strictness alone.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.credentialed-cors-misconfiguration",
+      "path": "backend/src/index.ts",
+      "start": {
+        "line": 36,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 36,
+        "col": 63,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The global CORS policy is configured with `origin: true, credentials: true`, which makes @fastify/cors reflect the request's `Origin` header back in `Access-Control-Allow-Origin` while allowing credentials. Combined with cookie-based sessions, this lets any external website make authenticated cross-origin requests on behalf of a logged-in victim and read the JSON responses via `fetch(..., {credentials: 'include'})`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.clickjacking-cors-widget",
+      "path": "backend/src/routes/tracking.ts",
+      "start": {
+        "line": 22,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getEmbeddableTrackingWidget reflects any request `Origin` into `Access-Control-Allow-Origin` and removes the `X-Frame-Options: DENY` protection whenever the job's customer has a `companyName` set, with no allowlist check on the origin itself. This lets any third-party site embed or fetch the tracking widget for arbitrary jobs. `getTrackingStatusCard` is the fixed twin validating the origin against `embedPartners`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.redirect.open-redirect-cookie",
+      "path": "backend/src/routes/tracking.ts",
+      "start": {
+        "line": 80,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 87,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "completeRescheduleHandoff redirects to whatever URL is stored in the `redirect_target` cookie with no validation against an allowlist, unlike `completeCheckInHandoff` which validates the equivalent `flow_id` cookie against `ALLOWED_RESCHEDULE_RETURN_PATHS` and a fixed origin. If an attacker can influence this cookie (e.g. via a sibling endpoint, subdomain, or non-HttpOnly client script), visiting this endpoint results in an open redirect to an attacker-controlled site.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.prototype-pollution.object-assign-merge",
+      "path": "backend/src/routes/webhooks.ts",
+      "start": {
+        "line": 17,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 34,
+        "offset": 0
+      },
+      "extra": {
+        "message": "registerWebhookDeliveryConfig merges the raw request body directly into a stored config object with `Object.assign(config, request.body)` with no key filtering, so a body containing a `__proto__` key can alter the prototype chain of the in-memory `config` object. `registerWebhookDeliveryConfigSafely` is the fixed twin that strips `__proto__`/`constructor`/`prototype` keys via `sanitizeDeliveryConfigInput`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.padding-oracle-distinct-error",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 133,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 140,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "acceptDirectDepositConfirmationSlip decrypts an attacker-supplied ciphertext with AES-256-CBC and returns a distinct error message (\"Confirmation slip padding is invalid\") specifically when a 'bad decrypt' (PKCS#7 padding failure) occurs, versus a generic error for any other failure. This observable difference enables a classic CBC padding-oracle attack to decrypt or forge ciphertexts without knowing the key. The GCM-based `acceptDirectDepositAcknowledgmentSlip` avoids this because AEAD failures don't leak padding-specific information.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-203: Observable Discrepancy",
+            "CWE-696: Incorrect Behavior Order"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.missing-secure-flags-terminal-device",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 24,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "claimSharedTerminalSession sets the `terminal_device` cookie without `Secure`, `HttpOnly`, or `SameSite` attributes, making it readable/writable by client-side script and transmittable over plain HTTP, unlike `resumeTerminalSessionAfterHandoff` which sets the equivalent cookie with `Secure; HttpOnly; SameSite=Strict`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie Without 'Secure' Attribute"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.missing-secure-flags-companion-session",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 229,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 229,
+        "col": 92,
+        "offset": 0
+      },
+      "extra": {
+        "message": "issueMobileCompanionSession sets the `companion_session` cookie, which functions as a session token, without `Secure`, `HttpOnly`, or `SameSite` attributes, exposing it to theft via XSS or network interception.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie Without 'Secure' Attribute"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.insecure-randomness-activation-code",
+      "path": "backend/src/routes/customers.ts",
+      "start": {
+        "line": 139,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 139,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "sendPortalActivationCode generates the 6-digit portal activation code using `Math.random()`, which is not cryptographically secure and can be predicted or brute-forced more easily than a CSPRNG-derived value. `sendVerifiedPortalActivationCode` is the fixed twin using `crypto.randomInt`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak PRNG"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-disclosure.stack-trace-spoofable-header",
+      "path": "backend/src/routes/regions.ts",
+      "start": {
+        "line": 69,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 74,
+        "col": 8,
+        "offset": 0
+      },
+      "extra": {
+        "message": "reconcileCarrierRateDiscrepancy returns the raw error message and stack trace to the client whenever the request includes an `x-support-console` header, but this header is never validated against any real support-session mechanism \u2014 any external caller can set it to trigger disclosure of internal error details (file paths, stack frames, internal query info).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.client-trusted-account-tier",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 177,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 181,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "requestPriorityDispatchUpgrade upgrades a job to 'urgent' priority based solely on a client-supplied `accountTier` field in the request body, never checking the actual customer's stored account tier. Any caller can self-declare `accountTier: \"premium\"` to obtain a paid feature for free. `requestVerifiedPriorityDispatchUpgrade` is the fixed twin that looks up `customer.accountTier` from the database.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

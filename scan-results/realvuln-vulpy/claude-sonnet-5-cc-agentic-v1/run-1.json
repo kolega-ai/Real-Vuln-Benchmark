@@ -1,0 +1,539 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.security.auth.forgeable-session-cookie",
+      "path": "bad/libsession.py",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The session cookie 'vulpy_session' is created as plain base64(JSON) with no signature, HMAC, or encryption (create()) and load() only base64-decodes it back. Any client can forge a cookie such as base64('{\"username\":\"admin\"}') to authenticate as any user, since g.session (used throughout mod_posts.py, mod_mfa.py, mod_user.py) is populated straight from this untrusted, unauthenticated cookie value. This is a full authentication bypass / privilege escalation.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-345: Insufficient Verification of Data Authenticity"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.empty-password-bypass",
+      "path": "bad/libapi.py",
+      "start": {
+        "line": 10,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "keygen() only calls libuser.login() to verify credentials when `password` is truthy. Flask's key_schema (mod_api.py) merely requires the 'password' field to be a string, it does not forbid an empty string. Sending POST /api/key with {\"username\":\"admin\",\"password\":\"\"} makes the `if password:` check False, skipping authentication entirely and returning a valid API key for the requested username with no credential check.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.glob-wildcard-key-bypass",
+      "path": "bad/libapi.py",
+      "start": {
+        "line": 33,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 34,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The X-APIKEY header value is concatenated unsanitized into a filesystem glob pattern: Path('/tmp/').glob('vulpy.apikey.*.' + key). Since key is attacker-controlled and glob metacharacters ('*', '?', '[...]') are not escaped, an attacker can send a header like 'X-APIKEY: *' to match any existing API key file in /tmp and be authenticated as the first matching user, bypassing the need to know a real key.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.sql-injection-login",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 12,
+        "col": 12,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 120,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The login() query builds SQL with str.format() directly from the user-supplied `username` and `password` parameters (from the /user/login form) with no parameterization, allowing SQL injection, e.g. username = \"' OR '1'='1' --\" to bypass authentication or exfiltrate data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.sql-injection-create",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 25,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 120,
+        "offset": 0
+      },
+      "extra": {
+        "message": "create() builds the INSERT statement with %-string formatting of the user-supplied `username`/`password` (from /user/create) with no parameterization, allowing SQL injection during account registration.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.sql-injection-password-change",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 53,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 53,
+        "col": 100,
+        "offset": 0
+      },
+      "extra": {
+        "message": "password_change() builds the UPDATE statement with str.format() from the user-supplied `password` and `username`, with no parameterization, allowing SQL injection through the /user/chpasswd flow.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.stored-xss-post-text",
+      "path": "bad/templates/posts.view.html",
+      "start": {
+        "line": 23,
+        "col": 20,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "post.text is rendered with the Jinja2 `| safe` filter, disabling autoescaping. post.text originates from the untrusted `text` form field in mod_posts.py do_create() and is stored verbatim in the database, so any user can submit a post containing `<script>` and have it executed in the browser of every visitor viewing that user's posts (stored XSS).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.deserial.sensitive-data-in-logs",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 8,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "conn.set_trace_callback(print) causes every SQL statement executed on this connection to be printed, including the login() query that embeds the plaintext username and password directly in the SQL text (line 12). This writes user credentials in cleartext to stdout/application logs.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.plaintext-password-storage",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "create() inserts the user-supplied password directly into the `password` column with no hashing (contrast with db_init.py which uses pbkdf2_sha256 for seed users). Any account registered via /user/create stores its password in plaintext in db_users.sqlite, and login() later compares it as plaintext too.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.weak-prng-api-key",
+      "path": "bad/libapi.py",
+      "start": {
+        "line": 14,
+        "col": 11,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 65,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The API key is derived from random.getrandbits(), which uses the Mersenne Twister PRNG (not cryptographically secure). An attacker who observes enough output or can influence timing may predict future key values. Security-sensitive tokens should use secrets.token_hex/os.urandom.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.file.insecure-tmp-key-storage",
+      "path": "bad/libapi.py",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "API keys are persisted as empty files named /tmp/vulpy.apikey.<username>.<key> in the world-writable, shared /tmp directory with default permissions. On a multi-user system any local user can list /tmp to enumerate valid API keys for every username, or race-create colliding filenames.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-377: Insecure Temporary File",
+            "CWE-552: Files or Directories Accessible to External Parties"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.csrf.mfa-disable-via-get",
+      "path": "bad/mod_mfa.py",
+      "start": {
+        "line": 57,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 64,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "/mfa/disable performs a state-changing action (disabling two-factor authentication for g.session['username']) on a GET request with no CSRF token. A malicious page can trigger this with a simple <img src=\"/mfa/disable\"> against a logged-in victim, silently stripping their 2FA protection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.password-change-no-current-password",
+      "path": "bad/mod_user.py",
+      "start": {
+        "line": 64,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 83,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "/user/chpasswd changes g.session['username']'s password after only checking that the two new-password fields match; it never verifies the user's current password, and the form carries no CSRF token. Combined with the forgeable session cookie, or via plain CSRF, an attacker can change any victim's password.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-620: Unverified Password Change",
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.misconfig.flask-debug-enabled",
+      "path": "bad/vulpy.py",
+      "start": {
+        "line": 55,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 55,
+        "col": 75,
+        "offset": 0
+      },
+      "extra": {
+        "message": "app.run(debug=True, ...) enables the Werkzeug interactive debugger and reloader on the running application. If reached (e.g. via an unhandled exception), the debugger console allows arbitrary Python code execution and leaks source/environment details in stack traces.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.misconfig.flask-debug-and-key-in-tmp",
+      "path": "bad/vulpy-ssl.py",
+      "start": {
+        "line": 29,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "app.run(debug=True, ...) enables the Werkzeug debugger (CWE-489, same risk as vulpy.py). Additionally the TLS private key is loaded from /tmp/acme.key, a world-writable shared directory, where other local users could read or replace the private key.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code",
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.secrets.hardcoded-flask-secret-key",
+      "path": "bad/vulpy.py",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Flask's SECRET_KEY is hardcoded to the weak, guessable value 'aaaaaaa' (identically in bad/vulpy-ssl.py:13). Any Flask-signed data (flash messages, the built-in `session` object used in mod_user.py) can be forged by anyone who knows this key.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.secrets.hardcoded-default-credentials",
+      "path": "bad/db_init.py",
+      "start": {
+        "line": 9,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Default user accounts are seeded with hardcoded, weak, plaintext credentials (admin/SuperSecret, elliot/123123123, tim/12345678). If deployed as-is these well-known credentials grant immediate account access, including the 'admin' account.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-521: Weak Password Requirements"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.no-account-lockout",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The users table has a 'failures' column (see db_init.py) evidently intended to track failed login attempts, but login() never reads or increments it, and no lockout/rate-limit is enforced anywhere in mod_user.py's /user/login handler. This permits unlimited online password-guessing attempts (as demonstrated by bad/brute.py).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.no-password-complexity",
+      "path": "bad/libuser.py",
+      "start": {
+        "line": 59,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 60,
+        "col": 15,
+        "offset": 0
+      },
+      "extra": {
+        "message": "password_complexity() unconditionally returns True, so /user/chpasswd (mod_user.py) enforces no password strength requirements whatsoever, permitting trivially weak passwords.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-521: Weak Password Requirements"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.secrets.hardcoded-fernet-key",
+      "path": "good/libsession.py",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The Fernet symmetric encryption key used to protect session cookie contents is hardcoded directly in source. Anyone with source access can decrypt or forge session cookies for any user.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.secrets.hardcoded-jwt-secret",
+      "path": "good/libapi.py",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 35,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The JWT HS256 signing secret is hardcoded in source. Anyone with source access can forge arbitrary API tokens for any username, since keygen()/authenticate() both trust tokens signed with this fixed, non-rotatable secret.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

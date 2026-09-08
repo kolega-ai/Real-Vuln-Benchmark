@@ -185,6 +185,7 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
     "gpt-6-astra-codex-cli": ("GPT-6 Astra", "llm", "codex-cli"),
     "gpt-5.6-sol-codex-cli": ("GPT-5.6 Sol", "llm", "codex-cli"),
     "gpt-daybreak-blue-codex-cli": ("Daybreak Blue", "llm", "codex-cli"),
+    "claude-sonnet-5-cc-agentic-v1": ("Sonnet 5", "llm", "Claude Code"),
     "glm-5.2-agentic-v1": ("GLM-5.2", "llm", "agentic-v1"),
     "glm-5.1-agentic-v1": ("GLM-5.1", "llm", "agentic-v1"),
     "glm-5-agentic-v1": ("GLM-5", "llm", "agentic-v1"),
@@ -235,6 +236,7 @@ SCANNER_URLS: dict[str, str] = {
     "gpt-6-astra-codex-cli": "https://openai.com/index/gpt-6-astra/",
     "gpt-5.6-sol-codex-cli": "https://openai.com/",
     "gpt-daybreak-blue-codex-cli": "https://developers.openai.com/api/docs/models/gpt-daybreak-blue-latest",
+    "claude-sonnet-5-cc-agentic-v1": "https://claude.com/claude-code",
     "glm-5.2-agentic-v1": "https://docs.z.ai/guides/llm/glm-5.2",
     "glm-5.1-agentic-v1": "https://docs.z.ai/guides/llm/glm-5.1",
     "glm-5-agentic-v1": "https://docs.z.ai/guides/llm/glm-5",
@@ -283,6 +285,7 @@ SCANNER_PROVIDERS: dict[str, str] = {
     "gpt-6-astra-codex-cli": "OpenAI",
     "gpt-5.6-sol-codex-cli": "OpenAI",
     "gpt-daybreak-blue-codex-cli": "OpenAI",
+    "claude-sonnet-5-cc-agentic-v1": "Anthropic",
     "glm-5.2-agentic-v1": "Z.ai",
     "glm-5.1-agentic-v1": "Z.ai",
     "glm-5-agentic-v1": "Z.ai",
@@ -352,17 +355,25 @@ SCANNER_NOTES: dict[str, str] = {
         "RTX PRO 6000, standard agentic-v1 harness. Cost $0 (self-hosted)."
     ),
     "gpt-6-astra-codex-cli": (
-        "<strong>Full coverage (139/140).</strong> GPT-6 Astra, OpenAI's newest flagship "
+        "<strong>Full coverage (140/140).</strong> GPT-6 Astra, OpenAI's newest flagship "
         "(\"our most capable model for complex, demanding work\"), run through the Codex "
         "CLI at <span class=\"mono\">high</span> reasoning effort, the same setting used for "
-        "Sol and Daybreak Blue. F3 49.4 on Python (66/66), 53.5 on TypeScript / JS (73/74, "
-        "one validation failure), Overall 51.7 \u2014 well below GPT-5.6 Sol (74.7) and "
+        "Sol and Daybreak Blue. F3 49.4 on Python (66/66), 53.5 on TypeScript / JS (74/74), "
+        "Overall 51.7 \u2014 well below GPT-5.6 Sol (74.7) and "
         "Daybreak Blue (79.5) at the identical effort level and prompt. OpenAI's newest and "
         "most expensive model in this benchmark (2.5\u00d7 Sol's price) is not its strongest: "
         "it lands fourth, behind two models built on an older, cheaper base. The TypeScript / "
-        "JS run was interrupted twice by the Codex/ChatGPT subscription's usage limit and "
-        "resumed after each reset; every repository not still failing validation is now "
-        "scored at the same effort as Python."
+        "JS run was interrupted twice by the Codex/ChatGPT subscription's usage limit and once "
+        "by one repository's validation failure; every repository is now scored at the same "
+        "effort as Python."
+    ),
+    "claude-sonnet-5-cc-agentic-v1": (
+        "<strong>Full coverage (140/140).</strong> Claude Sonnet 5 run through the Claude Code "
+        "CLI headless (<span class=\"mono\">claude -p</span>) at <span class=\"mono\">high</span> "
+        "effort, Edit/Write/NotebookEdit disallowed so the agent can only read and report. F3 52.8 "
+        "on Python (66/66), 35.3 on TypeScript / JS (74/74), Overall 43.3. Cost $130.67 across the "
+        "corpus ($0.93/repo). Two runs were interrupted by the Claude Code subscription's session "
+        "limit and resumed after each reset."
     ),
     "gpt-5.6-sol-codex-cli": (
         "<strong>Full coverage; subscription-metered.</strong> Runs through the Codex CLI "

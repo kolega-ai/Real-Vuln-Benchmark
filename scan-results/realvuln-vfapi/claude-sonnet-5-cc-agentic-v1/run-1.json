@@ -1,0 +1,207 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.security.injection.sql-injection-select-username",
+      "path": "main.py",
+      "start": {
+        "line": 182,
+        "col": 31,
+        "offset": 5800
+      },
+      "end": {
+        "line": 182,
+        "col": 87,
+        "offset": 5856
+      },
+      "extra": {
+        "message": "The `username` query parameter from GET /select is interpolated directly into a SQL string via an f-string and passed to `run_sql_query`/`cursor.execute()` with no parameterization or escaping. An attacker can supply e.g. `\" OR \"1\"=\"1` to dump all users, or use UNION-based/stacked-query payloads to exfiltrate password hashes and other data from the SQLite database.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.sql-injection-put-user",
+      "path": "main.py",
+      "start": {
+        "line": 188,
+        "col": 5,
+        "offset": 5900
+      },
+      "end": {
+        "line": 204,
+        "col": 4,
+        "offset": 6300
+      },
+      "extra": {
+        "message": "In PUT /user, the request body fields `user.name`, `user.username`, `user.address`, `user.email`, and `user.contact` are interpolated directly into an INSERT SQL string via f-string formatting and executed with `run_sql_query(query, commit=True)` with no parameterization. A value like `\", \"x\", \"x\", \"x\", \"x\", \"x\"); DROP TABLE users;--` in any of these fields breaks out of the string literal and injects arbitrary SQL.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.nosql-injection-find-post",
+      "path": "main.py",
+      "start": {
+        "line": 222,
+        "col": 1,
+        "offset": 6900
+      },
+      "end": {
+        "line": 225,
+        "col": 34,
+        "offset": 7050
+      },
+      "extra": {
+        "message": "POST /find reads an arbitrary JSON object from the request body (`await request.json()`) and passes it unvalidated as a MongoDB-style query filter to `get_nosql_users()`, which calls `db_client.vfapi.users.find(query)`. Because the entire filter is attacker-controlled, an attacker can use query operators (e.g. `{\"password\": {\"$regex\": \"^5f4\"}}`, `{\"password\": {\"$ne\": null}}`) to perform blind NoSQL injection and enumerate/extract user records \u2014 including password hashes \u2014 field-by-field, or use operators like `$where` to alter query logic. The response only strips `password`/`_id` from the returned document after the match is made, so match/no-match behavior alone leaks data character-by-character.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic (NoSQL Injection)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.sql-injection-delete-username",
+      "path": "main.py",
+      "start": {
+        "line": 231,
+        "col": 9,
+        "offset": 7300
+      },
+      "end": {
+        "line": 231,
+        "col": 94,
+        "offset": 7390
+      },
+      "extra": {
+        "message": "The `username` query parameter from DELETE /user is interpolated directly into a `DELETE FROM users WHERE username = \"{username}\"` SQL string with no parameterization, allowing SQL injection (e.g. deleting all rows via `\" OR \"1\"=\"1`).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.sql-injection-delete-address",
+      "path": "main.py",
+      "start": {
+        "line": 235,
+        "col": 9,
+        "offset": 7450
+      },
+      "end": {
+        "line": 235,
+        "col": 92,
+        "offset": 7540
+      },
+      "extra": {
+        "message": "In DELETE /user, `user.address` from the request body is interpolated unquoted and unsanitized into `DELETE FROM users WHERE address = {user.address}`, allowing SQL injection through the address field of the User model.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authz.missing-auth-reset-endpoint",
+      "path": "main.py",
+      "start": {
+        "line": 242,
+        "col": 1,
+        "offset": 7600
+      },
+      "end": {
+        "line": 247,
+        "col": 26,
+        "offset": 7750
+      },
+      "extra": {
+        "message": "POST /reset has no authentication or authorization check. Any unauthenticated remote user can trigger `remove(f'{DB_FILENAME}.sql.db')` and `rmtree(f'{DB_FILENAME}.nosql.db')`, permanently destroying all stored user data (SQL and NoSQL stores) and forcing regeneration with fresh fake data. This is a critical function exposed with no access control, enabling trivial denial of service / data destruction.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authz.missing-authz-delete-user",
+      "path": "main.py",
+      "start": {
+        "line": 227,
+        "col": 1,
+        "offset": 6600
+      },
+      "end": {
+        "line": 236,
+        "col": 26,
+        "offset": 6850
+      },
+      "extra": {
+        "message": "DELETE /user allows any unauthenticated caller to delete any user account by supplying an arbitrary `username` (or `user.address`) with no ownership check, session validation, or authorization of any kind \u2014 a full IDOR/missing-authorization vulnerability enabling mass account deletion.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.weak-hash-md5-password",
+      "path": "main.py",
+      "start": {
+        "line": 187,
+        "col": 5,
+        "offset": 5300
+      },
+      "end": {
+        "line": 187,
+        "col": 61,
+        "offset": 5356
+      },
+      "extra": {
+        "message": "User passwords submitted to PUT /user are hashed with MD5 (`md5(user.password.encode()).hexdigest()`) before storage. MD5 is cryptographically broken and unsalted, making stored password hashes trivially crackable via rainbow tables or brute force if the database is ever exposed (e.g. via the SQL/NoSQL injection findings above).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

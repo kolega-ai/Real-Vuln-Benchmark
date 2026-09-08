@@ -1,0 +1,309 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.ssrf-arbitrary-url-fetch",
+      "path": "app/routes/documents.$id.tsx",
+      "start": {
+        "line": 17,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importExternalDocumentVersion(documentUrl) calls fetch(documentUrl) with a URL taken directly from the attacker-controlled 'x-dms-content-url' request header (see action() at line 214: `const documentUrl = request.headers.get(\"x-dms-content-url\")`, then `buffer = await importExternalDocumentVersion(documentUrl)` at line 229) with no allowlist or scheme/host validation. A staff-role user can point this at internal services or cloud metadata endpoints (e.g. http://169.254.169.254/...) and the fetched content is stored as a document version, making it retrievable afterward. Contrast with clients.$id.tsx's syncClientLogoFromUrl, which validates the hostname against an explicit allowlist before fetching \u2014 that check is missing here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.os-command-injection-shell-interpolation",
+      "path": "app/routes/admin.export.tsx",
+      "start": {
+        "line": 58,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 73,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "packageExportBundle(csvContent, reportType) builds a shell command string by directly interpolating `reportType` and runs it with `spawn(cmd, [], { shell: true })` (line 65: `spawn(\\`tar czf ${archivePath} -C ${workDir} export.csv --transform s|export.csv|${reportType}.csv|\\`, [], { shell: true })`). `reportType` comes from the unsanitized form field `reportType` submitted via the 'exportMattersBundle' intent (action(), line 256: `const reportType = ((formData.get(\"reportType\") as string) || \"matters\").trim();`), so a firm_admin-role attacker can inject shell metacharacters (e.g. `; rm -rf / #` or `$(...)`) to execute arbitrary OS commands on the server. The sibling function packageRetentionExportBundle validates reportType against an allowlist and uses `spawn(\"tar\", [...], { shell: false })`, showing the safe pattern that this path fails to follow.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.server-side-template-injection-handlebars",
+      "path": "app/routes/documents.$id.print.tsx",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderPrintLetterhead(layout, document) calls `Handlebars.compile(layout)` where `layout` is the raw, attacker-controlled `layout` query-string parameter (loader(), line 52: `const customLayout = url.searchParams.get(\"layout\")`, compiled at line 53-61). Handlebars templates support helpers and, depending on version/registered helpers, can be abused for server-side template injection leading to code execution or, at minimum, arbitrary HTML injection. The compiled output is then rendered client-side via `dangerouslySetInnerHTML={{ __html: letterhead }}` (component, line 72), so even absent full SSTI this is a straightforward stored/reflected XSS vector \u2014 any authenticated user who can view a document can trigger arbitrary HTML/script execution in another viewer's browser by sharing a crafted `?layout=` URL.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection",
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.mass-assignment-privilege-escalation",
+      "path": "app/routes/profile.tsx",
+      "start": {
+        "line": 42,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyPreferencesPayload(userId, rawJson) parses a client-supplied JSON blob and passes the result directly as the `data` object to `db.user.update({ where: { id: userId }, data: preferences })` with no field allowlist. The 'updatePreferences' intent (action(), lines 55-63) reaches this with `preferencesJson` taken verbatim from the POST body. Although the UI only ever sends `{name: user.name}` (line 243), an attacker can submit `preferencesJson` containing arbitrary User model fields such as `role`, `isActive`, `email`, or `passwordHash` for their own account (self-service update, `where: { id: userId }` uses the caller's own id), enabling full privilege escalation to firm_admin. Compare to workspace.server.ts's applyWidgetPreferenceEdits, which allowlists specific keys before merging \u2014 that pattern is missing here for a live Prisma model update.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-unescaped-filter",
+      "path": "app/lib/directory.server.ts",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffByEmail(searchTerm) builds the LDAP filter `(mail=${searchTerm})` by direct string interpolation with no escaping of LDAP special characters, then passes it to `client.search(BASE_DN, { filter }, ...)`. The value flows from user input: clients.new.tsx's runDirectoryConflictCheck (line 79) takes the raw `directoryTerm` form field from the 'checkDirectoryConflict' intent (line 130: `const directoryTerm = ((formData.get(\"directoryTerm\") as string) || \"\").trim();`) and passes it straight through to searchStaffByEmail (line 85), letting an authenticated paralegal/attorney inject LDAP filter metacharacters (e.g. `*)(uid=*))(|(mail=*`) to alter query logic and enumerate or bypass directory search restrictions. The sibling function verifyGroupAccess in the same file correctly escapes both interpolated values via escapeLdapFilterValue() (line 42) \u2014 that sanitization is missing here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.idor-document-version-not-scoped-to-document",
+      "path": "app/routes/documents.$id.download.tsx",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 39,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The loader checks access with `canAccessDocument(user.id, id)` against the `id` route param (line 16), but when a `versionId` query parameter is supplied it fetches that version directly by its own id (`db.documentVersion.findUnique({ where: { id: versionId }, ... })`, lines 27-32) without verifying `version.documentId === id` or re-checking access against the version's actual parent document. A user who has legitimate access to any one document can enumerate `versionId` values belonging to other documents/matters (including privileged or highly-confidential ones they cannot otherwise access) and download their file content, bypassing the authorization check entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.access-control-bypass-via-unsigned-cookie",
+      "path": "app/lib/permissions.server.ts",
+      "start": {
+        "line": 179,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 193,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveDocumentViewScope(request, documentId, userId) reads the raw `viewAccess` cookie directly off the request (`request.headers.get(\"Cookie\")`, unsigned, not part of the app's signed session) and, if its value is the literal string `\"firm-wide\"`, returns `true` unconditionally \u2014 completely bypassing the real `canAccessDocument` authorization check. Because this cookie is never set/signed by the server for this purpose (unlike the app's `__session` cookie, which uses `createCookieSessionStorage` with a secret), any client can simply set `Cookie: viewAccess=firm-wide` on a request to view any document's privileged content via documents.$id.print.tsx (loader, line 34: `const canView = await resolveDocumentViewScope(request, id, user.id)`), regardless of their actual matter/document access.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization",
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.redirect.open-redirect-header-controlled",
+      "path": "app/routes/co-counsel.$matterId.tsx",
+      "start": {
+        "line": 52,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 55,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The action() handler takes the `x-return-url` request header verbatim and redirects to it with no validation of scheme or origin: `const returnTo = request.headers.get(\"x-return-url\"); if (returnTo) { throw redirect(returnTo); }`. Any value supplied in that header \u2014 including a fully-qualified external URL \u2014 is honored, allowing an attacker to craft a request that redirects an authenticated co-counsel session to an arbitrary phishing destination. Contrast with messages.tsx's resolveTrustedReturnDestination, which parses the destination and rejects any URL whose origin doesn't match `process.env.APP_ORIGIN` before redirecting \u2014 that allowlist check is absent here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site (Open Redirect)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.unsanitized-upload-filename",
+      "path": "app/lib/upload.server.ts",
+      "start": {
+        "line": 44,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 60,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "saveUploadedFile builds the on-disk filename as `${uuidv4()}-${file.name}` (line 49) and writes it with `path.join(dir, uniqueName)` (line 50) without stripping path separators or `..` sequences from `file.name`. `file.name` comes from the multipart upload's client-supplied filename field, which is fully attacker-controllable independent of any `<input type=file>` client-side restriction (e.g. via a raw multipart POST). A crafted filename such as `../../../../etc/cron.d/evil` (or an absolute path) can cause `path.join` to resolve outside the intended matter upload directory, allowing a staff-role user to write files to arbitrary locations on the server (invoked from matters.$id.tsx's 'uploadDocument' intent, line 235, and documents.$id.tsx's 'uploadNewVersion' intent, line 169).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.cookie-controlled-view-label",
+      "path": "app/lib/workspace.server.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "persistMatterViewSnapshot(viewLabel, payload) and readMatterViewSnapshot(viewLabel) build a file path as `path.join(dir, \\`${viewLabel}.json\\`)` with no sanitization of `viewLabel` (contrast with the neighboring persistTaskDraftNote, which explicitly applies `path.basename(noteLabel)` first). `viewLabel` originates from the client-controlled `matterViewLabel` cookie read in matters.$id.tsx's 'saveViewLayout' action handler (lines 161-165: `const cookieMatch = cookieHeader.match(/matterViewLabel=([^;]+)/); const viewLabel = cookieMatch ? decodeURIComponent(cookieMatch[1]) : \"default\"; persistMatterViewSnapshot(viewLabel, layoutJson);`). An attacker who controls this cookie value can supply a traversal sequence (e.g. `../../../../tmp/evil`) to write or read arbitrary JSON files outside the intended `data/view-cache` directory.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.missing-httponly-secure-samesite",
+      "path": "app/lib/collab.server.ts",
+      "start": {
+        "line": 72,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 84,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "createCoCounselAccessToken issues the `collab_ctx` cookie as `\\`collab_ctx=${encodeURIComponent(token)}; Path=/; Max-Age=${60 * 60 * 24 * 365}\\`` with no `HttpOnly`, `Secure`, or `SameSite` attributes, and the token is valid for a full year with no expiry check in validateCoCounselAccessToken. This cookie carries a bearer-style credential granting external co-counsel access to a matter; without `HttpOnly` it is readable by any script (XSS anywhere on the origin can exfiltrate it), and without `Secure`/`SameSite` it can be sent over plaintext HTTP or leaked via cross-site requests. Contrast with createClientPortalFeedToken in the same file, which sets `HttpOnly; Secure; SameSite=Strict` on its equivalent cookie \u2014 that hardening is missing here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-leak.error-detail-gated-on-client-header",
+      "path": "app/routes/admin.retention.tsx",
+      "start": {
+        "line": 49,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 62,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildComplianceReport(request) reveals the raw exception message and stack trace whenever the request carries an `x-app-context` header (`const appContext = request.headers.get(\"x-app-context\"); if (appContext) { return { ok: false as const, error: err?.message, stack: err?.stack }; }`), rather than gating verbose diagnostics on a trusted server-side signal (e.g. NODE_ENV, as buildBillingSummary in admin.export.tsx correctly does). Any caller of this admin action can trigger the verbose branch simply by setting that header, potentially leaking internal file paths, query fragments, or other implementation details useful for further attacks.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

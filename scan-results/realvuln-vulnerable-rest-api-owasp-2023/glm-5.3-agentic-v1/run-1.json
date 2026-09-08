@@ -1,0 +1,1004 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.jwt.algorithm-confusion",
+      "path": "server/middleware/auth.js",
+      "start": {
+        "line": 10,
+        "col": 25,
+        "offset": 341
+      },
+      "end": {
+        "line": 10,
+        "col": 105,
+        "offset": 421
+      },
+      "extra": {
+        "message": "jwt.verify() accepts both 'RS256' and 'HS256' algorithms while using the RSA public key as the verification key. The public key is publicly downloadable from GET /api/system/key, so an attacker can forge a valid token by signing it with HS256 using the public key as the HMAC secret (algorithm confusion), bypassing authentication and impersonating any user including admins.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.hardcoded-private-key",
+      "path": "server/cert/private_key.key",
+      "start": {
+        "line": 1,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1,
+        "col": 32,
+        "offset": 31
+      },
+      "extra": {
+        "message": "The RSA private key used to sign JWT authentication tokens (read at runtime in server/models/user.js:37 and server/routes/adminAuth.js:19) is committed to the repository. Anyone with repository access can mint validly RS256-signed admin tokens, completely bypassing authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key",
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.mass-assignment",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 33,
+        "col": 5,
+        "offset": 1178
+      },
+      "end": {
+        "line": 33,
+        "col": 31,
+        "offset": 1204
+      },
+      "extra": {
+        "message": "The unauthenticated registration endpoint constructs the user document directly from the request body via 'new User(req.body)' with no field allowlist. The User schema includes a 'role' field (enum ADMIN/USER) and 'credit', so a client can POST {\"role\":\"ADMIN\"} to register a privileged admin account (mass assignment privilege escalation).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.unvalidated-url",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 51,
+        "col": 5,
+        "offset": 1629
+      },
+      "end": {
+        "line": 51,
+        "col": 38,
+        "offset": 1662
+      },
+      "extra": {
+        "message": "PUT /api/users/:id makes the server fetch a URL taken directly from the request body (needle('get', req.body.url)) with no validation or allowlisting, and the response body is reflected back to the caller in the 'domain' field (line 66). This is a full-read SSRF allowing access to internal-only services and cloud metadata endpoints.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.idor-user-update",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 48,
+        "col": 5,
+        "offset": 1552
+      },
+      "end": {
+        "line": 48,
+        "col": 57,
+        "offset": 1604
+      },
+      "extra": {
+        "message": "PUT /api/users/:id looks up and updates the account identified by the user-controlled :id parameter with no ownership or admin authorization check, so any authenticated user can modify any other user's name, email and website. It also sets a new password from req.body.newPass (line 56) without ever verifying req.body.currentPass, enabling full account takeover of arbitrary users.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.missing-admin-authorization-user-delete",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 111,
+        "col": 1,
+        "offset": 3536
+      },
+      "end": {
+        "line": 111,
+        "col": 66,
+        "offset": 3601
+      },
+      "extra": {
+        "message": "DELETE /api/users/:id is protected only by the 'auth' middleware \u2014 the server performs no admin/role check, so any authenticated user can delete arbitrary user accounts (including administrators). The admin-only restriction exists only in the React client (users.jsx), which is trivially bypassed by calling the API directly.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.nosql-injection-me",
+      "path": "server/routes/me.js",
+      "start": {
+        "line": 10,
+        "col": 9,
+        "offset": 300
+      },
+      "end": {
+        "line": 10,
+        "col": 85,
+        "offset": 376
+      },
+      "extra": {
+        "message": "The 'id' query parameter is decoded and passed through JSON.parse() then used unsanitized as the _id filter of User.findOne(). A request such as GET /api/me?id={\"$ne\":null} injects MongoDB query operators, returning arbitrary users' full documents (including password hashes) to any authenticated user.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Used in a Database Query ('NoSQL Injection')",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-random-otp",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 74,
+        "col": 5,
+        "offset": 2375
+      },
+      "end": {
+        "line": 74,
+        "col": 66,
+        "offset": 2436
+      },
+      "extra": {
+        "message": "The password-reset token is generated with Math.random() (not a cryptographically secure RNG) and is only 4 digits (1000-9999). Combined with the absence of any attempt limiting on POST /api/users/verify, the token is trivially brute-forceable, enabling account takeover of any user whose username is known.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)",
+            "CWE-330: Use of Insufficiently Random Values"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.missing-rate-limit-otp-verify",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 93,
+        "col": 1,
+        "offset": 2885
+      },
+      "end": {
+        "line": 93,
+        "col": 41,
+        "offset": 2925
+      },
+      "extra": {
+        "message": "POST /api/users/verify compares a 4-digit reset token (line 97) with no rate limiting, lockout, or attempt counter. An attacker can submit all 9000 possible OTP values and reset any user's password (account takeover).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Limitation of Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cache.web-cache-deception",
+      "path": "server/routes/me.js",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 215
+      },
+      "end": {
+        "line": 8,
+        "col": 53,
+        "offset": 267
+      },
+      "extra": {
+        "message": "The /api/me route runs the cacheRoute middleware BEFORE the auth middleware. cacheRoute (server/middleware/cache.js) caches any response whose URL ends in .css/.js/.png, keyed only by URL. If a victim is induced to request /api/me/anything.css with their token, the authenticated response (full profile) is stored in the shared cache and can then be retrieved by an unauthenticated attacker, because a cache hit skips the auth middleware entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-525: Use of Web Browser Cache Containing Sensitive Data",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.redirect.host-header-injection-reset-link",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 84,
+        "col": 5,
+        "offset": 2633
+      },
+      "end": {
+        "line": 84,
+        "col": 103,
+        "offset": 2731
+      },
+      "extra": {
+        "message": "The password-reset link is built from the attacker-controllable Host header (const host = req.hostname, line 83) without any validation: http://${host}:3000/change-password?token=...&userId=... An attacker who triggers POST /api/users/otp with a poisoned Host header causes the reset email to contain a link to the attacker's domain, capturing the victim's reset token and enabling account takeover. The link is also sent over plain HTTP with the token in the URL.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.missing-authentication-dev-users",
+      "path": "server/routes/usersDev.js",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 161
+      },
+      "end": {
+        "line": 6,
+        "col": 36,
+        "offset": 196
+      },
+      "extra": {
+        "message": "This router (mounted at dev.localhost via vhost in server/startup/routes.js:21,33) returns every user document with no authentication middleware and no password filtering \u2014 including bcrypt password hashes \u2014 to anyone who sends a Host: dev.localhost header (improper inventory management of a dev deployment).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.nosql-injection-otp",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 70,
+        "col": 5,
+        "offset": 2203
+      },
+      "end": {
+        "line": 70,
+        "col": 68,
+        "offset": 2266
+      },
+      "extra": {
+        "message": "POST /api/users/otp filters by the raw req.body.username value. Since express.json() parses nested objects, a body like {\"username\":{\"$ne\":null}} injects MongoDB query operators and makes findOne() match the first user (typically the admin), emailing them a reset OTP and returning their _id \u2014 NoSQL injection enabling targeted account takeover when combined with the brute-forceable 4-digit token.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Used in a Database Query ('NoSQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.nosql-injection-login",
+      "path": "server/routes/auth.js",
+      "start": {
+        "line": 9,
+        "col": 5,
+        "offset": 233
+      },
+      "end": {
+        "line": 9,
+        "col": 67,
+        "offset": 295
+      },
+      "extra": {
+        "message": "The login query filters by the raw JSON value of req.body.username with no type validation. A body like {\"username\":{\"$ne\":null}} injects MongoDB operators, making findOne() match the first user \u2014 a NoSQL injection that aids user enumeration and pairs with the userId leak on line 13.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Used in a Database Query ('NoSQL Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.idor-user-read",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 22,
+        "col": 9,
+        "offset": 772
+      },
+      "end": {
+        "line": 22,
+        "col": 71,
+        "offset": 834
+      },
+      "extra": {
+        "message": "GET /api/users/:name returns the profile (name, email, role, username, website, _id, credit) of any user to any authenticated user, with no object-level authorization check \u2014 authenticated users can enumerate and read other users' private data.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.regex-redos",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 20,
+        "col": 5,
+        "offset": 691
+      },
+      "end": {
+        "line": 20,
+        "col": 38,
+        "offset": 724
+      },
+      "extra": {
+        "message": "The regex /([a-zA-Z0-9]+)+$/ used to validate req.params.name contains nested quantifiers over the same character class. On non-matching input (e.g. a long run of letters followed by '!'), catastrophic backtracking causes exponential CPU consumption in the single-threaded Node.js server, enabling remote denial of service via GET /api/users/:name.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1333: Inefficient Regular Expression Complexity",
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.user-id-in-error-response",
+      "path": "server/routes/auth.js",
+      "start": {
+        "line": 13,
+        "col": 5,
+        "offset": 462
+      },
+      "end": {
+        "line": 13,
+        "col": 110,
+        "offset": 567
+      },
+      "extra": {
+        "message": "When the password is invalid, the login response includes the internal MongoDB userId ('userId: user._id') alongside the error message. This leaks a sensitive identifier required for IDOR attacks on PUT /api/users/:id and the password-reset flow.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.user-id-in-otp-response",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 90,
+        "col": 5,
+        "offset": 2831
+      },
+      "end": {
+        "line": 90,
+        "col": 51,
+        "offset": 2877
+      },
+      "extra": {
+        "message": "POST /api/users/otp returns the target user's MongoDB _id in the response ('user: user._id'), leaking a sensitive identifier to unauthenticated callers and enabling subsequent IDOR / password-takeover attacks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.password-hash-login-response",
+      "path": "server/routes/auth.js",
+      "start": {
+        "line": 16,
+        "col": 5,
+        "offset": 616
+      },
+      "end": {
+        "line": 16,
+        "col": 62,
+        "offset": 673
+      },
+      "extra": {
+        "message": "The successful login response sends the entire Mongoose user document. The User schema (server/models/user.js) does not hide the password field (no select:false or toJSON transform), so the bcrypt password hash is disclosed in the response body.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.password-hash-register-response",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 43,
+        "col": 5,
+        "offset": 1458
+      },
+      "end": {
+        "line": 43,
+        "col": 20,
+        "offset": 1473
+      },
+      "extra": {
+        "message": "The registration response returns the full user document, including the bcrypt password hash, because the User schema defines no password filtering.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.password-hash-me-response",
+      "path": "server/routes/me.js",
+      "start": {
+        "line": 15,
+        "col": 5,
+        "offset": 447
+      },
+      "end": {
+        "line": 18,
+        "col": 8,
+        "offset": 564
+      },
+      "extra": {
+        "message": "GET /api/me returns the complete user document, including the stored bcrypt password hash (the schema has no select:false or toJSON removal), exposing credential material to the client.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.password-hash-admin-response",
+      "path": "server/routes/adminAuth.js",
+      "start": {
+        "line": 22,
+        "col": 5,
+        "offset": 924
+      },
+      "end": {
+        "line": 22,
+        "col": 62,
+        "offset": 981
+      },
+      "extra": {
+        "message": "The admin login response sends the full user document including the bcrypt password hash.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.unauthenticated-log-file",
+      "path": "server/routes/log.js",
+      "start": {
+        "line": 7,
+        "col": 5,
+        "offset": 255
+      },
+      "end": {
+        "line": 7,
+        "col": 61,
+        "offset": 311
+      },
+      "extra": {
+        "message": "GET /api/logs serves the server's logfile.log to unauthenticated users with no authentication or authorization. The log (written by winston with full error objects in server/startup/logging.js and middleware/error.js) contains internal file paths, database connection strings and error details \u2014 sensitive information disclosure through a debug endpoint left enabled.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor",
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.bfla-books-create",
+      "path": "server/routes/books.js",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 549
+      },
+      "end": {
+        "line": 16,
+        "col": 41,
+        "offset": 589
+      },
+      "extra": {
+        "message": "POST /api/books requires only the 'auth' middleware \u2014 any authenticated non-admin user can create book records. In the intended design this is an admin-only function (the client gates it behind AdminProtectedRoute for /addBook), but the server enforces no role check (broken function level authorization).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.bfla-books-update",
+      "path": "server/routes/books.js",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 692
+      },
+      "end": {
+        "line": 22,
+        "col": 43,
+        "offset": 734
+      },
+      "extra": {
+        "message": "PUT /api/books/:id requires only the 'auth' middleware \u2014 any authenticated non-admin user can modify arbitrary book records. The client exposes this function only to admins (AdminProtectedRoute for /books/:bookId), but the server performs no admin role check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.bfla-books-delete",
+      "path": "server/routes/books.js",
+      "start": {
+        "line": 35,
+        "col": 1,
+        "offset": 1052
+      },
+      "end": {
+        "line": 35,
+        "col": 46,
+        "offset": 1097
+      },
+      "extra": {
+        "message": "DELETE /api/books/:id requires only the 'auth' middleware \u2014 any authenticated non-admin user can delete arbitrary book records. This admin-only function has no server-side role check (broken function level authorization).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.bfla-authors-create",
+      "path": "server/routes/authors.js",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 502
+      },
+      "end": {
+        "line": 18,
+        "col": 41,
+        "offset": 542
+      },
+      "extra": {
+        "message": "POST /api/authors requires only the 'auth' middleware \u2014 any authenticated non-admin user can create author records. The client gates this function behind AdminProtectedRoute (/addAuthor), but the server enforces no admin role check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.bfla-authors-update",
+      "path": "server/routes/authors.js",
+      "start": {
+        "line": 27,
+        "col": 1,
+        "offset": 783
+      },
+      "end": {
+        "line": 27,
+        "col": 43,
+        "offset": 825
+      },
+      "extra": {
+        "message": "PUT /api/authors/:id requires only the 'auth' middleware \u2014 any authenticated non-admin user can modify arbitrary author records (name, email, about, job). No server-side admin role check is performed.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.bfla-authors-delete",
+      "path": "server/routes/authors.js",
+      "start": {
+        "line": 40,
+        "col": 1,
+        "offset": 1107
+      },
+      "end": {
+        "line": 40,
+        "col": 46,
+        "offset": 1152
+      },
+      "extra": {
+        "message": "DELETE /api/authors/:id requires only the 'auth' middleware \u2014 any authenticated non-admin user can delete arbitrary author records. No server-side admin role check is performed.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.pii-books-list",
+      "path": "server/routes/books.js",
+      "start": {
+        "line": 7,
+        "col": 5,
+        "offset": 200
+      },
+      "end": {
+        "line": 7,
+        "col": 114,
+        "offset": 309
+      },
+      "extra": {
+        "message": "The public, unauthenticated GET /api/books endpoint populates author documents including 'email' and 'phoneNumber' fields, disclosing authors' personal information to anonymous users (excessive data exposure \u2014 only name was needed for display).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-359: Exposure of Private Personal Information to an Unauthorized Actor",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.pii-book-detail",
+      "path": "server/routes/books.js",
+      "start": {
+        "line": 12,
+        "col": 5,
+        "offset": 381
+      },
+      "end": {
+        "line": 12,
+        "col": 144,
+        "offset": 520
+      },
+      "extra": {
+        "message": "The public, unauthenticated GET /api/books/:id endpoint populates author 'email' and 'phoneNumber' fields, disclosing authors' personal information to anonymous users.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-359: Exposure of Private Personal Information to an Unauthorized Actor",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.pii-authors-list",
+      "path": "server/routes/authors.js",
+      "start": {
+        "line": 8,
+        "col": 5,
+        "offset": 235
+      },
+      "end": {
+        "line": 8,
+        "col": 41,
+        "offset": 271
+      },
+      "extra": {
+        "message": "The public, unauthenticated GET /api/authors endpoint returns complete author documents including 'email' and 'phoneNumber', disclosing authors' personal information to anonymous users.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-359: Exposure of Private Personal Information to an Unauthorized Actor",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-xss-profile",
+      "path": "client/src/components/profile.jsx",
+      "start": {
+        "line": 38,
+        "col": 54,
+        "offset": 1297
+      },
+      "end": {
+        "line": 38,
+        "col": 115,
+        "offset": 1358
+      },
+      "extra": {
+        "message": "The user-controlled 'name' field is rendered with dangerouslySetInnerHTML without any sanitization. The name is set at registration (POST /api/users) or via PUT /api/users/:id with no server-side sanitization, so a value like <img src=x onerror=alert(document.cookie)> executes as stored XSS in every visitor's browser on /profile/:userName.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.third-party-xss",
+      "path": "client/src/components/about.jsx",
+      "start": {
+        "line": 67,
+        "col": 49,
+        "offset": 2534
+      },
+      "end": {
+        "line": 67,
+        "col": 139,
+        "offset": 2624
+      },
+      "extra": {
+        "message": "The email echoed back from the third-party subscription API (data.email, which reflects the attacker-supplied ?email= query parameter \u2014 see componentDidMount line 18-19) is rendered with dangerouslySetInnerHTML without sanitization. This is XSS through unsafe consumption of an external API (the third-party response is trusted blindly).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.jwt.missing-expiration-user",
+      "path": "server/models/user.js",
+      "start": {
+        "line": 38,
+        "col": 5,
+        "offset": 782
+      },
+      "end": {
+        "line": 38,
+        "col": 183,
+        "offset": 960
+      },
+      "extra": {
+        "message": "User JWTs are signed with only {algorithm: 'RS256'} \u2014 no 'expiresIn' option and no 'exp' claim in the payload. Access tokens never expire, so stolen or leaked tokens grant permanent account access (insufficient session expiration).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.jwt.missing-expiration-admin",
+      "path": "server/routes/adminAuth.js",
+      "start": {
+        "line": 21,
+        "col": 5,
+        "offset": 761
+      },
+      "end": {
+        "line": 21,
+        "col": 162,
+        "offset": 918
+      },
+      "extra": {
+        "message": "Admin JWTs are signed with only {algorithm: 'RS256'} \u2014 no 'expiresIn' option and no 'exp' claim in the payload. Compromised admin tokens never expire and grant permanent administrative access.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.referral-abuse",
+      "path": "server/routes/users.js",
+      "start": {
+        "line": 36,
+        "col": 9,
+        "offset": 1239
+      },
+      "end": {
+        "line": 36,
+        "col": 82,
+        "offset": 1312
+      },
+      "extra": {
+        "message": "During unauthenticated registration, the referral flow increments the 'credit' balance of any user id supplied in req.body.ref with no captcha, rate limiting, or verification that a genuine referral occurred. Automated self-referral registration scripts can farm unlimited credit (unrestricted access to a sensitive business flow).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-799: Improper Control of Interaction Frequency",
+            "CWE-840: Business Logic Errors"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.default-credentials",
+      "path": "server/migrations/20230820171849-users.js",
+      "start": {
+        "line": 9,
+        "col": 9,
+        "offset": 202
+      },
+      "end": {
+        "line": 9,
+        "col": 83,
+        "offset": 276
+      },
+      "extra": {
+        "message": "The migration seeds a default ADMIN account (username 'admin') with a weak, publicly documented password ('admin1234' per vulnerabilities/vulnerabilities.md). Attackers can authenticate via POST /api/adminAuth using these well-known default credentials.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1392: Use of Default Credentials",
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.token-in-localstorage",
+      "path": "client/src/services/authService.js",
+      "start": {
+        "line": 11,
+        "col": 6,
+        "offset": 310
+      },
+      "end": {
+        "line": 11,
+        "col": 59,
+        "offset": 363
+      },
+      "extra": {
+        "message": "The JWT authentication token is stored in localStorage, which is readable by any JavaScript running on the page. Combined with the XSS vulnerabilities in this application (profile.jsx:38, about.jsx:67), this allows full token theft and session hijacking; HttpOnly cookies are the safer storage.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-922: Insecure Storage of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,362 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.flask.security.server-side-template-injection",
+      "path": "app.py",
+      "start": {
+        "line": 31,
+        "col": 5,
+        "offset": 700
+      },
+      "end": {
+        "line": 33,
+        "col": 6,
+        "offset": 790
+      },
+      "extra": {
+        "message": "The 404 error handler builds a Jinja2 template string by f-string-interpolating request.path (fully attacker-controlled URL path) and then passes it to render_template_string(), which compiles and executes it as a Jinja2 template. A request to a path such as '/{{7*7}}' or a path containing '{{ config }} ' / '{{ self.__init__.__globals__.__builtins__.__import__(\"os\").popen(\"id\").read() }}' will be evaluated server-side, leading to Server-Side Template Injection and full remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-94: Improper Control of Generation of Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.sqlalchemy.security.sql-injection-search",
+      "path": "routes/account.py",
+      "start": {
+        "line": 33,
+        "col": 13,
+        "offset": 900
+      },
+      "end": {
+        "line": 33,
+        "col": 62,
+        "offset": 950
+      },
+      "extra": {
+        "message": "The 'search' query parameter (request.args.get('search', ''), line 27) is concatenated directly into a raw SQL fragment via an f-string and passed to sqlalchemy.text(), then used as a filter in the ORM query. A value like \"' UNION SELECT ... --\" breaks out of the LIKE clause, allowing SQL injection (e.g. to read other users' private notes or exfiltrate data via UNION-based injection).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.sqlalchemy.security.sql-injection-registration-code",
+      "path": "routes/signup.py",
+      "start": {
+        "line": 17,
+        "col": 17,
+        "offset": 480
+      },
+      "end": {
+        "line": 17,
+        "col": 95,
+        "offset": 560
+      },
+      "extra": {
+        "message": "In validate_token(), the user-supplied 'registration_code' form field (code) is interpolated directly into a raw SQL query string via an f-string and executed with session.execute(text(...)). An attacker can inject SQL, e.g. registration_code=\"' UNION SELECT id, code FROM users --\" style payloads adapted to this table, to bypass registration-code validation or extract data via UNION-based injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.mass-assignment-privilege-escalation",
+      "path": "routes/account.py",
+      "start": {
+        "line": 76,
+        "col": 9,
+        "offset": 2100
+      },
+      "end": {
+        "line": 81,
+        "col": 46,
+        "offset": 2260
+      },
+      "extra": {
+        "message": "update_account() takes every field submitted in AccountForm (email, password, password_control, is_admin) except 'password', and blindly mass-assigns it onto current_user via __dict__.update() followed by session.merge(). Because AccountForm defines an 'is_admin' BooleanField, any authenticated user can POST is_admin=true to /account and grant themselves admin privileges. This is a critical privilege-escalation / mass-assignment vulnerability.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.pickle-deserialization-cookie",
+      "path": "routes/account.py",
+      "start": {
+        "line": 118,
+        "col": 22,
+        "offset": 3400
+      },
+      "end": {
+        "line": 118,
+        "col": 46,
+        "offset": 3424
+      },
+      "extra": {
+        "message": "before_request() reads the client-supplied 'preferences' cookie and passes it through base64-decode into pickle.loads(). Flask's set_cookie here is not cryptographically signed (raw b64encode(pickle.dumps(...)) is used, not the signed session cookie), so an attacker can craft an arbitrary pickle payload (e.g. via a class with __reduce__ invoking os.system) and set it as the 'preferences' cookie to achieve remote code execution on every subsequent request.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.ssrf-file-fetch",
+      "path": "utils/profile_image.py",
+      "start": {
+        "line": 7,
+        "col": 10,
+        "offset": 130
+      },
+      "end": {
+        "line": 7,
+        "col": 29,
+        "offset": 149
+      },
+      "extra": {
+        "message": "download() calls urllib.request.urlopen(url) with a URL taken directly from user input (ImageForm.url in routes/account.py add_image, line 60-61), with no scheme or host allow-listing. urlopen supports the 'file://' scheme by default, so a value like 'file:///etc/passwd' reads arbitrary local files (which are then base64-encoded and stored/displayed as the user's profile image), and http(s) URLs allow requests to internal/cloud-metadata hosts (e.g. http://169.254.169.254/...), enabling SSRF.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)",
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.broken-access-control-delete-note",
+      "path": "routes/notes.py",
+      "start": {
+        "line": 39,
+        "col": 1,
+        "offset": 800
+      },
+      "end": {
+        "line": 52,
+        "col": 27,
+        "offset": 1050
+      },
+      "extra": {
+        "message": "delete_note(note_id) only checks @login_required and that the note exists; it never verifies that note.user_id == current_user.id (or that current_user is an admin) before deleting. Any authenticated user can delete any other user's notes by guessing/incrementing note_id, resulting in broken access control / IDOR on a destructive action.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.idor-personal-notes",
+      "path": "routes/account.py",
+      "start": {
+        "line": 41,
+        "col": 1,
+        "offset": 1050
+      },
+      "end": {
+        "line": 48,
+        "col": 45,
+        "offset": 1250
+      },
+      "extra": {
+        "message": "get_personal_notes(user_id) is protected only by @login_required and queries Note.filter(Note.user_id == user_id) using the URL path parameter directly, without checking that user_id matches current_user.id (or that current_user is an admin). Any logged-in user can enumerate /accounts/<id>/notes to read another user's notes, including notes marked private, bypassing the private-note access control enforced elsewhere (utils/notes.py).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "html.jinja2.security.stored-xss-safe-filter",
+      "path": "templates/home.html",
+      "start": {
+        "line": 31,
+        "col": 25,
+        "offset": 900
+      },
+      "end": {
+        "line": 31,
+        "col": 45,
+        "offset": 920
+      },
+      "extra": {
+        "message": "note.text (free-form user input from NoteForm's TextAreaField, routes/notes.py add_note) is rendered with the Jinja2 '| safe' filter, disabling autoescaping. Since notes are shared with other users when not private (utils/notes.py returns all non-private notes plus the owner's own notes), any user can store a note containing '<script>...</script>' or other HTML/JS which will execute in the browser of every other user who views the home page \u2014 persistent/stored XSS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (XSS)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.missing-csrf-protection",
+      "path": "routes/account.py",
+      "start": {
+        "line": 68,
+        "col": 1,
+        "offset": 1900
+      },
+      "end": {
+        "line": 69,
+        "col": 30,
+        "offset": 1950
+      },
+      "extra": {
+        "message": "The application uses plain WTForms Form classes (not FlaskForm / Flask-WTF) with no CSRF token generation or validation anywhere in the codebase (no csrf_token() usage in any template, no CSRFProtect configured). All state-changing POST endpoints (/account, /notes, /notes/<id>/delete, /registration-codes, /account/image) are vulnerable to Cross-Site Request Forgery. This is especially severe combined with the mass-assignment privilege-escalation issue on /account: a forged cross-site POST can silently grant is_admin=true to a logged-in victim.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.hardcoded-secret-key",
+      "path": "app.py",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 220
+      },
+      "end": {
+        "line": 11,
+        "col": 34,
+        "offset": 253
+      },
+      "extra": {
+        "message": "app.secret_key is hardcoded to the static string 'super secret key'. This key signs Flask's session cookie; an attacker who knows/guesses it (it is also publicly visible in this repository) can forge arbitrary session cookies, including impersonating any user_id via flask_login's session, resulting in authentication bypass.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "html.jinja2.security.xss-object-data-mimetype",
+      "path": "templates/home.html",
+      "start": {
+        "line": 35,
+        "col": 11,
+        "offset": 1050
+      },
+      "end": {
+        "line": 36,
+        "col": 90,
+        "offset": 1200
+      },
+      "extra": {
+        "message": "note.user.profile_image is rendered as the 'data' attribute of an <object> element. Its value is a data: URI whose MIME type is derived from guess_type(url) on the attacker-supplied image URL (utils/profile_image.py) with no allow-list. By submitting a URL ending in '.svg' (or similar) via /account/image, an attacker can cause the mimetype to be image/svg+xml; because <object> (unlike <img>) executes scripts embedded in SVG/HTML content it renders, a crafted SVG profile image results in stored XSS against any user viewing the note.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (XSS)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.sqlalchemy.security.verbose-sql-logging",
+      "path": "models/__init__.py",
+      "start": {
+        "line": 14,
+        "col": 5,
+        "offset": 380
+      },
+      "end": {
+        "line": 14,
+        "col": 14,
+        "offset": 389
+      },
+      "extra": {
+        "message": "The SQLAlchemy engine is created with echo=True, causing all SQL statements (including ones built with interpolated user input such as the search and registration-code queries) and bound parameters to be written to stdout/logs. This can leak sensitive data (query text, credentials in transit, PII) into application logs.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.hardcoded-credentials-seed-data",
+      "path": "db_seed.py",
+      "start": {
+        "line": 9,
+        "col": 13,
+        "offset": 260
+      },
+      "end": {
+        "line": 19,
+        "col": 65,
+        "offset": 620
+      },
+      "extra": {
+        "message": "setup_db() seeds the database with a hardcoded, fixed registration-code UUID ('a36e990b-0024-4d55-b74a-f8d7528e1764') and two accounts with hardcoded, well-known weak passwords ('user' and 'admin', for user@evfa.com and the admin account admin@evfa.com). If this seeding code path runs against a production deployment, these credentials and the static registration code are known in advance and grant immediate access, including admin access.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

