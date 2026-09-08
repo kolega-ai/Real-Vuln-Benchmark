@@ -1,19 +1,28 @@
 #!/usr/bin/env python3
-"""Add archive SEO <head> tags to snapshots frozen before release.py emitted them.
+"""Bring every frozen snapshot's <head> up to what release.py emits today.
 
-``release.py`` now writes a ``noindex,follow`` robots tag and a canonical
-pointing at the live equivalent into every frozen snapshot (see
-``release.py:archive_seo_html``). Snapshots frozen before that — v1.0.0 and
+``release.py`` writes a ``noindex,follow`` robots tag into every frozen snapshot
+(see ``release.py:archive_seo_html``). Snapshots frozen before that — v1.0.0 and
 v2.0.0 — shipped the live pages' ``<title>`` and ``<meta description>``
 verbatim and so compete with the live site for the same queries.
 
-A frozen release is immutable, and this script deliberately keeps it that way in
-every sense that matters: it touches only ``<head>`` metadata and the ``<title>``
-prefix. No score, table, dataset figure or ``dashboard.json`` is read or written,
-so the published numbers and every hash over them are untouched. URLs stay
-served, so citations keep resolving.
+It also repairs snapshots tagged by an *older* revision of release.py, which
+paired the noindex with a ``rel="canonical"``. That combination is what Search
+Console was reporting as "Duplicate without user-selected canonical": Google
+reads noindex and canonical as conflicting instructions and discards the
+canonical, and on 53 snapshot pages it pointed at a retired scanner URL that no
+longer resolves anyway. ``release.py:inject_archive_seo`` now strips any
+canonical it finds regardless of whether the page is already tagged, so a rerun
+here is what removes them.
 
-Idempotent — reruns are a no-op once the marker is present.
+A frozen release is immutable, and this script deliberately keeps it that way in
+every sense that matters: it touches only ``<head>`` metadata, the ``<title>``
+prefix and the href of the paper-PDF link. No score, table, dataset figure or
+``dashboard.json`` is read or written, so the published numbers and every hash
+over them are untouched. URLs stay served, so citations keep resolving.
+
+Idempotent — a page is rewritten only when the prepared HTML actually differs,
+so reruns settle to "0 changed" once every snapshot is current.
 
     python backfill_archive_seo.py --dry-run   # report what would change
     python backfill_archive_seo.py             # apply
@@ -24,7 +33,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from release import SEO_MARKER, VERSIONS_DIR, prepare_snapshot_html
+from release import VERSIONS_DIR, prepare_snapshot_html
 
 ROOT = Path(__file__).resolve().parent
 
@@ -40,12 +49,8 @@ def backfill(version_dir: Path, dry_run: bool) -> tuple[int, int]:
     version = version_dir.name
     changed = skipped = 0
     for page in snapshot_pages(version_dir):
-        rel = page.relative_to(version_dir).as_posix()
         text = page.read_text()
-        if SEO_MARKER in text:
-            skipped += 1
-            continue
-        new = prepare_snapshot_html(text, version, rel)
+        new = prepare_snapshot_html(text, version)
         if new == text:
             skipped += 1
             continue

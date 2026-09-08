@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Freeze the current built site as an immutable, citable version snapshot.
 
-The live site is served by a single Cloudflare Worker out of ``reports/`` with
-the *latest* release at the root (``realvuln.com/``) and every past release
-frozen under ``reports/v/<version>/`` (``realvuln.com/v/<version>/``). A frozen
-snapshot is written once and never regenerated, so a URL printed in the paper
-keeps meaning the same thing after later releases ship.
+The live site is served from ``reports/`` by CloudFront over an S3 origin (see
+.github/workflows/deploy-dashboard.yml) with the *latest* release at the root
+(``realvuln.com/``) and every past release frozen under ``reports/v/<version>/``
+(``realvuln.com/v/<version>/``). A frozen snapshot is written once and never
+regenerated, so a URL printed in the paper keeps meaning the same thing after
+later releases ship.
 
 Typical flow for a release::
 
@@ -41,14 +42,17 @@ VERSIONS_DIR = REPORTS / "v"
 # and is deliberately excluded.
 SNAPSHOT_GLOBS = ("*.html", "*.js", "*.css", "*.json")
 SNAPSHOT_DIRS = ("scanners",)
-ROOT_ONLY = {"wrangler.jsonc", "robots.txt", "sitemap.xml", "versions.json"}
+# 404.html is root-only for two reasons: CloudFront serves one error document
+# for the whole distribution, and its links are root-absolute (they have to be —
+# it renders at whatever path 404'd), which relativise_root_links would break.
+ROOT_ONLY = {"wrangler.jsonc", "robots.txt", "sitemap.xml", "versions.json", "404.html"}
 
 BANNER_MARKER = "RV-ARCHIVE-BANNER"
 SEO_MARKER = "RV-ARCHIVE-SEO"
 SITE_BASE_URL = "https://realvuln.com"
 
 
-def archive_seo_html(rel_path: str) -> str:
+def archive_seo_html() -> str:
     """<head> tags that keep a frozen snapshot citable but out of search results.
 
     A snapshot ships the same title and meta description as the live page it was
@@ -59,29 +63,37 @@ def archive_seo_html(rel_path: str) -> str:
     ``noindex`` drops the duplicate from search listings while leaving the URL
     fully served, so a citation printed in the paper keeps resolving. ``follow``
     matters: crawlers still traverse the archive banner's link to the live site,
-    so any accumulated authority flows there instead of being stranded. The
-    canonical names the live equivalent as the version that should rank.
+    so any accumulated authority flows there instead of being stranded.
+
+    Deliberately *no* ``rel="canonical"``. Earlier revisions paired one with the
+    noindex, which broke twice over. Google documents the two as conflicting
+    signals — "drop this page" against "rank that one instead" — and resolves
+    the conflict by discarding the canonical, which files the snapshot under
+    "Duplicate without user-selected canonical" instead of under noindex. And a
+    snapshot names scanners that later releases retire, so its canonical pointed
+    at a live URL that no longer exists; a canonical Google cannot fetch is
+    ignored anyway. ``noindex,follow`` plus the banner's absolute link to the
+    live site says the whole of what these pages mean, with nothing to reject.
     """
-    live = f"{SITE_BASE_URL}/" if rel_path == "index.html" else f"{SITE_BASE_URL}/{rel_path}"
     return (
         f"<!-- {SEO_MARKER} -->\n"
         '<meta name="robots" content="noindex,follow" />\n'
-        f'<link rel="canonical" href="{live}" />\n'
     )
 
 
-def inject_archive_seo(text: str, version: str, rel_path: str) -> str:
+def inject_archive_seo(text: str, version: str) -> str:
     """Apply archive <head> tags and mark the <title> as an archived version.
 
-    Any canonical inherited from the live build is stripped first — it would
-    otherwise point the snapshot at itself. The title prefix is belt-and-braces:
-    until a crawler re-reads the page and honours the noindex, an already-listed
-    snapshot at least stops presenting itself as the current results.
+    The canonical strip runs before the marker check, so re-running the backfill
+    over snapshots frozen by an older revision removes the canonical they were
+    tagged with. Everything after the check is write-once. The title prefix is
+    belt-and-braces: until a crawler re-reads the page and honours the noindex,
+    an already-listed snapshot at least stops presenting itself as current.
     """
+    text = re.sub(r'\s*<link rel="canonical"[^>]*>', "", text)
     if SEO_MARKER in text or "</head>" not in text:
         return text
-    text = re.sub(r'\s*<link rel="canonical"[^>]*>', "", text)
-    text = text.replace("</head>", archive_seo_html(rel_path) + "</head>", 1)
+    text = text.replace("</head>", archive_seo_html() + "</head>", 1)
     return re.sub(
         r"<title>(.*?)</title>",
         lambda m: f"<title>[v{version} archive] {m.group(1)}</title>",
@@ -106,10 +118,24 @@ def relativise_root_links(text: str) -> str:
     return text.replace('href="/"', 'href="index.html"')
 
 
-def prepare_snapshot_html(text: str, version: str, rel_path: str) -> str:
+def absolutise_asset_links(text: str) -> str:
+    """Point ``assets/`` links at the live site rather than inside the snapshot.
+
+    ``assets/`` is not in SNAPSHOT_DIRS — the paper PDF is half a megabyte and
+    one living document, not something to fork per release — so the relative
+    link the live pages carry resolves to a path no snapshot contains. On S3 a
+    missing key answers 403, not 404, and Search Console files a 403 under
+    "Blocked due to access forbidden" and retries it indefinitely rather than
+    dropping the URL. Linking the live copy is both reachable and honest: the
+    banner above it already says this is an archived release.
+    """
+    return text.replace('href="assets/', f'href="{SITE_BASE_URL}/assets/')
+
+
+def prepare_snapshot_html(text: str, version: str) -> str:
     """All snapshot-only HTML rewrites: banner, SEO tags, in-version links."""
-    return relativise_root_links(
-        inject_archive_seo(inject_banner(text, version), version, rel_path)
+    return absolutise_asset_links(
+        relativise_root_links(inject_archive_seo(inject_banner(text, version), version))
     )
 
 
@@ -160,9 +186,7 @@ def freeze(version: str, force: bool) -> None:
     for f in snapshot_files(REPORTS):
         text_dst = dest / f.name
         if f.suffix == ".html":
-            text_dst.write_text(
-                prepare_snapshot_html(f.read_text(), version, f.name)
-            )
+            text_dst.write_text(prepare_snapshot_html(f.read_text(), version))
         else:
             shutil.copy2(f, text_dst)
         copied += 1
@@ -172,11 +196,7 @@ def freeze(version: str, force: bool) -> None:
             dstd = dest / d
             shutil.copytree(srcd, dstd)
             for html in dstd.glob("*.html"):
-                html.write_text(
-                    prepare_snapshot_html(
-                        html.read_text(), version, f"{d}/{html.name}"
-                    )
-                )
+                html.write_text(prepare_snapshot_html(html.read_text(), version))
             copied += sum(1 for _ in dstd.rglob("*") if _.is_file())
     print(f"froze {copied} files into {dest.relative_to(ROOT)}")
 
