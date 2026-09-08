@@ -117,7 +117,6 @@
       // partial-coverage entries always sink below fully-covered ones
       if (!a.partial !== !b.partial) return a.partial ? 1 : -1;
       if (k === 'name') return dir * a.name.localeCompare(b.name);
-      if (k === 'fpratio') { var ar = a.tp ? (a.fp || 0) / a.tp : -1, br = b.tp ? (b.fp || 0) / b.tp : -1; return dir * (ar - br); }
       if (k === 'cost') { var ac = a.cost == null ? -1 : a.cost, bc = b.cost == null ? -1 : b.cost; return dir * (ac - bc); }
       if (k === 'cpv') { var acv = a.cpv == null ? -1 : a.cpv, bcv = b.cpv == null ? -1 : b.cpv; return dir * (acv - bcv); }
       if (k === 'fn') return dir * (effFn(a) - effFn(b));
@@ -149,7 +148,6 @@
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         (langCols() ? ['python', 'tsjs'].map(function (lk) { var v = langF(s, lk); return '<td class="lang-col">' + (v == null ? '<span class="dim">—</span>' : fmt(v)) + '</td>'; }).join('') : '') +
         '<td title="real vulnerabilities missed (false negatives)' + (sevAllOn() ? '' : ' — filtered to selected severities') + '">' + effFn(s) + (sevFilterVisible() ? ' <span class="dim">of ' + effTotal(s) + '</span>' : '') + '</td>' +
-        '<td title="false positives per true positive found (lower is cleaner)">' + (s.tp ? ((s.fp || 0) / s.tp).toFixed(2) : '<span class="dim">—</span>') + '</td>' +
         '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + (s.cost < 10 ? s.cost.toFixed(2) : s.cost.toFixed(0))) + '</td>' +
         '<td class="dim">' + (s.cpv == null ? '—' : '$' + (s.cpv < 10 ? s.cpv.toFixed(2) : s.cpv.toFixed(0))) + '</td>';
       tbody.appendChild(tr);
