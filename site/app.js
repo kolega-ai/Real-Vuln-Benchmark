@@ -210,6 +210,19 @@
   });
   render();
 
+  // hide the "more columns" fade once the table is scrolled all the way right
+  (function () {
+    var scroller = document.querySelector('.table-scroll');
+    if (!scroller) return;
+    function sync() {
+      var atEnd = scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 1;
+      scroller.classList.toggle('at-end', atEnd || scroller.scrollWidth <= scroller.clientWidth);
+    }
+    scroller.addEventListener('scroll', sync);
+    window.addEventListener('resize', sync);
+    sync();
+  })();
+
   // ---------------------------------------------------------
   // precision–recall scatter
   // ---------------------------------------------------------
