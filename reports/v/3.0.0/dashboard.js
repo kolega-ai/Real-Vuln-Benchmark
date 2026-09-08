@@ -78,8 +78,9 @@
   function activeF(s) { return effF3(s); }
   function on(s) { return state.cats[s.cat]; }
   function fmt(v) { return v.toFixed(1); }
-  var EFFORT_ORDER = { minimal: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5, ultra: 6 };
-  function EFFORT_RANK(e) { return e in EFFORT_ORDER ? EFFORT_ORDER[e] : -1; }
+  function effortTag(s) {
+    return s.effort ? ' <span class="dim">·</span> <span title="Reasoning/thinking effort level">' + s.effort + ' effort</span>' : '';
+  }
   // per-language F3 (only present on cross-language tabs): [standard, strict]
   function langF(s, lk) { var v = s.lf && s.lf[lk]; return v ? v[state.mode === 'strict' ? 1 : 0] : null; }
   function langCols() { return state.lang === 'all'; }
@@ -133,7 +134,6 @@
       if (k === 'name') return dir * a.name.localeCompare(b.name);
       if (k === 'prec') return dir * (a.prec - b.prec);
       if (k === 'noise') return dir * ((1 - a.prec) - (1 - b.prec));
-      if (k === 'effort') return dir * (EFFORT_RANK(a.effort) - EFFORT_RANK(b.effort));
       if (k === 'repos') return dir * (a.repos - b.repos);
       if (k === 'cost') { var ac = a.cost == null ? -1 : a.cost, bc = b.cost == null ? -1 : b.cost; return dir * (ac - bc); }
       if (k === 'cpv') { var av = a.cpv == null ? -1 : a.cpv, bv = b.cpv == null ? -1 : b.cpv; return dir * (av - bv); }
@@ -163,12 +163,11 @@
       tr.innerHTML =
         '<td class="l">' + rankCell + '</td>' +
         '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' + langBadges(s) +
-          '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
+          '<div class="cat-tag">' + s.ver + effortTag(s) + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         (langCols() ? ['python', 'tsjs'].map(function (lk) { var v = langF(s, lk); return '<td class="lang-col">' + (v == null ? '<span class="dim">—</span>' : fmt(v)) + '</td>'; }).join('') : '') +
         '<td title="real vulnerabilities missed (false negatives)' + (sevAllOn() ? '' : ' — filtered to selected severities') + '">' + effFn(s) + (sevFilterVisible() ? ' <span class="dim">of ' + effTotal(s) + '</span>' : '') + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
-        '<td class="dim">' + (s.effort ? s.effort : '<span class="dim">—</span>') + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/' + total + '</span></td>' +
         '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + (s.cost < 10 ? s.cost.toFixed(2) : s.cost.toFixed(0))) + '</td>';
       tbody.appendChild(tr);

@@ -22,8 +22,10 @@
   var state = { metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1 };
 
   var METRIC_LABEL = { f2: 'F2', f3: 'F3' };
-  var EFFORT_ORDER = { minimal: 0, low: 1, medium: 2, high: 3, xhigh: 4, max: 5, ultra: 6 };
-  function EFFORT_RANK(e) { return e in EFFORT_ORDER ? EFFORT_ORDER[e] : -1; }
+  // scanner tag line: version/org, effort (only where the model exposes one), external link
+  function effortTag(s) {
+    return s.effort ? ' <span class="dim">·</span> <span title="Reasoning/thinking effort level">' + s.effort + ' effort</span>' : '';
+  }
   function mk(base) { return state.mode === 'strict' ? base + 's' : base; }   // metric/recall key for mode
   function val(s, base) { return s[mk(base)]; }
 
@@ -115,10 +117,9 @@
       // partial-coverage entries always sink below fully-covered ones
       if (!a.partial !== !b.partial) return a.partial ? 1 : -1;
       if (k === 'name') return dir * a.name.localeCompare(b.name);
-      if (k === 'fp') return dir * ((a.fp || 0) - (b.fp || 0));
-      if (k === 'effort') return dir * (EFFORT_RANK(a.effort) - EFFORT_RANK(b.effort));
-      if (k === 'repos') return dir * (a.repos - b.repos);
+      if (k === 'fpratio') { var ar = a.tp ? (a.fp || 0) / a.tp : -1, br = b.tp ? (b.fp || 0) / b.tp : -1; return dir * (ar - br); }
       if (k === 'cost') { var ac = a.cost == null ? -1 : a.cost, bc = b.cost == null ? -1 : b.cost; return dir * (ac - bc); }
+      if (k === 'cpv') { var acv = a.cpv == null ? -1 : a.cpv, bcv = b.cpv == null ? -1 : b.cpv; return dir * (acv - bcv); }
       if (k === 'fn') return dir * (effFn(a) - effFn(b));
       if (k.indexOf('lf:') === 0) { var lk = k.slice(3), av = langF(a, lk), bv = langF(b, lk); return dir * ((av == null ? -1 : av) - (bv == null ? -1 : bv)); }
       return dir * (val(a, k) - val(b, k)); // f2 / f3
@@ -137,7 +138,6 @@
       if (isLead && !s.partial) tr.className = 'leader';
       if (s.partial) tr.classList.add('partial');
       var pct = Math.min(100, Math.round((activeF(s) / maxA) * 100));
-      var reposCls = s.repos < REPO_TOTAL ? ' class="repos-bad"' : '';
       var rankCell = s.partial
         ? '<span class="rank" title="Unranked — scanned fewer than 95% of the corpus; score not comparable">—</span>'
         : '<span class="rank">' + String(++rankNo).padStart(2, '0') + '</span>';
@@ -145,14 +145,13 @@
       tr.innerHTML =
         '<td class="l">' + rankCell + '</td>' +
         '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' + langBadges(s) +
-          '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
+          '<div class="cat-tag">' + s.ver + effortTag(s) + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
         (langCols() ? ['python', 'tsjs'].map(function (lk) { var v = langF(s, lk); return '<td class="lang-col">' + (v == null ? '<span class="dim">—</span>' : fmt(v)) + '</td>'; }).join('') : '') +
         '<td title="real vulnerabilities missed (false negatives)' + (sevAllOn() ? '' : ' — filtered to selected severities') + '">' + effFn(s) + (sevFilterVisible() ? ' <span class="dim">of ' + effTotal(s) + '</span>' : '') + '</td>' +
-        '<td title="findings that did not match a real vulnerability (false positives)">' + (s.fp || 0) + '</td>' +
-        '<td class="dim">' + (s.effort ? s.effort : '<span class="dim">—</span>') + '</td>' +
-        '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/' + REPO_TOTAL + '</span></td>' +
-        '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + (s.cost < 10 ? s.cost.toFixed(2) : s.cost.toFixed(0))) + '</td>';
+        '<td title="false positives per true positive found (lower is cleaner)">' + (s.tp ? ((s.fp || 0) / s.tp).toFixed(2) : '<span class="dim">—</span>') + '</td>' +
+        '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + (s.cost < 10 ? s.cost.toFixed(2) : s.cost.toFixed(0))) + '</td>' +
+        '<td class="dim">' + (s.cpv == null ? '—' : '$' + (s.cpv < 10 ? s.cpv.toFixed(2) : s.cpv.toFixed(0))) + '</td>';
       tbody.appendChild(tr);
     });
 
