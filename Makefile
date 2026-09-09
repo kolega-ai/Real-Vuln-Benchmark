@@ -31,9 +31,11 @@ score: ## Score all scanners on all repos
 	python3 score.py --repo realvuln-pygoat --all-scanners
 
 dashboard: ## Regenerate data (dashboard.json), then build the public site
-	# --min-repos 58: only scanners run on (nearly) the full v2.0 corpus (66 repos)
-	# appear on the leaderboard — old-benchmark-only and partial/slice runs are excluded.
-	python3 dashboard.py --scanner-group all --min-repos 58
+	# --min-coverage 0.85: a scanner appears on the leaderboards only if it scored at
+	# least 85% of the repos of at least one language group (66 Python / 74 TS-JS).
+	# Old-benchmark-only and partial/slice runs are excluded; a scanner that fully
+	# covered one language is kept and shown as language-limited on the Overall tab.
+	python3 dashboard.py --scanner-group all --min-coverage 0.85
 	python3 build_site.py
 
 site: ## Rebuild the public site from existing dashboard.json (no re-scoring)

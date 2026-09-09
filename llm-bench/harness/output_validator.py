@@ -61,13 +61,34 @@ def extract_json_from_text(text: str) -> str | None:
         candidate = _match_braces(text, brace_start)
         if candidate is None:
             continue
-        try:
-            json.loads(candidate)
-        except (json.JSONDecodeError, ValueError):
-            continue
-        return candidate
+        for attempt in (candidate, _fix_invalid_escapes(candidate)):
+            try:
+                json.loads(attempt)
+            except (json.JSONDecodeError, ValueError):
+                continue
+            return attempt
 
     return None
+
+
+_ESCAPE = re.compile(r'\\(["\\/bfnrtu]?)')
+
+
+def _first_json_error(text: str) -> json.JSONDecodeError | None:
+    try:
+        json.loads(text)
+    except json.JSONDecodeError as exc:
+        return exc
+    return None
+
+
+def _fix_invalid_escapes(text: str) -> str:
+    """Escape backslashes that are not valid JSON escapes (e.g. a regex literal
+    like `/([0-9]+)+\\#/` quoted verbatim inside a message string). Without this
+    the whole findings object is rejected and a nested finding object — which
+    parses but has no `results` key — wins the extraction instead."""
+    # consume every backslash pair so a valid `\\` is never re-split
+    return _ESCAPE.sub(lambda m: m.group(0) if m.group(1) else "\\\\", text)
 
 
 def _match_braces(text: str, brace_start: int) -> str | None:
@@ -332,7 +353,13 @@ def validate_output(raw_text: str) -> ValidationResult:
     try:
         data = json.loads(json_str)
     except json.JSONDecodeError as e:
-        # Attempt LLM repair
+        # Cheap deterministic repair first (invalid escapes), then LLM repair
+        try:
+            data = json.loads(_fix_invalid_escapes(json_str))
+        except json.JSONDecodeError:
+            data = None
+    if data is None:
+        e = _first_json_error(json_str)
         repaired_str = _llm_repair_json(json_str)
         if repaired_str:
             # Extract JSON again in case GPT wrapped it in fences

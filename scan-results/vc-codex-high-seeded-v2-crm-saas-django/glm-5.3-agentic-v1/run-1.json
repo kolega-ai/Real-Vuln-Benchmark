@@ -1,0 +1,580 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.security.comparison.timing-unsafe-token-compare",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 21,
+        "col": 5,
+        "offset": 554
+      },
+      "end": {
+        "line": 21,
+        "col": 86,
+        "offset": 635
+      },
+      "extra": {
+        "message": "The internal ops gate compares the shared secret token with a plain '==' string comparison (request.headers.get('x-internal-token') == gate_value) instead of a constant-time comparison such as hmac.compare_digest(). The comparison short-circuits on the first differing byte, leaking a timing side channel that can be used to recover the INTERNAL_OPS_TOKEN value and bypass the gate protecting all /ops/ endpoints.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-208: Observable Timing Discrepancy"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.path-traversal.file-read",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 39,
+        "col": 5,
+        "offset": 1206
+      },
+      "end": {
+        "line": 42,
+        "col": 39,
+        "offset": 1366
+      },
+      "extra": {
+        "message": "User input from request.GET['packet_ref'] is joined directly into a filesystem path (BASE_EXPORT_DIR / packet_ref) and read with parcel_path.read_text() without any sanitization. An attacker (anyone holding the internal token) can supply '../' sequences to read arbitrary files outside the private_exports directory, e.g. packet_ref=../../.env or ../../config/settings.py, exposing secrets and source code.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.ssrv.unvalidated-url-fetch",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 51,
+        "col": 5,
+        "offset": 1581
+      },
+      "end": {
+        "line": 52,
+        "col": 67,
+        "offset": 1709
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery: the URL is taken verbatim from request.GET['url'] and passed to urllib.request.urlopen(relay_ref) with no scheme/host allow-listing. An attacker can make the server fetch arbitrary internal targets (e.g. http://169.254.169.254/latest/meta-data/, http://localhost:5432/, internal admin panels), and the first 2048 bytes of the response are returned to the caller in the JSON 'preview' field.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.business-logic.unvalidated-ledger-mutation",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 63,
+        "col": 5,
+        "offset": 2078
+      },
+      "end": {
+        "line": 66,
+        "col": 81,
+        "offset": 2327
+      },
+      "extra": {
+        "message": "Business logic flaw in the ledger adjustment endpoint: 'amount' is taken from the request body/GET and applied as ledger['balance'] -= amount with no validation that it is a positive value, so a negative amount (the default is even '-250') credits the balance instead of debiting it. Additionally the ledger 'state' is set directly from the attacker-controlled payload (payload.get('state')), allowing the client to force state='approved' and bypass the limit check implied by the ledger structure.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-840: Business Logic Errors"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.redirect.open-redirect",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 72,
+        "col": 5,
+        "offset": 2454
+      },
+      "end": {
+        "line": 73,
+        "col": 26,
+        "offset": 2545
+      },
+      "extra": {
+        "message": "Open redirect: the redirect target is read from request.GET['lane'] / request.POST['lane'] and passed to redirect(lane) with no validation that it is a relative path. Django's redirect() accepts absolute URLs, so an attacker can craft /ops/after/acct-lane-161/?lane=https://evil.example/phish to bounce victims to a malicious site through the application, aiding phishing.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: Redirect to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.mass-assignment.dict-update",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 83,
+        "col": 5,
+        "offset": 2876
+      },
+      "end": {
+        "line": 83,
+        "col": 28,
+        "offset": 2899
+      },
+      "extra": {
+        "message": "Mass assignment: the JSON request body is parsed and applied wholesale via workset.update(payload) onto a workset that contains authorization attributes ('role', 'tier', 'approved'). Any key the attacker supplies overrides these defaults, so a caller can POST {\"role\": \"admin\", \"approved\": true, \"tier\": \"elevated\"} and obtain a response granting themselves privileged attributes.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Modifying an Assumed-Immutable Object"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.path-traversal.file-write",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 89,
+        "col": 5,
+        "offset": 3027
+      },
+      "end": {
+        "line": 92,
+        "col": 147,
+        "offset": 3309
+      },
+      "extra": {
+        "message": "Path traversal leading to arbitrary file write: request.GET['ref'] is interpolated into the write path (BASE_EXPORT_DIR / f\"{ref}.json\") with no sanitization, then written with target.write_text(...). A value like ref=../../appcode or an absolute path escapes private_exports and lets the attacker create/overwrite arbitrary .json files anywhere the process can write (also overwriting application data or config).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.sensitive-data.cleartext-pii-storage",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 92,
+        "col": 5,
+        "offset": 3167
+      },
+      "end": {
+        "line": 92,
+        "col": 147,
+        "offset": 3309
+      },
+      "extra": {
+        "message": "Cleartext storage and exposure of highly sensitive PII: Social Security Numbers (request.GET['ssn']) and full credit card numbers (request.GET['card']) are written unencrypted to a JSON file on disk. Because they are transmitted as GET query-string parameters, they are also recorded in proxy/server access logs and browser history. No encryption, tokenization, or masking is applied.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.weak-hash-md5",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 100,
+        "col": 5,
+        "offset": 3550
+      },
+      "end": {
+        "line": 100,
+        "col": 61,
+        "offset": 3606
+      },
+      "extra": {
+        "message": "Use of a cryptographically broken hash: the user-supplied 'phrase' is hashed with hashlib.md5(). MD5 is broken for collision resistance and unsuitable for any security purpose such as credential or verifier digests; there is also no salt. A strong KDF (e.g. hashlib.scrypt, bcrypt, argon2) or SHA-256+ should be used instead.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.missing-authentication",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 104,
+        "col": 5,
+        "offset": 3693
+      },
+      "end": {
+        "line": 106,
+        "col": 84,
+        "offset": 3924
+      },
+      "extra": {
+        "message": "Missing authentication: acct_identity_ping_340 is the only /ops/ endpoint that does not call _wrk_gate() (compare every sibling view in this module), has no @login_required decorator, and performs no inline check. Any unauthenticated client can POST/GET arbitrary 'handle' and 'channel' values to this internal identity-operations endpoint, enabling unauthenticated abuse of identity queueing (e.g. spamming verification pings for arbitrary handles or selecting the delivery channel).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.no-rate-limit-on-verifier",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 112,
+        "col": 5,
+        "offset": 4064
+      },
+      "end": {
+        "line": 118,
+        "col": 46,
+        "offset": 4399
+      },
+      "extra": {
+        "message": "Improper restriction of excessive authentication attempts: the 4-digit 'verifier' (known values '4812'/'5930' hardcoded in source at line 113) is checked with a simple equality per request, with no rate limiting, lockout, or attempt counting. Only 10,000 combinations exist, so an attacker can brute-force the verifier for any valid handle in seconds and get {'status': 'queued'} (a successful verification signal).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.cors.origin-reflection-with-credentials",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 123,
+        "col": 5,
+        "offset": 4496
+      },
+      "end": {
+        "line": 126,
+        "col": 58,
+        "offset": 4698
+      },
+      "extra": {
+        "message": "Permissive CORS: the request's Origin header is reflected verbatim into Access-Control-Allow-Origin and combined with Access-Control-Allow-Credentials: true. This allows ANY origin to make credentialed cross-origin requests to this endpoint and read the responses, defeating the same-origin policy; any malicious website can trigger authenticated requests with the victim's cookies and exfiltrate the JSON data.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.headers.disabled-security-headers",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 132,
+        "col": 5,
+        "offset": 4812
+      },
+      "end": {
+        "line": 134,
+        "col": 45,
+        "offset": 4941
+      },
+      "extra": {
+        "message": "Security header misconfiguration: the response explicitly sets 'X-XSS-Protection: 0' (disabling the browser XSS auditor) and sets Content-Security-Policy to an empty string, removing the CSP protections otherwise applied. This weakens the browser's defenses for any content served from this endpoint and signals the intended hardening was deliberately disabled.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-693: Protection Mechanism Failure"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.ssti",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 141,
+        "col": 5,
+        "offset": 5087
+      },
+      "end": {
+        "line": 142,
+        "col": 52,
+        "offset": 5192
+      },
+      "extra": {
+        "message": "Server-Side Template Injection leading to Remote Code Execution: request.GET['fragment'] is concatenated into a Jinja2 template string and rendered with Template('Result: ' + fragment).render() using the default (non-sandboxed) Jinja2 environment. An attacker can supply template expressions such as {{ ''.__class__.__mro__[1].__subclasses__() }} to execute arbitrary Python code on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.path-traversal.arbitrary-file-write",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 148,
+        "col": 5,
+        "offset": 5342
+      },
+      "end": {
+        "line": 151,
+        "col": 37,
+        "offset": 5512
+      },
+      "extra": {
+        "message": "Arbitrary file write: request.GET['name'] is joined into the storage path (BASE_EXPORT_DIR / name) without sanitization and the raw request body is written with target.write_bytes(request.body). Traversal sequences ('../../') or an absolute path (Path joining with '/...' discards the base entirely) allow overwriting any file writable by the process, e.g. name=../../manage.py, enabling defacement or code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.random.weak-prng",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 158,
+        "col": 5,
+        "offset": 5701
+      },
+      "end": {
+        "line": 160,
+        "col": 67,
+        "offset": 5867
+      },
+      "extra": {
+        "message": "Use of a cryptographically weak PRNG for token/nonce generation: the 'code' is generated with ''.join(random.choice(alphabet) ...) using the random module, which is a Mersenne Twister and not cryptographically secure. Codes/nonces produced by this endpoint are predictable; secrets.token_urlsafe() or secrets.choice() should be used instead. The attacker-controlled 'length' parameter is also passed unvalidated to range(), permitting oversized allocations.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.nosql-injection",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 167,
+        "col": 5,
+        "offset": 6037
+      },
+      "end": {
+        "line": 169,
+        "col": 108,
+        "offset": 6246
+      },
+      "extra": {
+        "message": "NoSQL injection: the JSON request body is parsed and used directly as a MongoDB query filter (query = payload.get('filter', payload) ... MongoClient(...).ops.records.find_one(query)). The attacker fully controls the filter document, so they can inject MongoDB query operators such as {'$gt': ''}, {'$ne': None}, or {'$where': '...'} to bypass intended matching, dump arbitrary records, or execute server-side JavaScript via $where. The matched document is returned in the response.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Used in a NoSQL Query"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.client-controlled-authorization",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 175,
+        "col": 5,
+        "offset": 6392
+      },
+      "end": {
+        "line": 177,
+        "col": 89,
+        "offset": 6587
+      },
+      "extra": {
+        "message": "Authentication/authorization bypass via client-controlled data: the privilege decision is based entirely on a client-supplied cookie or header (badge = request.COOKIES.get('ops_badge') or request.headers.get('x-ops-badge')), and if badge == 'lead' the endpoint returns elevated data ('lane': 'elevated', 'payroll': 'full', 'casework': 'open'). Any caller can trivially set ops_badge=lead (or the x-ops-badge header) to impersonate the privileged role; the value is never validated against a server-side session or signed token.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-565: Reliance on Cookies without Validation and Integrity Checking"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.os-command-injection",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 184,
+        "col": 5,
+        "offset": 6749
+      },
+      "end": {
+        "line": 185,
+        "col": 45,
+        "offset": 6837
+      },
+      "extra": {
+        "message": "OS command injection: request.GET['host'] is concatenated into a shell command and executed via os.system('ping -c 1 ' + host). Because os.system() invokes a shell, input such as host=127.0.0.1; whoami or host='$(id)' executes arbitrary commands on the server with the application's privileges, giving full remote code execution. No shell=False/subprocess list form or input validation is used.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.tls.certificate-validation-disabled",
+      "path": "config/partner_console.py",
+      "start": {
+        "line": 193,
+        "col": 5,
+        "offset": 7039
+      },
+      "end": {
+        "line": 194,
+        "col": 61,
+        "offset": 7138
+      },
+      "extra": {
+        "message": "TLS certificate validation disabled: the HTTPS request to the partner endpoint is made with ssl._create_unverified_context() (a private, unsupported API that disables peer certificate and hostname verification). This exposes the connection to man-in-the-middle attacks: an attacker can impersonate the partner endpoint, tamper with responses, or harvest credentials sent along the request.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-295: Improper Certificate Validation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.secrets.hardcoded-default-secret-key",
+      "path": "config/settings.py",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 151
+      },
+      "end": {
+        "line": 10,
+        "col": 85,
+        "offset": 235
+      },
+      "extra": {
+        "message": "Hardcoded fallback secret: SECRET_KEY defaults to the well-known string 'unsafe-local-dev-secret-key-change-me' when DJANGO_SECRET_KEY is unset. If deployed without the environment variable, session signing, password-reset tokens, and CSRF tokens are all forgeable by anyone who knows this public default, allowing complete session forgery and auth bypass.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.cookies.missing-secure-flag",
+      "path": "config/settings.py",
+      "start": {
+        "line": 108,
+        "col": 1,
+        "offset": 3337
+      },
+      "end": {
+        "line": 110,
+        "col": 32,
+        "offset": 3427
+      },
+      "extra": {
+        "message": "Session and CSRF cookies are configured with HttpOnly and SameSite=Lax but SESSION_COOKIE_SECURE and CSRF_COOKIE_SECURE are never set (Django defaults them to False), and SECURE_SSL_REDIRECT / SECURE_HSTS_SECONDS are absent from the otherwise deliberate hardening block. In any HTTPS deployment the authentication session cookie will be transmitted over plain HTTP if requested, allowing interception.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.csv-formula-injection",
+      "path": "crm/views.py",
+      "start": {
+        "line": 871,
+        "col": 9,
+        "offset": 33373
+      },
+      "end": {
+        "line": 882,
+        "col": 14,
+        "offset": 33752
+      },
+      "extra": {
+        "message": "CSV/formula injection in report_export: user-editable field values such as organization names, risk_notes, escalation titles, and emails are written directly into CSV cells with csv.writer.writerow() and served as a downloadable attachment. A value beginning with '=', '+', '-', or '@' (e.g. an organization named '=HYPERLINK(\"http://evil\",\"click\")' or '=cmd|...') is executed as a formula when an admin opens the export in Excel/LibreOffice, leading to data exfiltration or command execution on the analyst's workstation. The same pattern repeats in the 'health' (lines 884-886) and 'escalations' (lines 888-890) report branches.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1236: Improper Neutralization of Formula Elements in a CSV File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

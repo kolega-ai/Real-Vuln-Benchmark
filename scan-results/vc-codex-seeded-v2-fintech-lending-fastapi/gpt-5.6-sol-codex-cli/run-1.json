@@ -2,12 +2,12 @@
   "version": "1.0.0",
   "results": [
     {
-      "check_id": "python.security.auth.hardcoded-session-secret",
+      "check_id": "python.security.crypto.hardcoded-session-secret",
       "path": "backend/app/main.py",
       "start": {
         "line": 28,
         "col": 5,
-        "offset": 1089
+        "offset": 1093
       },
       "end": {
         "line": 28,
@@ -15,11 +15,11 @@
         "offset": 1135
       },
       "extra": {
-        "message": "The application uses a publicly known default session-signing secret. If SESSION_SECRET is unset, attackers can forge lp_session tokens containing arbitrary user IDs and impersonate privileged users.",
+        "message": "The application falls back to the hardcoded session-signing secret \"dev-only-change-me\". If SESSION_SECRET is unset, attackers can forge signed lp_session tokens containing an arbitrary user ID and impersonate privileged users.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
+            "CWE-321: Use of Hard-coded Cryptographic Key"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -27,21 +27,21 @@
       }
     },
     {
-      "check_id": "python.security.session.missing-expiration",
+      "check_id": "python.security.auth.session-without-expiration",
       "path": "backend/app/main.py",
       "start": {
-        "line": 253,
-        "col": 5,
-        "offset": 11127
+        "line": 252,
+        "col": 1,
+        "offset": 11090
       },
       "end": {
-        "line": 253,
-        "col": 73,
-        "offset": 11199
+        "line": 263,
+        "col": 35,
+        "offset": 11531
       },
       "extra": {
-        "message": "Session tokens contain no issuance or expiration time, and current_user verifies them with URLSafeSerializer rather than an age-limited serializer. Stolen or copied tokens remain valid indefinitely unless the account is disabled or the signing secret changes.",
-        "severity": "WARNING",
+        "message": "Session tokens contain only a user ID and untracked nonce, and URLSafeSerializer.loads() performs no age check. Tokens therefore remain valid indefinitely and cannot be revoked after theft or logout.",
+        "severity": "ERROR",
         "metadata": {
           "cwe": [
             "CWE-613: Insufficient Session Expiration"
@@ -52,20 +52,20 @@
       }
     },
     {
-      "check_id": "python.security.access-control.underwriter-idor",
+      "check_id": "python.security.authorization.underwriter-cross-assignment-access",
       "path": "backend/app/main.py",
       "start": {
-        "line": 293,
-        "col": 9,
-        "offset": 12696
+        "line": 289,
+        "col": 1,
+        "offset": 12515
       },
       "end": {
-        "line": 293,
-        "col": 181,
-        "offset": 12876
+        "line": 294,
+        "col": 91,
+        "offset": 12967
       },
       "extra": {
-        "message": "The status-based OR condition lets an underwriter access an application assigned to another underwriter whenever its status is submitted, in_review, or needs_documents. Direct application and document endpoints relying on can_view_app therefore expose another underwriter's borrower data and documents.",
+        "message": "can_view_app() permits an underwriter to view applications assigned to other underwriters whenever their status is submitted, in_review, or needs_documents. Direct requests by app_id consequently expose another underwriter's borrower PII and financial data.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -77,12 +77,62 @@
       }
     },
     {
-      "check_id": "python.security.cookie.missing-secure-flag",
+      "check_id": "python.security.auth.registration-missing-rate-limit",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 413,
+        "col": 1,
+        "offset": 18485
+      },
+      "end": {
+        "line": 425,
+        "col": 39,
+        "offset": 19430
+      },
+      "extra": {
+        "message": "The unauthenticated registration endpoint creates users and borrower profiles without throttling, per-IP limits, CAPTCHA, or another abuse control. Automated requests can create unbounded accounts and exhaust application resources.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.registration-account-enumeration",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 415,
+        "col": 5,
+        "offset": 18602
+      },
+      "end": {
+        "line": 416,
+        "col": 61,
+        "offset": 18725
+      },
+      "extra": {
+        "message": "Registration returns a distinct HTTP 409 \"Email already registered\" response for existing email addresses, allowing unauthenticated callers to enumerate registered accounts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-204: Observable Response Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.cookie.session-cookie-without-secure",
       "path": "backend/app/main.py",
       "start": {
         "line": 424,
         "col": 5,
-        "offset": 19289
+        "offset": 19293
       },
       "end": {
         "line": 424,
@@ -90,11 +140,61 @@
         "offset": 19391
       },
       "extra": {
-        "message": "The authenticated lp_session cookie is explicitly created with secure=False during registration and again during login. Browsers may transmit the session token over unencrypted HTTP, allowing interception.",
-        "severity": "INFO",
+        "message": "The lp_session authentication cookie is explicitly created with secure=False during registration and again during login at line 435. Browsers may transmit the session token over cleartext HTTP, enabling interception and session hijacking.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-614: Sensitive Cookie in HTTPS Session Without Secure Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.login-missing-rate-limit",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 428,
+        "col": 1,
+        "offset": 19433
+      },
+      "end": {
+        "line": 436,
+        "col": 39,
+        "offset": 19978
+      },
+      "extra": {
+        "message": "The public login endpoint performs unrestricted password verification without account lockout, per-account throttling, or an IP rate limit, enabling password spraying and credential brute-force attacks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.password-reset-missing-rate-limit",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 445,
+        "col": 1,
+        "offset": 20110
+      },
+      "end": {
+        "line": 451,
+        "col": 135,
+        "offset": 20475
+      },
+      "extra": {
+        "message": "The unauthenticated password-reset endpoint generates recovery tokens without per-email or per-IP throttling, allowing automated reset abuse and repeated invalidation of previously issued tokens.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -107,7 +207,7 @@
       "start": {
         "line": 451,
         "col": 5,
-        "offset": 20341
+        "offset": 20345
       },
       "end": {
         "line": 451,
@@ -115,8 +215,8 @@
         "offset": 20475
       },
       "extra": {
-        "message": "The unauthenticated password-reset endpoint returns the generated reset token directly to any requester who supplies a registered email address. This discloses an account-recovery credential instead of delivering it through a separately authenticated channel.",
-        "severity": "ERROR",
+        "message": "The unauthenticated password-reset response returns the generated recovery token for an existing account and null otherwise. This discloses the recovery secret and enables account enumeration.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-640: Weak Password Recovery Mechanism for Forgotten Password"
@@ -127,12 +227,37 @@
       }
     },
     {
-      "check_id": "python.security.dos.unbounded-file-upload",
+      "check_id": "python.security.workflow.decision-allows-unreviewed-documents",
       "path": "backend/app/main.py",
       "start": {
-        "line": 680,
-        "col": 9,
-        "offset": 32982
+        "line": 652,
+        "col": 5,
+        "offset": 30953
+      },
+      "end": {
+        "line": 654,
+        "col": 109,
+        "offset": 31252
+      },
+      "extra": {
+        "message": "The decision workflow blocks requested, rejected, expired, and resubmission documents but not documents whose status is merely uploaded. Applications can therefore be approved or counteroffered before uploaded evidence has been reviewed and accepted.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-840: Business Logic Errors"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.upload.client-controlled-content-type",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 675,
+        "col": 5,
+        "offset": 32653
       },
       "end": {
         "line": 680,
@@ -140,11 +265,86 @@
         "offset": 33024
       },
       "extra": {
-        "message": "Uploaded document data is copied to disk without enforcing a byte limit. Any authenticated user with document access can submit an arbitrarily large body and exhaust server storage.",
+        "message": "Document uploads are accepted solely from the client-supplied content_type value. The file bytes are never checked against the claimed type, allowing arbitrary or polyglot content to be stored and later served under an allowed MIME type.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-770: Allocation of Resources Without Limits or Throttling"
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.dos.unbounded-document-upload",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 679,
+        "col": 5,
+        "offset": 32951
+      },
+      "end": {
+        "line": 680,
+        "col": 43,
+        "offset": 33024
+      },
+      "extra": {
+        "message": "shutil.copyfileobj() copies the uploaded document to disk without a file-size limit, storage quota, or early cutoff. An authenticated borrower can repeatedly upload large files and exhaust server storage.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.storage.plaintext-loan-documents",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 679,
+        "col": 5,
+        "offset": 32951
+      },
+      "end": {
+        "line": 681,
+        "col": 32,
+        "offset": 33056
+      },
+      "extra": {
+        "message": "Sensitive loan documents, including configured bank statements, tax returns, and government IDs, are written directly to ordinary local files without application-level encryption. Filesystem or backup disclosure exposes the documents in plaintext.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.workflow.borrower-can-replace-reviewed-documents",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 670,
+        "col": 5,
+        "offset": 32336
+      },
+      "end": {
+        "line": 685,
+        "col": 41,
+        "offset": 33209
+      },
+      "extra": {
+        "message": "The upload handler checks only whether the borrower can view the document. It does not restrict the document or application state, then unconditionally replaces the file and changes the status to uploaded. Borrowers can overwrite accepted evidence or documents belonging to finalized applications.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-840: Business Logic Errors"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -157,19 +357,19 @@
       "start": {
         "line": 760,
         "col": 5,
-        "offset": 36992
+        "offset": 36996
       },
       "end": {
-        "line": 760,
-        "col": 48,
-        "offset": 37039
+        "line": 766,
+        "col": 418,
+        "offset": 37629
       },
       "extra": {
-        "message": "The leads-import endpoint reads the complete uploaded file into memory without a size or row limit. A support specialist or compromised privileged account can cause excessive memory and database resource consumption.",
+        "message": "The lead importer reads the entire uploaded CSV into memory, duplicates it in StringIO, and processes an unlimited number of rows. A large upload by a support or admin account can exhaust memory and cause unbounded database growth.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-770: Allocation of Resources Without Limits or Throttling"
+            "CWE-400: Uncontrolled Resource Consumption"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -177,12 +377,87 @@
       }
     },
     {
-      "check_id": "python.security.access-control.loan-record-idor",
+      "check_id": "python.security.dos.unbounded-admin-export",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 778,
+        "col": 5,
+        "offset": 38106
+      },
+      "end": {
+        "line": 795,
+        "col": 145,
+        "offset": 39481
+      },
+      "extra": {
+        "message": "The export handler loads complete tables, builds the entire CSV in one StringIO buffer, and copies it again with getvalue(). Dataset growth can cause excessive memory consumption and denial of service when an export is requested.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.csv-formula-injection",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 783,
+        "col": 13,
+        "offset": 38378
+      },
+      "end": {
+        "line": 787,
+        "col": 172,
+        "offset": 38927
+      },
+      "extra": {
+        "message": "Borrower-controlled business names and other database values are written directly to CSV cells without neutralizing leading =, +, -, or @ characters. Opening the report in spreadsheet software can execute attacker-supplied formulas.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1236: Improper Neutralization of Formula Elements in a CSV File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.disabled-api-key-remains-valid",
+      "path": "backend/app/main.py",
+      "start": {
+        "line": 812,
+        "col": 5,
+        "offset": 40034
+      },
+      "end": {
+        "line": 814,
+        "col": 52,
+        "offset": 40269
+      },
+      "extra": {
+        "message": "Integration API-key validation selects administrators with API-key hashes but does not exclude disabled users. Disabling a compromised administrator therefore leaves that administrator's existing API key valid.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.ops-folio-idor",
       "path": "backend/app/loan_operations.py",
       "start": {
-        "line": 29,
-        "col": 9,
-        "offset": 979
+        "line": 23,
+        "col": 1,
+        "offset": 727
       },
       "end": {
         "line": 30,
@@ -190,7 +465,7 @@
         "offset": 1090
       },
       "extra": {
-        "message": "The caller selects loan_id and receives the corresponding loan card without any ownership or per-record authorization check. The shared internal token authenticates the request but does not establish authorization to the selected loan record.",
+        "message": "The caller controls loan_id and can retrieve any matching folio record without an ownership or tenant-scope check. Possession of the shared operations token does not establish authorization to the selected loan object.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -205,9 +480,9 @@
       "check_id": "python.security.path-traversal.arbitrary-file-read",
       "path": "backend/app/loan_operations.py",
       "start": {
-        "line": 38,
+        "line": 36,
         "col": 5,
-        "offset": 1258
+        "offset": 1181
       },
       "end": {
         "line": 40,
@@ -215,11 +490,36 @@
         "offset": 1352
       },
       "extra": {
-        "message": "User-controlled packet_ref is appended to BASE_EXPORT_DIR without containment validation and then read. Absolute paths or ../ components allow an authenticated caller to read arbitrary files accessible to the service account.",
+        "message": "The packet_ref query parameter is joined directly to BASE_EXPORT_DIR and read without resolving and validating containment. Values containing ../ or an absolute path can read files outside the intended export directory.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
             "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.business-logic.unvalidated-ledger-update",
+      "path": "backend/app/loan_operations.py",
+      "start": {
+        "line": 51,
+        "col": 5,
+        "offset": 1634
+      },
+      "end": {
+        "line": 55,
+        "col": 55,
+        "offset": 1863
+      },
+      "extra": {
+        "message": "Raw JSON values are used to update sensitive ledger state without validating the amount or allowed state transitions. A negative amount increases the balance, and an arbitrary state string replaces the server-selected state.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-840: Business Logic Errors"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -232,7 +532,7 @@
       "start": {
         "line": 61,
         "col": 5,
-        "offset": 2006
+        "offset": 2010
       },
       "end": {
         "line": 61,
@@ -240,7 +540,7 @@
         "offset": 2039
       },
       "extra": {
-        "message": "The lane query parameter is passed directly to RedirectResponse without restricting its scheme or destination. An attacker can construct a trusted application URL that redirects victims to an arbitrary external site.",
+        "message": "The caller-controlled lane parameter is passed directly to RedirectResponse without restricting it to a trusted host or local path, allowing redirection to an attacker-controlled site.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -252,12 +552,37 @@
       }
     },
     {
-      "check_id": "python.security.auth.hardcoded-verifiers",
+      "check_id": "python.security.cookie.missing-security-attributes",
+      "path": "backend/app/loan_operations.py",
+      "start": {
+        "line": 73,
+        "col": 5,
+        "offset": 2339
+      },
+      "end": {
+        "line": 73,
+        "col": 48,
+        "offset": 2382
+      },
+      "extra": {
+        "message": "The portal_crumb cookie is set without Secure or HttpOnly attributes. It can be transmitted over cleartext HTTP and read by client-side scripts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without HttpOnly Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.credentials.hardcoded-verifier",
       "path": "backend/app/loan_operations.py",
       "start": {
         "line": 84,
         "col": 5,
-        "offset": 2615
+        "offset": 2619
       },
       "end": {
         "line": 84,
@@ -265,8 +590,8 @@
         "offset": 2661
       },
       "extra": {
-        "message": "Identity verification relies on hardcoded four-digit verifier values stored in source code. Anyone with source access can supply these static credentials, and they cannot be safely rotated or individually revoked.",
-        "severity": "INFO",
+        "message": "Identity verifier values are hardcoded directly in runtime source code. Anyone who obtains the source knows the verifier for both handles, and the credentials cannot be rotated without changing and redeploying the application.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-798: Use of Hard-coded Credentials"
@@ -277,12 +602,112 @@
       }
     },
     {
+      "check_id": "python.security.auth.identity-enumeration",
+      "path": "backend/app/loan_operations.py",
+      "start": {
+        "line": 85,
+        "col": 5,
+        "offset": 2666
+      },
+      "end": {
+        "line": 88,
+        "col": 73,
+        "offset": 2871
+      },
+      "extra": {
+        "message": "The identity endpoint returns HTTP 404 and \"unknown handle\" for an invalid handle but HTTP 403 and \"bad verifier\" for a valid handle with the wrong code. This discrepancy allows callers to enumerate valid identities.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-204: Observable Response Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.identity-verifier-bruteforce",
+      "path": "backend/app/loan_operations.py",
+      "start": {
+        "line": 80,
+        "col": 1,
+        "offset": 2461
+      },
+      "end": {
+        "line": 89,
+        "col": 32,
+        "offset": 2903
+      },
+      "extra": {
+        "message": "The endpoint accepts unlimited verifier guesses with no throttling or lockout. Because the accepted verifier values are only four digits and successful guesses produce a distinct response, a holder of the operations token can brute-force them.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.cors.credentialed-origin-reflection",
+      "path": "backend/app/loan_operations.py",
+      "start": {
+        "line": 94,
+        "col": 5,
+        "offset": 3038
+      },
+      "end": {
+        "line": 97,
+        "col": 66,
+        "offset": 3256
+      },
+      "extra": {
+        "message": "The endpoint reflects the request Origin into Access-Control-Allow-Origin while also setting Access-Control-Allow-Credentials to true. This creates a credentialed CORS policy for arbitrary origins instead of enforcing the application's configured origin allowlist.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.headers.missing-frame-protection",
+      "path": "backend/app/loan_operations.py",
+      "start": {
+        "line": 103,
+        "col": 5,
+        "offset": 3387
+      },
+      "end": {
+        "line": 105,
+        "col": 53,
+        "offset": 3532
+      },
+      "extra": {
+        "message": "The response explicitly clears Content-Security-Policy and provides no X-Frame-Options or frame-ancestors directive, leaving the operations endpoint frameable by untrusted sites.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendered UI Layers or Frames"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
       "check_id": "python.security.path-traversal.arbitrary-file-write",
       "path": "backend/app/loan_operations.py",
       "start": {
-        "line": 117,
+        "line": 116,
         "col": 5,
-        "offset": 3788
+        "offset": 3760
       },
       "end": {
         "line": 119,
@@ -290,7 +715,7 @@
         "offset": 3905
       },
       "extra": {
-        "message": "User-controlled name is joined with BASE_EXPORT_DIR without validating that the resolved path remains inside that directory. The request body is then written to the resulting path, allowing arbitrary file creation or overwrite through absolute paths or ../ traversal.",
+        "message": "The caller controls both the file name and bytes written to BASE_EXPORT_DIR. Because name is not sanitized or checked for directory containment, ../ segments or an absolute path permit arbitrary file creation or overwrite with the application's filesystem privileges.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -302,12 +727,37 @@
       }
     },
     {
-      "check_id": "python.security.authorization.client-controlled-role",
+      "check_id": "python.security.dos.unbounded-ops-upload",
+      "path": "backend/app/loan_operations.py",
+      "start": {
+        "line": 116,
+        "col": 5,
+        "offset": 3760
+      },
+      "end": {
+        "line": 119,
+        "col": 29,
+        "offset": 3905
+      },
+      "extra": {
+        "message": "request.body() buffers the complete request in memory and write_bytes() stores it without a size limit or quota. A sufficiently large or repeated authorized request can exhaust server memory and disk.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authorization.client-controlled-badge",
       "path": "backend/app/loan_operations.py",
       "start": {
         "line": 131,
         "col": 5,
-        "offset": 4195
+        "offset": 4199
       },
       "end": {
         "line": 133,
@@ -315,11 +765,11 @@
         "offset": 4380
       },
       "extra": {
-        "message": "Elevated authorization is granted solely when an attacker-controlled cookie or header equals the literal value lead. These values are neither signed nor mapped to a server-side identity, allowing any internal-token holder to self-assert elevated payroll and casework access.",
+        "message": "The endpoint trusts an unsigned, caller-controlled cookie or header as an authorization decision. Setting ops_badge or x-ops-badge to \"lead\" immediately returns the elevated payroll and casework response.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-602: Client-Side Enforcement of Server-Side Security"
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -330,9 +780,9 @@
       "check_id": "python.security.exposure.debug-information",
       "path": "backend/app/loan_operations.py",
       "start": {
-        "line": 140,
+        "line": 139,
         "col": 5,
-        "offset": 4541
+        "offset": 4525
       },
       "end": {
         "line": 140,
@@ -340,11 +790,11 @@
         "offset": 4638
       },
       "extra": {
-        "message": "The operations endpoint exposes deployment environment information and the server-side export directory path. This reveals internal configuration and filesystem layout useful for subsequent attacks such as path traversal.",
-        "severity": "INFO",
+        "message": "The trace endpoint is permanently enabled and exposes the APP_ENV value and filesystem export directory. These deployment details aid environment fingerprinting and follow-on file attacks.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+            "CWE-215: Insertion of Sensitive Information Into Debugging Code"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -355,9 +805,9 @@
       "check_id": "python.security.tls.disabled-certificate-validation",
       "path": "backend/app/loan_operations.py",
       "start": {
-        "line": 148,
+        "line": 147,
         "col": 5,
-        "offset": 4811
+        "offset": 4767
       },
       "end": {
         "line": 149,
@@ -365,7 +815,7 @@
         "offset": 4914
       },
       "extra": {
-        "message": "The outbound HTTPS request explicitly uses ssl._create_unverified_context(), disabling certificate and hostname verification. A network attacker able to intercept or redirect the connection can impersonate the partner service.",
+        "message": "The outbound HTTPS request uses ssl._create_unverified_context(), disabling certificate and hostname validation. A network attacker can impersonate the partner endpoint and intercept or alter the connection.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [

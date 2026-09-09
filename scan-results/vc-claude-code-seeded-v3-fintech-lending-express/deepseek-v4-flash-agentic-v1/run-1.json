@@ -1,0 +1,710 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.dos.arbitrary-file-read",
+      "path": "server/src/services/viewState.ts",
+      "start": {
+        "line": 13,
+        "col": 28,
+        "offset": 618
+      },
+      "end": {
+        "line": 13,
+        "col": 55,
+        "offset": 645
+      },
+      "extra": {
+        "message": "restoreViewPreferences() parses `<!ENTITY name SYSTEM \"path\">` declarations out of the attacker-controlled `viewStateMarkup` cookie and passes the entity's file path directly to fs.readFileSync(), then substitutes the file contents back into the response. The GET /api/servicing/application/:id/statement-view endpoint (servicing.ts:42-52) calls this with zero authentication, so any unauthenticated attacker can read arbitrary files from the server (e.g. /etc/passwd, .env, source) by sending the cookie. This is an XXE-style arbitrary local file disclosure.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "server/src/routes/applications.ts",
+      "start": {
+        "line": 100,
+        "col": 7,
+        "offset": 4262
+      },
+      "end": {
+        "line": 101,
+        "col": 47,
+        "offset": 4350
+      },
+      "extra": {
+        "message": "runSavedQueueSearch() builds SQL by interpolating both the field name and the value from the request body directly into a raw QueryBuilder condition: `qb.andWhere(\\`app.${field} = '${value}'\\`)`. `body.criteria` keys/values are fully attacker-controlled (zod only allows z.record(z.unknown())), enabling SQL injection against PostgreSQL. A staff user can read/alter any table. Note the adjacent /saved-search-validated endpoint (lines 114-137) proves this field should be allow-listed and parameterized.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "server/src/routes/documents.ts",
+      "start": {
+        "line": 377,
+        "col": 17,
+        "offset": 16759
+      },
+      "end": {
+        "line": 378,
+        "col": 55,
+        "offset": 16889
+      },
+      "extra": {
+        "message": "repackageDocumentForRecipient() takes `targetFormat` straight from req.body and concatenates it into a shell command string (`pandoc \"...\" --to=${targetFormat} ...`) executed via spawn(\"bash\", [\"-c\", cmd]). There is no allow-list on targetFormat (only the /repackage-secure variant validates it), so the owning borrower can inject arbitrary shell commands (e.g. targetFormat=`pdf; curl attacker`) achieving RCE on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "server/src/routes/dataio.ts",
+      "start": {
+        "line": 325,
+        "col": 17,
+        "offset": 14056
+      },
+      "end": {
+        "line": 326,
+        "col": 50,
+        "offset": 14152
+      },
+      "extra": {
+        "message": "renderPortfolioReport() takes the `outputType` query parameter with no allow-list and splices it into a shell command string (`${config.reportConverterBin} --to ${format}`) executed via spawn(\"bash\", [\"-c\", cmd]). Unlike the equivalent report renderer in documents.ts (which validates against ALLOWED_REPORT_FORMATS and passes arguments as an array), an admin/underwriter can inject arbitrary shell metacharacters (e.g. outputType=csv; curl ...) to execute commands on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection",
+      "path": "server/src/services/workflow.ts",
+      "start": {
+        "line": 69,
+        "col": 14,
+        "offset": 3100
+      },
+      "end": {
+        "line": 69,
+        "col": 67,
+        "offset": 3153
+      },
+      "extra": {
+        "message": "evaluateCovenantExpression() compiles the caller-supplied `expression` string with the Function constructor (`new Function(...Object.keys(metrics), \\`return (${expression});\\`)`) and executes it. This is reachable via POST /api/applications/:id/covenant-test which only requires any staff role (isStaffRole includes support_specialist, applications.ts:541), so a low-privilege support specialist can achieve arbitrary server-side code execution. The safe sibling endpoint /covenant-test-standard only evaluates a fixed library of tests.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.url-request",
+      "path": "server/src/routes/documents.ts",
+      "start": {
+        "line": 431,
+        "col": 27,
+        "offset": 19678
+      },
+      "end": {
+        "line": 431,
+        "col": 51,
+        "offset": 19702
+      },
+      "extra": {
+        "message": "importDocumentFromAccountingSource() fetches `body.sourceUrl` (any http(s) URL accepted by zod) with no host allow-list and writes the response body to disk as the borrower's document, after which the borrower can download it via /:docId/download. A borrower can thus probe and exfiltrate internal services (cloud metadata endpoints, internal admin APIs) \u2014 classic SSRF. The /import-from-source-secure sibling validates the hostname against ALLOWED_SOURCE_HOSTS.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.jwt.none-algorithm",
+      "path": "server/src/routes/dataio.ts",
+      "start": {
+        "line": 28,
+        "col": 7,
+        "offset": 1346
+      },
+      "end": {
+        "line": 31,
+        "col": 23,
+        "offset": 1466
+      },
+      "extra": {
+        "message": "applyLegacyBranchCostAllocation() verifies the `context` token with `algorithms: [\"HS256\", \"none\"]` and, on any failure, falls back to an unsigned jwt.decode(). An attacker can forge an unsigned token (alg=none / arbitrary payload) to pass the `payload.branchId` gate and access the branch cost-allocation report (aggregate loan totals), which is served without any other authentication (registered before router.use(requireAuth)). The /reports/branch-cost-allocation-export sibling (lines 46-63) correctly restricts to HS256.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.jwt.decode-without-verify",
+      "path": "server/src/routes/embed.ts",
+      "start": {
+        "line": 22,
+        "col": 22,
+        "offset": 1051
+      },
+      "end": {
+        "line": 26,
+        "col": 90,
+        "offset": 1120
+      },
+      "extra": {
+        "message": "continuePartnerHandoff() decodes the `handoff` token with jwt.decode() only (no signature verification) and, if a `sub` claim exists, returns any application's status, amount, and purpose looked up solely from the unauthenticated URL parameter. Because this route sits before router.use(requireAuth) (line 51), any anonymous attacker can forge a trivial token and read loan amounts/purpose for any application UUID. The servicing counterpart (servicing.ts:58-74) correctly uses jwt.verify with an explicit algorithm.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment",
+      "path": "server/src/routes/notifications.ts",
+      "start": {
+        "line": 16,
+        "col": 5,
+        "offset": 689
+      },
+      "end": {
+        "line": 17,
+        "col": 34,
+        "offset": 753
+      },
+      "extra": {
+        "message": "updateDeliveryPreferences() performs `Object.assign(user, req.body)` on the full User entity with no schema/allow-list. Any authenticated user (the route only requires requireAuth) can send `{\"role\":\"admin\"}` (or isActive, passwordHash, etc.) and escalate their own account to administrator on save. Compare users.ts:22-35, which copies only emailDigest/smsAlerts.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.file-write",
+      "path": "server/src/routes/dashboard.ts",
+      "start": {
+        "line": 38,
+        "col": 30,
+        "offset": 1664
+      },
+      "end": {
+        "line": 39,
+        "col": 66,
+        "offset": 1780
+      },
+      "extra": {
+        "message": "cacheDeskLayoutSnapshot() builds a file path from the client-controlled `deskId` cookie with no sanitization (`path.join(config.workspaceCacheDir, \\`${deskId}.json\\`)`) and writes JSON.stringify(req.body) to it. getDeskLayoutSnapshot() (lines 47-58) symmetrically reads and returns `${deskId}.json`. Any authenticated user (route only requires requireAuth) can set deskId to a traversal value (e.g. ../../../../tmp/pwn) to write arbitrary JSON files to arbitrary paths and read arbitrary *.json files from the server. The servicing.ts:25-36 sibling mitigates the same pattern with path.basename().",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.broken-access-control.data-level",
+      "path": "server/src/routes/shares.ts",
+      "start": {
+        "line": 98,
+        "col": 33,
+        "offset": 4550
+      },
+      "end": {
+        "line": 120,
+        "col": 5,
+        "offset": 5460
+      },
+      "extra": {
+        "message": "getSharedApplicationView() honors the client-supplied `dataLevel` query parameter (`const requestedLevel = (req.query.dataLevel as string) || share.dataLevel`). A viewer who was granted only 'summary' access can request `?dataLevel=full` and receive the full payload: financialSummary, riskTier, taxId, annualRevenue, owners (incl. ssnLast4), contact email/phone. This breaks the grant model; getGrantedApplicationView() (lines 129-163) correctly keys off share.dataLevel stored server-side.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor.payment-account",
+      "path": "server/src/routes/borrowers.ts",
+      "start": {
+        "line": 165,
+        "col": 13,
+        "offset": 6877
+      },
+      "end": {
+        "line": 167,
+        "col": 23,
+        "offset": 6937
+      },
+      "extra": {
+        "message": "getPaymentAccountById() (GET /api/borrowers/payment-accounts/:acctId) returns any PaymentAccount by id with no ownership or role check. Any authenticated borrower can enumerate other borrowers' payment accounts (bank name, account type, masked account/routing numbers, owning profile id). The sibling listPaymentAccountsForProfile() (lines 176-186) demonstrates the intended profile-scoped access check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect",
+      "path": "server/src/routes/embed.ts",
+      "start": {
+        "line": 43,
+        "col": 22,
+        "offset": 2134
+      },
+      "end": {
+        "line": 44,
+        "col": 34,
+        "offset": 2257
+      },
+      "extra": {
+        "message": "returnToPartnerAfterHandoff() redirects to an attacker-influenced destination taken from the `x-partner-return-url` header or the `returnTo` query parameter with no allow-list/validation (`res.redirect(returnTo)`), and the route is unauthenticated. This is an open redirect that can be abused for phishing. The secure pattern used in integrations.ts:218-228 restricts destinations to an allow-list.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unsafe-html",
+      "path": "server/src/routes/embed.ts",
+      "start": {
+        "line": 103,
+        "col": 25,
+        "offset": 4771
+      },
+      "end": {
+        "line": 104,
+        "col": 132,
+        "offset": 4935
+      },
+      "extra": {
+        "message": "renderWidgetBootstrapShell() injects the cookie value `widgetLocale` unescaped into an inline <script> block of an HTML page served at the portal origin (`window.__WIDGET_LOCALE__ = \"${locale}\";`). An attacker who can influence the widgetLocale cookie (or any upstream value feeding it) can execute arbitrary script in the portal origin. The preview shell sibling (lines 115-127) correctly escapes the same value with htmlEscape().",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.missing-auth.payoff-quote",
+      "path": "server/src/routes/servicing.ts",
+      "start": {
+        "line": 78,
+        "col": 3,
+        "offset": 3604
+      },
+      "end": {
+        "line": 93,
+        "col": 66,
+        "offset": 4091
+      },
+      "extra": {
+        "message": "getPayoffQuote() is registered as GET /application/:id/payoff-quote with no requireAuth and no authorization check, yet returns the loan principal amount and computed payoff accrual for any application id. This is an unauthenticated IDOR leaking borrowers' financial data (the sibling statement endpoint at line 113 requires auth and assertCanViewApplication).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.file-read",
+      "path": "server/src/routes/products.ts",
+      "start": {
+        "line": 214,
+        "col": 30,
+        "offset": 8178
+      },
+      "end": {
+        "line": 216,
+        "col": 62,
+        "offset": 8275
+      },
+      "extra": {
+        "message": "getAgreementTemplate() joins the caller-controlled `variant` query parameter directly into a filesystem path (`path.join(config.templatesDir, \\`${variant}.txt\\`)`) with no basename()/containment check before readFileSync. Any authenticated user can traverse (e.g. variant=../../../../etc/hosts => reads hosts.txt if present, or any *.txt under the uploads/private dirs) to read arbitrary .txt files outside templatesDir. getProductDisclosure (lines 225-241) shows the safe pattern using path.basename().",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.file-read",
+      "path": "server/src/routes/products.ts",
+      "start": {
+        "line": 251,
+        "col": 30,
+        "offset": 9870
+      },
+      "end": {
+        "line": 253,
+        "col": 57,
+        "offset": 9950
+      },
+      "extra": {
+        "message": "getIndustryGuidance() builds a path from the borrower's own, unvalidated profile `industry` value (`path.join(config.templatesDir, \"industry-guidance\", \\`${industry}.txt\\`)`) with no basename/containment check. A borrower can set industry to a traversal string (e.g. ../../disclosure-standard or ../../../x) and read arbitrary *.txt files from the server. getIndustryGuidanceSafe (lines 264-280) demonstrates the fix using path.basename() and a baseDir containment check.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment",
+      "path": "server/src/routes/documents.ts",
+      "start": {
+        "line": 143,
+        "col": 30,
+        "offset": 5718
+      },
+      "end": {
+        "line": 146,
+        "col": 11,
+        "offset": 5788
+      },
+      "extra": {
+        "message": "uploadDocumentWithCorrection() JSON.parses the borrower-supplied `correction` field and Object.assign()s it directly onto the Document entity. A borrower can set arbitrary document fields, e.g. {\"status\":\"accepted\"} to self-accept their own required documents (bypassing staff document review that gates loan decisions), or reassign documentTypeId/reviewerId. The /upload-with-correction-validated sibling (lines 156-197) restricts correction to an explicit label/category allow-list.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment",
+      "path": "server/src/routes/borrowers.ts",
+      "start": {
+        "line": 196,
+        "col": 5,
+        "offset": 8308
+      },
+      "end": {
+        "line": 199,
+        "col": 61,
+        "offset": 8400
+      },
+      "extra": {
+        "message": "restoreBorrowerIntakeDraft() base64-decodes and JSON.parses the caller-supplied `:draft` URL segment and Object.assign()s it wholesale onto the BorrowerProfile entity with no schema. This allows a borrower (or staff helper) to overwrite arbitrary profile fields including userId, taxId, owners (with ssnLast4), logoAssetName, etc. \u2014 bypassing the profile update schema. The /intake-draft-validated sibling (lines 210-223) validates against profileSchema.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.padding-oracle",
+      "path": "server/src/routes/borrowers.ts",
+      "start": {
+        "line": 249,
+        "col": 30,
+        "offset": 10612
+      },
+      "end": {
+        "line": 257,
+        "col": 7,
+        "offset": 10820
+      },
+      "extra": {
+        "message": "resumeIntakeFromToken() decrypts the token with AES-256-CBC and no authentication tag (vault.ts:63-80), then returns two distinct, attacker-visible error messages (ResumeTokenPaddingError => 'padding check failed' vs ResumeTokenFormatError). This distinguishable padding failure is a CBC padding oracle, letting an attacker who can submit arbitrary tokens (any borrower may on their own profile) recover plaintext of captured resume tokens. The secure sibling uses AES-256-GCM (vault.ts:85-107).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.insecure-hash",
+      "path": "server/src/routes/integrations.ts",
+      "start": {
+        "line": 71,
+        "col": 7,
+        "offset": 3287
+      },
+      "end": {
+        "line": 71,
+        "col": 90,
+        "offset": 3370
+      },
+      "extra": {
+        "message": "registerPartnerPortalAccount() stores the partner password using an unsalted single-pass SHA-256 (`crypto.createHash(\"sha256\").update(body.password).digest(\"hex\")`). Unsalted fast hashes are trivially brute-forced and rainbow-table-able; compare user passwords which are hashed with bcrypt (cost 12) in services/auth.ts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data-url",
+      "path": "server/src/routes/integrations.ts",
+      "start": {
+        "line": 94,
+        "col": 15,
+        "offset": 4318
+      },
+      "end": {
+        "line": 96,
+        "col": 3,
+        "offset": 4470
+      },
+      "extra": {
+        "message": "pushPartnerAccountToLegacyCrm() transmits the freshly created partner's plaintext password to the legacy CRM in a URL query string over plaintext HTTP (config.legacyCrmBaseUrl defaults to http://crm.internal.example.com). Credentials in query strings are logged by proxies/servers and sent in cleartext. The current-sync sibling pushPartnerContactToCrm (lines 107-124) only forwards the email over TLS with a header credential.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings",
+            "CWE-319: Cleartext Transmission of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.logging.sensitive-data",
+      "path": "server/src/routes/borrowers.ts",
+      "start": {
+        "line": 348,
+        "col": 36,
+        "offset": 14865
+      },
+      "end": {
+        "line": 348,
+        "col": 85,
+        "offset": 14914
+      },
+      "extra": {
+        "message": "verifyPaymentAccountMicrodeposits() logs the full request body \u2014 including the raw account number, routing/ABA number, and the two micro-deposit amounts \u2014 to the console via console.log(). These bank details are sensitive financial data; the /verify-microdeposits-safe sibling (lines 359-373) logs only the profileId and outcome.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.prototype-pollution",
+      "path": "server/src/services/config.ts",
+      "start": {
+        "line": 33,
+        "col": 12,
+        "offset": 1148
+      },
+      "end": {
+        "line": 33,
+        "col": 50,
+        "offset": 1186
+      },
+      "extra": {
+        "message": "registerQueuePreferences() merges attacker JSON into the shared queueWorkspaceDefaults object with a recursive mergeDeep that does not strip __proto__/constructor/prototype keys (the sanitizer only guards registerCatalogPreferences). POST /api/dashboard/workspace-preferences (dashboard.ts:20-28) is reachable by any authenticated user, so a body like {\"__proto__\":{\"polluted\":true}} pollutes Object.prototype process-wide \u2014 a prototype-pollution primitive that can lead to property-injection, DoS, or RCE gadget abuse.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.session.no-expiry",
+      "path": "server/src/services/auth.ts",
+      "start": {
+        "line": 30,
+        "col": 3,
+        "offset": 968
+      },
+      "end": {
+        "line": 30,
+        "col": 90,
+        "offset": 1054
+      },
+      "extra": {
+        "message": "signBranchTerminalToken() issues a JWT with no expiresIn and the branch-terminal session cookie (routes/auth.ts:220) sets no maxAge. Because verifyToken() never checks expiry, a stolen/leaked branch-terminal JWT is valid indefinitely (only secret rotation revokes it), contradicting the 'one shift' intent. This is an insufficient-session-expiration weakness for a high-privilege staff session.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secret",
+      "path": "server/src/services/disbursement.ts",
+      "start": {
+        "line": 13,
+        "col": 25,
+        "offset": 661
+      },
+      "end": {
+        "line": 13,
+        "col": 63,
+        "offset": 699
+      },
+      "extra": {
+        "message": "initiateAchDisbursement() embeds a hardcoded bearer credential (`bp_live_9f2a7c14d8e6401b9b3f5a0c7d2e441a`) in source for the ACH payout rail. Any committed secret is exposed to anyone with repo access; the wire counterpart (lines 23-35) correctly loads its key from the environment (WIRE_PARTNER_KEY).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-disclosure.stack-trace",
+      "path": "server/src/routes/dataio.ts",
+      "start": {
+        "line": 130,
+        "col": 5,
+        "offset": 5982
+      },
+      "end": {
+        "line": 130,
+        "col": 72,
+        "offset": 6049
+      },
+      "extra": {
+        "message": "generatePortfolioRiskSummary() returns the raw error message and stack trace to the client (`{ error: (err as Error).message, stack: (err as Error).stack }`), disclosing internal code paths, file names, and query internals. Errors should be logged server-side and a generic message returned, as the central handler does.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.logging.log-injection",
+      "path": "server/src/routes/applications.ts",
+      "start": {
+        "line": 34,
+        "col": 40,
+        "offset": 1366
+      },
+      "end": {
+        "line": 34,
+        "col": 71,
+        "offset": 1397
+      },
+      "extra": {
+        "message": "recordQueueSearchActivity() writes the raw, un-sanitized queue search `filter` (attacker-controlled `q` query param) into the log line. Newlines/control characters (and terminal escape sequences) are not stripped, enabling log forging/injection. The document-search counterpart in documents.ts:284-288 sanitizes CR/LF/NUL before logging.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

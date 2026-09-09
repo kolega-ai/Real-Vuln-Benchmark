@@ -1,0 +1,290 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.xss.reflected-xss",
+      "path": "src/server/routes.js",
+      "start": {
+        "line": 29,
+        "col": 5,
+        "offset": 789
+      },
+      "end": {
+        "line": 29,
+        "col": 47,
+        "offset": 831
+      },
+      "extra": {
+        "message": "The GET /api/search handler echoes the raw user-controlled query parameter req.query.searchTerm directly into the HTTP response via res.status(200).send(). Express sends string bodies with Content-Type text/html by default, so navigating to /api/search?searchTerm=<script>... or <img src=x onerror=...> renders and executes attacker-supplied markup in the victim's browser (reflected XSS). The value is also echoed unencoded into the search page HTML via $sce.trustAsHtml.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unsafe-trust-as-html",
+      "path": "src/client/app/xss-search/xss-search.controller.js",
+      "start": {
+        "line": 35,
+        "col": 21,
+        "offset": 1122
+      },
+      "end": {
+        "line": 35,
+        "col": 66,
+        "offset": 1167
+      },
+      "extra": {
+        "message": "Reflected/DOM XSS: the controller reads the URL hash ($location.hash(), line 19) as the search term, sends it to /api/search, and marks the server's unvalidated response as trusted HTML with $sce.trustAsHtml(response) (line 35), which is rendered by <pre ng-bind-html=\"vm.searchResults\"> in xss-search.html:18. $sce.trustAsHtml bypasses ngSanitize, so an attacker-controlled payload such as #<img src=x onerror=alert(document.cookie)> executes in the victim's browser.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting",
+            "CWE-80: Improper Neutralization of Script-Related HTML Tags"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-xss-trusted-html",
+      "path": "src/client/app/csrf/csrf.controller.js",
+      "start": {
+        "line": 45,
+        "col": 21,
+        "offset": 1448
+      },
+      "end": {
+        "line": 45,
+        "col": 75,
+        "offset": 1502
+      },
+      "extra": {
+        "message": "Stored XSS: the profile lastName is loaded from the server (where it was saved via updateProfile from an unauthenticated POST body) and wrapped with $sce.trustAsHtml(response.lastName) (line 45), then rendered raw by <span ng-bind-html=\"vm.user.lastName\"> in csrf.html:32. Because the value is explicitly trusted, ngSanitize is bypassed and a malicious lastName (e.g. <img src=x onerror=alert(1)>) stored through /api/user/profile executes whenever any victim opens the /csrf view.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting",
+            "CWE-80: Improper Neutralization of Script-Related HTML Tags"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.csrf.state-changing",
+      "path": "src/server/routes.js",
+      "start": {
+        "line": 38,
+        "col": 5,
+        "offset": 1128
+      },
+      "end": {
+        "line": 49,
+        "col": 42,
+        "offset": 1434
+      },
+      "extra": {
+        "message": "CSRF: POST /api/user/profile (updateProfile) is a state-changing endpoint authenticated only by the userAuthToken cookie (read at line 39). There is no CSRF token, no Origin/Referer validation, and the cookie is set without SameSite (line 62), so a cross-site HTML form (see attacker-app csrf-attack.html:10-13) automatically submits the victim's cookie and silently overwrites the victim's profile. GET /api/user/profile similarly discloses data based only on the cookie.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.broken-hardcoded-token",
+      "path": "src/server/routes.js",
+      "start": {
+        "line": 53,
+        "col": 21,
+        "offset": 1631
+      },
+      "end": {
+        "line": 53,
+        "col": 37,
+        "offset": 1647
+      },
+      "extra": {
+        "message": "Broken authentication / predictable session: login() discards the per-request random token and always issues the hardcoded, public token '35592211433686316' (line 53), set as the userAuthToken cookie (line 62). Every user shares one static token and no credentials are verified, so an attacker can forge the cookie with this known value to read or overwrite the victim's profile without logging in (impersonation / authentication bypass).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hardcoded Credentials",
+            "CWE-287: Improper Authentication",
+            "CWE-330: Use of Insufficiently Random Values"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-authorization",
+      "path": "src/server/routes.js",
+      "start": {
+        "line": 32,
+        "col": 5,
+        "offset": 867
+      },
+      "end": {
+        "line": 36,
+        "col": 82,
+        "offset": 1021
+      },
+      "extra": {
+        "message": "Missing authorization / broken object-level access control: getProfile (lines 32-36) and updateProfile (lines 38-49) key data purely off the client-supplied userAuthToken cookie without ever verifying a server-side session, that the user is logged in, or that the caller owns the profile. Any client can set the cookie to an arbitrary (or the known hardcoded) token value and read or modify another user's profile data (IDOR, CWE-639).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfig.clickjacking",
+      "path": "src/server/app.js",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 576
+      },
+      "end": {
+        "line": 25,
+        "col": 6,
+        "offset": 733
+      },
+      "extra": {
+        "message": "Clickjacking: the application sets no X-Frame-Options header and no Content-Security-Policy frame-ancestors directive (the only CSP present is commented out, lines 22-25), so the app can be embedded in a malicious page. The clickjacking-attack demo iframes http://localhost:3000/clickjacking (attacker-app clickjacking-attack.html:13) to trick victims into clicking the 'Delete Sensitive Information!' button. X-Frame-Options: DENY/SAMEORIGIN or CSP frame-ancestors must be set.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendered UI Layers or Frames",
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookies.insecure-session-cookie",
+      "path": "src/server/routes.js",
+      "start": {
+        "line": 62,
+        "col": 5,
+        "offset": 1892
+      },
+      "end": {
+        "line": 62,
+        "col": 76,
+        "offset": 1963
+      },
+      "extra": {
+        "message": "Insecure session cookie: the authentication token cookie is set with only maxAge and path; it lacks HttpOnly, Secure, and SameSite. HttpOnly absence lets any XSS read the token via document.cookie, Secure absence allows transmission over plain HTTP, and SameSite absence is what makes the CSRF in updateProfile possible.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Attribute",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute",
+            "CWE-1275: Sensitive Cookie with Improper 'SameSite' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.logging.sensitive-data-exposure",
+      "path": "src/server/routes.js",
+      "start": {
+        "line": 33,
+        "col": 5,
+        "offset": 878
+      },
+      "end": {
+        "line": 33,
+        "col": 69,
+        "offset": 942
+      },
+      "extra": {
+        "message": "Sensitive data exposure via logs: the server logs the raw userAuthToken cookie and full profile object to stdout (lines 33-35, 41-43, 61). Because the auth token is a shared session credential it should never be written to logs; combined with morgan('dev') request logging the profile body is also exposed.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfig.static-root-exposure",
+      "path": "src/server/app.js",
+      "start": {
+        "line": 47,
+        "col": 5,
+        "offset": 1428
+      },
+      "end": {
+        "line": 47,
+        "col": 38,
+        "offset": 1461
+      },
+      "extra": {
+        "message": "Information disclosure / misconfiguration: in the default DEV branch the server mounts express.static('./') (line 47) in addition to ./src/client and ./tmp, exposing the entire repository root over HTTP \u2014 including src/server source code, package.json, gulp config and node_modules \u2014 allowing remote disclosure of server-side application source.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information",
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfig.x-powered-by",
+      "path": "src/server/app.js",
+      "start": {
+        "line": 6,
+        "col": 5,
+        "offset": 95
+      },
+      "end": {
+        "line": 6,
+        "col": 31,
+        "offset": 121
+      },
+      "extra": {
+        "message": "Security misconfiguration: app.disable('x-powered-by') is commented out, so Express leaves the X-Powered-By header enabled, advertising the framework/version to attackers (minor information disclosure / fingerprinting).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

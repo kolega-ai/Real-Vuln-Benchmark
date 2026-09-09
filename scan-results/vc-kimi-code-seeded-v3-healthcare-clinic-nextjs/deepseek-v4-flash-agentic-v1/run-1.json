@@ -1,0 +1,488 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.secrets.hardcoded-jwt-secret",
+      "path": "src/lib/auth.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Session JWT cookie ('clinic-session') is signed with process.env.NEXTAUTH_SECRET falling back to a public, hardcoded string 'dev-secret-change-in-production-min-32-chars-long'. The identical fallback is used in src/middleware.ts:6 and src/lib/request-integrity.ts:3. If NEXTAUTH_SECRET is unset in any deployment, an attacker can forge a valid HS256 'clinic-session' cookie for any role (including clinic_admin) and fully bypass authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.broken-password-reset",
+      "path": "src/actions/auth.ts",
+      "start": {
+        "line": 179,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 209,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "completePasswordReset() accepts a user-supplied recoveryValue but never validates it against any stored token (requestPasswordReset generates randomBytes(16) and places it only in a notification link, storing no mapping). An attacker who knows a victim's email can call this action with any recoveryValue and newPassword to silently reset the victim's password, then createSession() logs them in as the victim: full account takeover (CWE-640).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "src/actions/timezone-reports.ts",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getTodaysScheduleInClinicTimezone() calls prisma.$queryRawUnsafe() and interpolates the 'clinic-tz' cookie value directly into the SQL string ('AT TIME ZONE '${tz}'). The cookie is fully attacker-controlled, enabling SQL injection. Note the sibling function at line 32 uses the parameterized prisma.$queryRaw tag, confirming the unsafe path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xxe-file-read",
+      "path": "src/lib/companion-widget-sync.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "parseWidgetSyncPayload()/expandEntities() honors DOCTYPE external SYSTEM entities and calls fs.readFileSync() on the resolved URI (line 20). It is reachable from GET /api/embed/checkin-sync (route.ts:17), which parses the attacker-controlled 'kiosk_widget_state' cookie. By sending <!DOCTYPE x [<!ENTITY f SYSTEM 'file:///etc/passwd'>]> and referencing &f; inside <roomNumber>, any authenticated user can read arbitrary server files; the strict parser used by /api/embed/checkin-presence explicitly rejects DOCTYPEs, confirming this is unintended.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference",
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.os-command-injection",
+      "path": "src/app/api/export/appointments/route.ts",
+      "start": {
+        "line": 17,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 65,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 'paperPreset' query parameter is passed unvalidated to renderScheduleSheetForPreset() (src/lib/print-render.ts:17-20), which builds `wkhtmltopdf --page-size ${paperPreset} ...` and executes it with spawn(cmd, [], { shell: true }). A value such as 'Letter; <cmd>' yields OS command execution. The parallel exhibit renderer (renderExhibitSheetForPreset, used by /api/export/visit-summaries) is allowlisted and uses an argv array without a shell, so this route is the vulnerable variant.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.os-command-injection",
+      "path": "src/app/api/documents/visit-letter/route.ts",
+      "start": {
+        "line": 66,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 66,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateReferralLetter() runs execSync(`pandoc ${inputPath} -o ${outputPath} --to=${format}`) where 'format' is an unvalidated query parameter, with shell interpolation. '--to=pdf; <cmd>' injects arbitrary shell commands. The equivalent appointment-packet route (line 41-42,64) validates format against an allowlist and uses execFileSync with shell:false, marking this as the vulnerable variant.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.read",
+      "path": "src/app/api/documents/handout-template/route.ts",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadHandoutTemplate() builds join(process.cwd(), HANDOUT_DIR, templateFile) with the 'templateFile' query parameter and reads/returns the file with no containment check. A front_desk/clinic_admin user can request templateFile=../../../../etc/passwd (or ../../../.env) to read arbitrary server files; the letterhead-asset route (line 24-27) performs the correct resolve()+startsWith() containment check, so this route is the vulnerable variant.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname",
+            "CWE-23: Relative Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf",
+      "path": "src/app/api/documents/partner-referral/route.ts",
+      "start": {
+        "line": 31,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 42,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importPartnerReferralDocument() fetches a fully attacker-controlled URL from the 'x-referral-document-url' header with no scheme/host allowlist (SSRF) and stores the response body as a chart document that the caller can later download via /api/documents/[id]/download, allowing exfiltration of cloud-metadata/internal endpoints. The sibling partner-webhook-receipt route (line 11,36-38) validates the host against ALLOWED_RECEIPT_HOSTS before fetching, confirming the missing control here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor",
+      "path": "src/app/api/patients/[id]/care-summary/route.ts",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "viewSharedCareSummary() derives delegation solely from two self-asserted query params: hasDelegatedAccess = sharingMode === 'family' && visibilityId === params.id. Any authenticated user (e.g. any patient) can append '?sharingMode=family&visibilityId=<id>' to view ANY patient's profile and released visit summaries (diagnosis/treatment PII). The check also wrongly compares session.id (user id) to params.id (patient_profile id), so self-access never matches. The adjacent patients/[id]/summary route performs the correct canAccessPatientRecords() check.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-upload",
+      "path": "src/app/api/messages/attachment/route.ts",
+      "start": {
+        "line": 37,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 63,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "attachPhotoToMessageThread() saves the uploaded file to public/message-attachments using the original, unsanitized file name (join(dir, file.name)) with no MIME/extension validation and no name randomization. public/ files are served statically on the clinic origin, so a patient can upload photo.html or photo.svg containing script and later open /message-attachments/<name> to run script in the portal origin (stored XSS / session theft). It also permits path traversal in file.name (writeFile to an arbitrary existing directory). Contrast with the visit-summary exhibit upload (visit-summaries/exhibit/route.ts:31-53) which allowlists image MIME types and renames to a UUID.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting",
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "src/app/api/team/badge-lookup/route.ts",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "lookupStaffByBadgeEmail() builds the LDAP filter `(mail=${badgeEmail})` directly from the user-supplied 'email' query parameter with no RFC 4515 escaping and no role restriction (any authenticated session). A value like *)(uid=*) can broaden the search and disclose staff names/on-call groups. The sibling oncall-membership route escapes via escapeDirectoryFilterValue(), confirming the missing control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.jwt.trust-unverified-token",
+      "path": "src/app/api/network/resource-check/route.ts",
+      "start": {
+        "line": 17,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "checkPartnerResourceAvailability() decodes the 'x-network-handoff' credential with jose's decodeJwt(), which performs no signature verification, and then trusts its providerId claim to query schedule availability, with no session check at all. Anyone can mint their own unsigned JWT with arbitrary claims and enumerate provider schedule counts. The sibling cost-allocation route correctly uses jwtVerify() with REFERRAL_NETWORK_SECRET and rejects requests when the secret is unset.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-345: Insufficient Verification of Data Authenticity",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect",
+      "path": "src/actions/auth.ts",
+      "start": {
+        "line": 30,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 100,
+        "offset": 0
+      },
+      "extra": {
+        "message": "After a successful login the server redirects to resolvePostLoginDestination(user.role, returnTo) (src/lib/auth-destinations.ts:8-10) where requestedReturnTo is returned verbatim with no internal-URL validation. An attacker can craft /login?returnTo=https://evil.example and the victim is redirected off-site after signing in (phishing).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection",
+      "path": "src/app/api/documents/ccd-section/route.ts",
+      "start": {
+        "line": 17,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 'sectionId' query parameter is stored and then embedded unescaped into an XPath-style expression that is ultimately evaluated as JavaScript: ccdSectionIndex.find() extracts the [..] predicate and evaluatePredicate() (src/lib/ccd-section-index.ts:20-30) runs `new Function('return (...);')` on it. Breaking out of the quoted @id string (e.g. sectionId = x') || <js> || ('x) yields server-side JS evaluation/code injection for any clinician/clinic_admin. The sibling ccd-section-summary route escapes the same value with escapeXPathString(), confirming the missing control here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: XPath Injection",
+            "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.write",
+      "path": "src/lib/print-cache.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "cacheKioskPrintSheet() writes path.join(PRINT_CACHE_DIR, `${workstationId}.html`) where workstationId is the unvalidated 'front-desk-workstation' cookie (see src/app/api/checkin/print-queue/route.ts:17-21,39). A value like ../../<dir>/x lets a front_desk user write the schedule HTML (containing patient PII) to arbitrary locations under the project tree. cacheProviderScheduleSheet() (line 23) sanitizes with path.basename(), so this function is the vulnerable variant.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-authorization",
+      "path": "src/app/api/reports/referral-volume/route.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "computeReferralVolumeByProvider() performs no session/role check at all (unlike its sibling report routes which require clinic_admin/front_desk). Any authenticated user including a patient can read provider names, specialties and released-visit counts across the clinic.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.secrets.hardcoded-credential",
+      "path": "src/lib/lab-results-gateway.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 6,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A long-lived integration credential for the reference-lab mirror API is hardcoded in source (LAB_MIRROR_CREDENTIAL = 'rrl_9f2c7b...'). Unlike the pharmacy-network gateway which loads its key from an environment variable and refuses to start without one, this key ships in the repository.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.dynamic-code-eval",
+      "path": "src/actions/billing.ts",
+      "start": {
+        "line": 34,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 35,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "estimateNoShowFee() compiles the DB-stored 'no_show_fee_formula' clinic setting with `new Function('base','lateMinutes','return ' + formula)` and invokes it on every front_desk/clinic_admin fee estimate. Although only clinic_admin can currently write clinic settings (admin/settings), the value is executed as arbitrary JavaScript on the server, so any write to that key (e.g. a compromised admin, or a future lower-privilege settings write) yields code execution on a front-desk request. The cancellation-fee path deliberately avoids freeform expressions via a rule allowlist.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.html-export-injection",
+      "path": "src/lib/print-sheets.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildVisitSummaryPrintSheet() interpolates patient names, diagnosis, treatment and careInstructions into the exported HTML without escaping, while buildAppointmentSchedulePrintSheet() escapes the same kinds of fields via escapeHtml(). Diagnosis/treatment/care-instruction text containing markup (entered through clinician/patient-controlled fields) is served back as text/html from /api/export/visit-summaries?format=html and via the reprint sheet, enabling HTML/script injection in exported pages.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-80: Improper Neutralization of Script-Related HTML Tags"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

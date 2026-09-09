@@ -42,7 +42,8 @@ REPO_FIELDS = [
     "authorship_evidence", "schema_version",
 ]
 FINDING_FIELDS = [
-    "repo_id", "finding_id", "is_vulnerable", "vulnerability_class",
+    "repo_id", "finding_id", "is_vulnerable", "scoring", "non_scoring_reason",
+    "vulnerability_class",
     "primary_cwe", "acceptable_cwes", "file", "start_line", "end_line",
     "function", "severity", "expected_category", "source", "cve_id",
     "description", "manually_verified", "poc",
@@ -86,6 +87,7 @@ def flatten_finding(f: dict, repo_id: str) -> dict:
         f, FINDING_FIELDS,
         repo_id=repo_id,
         finding_id=f.get("id"),
+        scoring=f.get("scoring", "scored"),
         start_line=loc.get("start_line"),
         end_line=loc.get("end_line"),
         function=loc.get("function"),
@@ -207,11 +209,11 @@ own ground truth.
 
 | Split | Rows | Description |
 |-------|------|-------------|
-| `findings` | {n_findings:,} | Human-reviewed vulnerabilities and FP traps |
+| `findings` | {n_findings:,} | Human-reviewed vulnerabilities, FP traps and non-scoring rows |
 | `repos` | {n_repos} | Target metadata (URL, pinned commit SHA, framework, LOC) |
 | `scan_results` | {n_scans:,} | Raw scanner output across {n_scanners} scanners |
 
-- **{n_vulns:,}** vulnerabilities + **{n_traps}** false-positive traps (`is_vulnerable: false`)
+- **{n_vulns:,}** vulnerabilities + **{n_traps}** false-positive traps (`is_vulnerable: false`){ns_note}
 - **{n_cwes}** unique primary CWEs
 - Every finding carries `primary_cwe` and an `acceptable_cwes` list for tolerant matching
 {corpus_note}
@@ -253,6 +255,11 @@ URLs are verified reachable at their pinned SHA at release time.
 Scoring uses file + CWE + line matching with a +/-10 line tolerance. Rows with
 `is_vulnerable: false` are false-positive traps: a scanner flagging one is
 penalised, not rewarded.
+
+Rows with `scoring: non_scoring` are reviewed locations whose status cannot be
+settled from the source alone (the `non_scoring_reason` column says why). They
+are excluded from scoring in both directions: flagging one is not a false
+positive and missing one is not a false negative. All other rows are `scored`.
 """
 
 
@@ -302,9 +309,11 @@ def main() -> None:
     write_jsonl(out / "scan_results.jsonl", scans)
 
     version = str(targets[0][1].get("benchmark_version") or "")
-    n_vulns = sum(1 for f in findings if f["is_vulnerable"])
-    n_traps = len(findings) - n_vulns
+    n_non_scoring = sum(1 for f in findings if f["scoring"] == "non_scoring")
+    n_vulns = sum(1 for f in findings if f["is_vulnerable"] and f["scoring"] != "non_scoring")
+    n_traps = len(findings) - n_vulns - n_non_scoring
     n_scanners = len({s["scanner"] for s in scans})
+    ns_note = f" + **{n_non_scoring}** non-scoring rows (`scoring: non_scoring`)" if n_non_scoring else ""
     corpus_note = ""
     if not args.authorship:
         human = sum(1 for r in repos if r["authorship"] == "human_authored")
@@ -324,8 +333,8 @@ def main() -> None:
         size_category="n<1K" if len(findings) < 1000 else "1K<n<10K",
         n_repos=len(repos), n_findings=len(findings), n_scans=len(scans),
         n_vulns=n_vulns, n_traps=n_traps, n_scanners=n_scanners,
-        n_cwes=len({f["primary_cwe"] for f in findings if f["primary_cwe"]}),
-        corpus_note=corpus_note,
+        n_cwes=len({f["primary_cwe"] for f in findings if f["primary_cwe"] and f["scoring"] != "non_scoring"}),
+        corpus_note=corpus_note, ns_note=ns_note,
         sibling_note=args.sibling_note,
     ))
     print(f"  wrote README.md")

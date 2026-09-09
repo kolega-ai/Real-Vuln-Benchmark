@@ -1,0 +1,383 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.authz.review-visibility-client-controlled-authorization",
+      "path": "backend/src/routes/reviews.ts",
+      "start": {
+        "line": 522,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 533,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "PUT /:id/visibility (updateReviewVisibility) decides whether the caller may hide/unhide ANY review purely from the client-supplied `sharingMode` body field ('vendor_storefront' or 'marketplace_staff') instead of checking the authenticated user's actual role or vendor ownership of the review. Any authenticated buyer can send `{ sharingMode: 'marketplace_staff', hidden: true }` for an arbitrary review id and it will be honored, since only `authenticate` (not `authorize`, and no vendor/staff ownership check) guards this route.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.merchandising-feed-patch-mass-assignment",
+      "path": "backend/src/routes/products.ts",
+      "start": {
+        "line": 932,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 942,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyMerchandisingFeedPatch (PUT /:id/merchandising-sync) parses an arbitrary JSON object from the `patch` query parameter and applies it directly to the Prisma update via `Object.assign({}, feedPatch)` with no field allowlist. A vendor_manager who owns the product can set ANY column \u2014 e.g. `price`, `status` (bypassing admin moderation to force-publish), or `vendorId` (transferring the product to a different vendor). The equivalent admin-only endpoint in routes/admin.ts (applyCatalogFeedPatch) correctly restricts this to a fixed MERCHANDISING_PATCH_FIELDS allowlist; this vendor-facing copy does not.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-catalog-tools-exec",
+      "path": "backend/src/routes/products.ts",
+      "start": {
+        "line": 1004,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1027,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertProductExportFormat (POST /:id/export/convert) builds a shell command string by directly interpolating the attacker-controlled `reportType` request body field \u2014 `catalog-tools convert --from ${sourcePath} --to ${outputPath} --format ${reportType}` \u2014 and executes it with `exec()`, which runs through a shell. Unlike the analogous vendors.ts `convertPayoutStatementFormat` (which validates reportType against a fixed allowlist and uses `spawn(..., { shell:false })` with array args), this handler performs no validation on `reportType`, allowing shell metacharacters (e.g. `; rm -rf /` or backticks) to be injected and executed on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.vendor-logo-arbitrary-file-read",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 845,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 856,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderVendorLogoAsset (GET /:id/branding/logo, unauthenticated/public route) builds the file path with `path.join(ASSET_DIR, vendor.logoUrl)` and reads it with `fs.readFileSync` without verifying the resolved path stays inside ASSET_DIR. `vendor.logoUrl` is a vendor-controlled field settable via PUT /vendors/:id (`body('logoUrl').optional().trim()`, no path/URL validation). A vendor can set logoUrl to `../../../../etc/passwd` (or any path) and any unauthenticated visitor can then read arbitrary files off the server's filesystem via this public endpoint. The very next handler, renderVendorBannerAsset, demonstrates the correct fix by checking `requestedPath.startsWith(ASSET_DIR + path.sep)` before reading \u2014 that check is missing here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.payout-ledger-snapshot-arbitrary-write",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 435,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 459,
+        "col": 61,
+        "offset": 0
+      },
+      "extra": {
+        "message": "writePayoutLedgerSnapshot (GET /:id/payouts/ledger) takes the `period` query parameter unsanitized and uses it to build the output filename: `path.join(LEDGER_DIR, \\`${vendor.id}-${period}.csv\\`)`, then calls `fs.writeFileSync`. A caller (any owning vendor_manager or admin) can pass e.g. `period=../../../../tmp/evil` to write attacker-controlled CSV content to an arbitrary path outside LEDGER_DIR. The comparable admin.ts `archiveVendorStatement` handler correctly sanitizes its equivalent label with `path.basename(requestedLabel)` \u2014 that protection is absent here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.catalog-asset-import-extension",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 2288,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2293,
+        "col": 41,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importVendorCatalogAsset builds the destination filename with `${vendor.storeSlug}-catalog.${fileExtension || 'bin'}` where `fileExtension` comes straight from the request body with no validation, then writes it via `path.join(PUBLIC_ASSET_DIR, fileName)` and `fs.writeFileSync`. Supplying `fileExtension: '../../../../var/www/html/shell.php'` (or similar) escapes PUBLIC_ASSET_DIR and writes the fetched remote content to an arbitrary path, which combined with the SSRF below can plant attacker-controlled content anywhere on disk the process can write.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.catalog-asset-import-fetch",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 2285,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 2285,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importVendorCatalogAsset performs `fetch(assetUrl)` where `assetUrl` is taken directly from the request body with no allowlist, scheme restriction, or private-IP/metadata-endpoint filtering. An admin-triggered request lets an attacker who controls the assetUrl value (e.g. via a compromised/malicious vendor onboarding submission workflow) make the server issue requests to internal-only services or cloud metadata endpoints (e.g. 169.254.169.254) and have the response contents written to disk and returned indirectly.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.compliance-document-import-fetch",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 2340,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 2340,
+        "col": 50,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importVendorComplianceDocument performs `fetch(documentUrl)` where `documentUrl` is taken directly from the request body with no allowlist or private-network filtering (only the resulting Content-Length and a MIME allowlist are checked after the fact). This allows the server to be used as a proxy to reach internal-only network services or cloud metadata endpoints.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.llm.dispute-resolution-prompt-injection-autorefund",
+      "path": "backend/src/routes/disputes.ts",
+      "start": {
+        "line": 1059,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 1082,
+        "col": 8,
+        "offset": 0
+      },
+      "extra": {
+        "message": "draftDisputeResolutionSuggestion embeds the buyer-controlled `dispute.description` (free text supplied when the dispute was created, fully attacker-controlled) directly into an LLM prompt asking it to end its answer with 'RESOLUTION: REFUND' or 'RESOLUTION: DENY'. The handler then regex-matches the model's raw output for `/RESOLUTION:\\s*REFUND/i` and, if found, automatically marks the dispute resolved and refunds the order in a transaction \u2014 bypassing all of the checks the legitimate PUT /:id/resolve endpoint performs (status validation, staff-only authorization re-check at action time, and buyer/vendor notification). A buyer can craft the dispute description to manipulate the LLM into emitting the trigger string (classic prompt injection via untrusted content embedded in a prompt whose output directly drives a privileged financial action), forcing an unauthorized refund.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.dispute-offer-token-padding-oracle",
+      "path": "backend/src/routes/disputes.ts",
+      "start": {
+        "line": 1013,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 1026,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "acceptDisputeResolutionOffer decrypts the caller-supplied `offerToken` using AES-256-CBC with no integrity/authentication tag, then distinguishes decryption failures by message content: a 'bad decrypt'/padding-related error returns 'Offer token padding is invalid' while any other failure returns a different generic message. Returning a distinguishable response for padding-validity failures versus other failures is the classic precondition for a padding oracle attack, letting an attacker iteratively decrypt or forge ciphertext without knowing RESOLUTION_OFFER_KEY. Contrast with the adjacent confirmOrderDelivery handler in orders.ts, which uses authenticated AES-256-GCM and explicitly collapses every decryption failure mode into one identical response so nothing leaks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information",
+            "CWE-696: Incorrect Behavior Order"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.order-recalculate-diagnostic-stack-trace",
+      "path": "backend/src/routes/orders.ts",
+      "start": {
+        "line": 738,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 742,
+        "col": 8,
+        "offset": 0
+      },
+      "extra": {
+        "message": "recalculateOrderTotals returns the full internal error message, stack trace, and echoed query string to the client whenever the request includes `?context=diagnostic`, with no additional authorization beyond the normal order-access check. Any buyer, vendor, or admin with access to a given order can trigger an internal error path (e.g. via a malformed request) and append this flag to obtain a raw stack trace, exposing internal file paths and implementation details.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-bcrypt-cost-factor-client-controlled",
+      "path": "backend/src/routes/admin.ts",
+      "start": {
+        "line": 2034,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 2034,
+        "col": 75,
+        "offset": 0
+      },
+      "extra": {
+        "message": "onboardSupportDeskAccount hashes the new staff member's temporary credential with `bcrypt.hash(tempCredential, strength || 4)` where `strength` is taken directly from the request body as a number with no bounds validation. A caller can pass an arbitrarily low cost factor (e.g. `strength: 1`), producing a weakly-hashed credential that is far cheaper to brute-force than the marketplace's standard work factor of 12 used everywhere else (e.g. onboardVendorTeamMember in vendors.ts hardcodes 12).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.payout-destination-body-logging",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 413,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 413,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "verifyPayoutDestination logs the entire request body via `console.warn('Payout destination verification failed', req.body)` when the banking partner rejects the submission. Since this endpoint's body carries the vendor's payout/banking destination details, this writes sensitive financial account information to application logs in plaintext.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.template-injection.vendor-autoreply-handlebars-compile",
+      "path": "backend/src/routes/vendors.ts",
+      "start": {
+        "line": 993,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 1002,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewOrderAutoReplyMessage compiles a vendor-supplied string directly with `Handlebars.compile(messageTemplate)` and renders it. Compiling arbitrary caller-controlled templates with a full-featured template engine is inherently risky (server-side template injection surface, potential for prototype-pollution-style helper abuse depending on runtime environment/version) \u2014 the safe pattern used elsewhere in this codebase (see notifications.ts DIGEST_GREETING_TEMPLATE) is to compile a fixed, developer-authored template string and only interpolate data into it, never compile caller-supplied template source.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.apikey-plaintext-comparison",
+      "path": "backend/src/middleware/auth.ts",
+      "start": {
+        "line": 40,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 43,
+        "col": 7,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The API-key authentication branch looks up `prisma.apiKey.findFirst({ where: { keyHash: token, ... } })`, comparing the raw, caller-supplied token directly against the `keyHash` column. If this column is meant to store a hash of the actual secret (as its name implies), no hashing of the incoming token is ever performed before the comparison, meaning `keyHash` must actually contain the plaintext key for any match to succeed \u2014 i.e. API keys are effectively stored and compared in plaintext rather than hashed.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Plaintext Storage of a Password",
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

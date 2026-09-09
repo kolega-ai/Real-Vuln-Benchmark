@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "results": [
     {
-      "check_id": "python.security.configuration.hardcoded-secret-key",
+      "check_id": "python.security.configuration.hardcoded-secret",
       "path": "python/app.py",
       "start": {
         "line": 25,
@@ -15,7 +15,7 @@
         "offset": 848
       },
       "extra": {
-        "message": "The Flask SECRET_KEY is hardcoded in source. An attacker who obtains the repository can forge Flask session cookies containing an arbitrary 'user' or 'is_admin' value, bypassing the application's session-based authentication checks.",
+        "message": "The Flask SECRET_KEY is hardcoded in source. Anyone who obtains the code can sign arbitrary Flask session cookies and forge the 'user' session field used by protected routes, bypassing authentication.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -27,24 +27,74 @@
       }
     },
     {
-      "check_id": "python.security.dos.unauthenticated-database-reset",
-      "path": "python/app.py",
+      "check_id": "python.security.credentials.hardcoded-default-accounts",
+      "path": "python/database.py",
       "start": {
-        "line": 154,
-        "col": 5,
-        "offset": 5163
+        "line": 96,
+        "col": 1,
+        "offset": 2799
       },
       "end": {
-        "line": 154,
-        "col": 14,
-        "offset": 5172
+        "line": 99,
+        "col": 74,
+        "offset": 3161
       },
       "extra": {
-        "message": "Every unauthenticated request to the login route invokes init_db(), which drops and recreates all application tables. An attacker can repeatedly request '/' to erase users, reports, comments, logs, and progress, causing persistent data loss and denial of service.",
+        "message": "Runtime database initialization creates known accounts using hardcoded plaintext credentials, including the administrator account admin/password. These credentials provide direct authenticated and administrative access.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
-            "CWE-400: Uncontrolled Resource Consumption"
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.unauthenticated-destructive-initialization",
+      "path": "python/app.py",
+      "start": {
+        "line": 154,
+        "col": 1,
+        "offset": 5159
+      },
+      "end": {
+        "line": 154,
+        "col": 52,
+        "offset": 5210
+      },
+      "extra": {
+        "message": "Every unauthenticated request to the login route calls init_db(), which drops and recreates all application tables. A remote attacker can erase all progress, logs, reports, comments, and account changes simply by requesting '/'.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.missing-login-rate-limit",
+      "path": "python/app.py",
+      "start": {
+        "line": 152,
+        "col": 1,
+        "offset": 5103
+      },
+      "end": {
+        "line": 206,
+        "col": 96,
+        "offset": 7912
+      },
+      "extra": {
+        "message": "The public login handler permits unlimited authentication attempts without throttling, lockout, or per-client rate limiting. This enables automated password guessing against the application's weak credentials.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -56,16 +106,16 @@
       "path": "python/app.py",
       "start": {
         "line": 165,
-        "col": 13,
-        "offset": 5506
+        "col": 1,
+        "offset": 5494
       },
       "end": {
-        "line": 165,
-        "col": 101,
-        "offset": 5594
+        "line": 177,
+        "col": 62,
+        "offset": 6221
       },
       "extra": {
-        "message": "User-controlled username and password values are interpolated directly into a SQL statement subsequently executed by conn.execute(). This permits authentication bypass and arbitrary database reads through SQL injection.",
+        "message": "User-controlled username and password values are interpolated directly into a SQL statement executed by SQLite. An attacker can alter the query to bypass authentication or retrieve unauthorized database records.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -77,12 +127,12 @@
       }
     },
     {
-      "check_id": "python.security.logging.password-exposure",
+      "check_id": "python.security.logging.plaintext-password",
       "path": "python/app.py",
       "start": {
         "line": 167,
-        "col": 13,
-        "offset": 5684
+        "col": 1,
+        "offset": 5672
       },
       "end": {
         "line": 167,
@@ -90,7 +140,7 @@
         "offset": 5712
       },
       "extra": {
-        "message": "The complete interpolated login query is printed to standard output. Because the query contains the submitted plaintext password, application logs can disclose user credentials.",
+        "message": "The complete authentication query is written to stdout. Because the query embeds the submitted plaintext password, application and aggregated server logs disclose every attempted credential.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -102,12 +152,12 @@
       }
     },
     {
-      "check_id": "python.security.error-disclosure.database",
+      "check_id": "python.security.exposure.database-error",
       "path": "python/app.py",
       "start": {
         "line": 203,
-        "col": 21,
-        "offset": 7731
+        "col": 1,
+        "offset": 7711
       },
       "end": {
         "line": 203,
@@ -115,7 +165,7 @@
         "offset": 7766
       },
       "extra": {
-        "message": "Raw database exception text produced while executing attacker-controlled SQL is placed in the login response. Crafted input can disclose database syntax, query details, and internal implementation information.",
+        "message": "Raw SQLite exception text is placed in the unauthenticated login response. Crafted SQL input can expose database syntax and schema details that assist exploitation.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -131,16 +181,16 @@
       "path": "python/app.py",
       "start": {
         "line": 247,
-        "col": 17,
-        "offset": 9673
+        "col": 1,
+        "offset": 9657
       },
       "end": {
-        "line": 247,
-        "col": 87,
-        "offset": 9743
+        "line": 249,
+        "col": 38,
+        "offset": 9822
       },
       "extra": {
-        "message": "The comment search term is interpolated directly into a SQL LIKE expression and the resulting string is passed to cursor.execute(). An authenticated attacker can alter the query and retrieve unauthorized database records.",
+        "message": "The submitted comment search term is interpolated into a LIKE query and the resulting string is executed directly. An authenticated attacker can inject SQL to bypass the filter or retrieve data from other tables.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -152,12 +202,12 @@
       }
     },
     {
-      "check_id": "python.security.error-disclosure.database",
+      "check_id": "python.security.exposure.database-error",
       "path": "python/app.py",
       "start": {
         "line": 256,
-        "col": 17,
-        "offset": 10163
+        "col": 1,
+        "offset": 10147
       },
       "end": {
         "line": 256,
@@ -165,7 +215,7 @@
         "offset": 10205
       },
       "extra": {
-        "message": "Raw SQLite exception text caused by the attacker-controlled comment query is returned through the rendered error value, enabling disclosure of query and database implementation details.",
+        "message": "The comment search handler returns raw SQLite exception messages to the requester, disclosing database syntax and schema information useful for refining SQL injection payloads.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -177,12 +227,62 @@
       }
     },
     {
-      "check_id": "python.security.filesystem.unrestricted-file-upload",
+      "check_id": "python.security.csrf.state-changing-get",
       "path": "python/app.py",
       "start": {
-        "line": 322,
-        "col": 17,
-        "offset": 12812
+        "line": 275,
+        "col": 1,
+        "offset": 10733
+      },
+      "end": {
+        "line": 288,
+        "col": 125,
+        "offset": 11487
+      },
+      "extra": {
+        "message": "A GET request containing an attacker-controlled amount enters the transfer success path and persists progress and audit-log changes without a CSRF token. A crafted cross-site navigation can perform this action using the victim's session.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.csrf.disabled-file-upload",
+      "path": "python/app.py",
+      "start": {
+        "line": 304,
+        "col": 1,
+        "offset": 12141
+      },
+      "end": {
+        "line": 305,
+        "col": 47,
+        "offset": 12201
+      },
+      "extra": {
+        "message": "The authenticated file-upload endpoint is explicitly exempted from global CSRF protection and performs no independent token validation. The csrf_token rendered by the template is therefore ignored by this handler.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.files.unrestricted-upload",
+      "path": "python/app.py",
+      "start": {
+        "line": 320,
+        "col": 1,
+        "offset": 12655
       },
       "end": {
         "line": 322,
@@ -190,7 +290,7 @@
         "offset": 12832
       },
       "extra": {
-        "message": "An authenticated user can save a file of any type into the publicly retrievable uploads directory. No extension, MIME type, content, size, or collision checks are enforced; active same-origin content can be hosted and existing files with the same basename can be overwritten.",
+        "message": "Uploaded content is saved under an attacker-chosen basename without an extension allowlist, MIME validation, content validation, or forced download disposition. Active HTML or SVG content can subsequently be served from the application's origin.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -202,12 +302,62 @@
       }
     },
     {
+      "check_id": "python.security.dos.unbounded-file-upload",
+      "path": "python/app.py",
+      "start": {
+        "line": 322,
+        "col": 1,
+        "offset": 12796
+      },
+      "end": {
+        "line": 322,
+        "col": 37,
+        "offset": 12832
+      },
+      "extra": {
+        "message": "Uploaded files are saved without any per-file size check, quota, or Flask MAX_CONTENT_LENGTH configuration. Repeated or oversized uploads can exhaust server storage and memory.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.missing-upload-download-authentication",
+      "path": "python/app.py",
+      "start": {
+        "line": 332,
+        "col": 1,
+        "offset": 13449
+      },
+      "end": {
+        "line": 335,
+        "col": 74,
+        "offset": 13597
+      },
+      "extra": {
+        "message": "Files accepted by the authenticated upload endpoint are served by /uploads/<filename> without any session or authorization check. Anyone who learns or guesses a filename can retrieve the uploaded content.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
       "check_id": "python.security.access-control.idor",
       "path": "python/app.py",
       "start": {
-        "line": 357,
-        "col": 13,
-        "offset": 14569
+        "line": 339,
+        "col": 1,
+        "offset": 13670
       },
       "end": {
         "line": 369,
@@ -215,7 +365,7 @@
         "offset": 15437
       },
       "extra": {
-        "message": "When the requested profile ID differs from the authenticated user's ID, the application explicitly continues and renders the other user's database row, including username, email, and role. Any authenticated user can enumerate and read other profiles.",
+        "message": "The profile route fetches a user selected entirely by the URL user_id and renders that user's username, email, and role even when the ID differs from the authenticated user's ID. The mismatch is detected but deliberately not blocked.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -231,8 +381,8 @@
       "path": "python/app.py",
       "start": {
         "line": 384,
-        "col": 13,
-        "offset": 15837
+        "col": 1,
+        "offset": 15825
       },
       "end": {
         "line": 384,
@@ -240,7 +390,7 @@
         "offset": 15876
       },
       "extra": {
-        "message": "An authenticated user's URL is passed directly to requests.get() without restricting schemes, destinations, redirects, loopback addresses, private networks, or cloud metadata addresses. Attackers can make requests from the server into otherwise inaccessible networks.",
+        "message": "A user-provided URL is passed directly to requests.get() without scheme, hostname, address-range, redirect, or destination validation. Attackers can make the server issue requests to localhost, private networks, and cloud metadata services.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -252,12 +402,12 @@
       }
     },
     {
-      "check_id": "python.security.deserialization.untrusted-pickle",
+      "check_id": "python.security.deserialization.pickle",
       "path": "python/app.py",
       "start": {
-        "line": 436,
-        "col": 13,
-        "offset": 17941
+        "line": 435,
+        "col": 1,
+        "offset": 17883
       },
       "end": {
         "line": 436,
@@ -265,7 +415,7 @@
         "offset": 17968
       },
       "extra": {
-        "message": "Base64-decoded user input is passed directly to pickle.loads(). A malicious pickle can invoke arbitrary callables during deserialization, resulting in remote code execution under the application account.",
+        "message": "Attacker-controlled form data is base64-decoded and passed to pickle.loads(). A crafted pickle can invoke arbitrary callables during deserialization, resulting in remote code execution.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -277,12 +427,12 @@
       }
     },
     {
-      "check_id": "javascript.security.xss.dom-innerhtml",
+      "check_id": "python.security.xss.dom",
       "path": "python/templates/dom_xss.html",
       "start": {
         "line": 139,
-        "col": 13,
-        "offset": 8306
+        "col": 1,
+        "offset": 8294
       },
       "end": {
         "line": 143,
@@ -290,11 +440,11 @@
         "offset": 8661
       },
       "extra": {
-        "message": "Attacker-controlled data from window.location.hash is extracted as the 'message' parameter and assigned to innerHTML without sanitization. A crafted URL can execute arbitrary JavaScript in the application's origin.",
+        "message": "The message value is read from the attacker-controlled URL fragment and assigned directly to innerHTML without sanitization. A crafted link can execute arbitrary JavaScript in an authenticated victim's application origin.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-79: Improper Neutralization of Input During Web Page Generation"
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -302,12 +452,62 @@
       }
     },
     {
-      "check_id": "python.security.access-control.api-idor",
+      "check_id": "python.security.dos.unbounded-report-storage",
       "path": "python/app.py",
       "start": {
-        "line": 617,
-        "col": 13,
-        "offset": 25512
+        "line": 578,
+        "col": 1,
+        "offset": 23550
+      },
+      "end": {
+        "line": 586,
+        "col": 86,
+        "offset": 24054
+      },
+      "extra": {
+        "message": "The user-controlled report writeup has no length limit and is persisted directly to SQLite. There is no request-size limit, submission quota, or rate limit, allowing an authenticated attacker to grow the database until storage is exhausted.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.csrf.logout-get",
+      "path": "python/app.py",
+      "start": {
+        "line": 603,
+        "col": 1,
+        "offset": 24908
+      },
+      "end": {
+        "line": 605,
+        "col": 20,
+        "offset": 24965
+      },
+      "extra": {
+        "message": "The logout endpoint clears the authenticated session in response to a GET request without CSRF validation. An attacker can force a victim to log out through a cross-site top-level navigation.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.bola",
+      "path": "python/app.py",
+      "start": {
+        "line": 608,
+        "col": 1,
+        "offset": 25012
       },
       "end": {
         "line": 619,
@@ -315,7 +515,7 @@
         "offset": 25781
       },
       "extra": {
-        "message": "The user API detects that the requested ID belongs to another account but returns that account's ID, username, email, and role instead of denying access. Any authenticated user can enumerate other users' records.",
+        "message": "The API selects records using a user-controlled user_id and returns another user's ID, username, email, and role when the requested ID differs from the caller's. No ownership or privilege check prevents this cross-account disclosure.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -327,7 +527,7 @@
       }
     },
     {
-      "check_id": "python.security.authentication.missing-api-authentication",
+      "check_id": "python.security.auth.missing-api-authentication",
       "path": "python/app.py",
       "start": {
         "line": 622,
@@ -340,8 +540,8 @@
         "offset": 25937
       },
       "extra": {
-        "message": "The /api/flag endpoint returns a sensitive challenge flag without checking authentication or authorization. Any remote unauthenticated requester can retrieve it.",
-        "severity": "ERROR",
+        "message": "The API flag endpoint returns the application's challenge flag without checking for an authenticated session. Any unauthenticated requester can retrieve it directly.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-306: Missing Authentication for Critical Function"
@@ -352,12 +552,12 @@
       }
     },
     {
-      "check_id": "python.security.authorization.global-comment-deletion",
+      "check_id": "python.security.access-control.global-comment-deletion",
       "path": "python/app.py",
       "start": {
         "line": 644,
-        "col": 9,
-        "offset": 26498
+        "col": 1,
+        "offset": 26490
       },
       "end": {
         "line": 645,
@@ -365,7 +565,7 @@
         "offset": 26569
       },
       "extra": {
-        "message": "The reset endpoint permits any authenticated user to execute an unscoped DELETE FROM comments operation. There is no administrator or ownership check, so an ordinary user can delete every user's comments.",
+        "message": "Any authenticated user can select the comment reset operation, which executes an unscoped DELETE and removes every user's comments. No ownership or administrator authorization is enforced.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -377,12 +577,12 @@
       }
     },
     {
-      "check_id": "python.security.authorization.global-upload-deletion",
+      "check_id": "python.security.access-control.global-upload-deletion",
       "path": "python/app.py",
       "start": {
         "line": 650,
-        "col": 9,
-        "offset": 26819
+        "col": 1,
+        "offset": 26811
       },
       "end": {
         "line": 653,
@@ -390,7 +590,7 @@
         "offset": 27020
       },
       "extra": {
-        "message": "Any authenticated user can select the upload reset operation, which recursively deletes the shared uploads directory and all files belonging to other users. No administrator or resource-ownership authorization is performed.",
+        "message": "Any authenticated user can invoke the upload reset operation, which recursively deletes the shared upload directory and all files belonging to other users. No ownership or administrator authorization is checked.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -402,12 +602,12 @@
       }
     },
     {
-      "check_id": "python.security.configuration.debug-mode",
+      "check_id": "python.security.configuration.debug-enabled",
       "path": "python/app.py",
       "start": {
         "line": 661,
-        "col": 5,
-        "offset": 27524
+        "col": 1,
+        "offset": 27520
       },
       "end": {
         "line": 661,
@@ -415,61 +615,11 @@
         "offset": 27570
       },
       "extra": {
-        "message": "The application starts Flask's development server on all interfaces with debug mode enabled. Unhandled errors can expose interactive debugger and detailed internal state to remote clients.",
+        "message": "When launched directly as documented, the application binds to every network interface with Flask debug mode enabled. Triggered exceptions expose detailed stack traces and the Werkzeug interactive debugger to network clients.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
             "CWE-489: Active Debug Code"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.password-storage.plaintext",
-      "path": "python/database.py",
-      "start": {
-        "line": 49,
-        "col": 17,
-        "offset": 1423
-      },
-      "end": {
-        "line": 49,
-        "col": 40,
-        "offset": 1446
-      },
-      "extra": {
-        "message": "Passwords are stored directly in a TEXT column and login compares submitted plaintext values against it. A database disclosure therefore immediately exposes reusable user credentials.",
-        "severity": "WARNING",
-        "metadata": {
-          "cwe": [
-            "CWE-256: Plaintext Storage of a Password"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.authentication.hardcoded-default-credentials",
-      "path": "python/database.py",
-      "start": {
-        "line": 96,
-        "col": 9,
-        "offset": 2807
-      },
-      "end": {
-        "line": 99,
-        "col": 74,
-        "offset": 3161
-      },
-      "extra": {
-        "message": "Database initialization creates fixed accounts with source-visible passwords ('admin'/'password' and 'user2'/'password2'). Because initialization runs automatically, these predictable credentials provide direct access to deployed instances.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
           ],
           "confidence": "HIGH",
           "category": "security"

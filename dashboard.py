@@ -21,7 +21,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from parsers import get_parser
-from scorer.matcher import load_ground_truth, match_findings
+from scorer.matcher import is_non_scoring, load_ground_truth, match_findings
 from scorer.metrics import compute_scorecard
 
 BASELINE_SCANNERS = {"semgrep", "snyk", "sonarqube"}
@@ -128,7 +128,7 @@ def score_all(
                 else:
                     # Average core metrics across runs
                     cell = dict(run_dicts[0])  # copy structure
-                    for key in ("tp", "fp", "fn", "tn"):
+                    for key in ("tp", "fp", "fn", "tn", "ns"):
                         cell[key] = round(statistics.mean(
                             [rd[key] for rd in run_dicts]
                         ))
@@ -180,8 +180,12 @@ def load_repo_loc(gt_dir: Path) -> dict[str, int]:
 
 def compute_scanner_costs(
     scan_dir: Path, scanners: list[str], repo_loc: dict[str, int],
+    repos: set[str] | None = None,
 ) -> dict[str, dict]:
     """Collect cost data from .metrics.json files per scanner.
+
+    `repos` restricts the sum to that subset of repositories (used for the
+    per-language / per-authorship tabs); None means every scanned repository.
 
     Returns {scanner: {"total_cost", "successful_runs", "cost_per_run",
                         "total_loc_scanned", "cost_per_100_loc"}}.
@@ -193,7 +197,7 @@ def compute_scanner_costs(
     )
 
     for repo_dir in scan_dir.iterdir():
-        if not repo_dir.is_dir():
+        if not repo_dir.is_dir() or (repos is not None and repo_dir.name not in repos):
             continue
         for scanner_dir in repo_dir.iterdir():
             if not scanner_dir.is_dir() or scanner_dir.name not in scanners:
@@ -234,6 +238,28 @@ def compute_scanner_costs(
     return result
 
 
+def _project_fable_cost(aggregates: dict) -> None:
+    """Estimated cost for the Claude Code Fable 5 run (interactive, so unmetered).
+
+    Fable 5's API price is exactly 2x Claude Opus 4.8 ($10/$50 vs $5/$25 per 1M
+    in/out tokens), so we project its cost as 2x Opus 4.8's measured cost on the
+    same repositories. Flagged as estimated so the UI can mark it.
+    """
+    _est_target, _est_base = "claude-fable-5-cc-v1", "claude-opus-4-8-agentic-v1"
+    _base_cost = aggregates.get(_est_base, {}).get("cost") or {}
+    _tgt = aggregates.get(_est_target)
+    if _tgt is not None and _base_cost.get("total_cost", 0) > 0 and not (_tgt.get("cost") or {}).get("total_cost"):
+        _tgt["cost"] = {
+            "total_cost": round(_base_cost.get("total_cost", 0) * 2, 4),
+            "cost_per_run": round(_base_cost.get("cost_per_run", 0) * 2, 4),
+            "cost_per_100_loc": round(_base_cost.get("cost_per_100_loc", 0) * 2, 4),
+            "total_loc_scanned": _base_cost.get("total_loc_scanned", 0),
+            "successful_runs": _base_cost.get("successful_runs", 0),
+            "estimated": True,
+            "estimate_basis": "2x claude-opus-4-8-agentic-v1 (matching 2x API token price)",
+        }
+
+
 def compute_scanner_metadata(
     scan_dir: Path, scanners: list[str],
 ) -> dict[str, dict]:
@@ -248,6 +274,7 @@ def compute_scanner_metadata(
         "input_tokens": [], "output_tokens": [], "total_tokens": [],
         "wall_clock_seconds": [], "json_repairs": 0, "total_runs": 0,
         "exit_status_counts": defaultdict(int),
+        "reasoning_effort_counts": defaultdict(int),
     })
 
     for repo_dir in scan_dir.iterdir():
@@ -274,6 +301,9 @@ def compute_scanner_metadata(
                     s["total_runs"] += 1
                     status = d.get("exit_status", "unknown")
                     s["exit_status_counts"][status] += 1
+                    effort = d.get("reasoning_effort", "")
+                    if effort:
+                        s["reasoning_effort_counts"][effort] += 1
                 except (json.JSONDecodeError, OSError):
                     pass
 
@@ -284,11 +314,17 @@ def compute_scanner_metadata(
             result[scanner] = {"has_metrics": False}
             continue
         n = s["total_runs"]
+        effort_counts = s["reasoning_effort_counts"]
+        # mode across runs -- a scanner's effort should be one fixed setting
+        # for the whole campaign; a split vote usually means a handful of
+        # early runs predate the field being recorded, not a real mix.
+        effort = max(effort_counts, key=effort_counts.get) if effort_counts else None
         result[scanner] = {
             "has_metrics": True,
             "model": s["model"],
             "prompt_version": s["prompt_version"],
             "prompt_label": s["prompt_label"],
+            "reasoning_effort": effort,
             "avg_input_tokens": int(round(statistics.mean(s["input_tokens"]))),
             "avg_output_tokens": int(round(statistics.mean(s["output_tokens"]))),
             "avg_total_tokens": int(round(statistics.mean(s["total_tokens"]))),
@@ -322,7 +358,8 @@ def compute_aggregates(
             if gt_path.exists():
                 with open(gt_path) as f:
                     gt = json.load(f)
-                findings = gt.get("findings", [])
+                # Non-scoring entries are excluded from every published count.
+                findings = [f for f in gt.get("findings", []) if not is_non_scoring(f)]
                 repo_vuln_counts[repo] = sum(1 for f in findings if f.get("is_vulnerable", True))
                 repo_trap_counts[repo] = sum(1 for f in findings if not f.get("is_vulnerable", True))
 
@@ -335,6 +372,11 @@ def compute_aggregates(
         max_num_runs = 1
         # Strict mode
         strict_tp = strict_fp = strict_fn = strict_tn = 0
+        # Per-severity totals (scored repos only -- a failed repo's missed
+        # vulns are not broken out by severity here, so this is an
+        # optimistic-mode-only breakdown even when the headline metric is
+        # strict; investigative feature, not the ranking metric).
+        sev_totals: dict[str, dict[str, int]] = {}
 
         for repo in grid:
             cell = grid[repo].get(scanner)
@@ -350,6 +392,11 @@ def compute_aggregates(
                 strict_fp += cell["fp"]
                 strict_fn += cell["fn"]
                 strict_tn += cell["tn"]
+                for sev, sd in (cell.get("per_severity") or {}).items():
+                    bucket = sev_totals.setdefault(sev, {"tp": 0, "fp": 0, "fn": 0})
+                    bucket["tp"] += sd.get("tp", 0)
+                    bucket["fp"] += sd.get("fp", 0)
+                    bucket["fn"] += sd.get("fn", 0)
             else:
                 # Failed — strict mode counts all vulns as missed
                 strict_fn += repo_vuln_counts.get(repo, 0)
@@ -399,6 +446,7 @@ def compute_aggregates(
                     sum(f2_scores) / len(f2_scores), 1
                 ) if f2_scores else 0.0,
             },
+            "per_severity": sev_totals,
             "repos_scored": len(f2_scores),
             "repos_total": len(grid),
             "f2_stddev": round(statistics.stdev(f2_scores), 1) if len(f2_scores) >= 2 else 0.0,
@@ -450,6 +498,106 @@ def compute_source_aggregates(
         source_repos[source] = sorted(sub_grid)
         source_aggregates[source] = compute_aggregates(sub_grid, scanners, gt_dir)
     return source_aggregates, source_repos
+
+
+# Language groups for the per-language leaderboards. Keyed by dashboard tab key;
+# values are the GT `language` strings that belong to the group. Ordered as the
+# tabs appear. A group with no repos in the corpus is simply not emitted.
+LANGUAGE_GROUPS: dict[str, tuple[str, ...]] = {
+    "python": ("python",),
+    "tsjs": ("typescript", "javascript"),
+    "java": ("java",),
+}
+LANGUAGE_LABELS = {"python": "Python", "tsjs": "TypeScript / JS", "java": "Java"}
+
+
+def load_repo_languages(gt_dir: Path, repos: list[str]) -> dict[str, str]:
+    """Map repo -> language group key from GT `language`.
+
+    A language that is not in LANGUAGE_GROUPS gets its own key so it is never
+    silently folded into another group.
+    """
+    by_lang = {lang: key for key, langs in LANGUAGE_GROUPS.items() for lang in langs}
+    out: dict[str, str] = {}
+    for repo in repos:
+        gt_path = gt_dir / repo / "ground-truth.json"
+        language = ""
+        if gt_path.exists():
+            with open(gt_path) as f:
+                language = (json.load(f).get("language") or "").lower()
+        out[repo] = by_lang.get(language, language or "unknown")
+    return out
+
+
+def language_coverage(
+    grid: dict[str, dict[str, dict | None]],
+    scanners: list[str],
+    repo_languages: dict[str, str],
+) -> dict[str, dict[str, list[int]]]:
+    """scanner -> {language key: [repos scored, repos total]} within `grid`."""
+    totals: dict[str, int] = {}
+    for repo in grid:
+        totals[repo_languages[repo]] = totals.get(repo_languages[repo], 0) + 1
+    out: dict[str, dict[str, list[int]]] = {}
+    for scanner in scanners:
+        scored: dict[str, int] = {}
+        for repo, row in grid.items():
+            if row.get(scanner) is not None:
+                lang = repo_languages[repo]
+                scored[lang] = scored.get(lang, 0) + 1
+        out[scanner] = {lang: [scored.get(lang, 0), n] for lang, n in totals.items()}
+    return out
+
+
+def compute_tab_aggregates(
+    grid: dict[str, dict[str, dict | None]],
+    scanners: list[str],
+    gt_dir: Path,
+) -> tuple[dict[str, dict], dict[str, list[str]], dict[str, str]]:
+    """Aggregates for every language x authorship leaderboard tab.
+
+    Tab keys: "all", each language group present ("python", "tsjs", ...), each
+    authorship source ("intentional", "vibe"), and the cross product
+    "<language>:<source>". Every aggregate carries `language_coverage`
+    (scanner -> {language: [scored, total]} within that tab) so the site can
+    tell a scanner that covered the whole tab from one that only covered one of
+    its languages.
+
+    Returns (tab_aggregates, tab_repos, languages) where `languages` maps each
+    language key present in the corpus to its display label.
+    """
+    repo_sources = load_repo_sources(gt_dir, list(grid))
+    repo_languages = load_repo_languages(gt_dir, list(grid))
+    present = [k for k in LANGUAGE_GROUPS if k in repo_languages.values()]
+    present += sorted({v for v in repo_languages.values() if v not in LANGUAGE_GROUPS})
+    languages = {k: LANGUAGE_LABELS.get(k, k.title()) for k in present}
+
+    def subset(lang: str | None, source: str | None) -> dict:
+        return {
+            r: grid[r]
+            for r in grid
+            if (lang is None or repo_languages[r] == lang)
+            and (source is None or repo_sources[r] == source)
+        }
+
+    tabs: dict[str, dict] = {"all": subset(None, None)}
+    for lang in present:
+        tabs[lang] = subset(lang, None)
+    for source in REPO_SOURCES:
+        tabs[source] = subset(None, source)
+        for lang in present:
+            tabs[f"{lang}:{source}"] = subset(lang, source)
+
+    tab_aggregates: dict[str, dict] = {}
+    tab_repos: dict[str, list[str]] = {}
+    for key, sub_grid in tabs.items():
+        tab_repos[key] = sorted(sub_grid)
+        agg = compute_aggregates(sub_grid, scanners, gt_dir) if sub_grid else {}
+        cov = language_coverage(sub_grid, scanners, repo_languages)
+        for scanner, a in agg.items():
+            a["language_coverage"] = cov.get(scanner, {})
+        tab_aggregates[key] = agg
+    return tab_aggregates, tab_repos, languages
 
 
 def compute_cwe_coverage(
@@ -1797,6 +1945,9 @@ def build_json_report(
     scanner_metadata: dict | None = None,
     source_aggregates: dict | None = None,
     source_repos: dict | None = None,
+    tab_aggregates: dict | None = None,
+    tab_repos: dict | None = None,
+    languages: dict | None = None,
 ) -> dict:
     """Build machine-readable JSON report."""
     report: dict = {
@@ -1825,6 +1976,12 @@ def build_json_report(
         report["source_aggregates"] = source_aggregates
     if source_repos:
         report["source_repos"] = source_repos
+    if tab_aggregates:
+        report["tab_aggregates"] = tab_aggregates
+    if tab_repos:
+        report["tab_repos"] = tab_repos
+    if languages:
+        report["languages"] = languages
     return report
 
 
@@ -1874,6 +2031,17 @@ def main() -> int:
         type=int,
         default=0,
         help="Exclude scanners that scored fewer than N repos (default: 0 = no filter)",
+    )
+    parser.add_argument(
+        "--min-coverage",
+        type=float,
+        default=0.0,
+        help=(
+            "Exclude scanners that did not score at least this share of the repos "
+            "of ANY language group (default: 0 = no filter). Applied per language so "
+            "a scanner that fully covered one language is kept even if it never "
+            "attempted another."
+        ),
     )
     args = parser.parse_args()
 
@@ -1925,8 +2093,9 @@ def main() -> int:
         gt_path = gt_dir / repo / "ground-truth.json"
         if gt_path.exists():
             gt_data = json.load(open(gt_path))
-            gt_total_vulns += sum(1 for f in gt_data["findings"] if f["is_vulnerable"])
-            gt_total_traps += sum(1 for f in gt_data["findings"] if not f["is_vulnerable"])
+            scored = [f for f in gt_data["findings"] if not is_non_scoring(f)]
+            gt_total_vulns += sum(1 for f in scored if f["is_vulnerable"])
+            gt_total_traps += sum(1 for f in scored if not f["is_vulnerable"])
             gt_total_repos += 1
 
     # Load LOC data
@@ -1944,33 +2113,30 @@ def main() -> int:
     grid = score_all(repos, scanners, gt_dir, scan_dir, cwe_families)
     aggregates = compute_aggregates(grid, scanners, gt_dir)
     source_aggregates, source_repos = compute_source_aggregates(grid, scanners, gt_dir)
+    tab_aggregates, tab_repos, languages = compute_tab_aggregates(grid, scanners, gt_dir)
     scanner_costs = compute_scanner_costs(scan_dir, scanners, repo_loc)
     scanner_metadata = compute_scanner_metadata(scan_dir, scanners)
 
-    # Merge costs and metadata into aggregates
+    # Merge costs, metadata and per-language coverage into aggregates
     for scanner in scanners:
+        aggregates.setdefault(scanner, {})["language_coverage"] = (
+            tab_aggregates["all"].get(scanner, {}).get("language_coverage", {})
+        )
         aggregates.setdefault(scanner, {})["cost"] = scanner_costs.get(scanner, {})
         aggregates.setdefault(scanner, {})["metadata"] = scanner_metadata.get(
             scanner, {"has_metrics": False}
         )
 
-    # Estimated cost for the Claude Code Fable 5 run (interactive, so unmetered).
-    # Fable 5's API price is exactly 2x Claude Opus 4.8 ($10/$50 vs $5/$25 per 1M
-    # in/out tokens), so we project its cost as 2x Opus 4.8's measured cost on the
-    # same benchmark. Flagged as estimated so the UI can mark it.
-    _est_target, _est_base = "claude-fable-5-cc-v1", "claude-opus-4-8-agentic-v1"
-    _base_cost = aggregates.get(_est_base, {}).get("cost") or {}
-    _tgt = aggregates.get(_est_target)
-    if _tgt is not None and _base_cost.get("total_cost", 0) > 0 and not (_tgt.get("cost") or {}).get("total_cost"):
-        _tgt["cost"] = {
-            "total_cost": round(_base_cost.get("total_cost", 0) * 2, 4),
-            "cost_per_run": round(_base_cost.get("cost_per_run", 0) * 2, 4),
-            "cost_per_100_loc": round(_base_cost.get("cost_per_100_loc", 0) * 2, 4),
-            "total_loc_scanned": _base_cost.get("total_loc_scanned", 0),
-            "successful_runs": _base_cost.get("successful_runs", 0),
-            "estimated": True,
-            "estimate_basis": "2x claude-opus-4-8-agentic-v1 (matching 2x API token price)",
-        }
+    # Per-tab costs: the same sums restricted to each tab's repositories, so a
+    # language tab prices the scanner on the code it scored there.
+    for key, agg in tab_aggregates.items():
+        tab_costs = compute_scanner_costs(scan_dir, scanners, repo_loc, set(tab_repos[key]))
+        for scanner, a in agg.items():
+            a["cost"] = tab_costs.get(scanner, {})
+            a["metadata"] = scanner_metadata.get(scanner, {"has_metrics": False})
+        _project_fable_cost(agg)
+
+    _project_fable_cost(aggregates)
 
     # Filter scanners by minimum repo count
     if args.min_repos > 0:
@@ -1982,6 +2148,21 @@ def main() -> int:
         dropped = before - len(scanners)
         if dropped:
             print(f"Dropped {dropped} scanners with < {args.min_repos} repos")
+    if args.min_coverage > 0:
+        before = len(scanners)
+        scanners = [
+            s for s in scanners
+            if any(
+                total and scored >= args.min_coverage * total
+                for scored, total in aggregates.get(s, {}).get("language_coverage", {}).values()
+            )
+        ]
+        dropped = before - len(scanners)
+        if dropped:
+            print(
+                f"Dropped {dropped} scanners below {args.min_coverage:.0%} coverage "
+                "of every language group"
+            )
 
     # Prune every emitted structure to the kept scanners — otherwise dropped
     # scanners' data still ships in dashboard.json (and build_detail_pages
@@ -1997,6 +2178,10 @@ def main() -> int:
         src: {s: v for s, v in per.items() if s in kept}
         for src, per in source_aggregates.items()
     }
+    tab_aggregates = {
+        key: {s: v for s, v in per.items() if s in kept}
+        for key, per in tab_aggregates.items()
+    }
 
     # dashboard.py is the data source of truth: it emits dashboard.json only.
     # All HTML (reports/dashboard.html, scanners/*.html) is built by build_site.py.
@@ -2004,6 +2189,7 @@ def main() -> int:
         grid, scanners, aggregates,
         manifest=manifest, scanner_metadata=scanner_metadata,
         source_aggregates=source_aggregates, source_repos=source_repos,
+        tab_aggregates=tab_aggregates, tab_repos=tab_repos, languages=languages,
     )
 
     json_path = Path(args.json)

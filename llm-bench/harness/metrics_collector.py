@@ -53,6 +53,12 @@ class RunMetrics:
     prompt_version: str = ""
     prompt_label: str = ""
 
+    # Reasoning effort passed to the model, when the CLI supports it
+    # (Codex: -c model_reasoning_effort=<level>; Claude Code: --effort <level>).
+    # Empty string means "not recorded" (older runs, or a CLI without the knob) --
+    # never assume a default silently; treat it as unknown for comparability checks.
+    reasoning_effort: str = ""
+
     # Benchmark / ground-truth versioning
     benchmark_version: str = ""
     ground_truth_version: str = ""

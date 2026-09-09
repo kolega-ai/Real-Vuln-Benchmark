@@ -1,0 +1,1352 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.authn.jwt-signature-not-verified",
+      "path": "middleware.ts",
+      "start": {
+        "line": 3,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 34,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "middleware.ts decodes the JWT payload with atob()/JSON.parse() to gate access to /monitoring/internal-status but never verifies the HMAC signature (the safe decodeWeakJWT in lib/server-auth.ts is not used here). An attacker can craft an arbitrary cookie authToken with payload {\"role\":\"ADMIN\",\"exp\":<future>} and any garbage signature to bypass this authentication check entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-290: Authentication Bypass by Spoofing"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.hardcoded-jwt-secret",
+      "path": "lib/server-auth.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const JWT_SECRET = process.env.JWT_SECRET || \"secret\"; falls back to the trivial literal \"secret\" for signing/verifying every auth JWT if the env var is unset. Combined with a JWT payload hint (\"The secret is not so secret\") set in login/signup/support-login routes, an attacker can forge tokens with role: \"ADMIN\" for any user id, bypassing every withAuth/withAdminAuth check in the app.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.weak-md5-password-hash",
+      "path": "lib/server-auth.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "hashMD5() hashes passwords with unsalted MD5 (crypto.createHash(\"md5\")), used across login, signup, and reset-password routes. MD5 is cryptographically broken and fast to brute-force/rainbow-table, allowing trivial recovery of stolen password hashes.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.role-mass-assignment-signup",
+      "path": "app/api/auth/signup/route.ts",
+      "start": {
+        "line": 59,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 61,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "if (body.role) { userData.role = body.role as UserRole; } \u2014 signupBodySchema (lib/validation/schemas/auth.ts) declares role as an unrestricted, client-controlled optional string with .passthrough(). Any anonymous signup request can send {\"role\":\"ADMIN\"} to self-register as an administrator and immediately receive a valid ADMIN JWT.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-269: Improper Privilege Management",
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-support-access-token-issuance",
+      "path": "app/api/user/support-access/route.ts",
+      "start": {
+        "line": 51,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 63,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const targetEmail = parsed.data?.email || user.email; ... findUnique({ where: { email: targetEmail } }) \u2014 this endpoint only requires withAuth (any logged-in user), not admin. Any authenticated user can POST {\"email\":\"victim@example.com\"} to mint a support-access token for a different user, then redeem it at /api/auth/support-login for full account takeover.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.predictable-password-reset-token",
+      "path": "app/api/auth/forgot-password/route.ts",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const token = hashMD5(email + timestamp); the reset token is deterministically derived from the victim's public email and the current Unix timestamp (seconds). An attacker who knows the target's email can brute-force the small timestamp window offline to compute a valid, unexpired reset token without intercepting any email.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-330: Use of Insufficiently Random Values",
+            "CWE-640: Weak Password Recovery Mechanism"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.plaintext-password-logged",
+      "path": "app/api/auth/login/route.ts",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "logger.warn({ email, password, ... }, `[auth] login attempt email=${email} password=${password} ...`) writes the raw plaintext password of every login attempt (success or failure) to logs/app.log, permanently persisting credentials in cleartext.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File",
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.missing-rate-limit-login",
+      "path": "app/api/auth/login/route.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The login handler has no rate limiting, lockout, or CAPTCHA, allowing unlimited password-guessing attempts against any account.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.excessive-session-lifetime-support-login",
+      "path": "app/api/auth/support-login/route.ts",
+      "start": {
+        "line": 42,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 49,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "exp: Math.floor(Date.now()/1000) + 60*60*24*365 mints a full authentication session valid for 1 year via support-access login (vs. 7 days for normal login), massively extending the exposure window if the token/cookie leaks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-613: Insufficient Session Expiration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.sensitive-token-in-url",
+      "path": "app/api/user/support-access/route.ts",
+      "start": {
+        "line": 90,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 90,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "supportLoginUrl: `/support-login?token=${supportToken.token}` passes a long-lived (365-day) bearer token as a GET query parameter, risking capture via browser history, server access logs, or Referer headers.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.sensitive-token-exposed-via-get",
+      "path": "app/api/user/support-access/route.ts",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 38,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET handler returns the raw bearer supportToken.token value in plaintext JSON, a credential equivalent to a password, over a simple authenticated GET with no additional protection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.hardcoded-siem-credentials",
+      "path": "app/api/monitoring/auth/route.ts",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const SIEM_USER = \"root\"; const SIEM_PASS = \"admin\"; if (username === SIEM_USER && password === SIEM_PASS) { ...cookies.set(\"siem_session\",\"authenticated\") } \u2014 hardcoded credentials grant a session cookie whose value is the static, guessable string \"authenticated\" with no cryptographic signing, so the cookie can also just be set manually to bypass auth.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authn.hardcoded-siem-credentials-logs",
+      "path": "app/api/monitoring/logs/route.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const SIEM_USER = \"root\"; const SIEM_PASS = \"admin\"; gate HTTP Basic Auth access to raw application log data, with no rate limiting/lockout on failed attempts, enabling trivial brute force.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.log-file-exposure-monitoring",
+      "path": "app/api/monitoring/logs/route.ts",
+      "start": {
+        "line": 40,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 93,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "After weak/hardcoded-credential auth, this endpoint reads and returns the entire raw application log file (fs.readFileSync) with no redaction, directly exposing previously-logged plaintext passwords and other sensitive data.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.hardcoded-aes-share-key",
+      "path": "lib/share-crypto.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const SHARE_KEY = Buffer.from(process.env.SHARE_ENCRYPTION_KEY || \"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2\", \"hex\") \u2014 falls back to a fixed key baked into source when the env var is unset, letting anyone who reads the repo decrypt or forge any share token in a default deployment.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.aes-cbc-no-integrity-padding-oracle",
+      "path": "lib/share-crypto.ts",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "decryptShareToken performs raw AES-256-CBC decryption with no HMAC/AEAD integrity check. Ciphertext can be bit-flipped/truncated, and decipher.final() throws a distinguishable padding error, creating the conditions for a CBC padding-oracle attack in any caller that surfaces this error distinctly.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.admin-diag-backdoor-header",
+      "path": "app/api/admin/diag/route.ts",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const DIAG_AUTH_TOKEN = \"dbg_8f3a7c91e2b4d6a05e21\"; if (provided !== DIAG_AUTH_TOKEN) return 403 \u2014 this route performs no session/role check at all (no withAdminAuth), granting access to admin diagnostic data purely via a static hardcoded header value that bypasses authentication and authorization entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-admin-reviews",
+      "path": "app/api/admin/reviews/route.ts",
+      "start": {
+        "line": 100,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 145,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "authorFilter (query param, only checked against a keyword blocklist used solely to award a CTF flag) is concatenated directly into raw SQL executed via db.exec()/.prepare() with better-sqlite3, e.g. `WHERE r.author = '${authorFilter}'`, allowing classic and blind SQL injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-product-search",
+      "path": "app/api/products/search/route.ts",
+      "start": {
+        "line": 85,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 100,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const sqlQuery = `... WHERE name LIKE '%${query}%' ...`; ... prisma.$queryRawUnsafe(sqlQuery) \u2014 the user-supplied search query is interpolated unescaped into a raw SQL string. The isSQLInjectionAttempt() blocklist only decides whether to award a CTF flag; it does not block execution, so UNION-based/boolean-based SQLi payloads reach the database.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-order-search",
+      "path": "app/api/orders/search/route.ts",
+      "start": {
+        "line": 81,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 102,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const statusFilter = status ? `AND o.status = '${status}'` : \"\"; ... prisma.$queryRawUnsafe(query) \u2014 the status body field is concatenated unescaped into a raw SQL query, breaking out of the intended `WHERE o.\"userId\" = '${user.id}'` per-user scoping and enabling arbitrary row/table disclosure via injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-header-x-forwarded-for",
+      "path": "app/api/tracking/route.ts",
+      "start": {
+        "line": 58,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 103,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const forwardedFor = request.headers.get(\"x-forwarded-for\"); ... INSERT INTO visitor_logs (... ip ...) VALUES ('${id}', '${ip}', ...) \u2014 unlike userAgent/visitPath, the attacker-controlled X-Forwarded-For value is not quote-escaped before being concatenated into an INSERT statement run via prisma.$queryRawUnsafe, allowing header-driven SQL injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection",
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-xss-x-forwarded-for-analytics",
+      "path": "app/admin/analytics/AnalyticsClient.tsx",
+      "start": {
+        "line": 366,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 366,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "dangerouslySetInnerHTML={{ __html: visit.ip }} renders the stored visitor IP (sourced from the unsanitized X-Forwarded-For header at app/api/tracking/route.ts:58) as raw HTML in the admin dashboard, so an attacker-controlled header value becomes stored XSS executed in an admin's browser.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xxe-supplier-import",
+      "path": "app/api/admin/suppliers/import-order/route.ts",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "libxmljs.parseXmlString(rawXml, { noent: true, dtdload: true }) parses fully attacker-controlled XML with entity expansion and external DTD loading enabled, enabling classic XXE (local file read via entity expansion, e.g. SYSTEM \"file:///etc/passwd\", or SSRF via SYSTEM \"http://internal-host/...\").",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.arbitrary-file-read-files-route",
+      "path": "app/api/files/route.ts",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 67,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const filePath = join(baseDir, file); const content = await readFile(filePath, ...) \u2014 unlike the sibling uploads/[...path]/route.ts handler, this route performs no \"..\"/absolute-path check on the user-supplied file/path query params before joining into baseDir, allowing arbitrary file read/directory listing outside the documents directory (e.g. ?file=../../../../etc/passwd).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-order-get",
+      "path": "app/api/orders/[id]/route.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 64,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The GET handler fetches an order by sequential/guessable id and always returns full order/customer PII (name, email, delivery address) regardless of whether order.userId matches the requesting user; the ownership check only decides whether to append a CTF flag, never whether to block or redact the response.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-wishlist-get",
+      "path": "app/api/wishlists/[id]/route.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 92,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The GET handler always returns full wishlist contents and the owner's email regardless of isPublic/ownership (unlike the DELETE handler in the same file, which correctly checks wishlist.userId !== user.id and returns 403). Guessing/iterating wishlist IDs discloses other users' private wishlists.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.bfla-live-stream",
+      "path": "app/api/live/stream/route.ts",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 110,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET and POST are both wrapped in withAuth instead of withAdminAuth, despite an explicit code comment admitting swapping the featured live video is admin-only. Any authenticated non-admin can POST an arbitrary video ID to overwrite the site-wide broadcast shown on /live for all visitors, and GET leaks the RTMP ingest URL/stream key to any authenticated user.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.client-side-price-manipulation",
+      "path": "app/api/orders/route.ts",
+      "start": {
+        "line": 35,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 138,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The order is persisted with the client-supplied `total` value regardless of whether it matches the server-calculated `expectedTotal`; the mismatch check only decides whether to reveal a CTF flag, never whether to reject/correct the order, so an attacker can submit any total (e.g. 0.01) and have it stored as the charged amount.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.race-condition.coupon-limit-toctou-orders",
+      "path": "app/api/orders/route.ts",
+      "start": {
+        "line": 64,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 88,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The usedCount < maxUses check and the increment are separated by an explicit 150ms delay with no locking/transaction, allowing concurrent requests to all pass the check and push usedCount above maxUses.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization",
+            "CWE-367: Time-of-check Time-of-use Race Condition"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.race-condition.coupon-apply-no-atomic-increment",
+      "path": "app/api/coupon/apply/route.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 51,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The route reads coupon.usedCount/maxUses and rejects if exceeded, but never increments usedCount nor performs an atomic conditional update (e.g. updateMany with a WHERE usedCount < maxUses guard, as is done correctly for gift-card redemption). Concurrent requests can all pass the check simultaneously and apply the coupon beyond its intended limit.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.csrf-order-status-update",
+      "path": "app/api/orders/[id]/route.ts",
+      "start": {
+        "line": 124,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 162,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The order status update is always executed before the Referer-header check; the check is spoofable and never blocks the request regardless of outcome \u2014 there is no CSRF token/synchronizer-token validation, so a cross-site request can change any order's status if the victim's session cookie is sent.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.csrf-profile-update",
+      "path": "app/api/user/profile/route.ts",
+      "start": {
+        "line": 69,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 106,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "prisma.user.update always executes regardless of the Referer-header check at lines 98-106; the check is spoofable and only flags csrfExploited rather than blocking the write. No CSRF token is validated, so a forged cross-site request can modify a victim's profile (chainable with the stored-XSS bio field below).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-xss-profile-bio",
+      "path": "app/profile/ProfileClient.tsx",
+      "start": {
+        "line": 404,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 414,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "dangerouslySetInnerHTML={{ __html: profile.bio }} renders the user-controlled bio field with no sanitization. app/api/user/profile/route.ts stores bio unsanitized and even detects HTML injection via htmlTagPattern to award a self-xss-profile-injection flag, confirming this is a real stored-XSS vector, worsened by the CSRF gap above allowing cross-site planting into a victim's own profile.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.stored-xss-product-reviews-script-reexecution",
+      "path": "app/products/[id]/ProductDetailClient.tsx",
+      "start": {
+        "line": 51,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 67,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "reviewElement.innerHTML = review.content; injects raw, unsanitized user-submitted review content as HTML. The code then explicitly walks querySelectorAll(\"script\") and manually recreates+re-inserts each script element to force execution of injected <script> payloads (browsers normally do not execute scripts inserted via innerHTML) \u2014 a deliberate high-severity stored XSS against every viewer of the product page.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.support-screenshot-fetch",
+      "path": "app/api/support/route.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const response = await fetch(screenshotUrl, { headers: { \"X-Internal-Request\": \"true\" } }); fetches an arbitrary user-supplied URL server-side with no allowlist/validation, and the fetched body is returned to the client, enabling SSRF against internal network resources.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss.dom-xss-support-screenshot-content",
+      "path": "app/support/SupportForm.tsx",
+      "start": {
+        "line": 95,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 109,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "dangerouslySetInnerHTML={{ __html: submittedData.screenshotContent }} renders the raw body fetched server-side from an attacker-controlled screenshotUrl (see SSRF finding in app/api/support/route.ts) with no sanitization, resulting in DOM-based XSS if the attacker points the URL at content they control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.ai-assistant-mcp-server-url",
+      "path": "app/api/ai-assistant/route.ts",
+      "start": {
+        "line": 200,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 212,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "discoverTools(mcpServerUrl) accepts an arbitrary, unvalidated mcpServerUrl from the client and performs a server-side fetch to it with no allowlist or scheme/host validation, enabling SSRF against internal services.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.prompt-injection-unsanitized-tool-results",
+      "path": "app/api/ai-assistant/route.ts",
+      "start": {
+        "line": 273,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 289,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Tool call results from either the internal MCP server or the attacker-controlled external mcpServerUrl are injected verbatim into the LLM's message history with no sanitization, size limiting, or provenance tagging, letting an attacker's tool response hijack the AI assistant's behavior (indirect prompt injection).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.weak-prompt-injection-filter",
+      "path": "lib/prompt-injection-filter.ts",
+      "start": {
+        "line": 1,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "BLOCKED_PATTERNS is a 4-regex denylist that only inspects the outbound user message, not tool responses returned from MCP servers, so injected instructions delivered via tool results bypass the filter entirely; trivial rewording also bypasses the regexes.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authz.hardcoded-mcp-session-secret",
+      "path": "app/api/mcp/route.ts",
+      "start": {
+        "line": 142,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 182,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The restricted get_compliance_report tool (which returns a flag/secret) is gated solely on request.headers.get(MCP_SESSION_HEADER) === MCP_SESSION_VALUE, where MCP_SESSION_VALUE (\"oopssec-internal-agent\", lib/mcp-constants.ts) is a static string baked into the shipped server code rather than a per-session secret.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.internal-mcp-url-tool-leak",
+      "path": "app/api/ai-assistant/route.ts",
+      "start": {
+        "line": 311,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 320,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The JSON response returned to the browser includes mcpTools with source: toolSourceMap.get(t.name)?.url, revealing the internal MCP server URL and the restricted get_compliance_report tool's existence to any client.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.api-key-in-localstorage",
+      "path": "app/support/ai-assistant/AIAssistantChat.tsx",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 82,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "localStorage.setItem(\"mistral_api_key\", key) persists the user's LLM API key unencrypted in localStorage, making it exfiltrable by any XSS elsewhere in the app.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.open-redirect-login",
+      "path": "app/login/LoginForm.tsx",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 37,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const redirect = useSearchParams().get(\"redirect\"); ... window.location.href = redirect; navigates to an attacker-controlled URL with no validation that it is a relative/same-origin path, e.g. /login?redirect=https://evil.example.com, enabling phishing right after credentials/session are established.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.file-export-password-field",
+      "path": "app/api/user/export/route.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 7,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "const ALLOWED_USER_FIELDS = [\"id\", \"email\", \"role\", \"addressId\", \"password\"]; includes password, so a user can request fields: [\"password\"] and receive their own stored password hash via the export endpoint, an unnecessary and dangerous exposure of credential material.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor",
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.verbose-error-debug-info-export",
+      "path": "app/api/user/export/route.ts",
+      "start": {
+        "line": 35,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 141,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Error responses include a systemDiagnostics object with stack traces, Node version, and internal Prisma version info returned to any authenticated (non-admin) user who submits invalid input, aiding attacker reconnaissance.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.upload.unrestricted-svg-upload-stored-xss",
+      "path": "app/api/admin/products/[id]/image/route.ts",
+      "start": {
+        "line": 74,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 108,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "image/svg+xml is an allowed content type; the file is written to disk and the product's imageUrl updated before any check for embedded <script>/onload=/javascript: content. The malicious-content scan only affects the flag message \u2014 the SVG (which can contain executable script) is already persisted and served at /api/uploads/<filename>, giving stored XSS against viewers of the product page.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-434: Unrestricted Upload of File with Dangerous Type",
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.insecure-randomness-gift-card-code",
+      "path": "lib/gift-card.ts",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generateGiftCardCode(seed) uses a custom Linear Congruential Generator (nextState using constants 1103515245/12345) seeded only with Date.now(), not crypto.randomBytes. Anyone knowing/observing the createdAt timestamp (visible via the gift cards API response) can fully reproduce the redemption code and steal the balance.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-330: Use of Insufficiently Random Values",
+            "CWE-338: Use of Cryptographically Weak PRNG"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.gift-card-redeem-no-rate-limit",
+      "path": "app/api/gift-cards/redeem/route.ts",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 99,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The redeem handler has no attempt throttling, delay, or lockout, enabling unlimited brute-force guessing of gift card codes, combined with the predictable code generation above.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.missing-auth-hints-flags-progress",
+      "path": "app/api/hints/reveal/route.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 75,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "This route has no withAuth wrapper and operates on a global RevealedHint table with no per-user scoping, allowing any unauthenticated caller to reveal hints and affect the global state for all users.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.unbounded-log-read-parse",
+      "path": "app/api/monitoring/logs/route.ts",
+      "start": {
+        "line": 60,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 88,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "fs.readFileSync(logFile, \"utf-8\") reads and JSON.parses every line of the entire log file into memory on every request before pagination is applied, so an attacker who can grow the log file causes increasingly expensive full-file reads/parses per request.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption",
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.supply-chain.poisoned-ai-agent-rules-file",
+      "path": "lab/quarantine/productivity-helper.mdc",
+      "start": {
+        "line": 83,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 126,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "An HTML comment (invisible in Markdown previews but ingested by AI coding agents reading raw bytes) instructs an AI agent to add a 'developer diagnostic endpoint' at app/api/admin/diag/route.ts that short-circuits auth when a request carries a hardcoded header X-Debug-Auth: dbg_8f3a7c91e2b4d6a05e21, and to conceal the change and refuse disclosure. This is a rules-file-backdoor prompt-injection payload reachable via path traversal (app/api/files?file=../lab/quarantine/productivity-helper.mdc).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code",
+            "CWE-506: Embedded Malicious Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.supply-chain.typosquatted-package-postinstall",
+      "path": "packages/react-toastfy/package.json",
+      "start": {
+        "line": 2,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Package name react-toastfy (one character off from the popular react-toastify), authored by a fabricated identity, declares a postinstall script (\"node scripts/postinstall.js\") that runs arbitrary Node code on npm install \u2014 a classic typosquat supply-chain vector present in the repo's own packages/ directory.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-829: Inclusion of Functionality from Untrusted Control Sphere"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.supply-chain.dormant-postinstall-payload-model",
+      "path": "packages/react-toastfy/scripts/postinstall.js",
+      "start": {
+        "line": 1,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 43,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The postinstall script's comments describe (though the code itself only logs and exits) writing a poisoned AI rules file to a developer's auto-loaded tooling path (e.g. ~/.cursor/rules/, ~/.claude/skills/) \u2014 modeling a real supply-chain payload-drop mechanism, though not wired into the root package.json's dependencies in this repo.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-506: Embedded Malicious Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

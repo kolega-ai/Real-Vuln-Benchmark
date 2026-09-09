@@ -6,8 +6,8 @@
       "path": "target/project/models/Dashboard.py",
       "start": {
         "line": 7,
-        "col": 6,
-        "offset": 121
+        "col": 1,
+        "offset": 116
       },
       "end": {
         "line": 7,
@@ -15,7 +15,7 @@
         "offset": 202
       },
       "extra": {
-        "message": "The user-controlled pageId URL parameter is concatenated directly into a SQL statement passed to db.execute(), allowing arbitrary SQL injection.",
+        "message": "The pageId URL parameter from controllers/Dashboard.py is concatenated directly into a SQL statement passed to db.execute(). An attacker can alter the query and read or manipulate database records.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -27,37 +27,12 @@
       }
     },
     {
-      "check_id": "python.security.injection.server-side-template-injection",
-      "path": "target/project/controllers/404.py",
-      "start": {
-        "line": 94,
-        "col": 8,
-        "offset": 2976
-      },
-      "end": {
-        "line": 95,
-        "col": 49,
-        "offset": 3045
-      },
-      "extra": {
-        "message": "The attacker-controlled request URL is interpolated into template source and evaluated by render_template_string(). An attacker can inject Jinja expressions; the globally exposed system_call function permits escalation to arbitrary OS command execution.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
       "check_id": "python.security.deserialization.untrusted-pickle",
       "path": "target/project/controllers/About.py",
       "start": {
-        "line": 27,
-        "col": 17,
-        "offset": 947
+        "line": 22,
+        "col": 1,
+        "offset": 737
       },
       "end": {
         "line": 27,
@@ -65,7 +40,7 @@
         "offset": 966
       },
       "extra": {
-        "message": "Hex-encoded data supplied through request.form['data_obj'] is written to a file and deserialized with pickle.load(). A malicious pickle can execute arbitrary Python code.",
+        "message": "Attacker-controlled request.form['data_obj'] is hex-decoded, written to a file, and immediately passed to pickle.load(). A crafted pickle payload can execute arbitrary Python code.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -80,9 +55,9 @@
       "check_id": "python.security.deserialization.unsafe-yaml",
       "path": "target/project/controllers/Information.py",
       "start": {
-        "line": 18,
-        "col": 23,
-        "offset": 470
+        "line": 17,
+        "col": 1,
+        "offset": 400
       },
       "end": {
         "line": 18,
@@ -90,7 +65,7 @@
         "offset": 490
       },
       "extra": {
-        "message": "Base64-decoded attacker input from the URL is passed to yaml.load() without a safe loader. PyYAML supports dangerous Python object tags that can cause arbitrary code execution.",
+        "message": "The attacker-controlled input path component is base64-decoded and passed to yaml.load() using PyYAML 3.13 without a safe loader. Python object tags can execute arbitrary code during deserialization.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -102,20 +77,46 @@
       }
     },
     {
-      "check_id": "python.security.injection.reflected-xss",
-      "path": "target/project/templates/search/index.html",
+      "check_id": "python.security.injection.server-side-template-injection",
+      "path": "target/project/controllers/404.py",
       "start": {
-        "line": 13,
-        "col": 60,
-        "offset": 422
+        "line": 94,
+        "col": 1,
+        "offset": 2969
       },
       "end": {
-        "line": 13,
-        "col": 102,
-        "offset": 464
+        "line": 95,
+        "col": 49,
+        "offset": 3045
       },
       "extra": {
-        "message": "The search value originates from request.form['search'] and is rendered with Jinja autoescaping explicitly disabled, allowing reflected script injection.",
+        "message": "The attacker-controlled request URL is inserted into template source before render_template_string() evaluates it. Jinja expressions therefore execute server-side. The globally exposed system_call() function in controllers/Monitoring.py passes its argument to os.popen(), making payloads such as {{system_call('id')}} arbitrary OS command execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.reflected-404-url",
+      "path": "target/project/controllers/404.py",
+      "start": {
+        "line": 94,
+        "col": 1,
+        "offset": 2969
+      },
+      "end": {
+        "line": 95,
+        "col": 49,
+        "offset": 3045
+      },
+      "extra": {
+        "message": "request.url is interpolated directly into HTML before rendering, so attacker-supplied markup in a missing URL is not HTML-escaped and can execute in the generated 404 page.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -127,20 +128,70 @@
       }
     },
     {
-      "check_id": "python.security.injection.stored-xss-url",
+      "check_id": "python.security.xss.reflected-search",
+      "path": "target/project/templates/search/index.html",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 363
+      },
+      "end": {
+        "line": 13,
+        "col": 111,
+        "offset": 473
+      },
+      "extra": {
+        "message": "The template disables autoescaping around the search value populated directly from request.form in controllers/Search.py. Submitted HTML or script is returned unescaped, enabling reflected XSS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.reflected-deserialized-content",
+      "path": "target/project/templates/about/index.html",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 921
+      },
+      "end": {
+        "line": 21,
+        "col": 84,
+        "offset": 1004
+      },
+      "extra": {
+        "message": "The template explicitly disables autoescaping for content returned by pickle.load() in /about/sync. An attacker can submit a serialized string containing HTML or script and have it rendered verbatim.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.xss.stored-unsafe-url",
       "path": "target/project/templates/messaging/index.html",
       "start": {
         "line": 56,
-        "col": 43,
-        "offset": 2196
+        "col": 1,
+        "offset": 2154
       },
       "end": {
         "line": 56,
-        "col": 61,
-        "offset": 2214
+        "col": 79,
+        "offset": 2232
       },
       "extra": {
-        "message": "An arbitrary link submitted to /messaging/new is stored and later placed in an href attribute without scheme validation. A javascript: URL executes attacker-controlled script when a user follows the stored link.",
+        "message": "The link submitted through /messaging/new is stored and later used directly as an href without validating its URL scheme. A javascript: URL executes script when a user follows the stored link.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
@@ -156,8 +207,8 @@
       "path": "target/project/controllers/Validator.py",
       "start": {
         "line": 15,
-        "col": 11,
-        "offset": 445
+        "col": 1,
+        "offset": 435
       },
       "end": {
         "line": 15,
@@ -165,7 +216,7 @@
         "offset": 483
       },
       "extra": {
-        "message": "Attacker-controlled XML from request.form['customers'] is parsed with xml.dom.pulldom.parseString without disabling external entities. Crafted XML can disclose local files or access internal network resources.",
+        "message": "Untrusted XML from request.form['customers'] is parsed with xml.dom.pulldom.parseString() and expanded without disabling DTDs or external entities. Crafted XML can retrieve local files or server-accessible network resources.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -181,8 +232,8 @@
       "path": "target/project/controllers/Validator.py",
       "start": {
         "line": 29,
-        "col": 16,
-        "offset": 1024
+        "col": 1,
+        "offset": 1009
       },
       "end": {
         "line": 31,
@@ -190,7 +241,7 @@
         "offset": 1164
       },
       "extra": {
-        "message": "The example_file form value is used directly as a filesystem path by open() and send_file(). Traversal or absolute paths allow an unauthenticated attacker to download arbitrary readable files.",
+        "message": "The example_file form value is used directly by open() and send_file() without restricting it to an intended directory. Traversal sequences can download arbitrary readable server files.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -206,8 +257,8 @@
       "path": "target/project/controllers/Validator.py",
       "start": {
         "line": 46,
-        "col": 24,
-        "offset": 1760
+        "col": 1,
+        "offset": 1737
       },
       "end": {
         "line": 48,
@@ -215,7 +266,7 @@
         "offset": 1848
       },
       "extra": {
-        "message": "The uploaded file's attacker-controlled filename is concatenated with 'uploads/' without secure_filename() or containment validation. Filenames containing traversal components can write allowed-extension files outside the upload directory.",
+        "message": "The client-supplied upload filename is concatenated with 'uploads/' without secure_filename() or resolved-path validation. A filename containing traversal components can overwrite files outside the upload directory, including application templates or static content.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -227,49 +278,24 @@
       }
     },
     {
-      "check_id": "python.security.authentication.hardcoded-credentials",
-      "path": "target/project/controllers/Login.py",
+      "check_id": "python.security.dos.unbounded-file-upload",
+      "path": "target/project/controllers/Validator.py",
       "start": {
-        "line": 12,
-        "col": 8,
-        "offset": 360
-      },
-      "end": {
-        "line": 12,
-        "col": 53,
-        "offset": 405
-      },
-      "extra": {
-        "message": "Authentication is performed using the hardcoded administrator credentials admin/admin. Anyone with source access or knowledge of the default can authenticate as the privileged user.",
-        "severity": "ERROR",
-        "metadata": {
-          "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
-          ],
-          "confidence": "HIGH",
-          "category": "security"
-        }
-      }
-    },
-    {
-      "check_id": "python.security.authentication.auth-bypass",
-      "path": "target/project/controllers/Webmaster.py",
-      "start": {
-        "line": 7,
+        "line": 40,
         "col": 1,
-        "offset": 201
+        "offset": 1522
       },
       "end": {
-        "line": 12,
-        "col": 33,
-        "offset": 436
+        "line": 48,
+        "col": 43,
+        "offset": 1848
       },
       "extra": {
-        "message": "The unauthenticated /webmaster endpoint renders secret account credentials and unconditionally sets session['loggedin'], granting privileged access without validating any credentials.",
-        "severity": "ERROR",
+        "message": "The upload endpoint accepts and saves files without a request-size or file-size limit. Repeated oversized uploads can exhaust temporary or persistent disk storage and deny service.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-306: Missing Authentication for Critical Function"
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -277,7 +303,7 @@
       }
     },
     {
-      "check_id": "python.security.credentials.hardcoded-secret-key",
+      "check_id": "python.security.crypto.hardcoded-secret-key",
       "path": "target/project/__init__.py",
       "start": {
         "line": 5,
@@ -290,11 +316,86 @@
         "offset": 126
       },
       "extra": {
-        "message": "Flask's session-signing SECRET_KEY is the hardcoded, weak value 'random'. An attacker who knows the source can forge a session containing a truthy loggedin value and access protected functionality.",
+        "message": "The Flask session-signing key is the hardcoded, easily guessed value 'random'. Attackers can forge a session containing a truthy loggedin value and bypass access checks such as /confidential.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.credentials.hardcoded-admin",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 353
+      },
+      "end": {
+        "line": 12,
+        "col": 53,
+        "offset": 405
+      },
+      "extra": {
+        "message": "Authentication is implemented using the hardcoded username and password admin/admin. Anyone who obtains the source or guesses these default credentials can authenticate as the privileged user.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
             "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authentication.webmaster-bypass",
+      "path": "target/project/controllers/Webmaster.py",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 201
+      },
+      "end": {
+        "line": 12,
+        "col": 33,
+        "offset": 436
+      },
+      "extra": {
+        "message": "The unauthenticated /webmaster endpoint unconditionally sets session['loggedin'] to a truthy UUID. Visiting this route creates an authenticated session that passes the only authorization check protecting /confidential.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.misconfiguration.credentialed-cors",
+      "path": "target/runserver.py",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 136
+      },
+      "end": {
+        "line": 8,
+        "col": 58,
+        "offset": 193
+      },
+      "extra": {
+        "message": "Flask-CORS permits every origin on every route. The confidential handler additionally sets Access-Control-Allow-Credentials: true at controllers/Confidential.py:10, allowing an attacker-controlled origin to issue credentialed cross-origin requests and read confidential responses.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -315,7 +416,7 @@
         "offset": 143
       },
       "extra": {
-        "message": "Flask debug mode is enabled while the application is served on all interfaces. Unhandled errors can expose stack traces, source code, configuration data, and the interactive debugger.",
+        "message": "Flask debug mode is permanently enabled while runserver.py exposes the application on 0.0.0.0. Triggered exceptions disclose source, stack traces, configuration, and debugger functionality to remote clients.",
         "severity": "INFO",
         "metadata": {
           "cwe": [
@@ -327,24 +428,99 @@
       }
     },
     {
-      "check_id": "python.security.misconfiguration.permissive-cors",
-      "path": "target/runserver.py",
+      "check_id": "python.security.authentication.missing-monitoring-auth",
+      "path": "target/project/controllers/Monitoring.py",
       "start": {
-        "line": 8,
-        "col": 12,
-        "offset": 147
+        "line": 6,
+        "col": 1,
+        "offset": 151
       },
       "end": {
         "line": 8,
-        "col": 58,
-        "offset": 193
+        "col": 52,
+        "offset": 260
       },
       "extra": {
-        "message": "CORS is enabled for every route and arbitrary origins. Because the confidential response separately permits credentials, an attacker-controlled origin can make credentialed cross-origin requests and read protected information.",
+        "message": "The /monitoring route performs no authentication check, despite being presented as authenticated-only in the navigation. Any remote user can render monitoring/index.html, which executes ps and cat /etc/passwd and returns their output.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.exposure.plaintext-account-credentials",
+      "path": "target/project/templates/webmaster/index.html",
+      "start": {
+        "line": 27,
+        "col": 1,
+        "offset": 1089
+      },
+      "end": {
+        "line": 39,
+        "col": 56,
+        "offset": 1715
+      },
+      "extra": {
+        "message": "The template embeds three plaintext account passwords and is rendered by the unauthenticated /webmaster endpoint. Any requester can retrieve the credentials for Mark, Jacob, and Larry.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.authentication.username-enumeration",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 590
+      },
+      "end": {
+        "line": 21,
+        "col": 96,
+        "offset": 880
+      },
+      "extra": {
+        "message": "Login failures produce 'invalid username' for non-admin names but 'invalid password for username' when the username is admin. This observable response difference lets remote attackers enumerate valid usernames.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-203: Observable Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.credentials.hardcoded-sonarqube-token",
+      "path": "Jenkinsfile",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 808
+      },
+      "end": {
+        "line": 25,
+        "col": 270,
+        "offset": 1077
+      },
+      "extra": {
+        "message": "An active Jenkins pipeline command contains a hardcoded SonarQube login token. Anyone with repository or build-log access can recover and potentially reuse the credential against the configured SonarQube service.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
           ],
           "confidence": "HIGH",
           "category": "security"

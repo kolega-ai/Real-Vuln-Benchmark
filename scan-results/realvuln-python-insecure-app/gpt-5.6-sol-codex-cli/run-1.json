@@ -6,8 +6,8 @@
       "path": "app/main.py",
       "start": {
         "line": 41,
-        "col": 5,
-        "offset": 1295
+        "col": 12,
+        "offset": 1302
       },
       "end": {
         "line": 41,
@@ -15,7 +15,7 @@
         "offset": 1328
       },
       "extra": {
-        "message": "The user-controlled 'name' query parameter is interpolated into a string that is compiled and rendered as a Jinja2 template. An attacker can inject Jinja expressions and potentially achieve remote code execution.",
+        "message": "The user-controlled 'name' query parameter is interpolated into 'content' and compiled as a Jinja2 template by Template(content).render(). Attackers can inject template expressions and access Python objects, potentially achieving remote code execution.",
         "severity": "ERROR",
         "metadata": {
           "cwe": [
@@ -31,20 +31,20 @@
       "path": "app/main.py",
       "start": {
         "line": 38,
-        "col": 5,
-        "offset": 1089
+        "col": 28,
+        "offset": 1112
       },
       "end": {
         "line": 38,
-        "col": 85,
-        "offset": 1169
+        "col": 34,
+        "offset": 1118
       },
       "extra": {
-        "message": "The user-controlled 'name' query parameter is inserted directly into an HTML response without HTML escaping. An attacker can supply HTML or script markup that executes in the visitor's browser.",
+        "message": "The user-controlled 'name' query parameter is inserted directly into HTML without escaping. Because the route uses HTMLResponse and the string template has no autoescaping, injected HTML or JavaScript is rendered by the browser.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-79: Improper Neutralization of Input During Web Page Generation"
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
           ],
           "confidence": "HIGH",
           "category": "security"
@@ -52,32 +52,32 @@
       }
     },
     {
-      "check_id": "python.security.secrets.hardcoded-credential",
-      "path": "app/config.py",
+      "check_id": "python.security.xss.untrusted-service-response",
+      "path": "app/main.py",
       "start": {
-        "line": 15,
-        "col": 1,
-        "offset": 353
+        "line": 38,
+        "col": 61,
+        "offset": 1145
       },
       "end": {
-        "line": 15,
-        "col": 82,
-        "offset": 434
+        "line": 38,
+        "col": 72,
+        "offset": 1156
       },
       "extra": {
-        "message": "A secret token is hardcoded in source code. Anyone with repository access can recover the credential, and it cannot be safely rotated independently of the code.",
-        "severity": "INFO",
+        "message": "Untrusted response text from PUBLIC_IP_SERVICE_URL is embedded into an HTML response without escaping. A malicious or compromised configured service can return HTML or JavaScript that executes in clients viewing this endpoint.",
+        "severity": "WARNING",
         "metadata": {
           "cwe": [
-            "CWE-798: Use of Hard-coded Credentials"
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
           ],
-          "confidence": "HIGH",
+          "confidence": "MEDIUM",
           "category": "security"
         }
       }
     },
     {
-      "check_id": "python.security.dos.http-request-without-timeout",
+      "check_id": "python.security.request-forgery.server-side-request-forgery",
       "path": "app/main.py",
       "start": {
         "line": 31,
@@ -90,11 +90,136 @@
         "offset": 842
       },
       "extra": {
-        "message": "Every request to the public endpoint performs a synchronous outbound HTTP request without a timeout inside an async handler. A slow or unresponsive upstream can block the event loop indefinitely, and repeated requests can deny service to other clients.",
+        "message": "requests.get() fetches PUBLIC_IP_SERVICE_URL, an externally supplied environment value, without validating its scheme, host, or resolved address. An actor able to influence deployment configuration can direct the application to internal services or cloud metadata endpoints.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.dos.unbounded-blocking-request",
+      "path": "app/main.py",
+      "start": {
+        "line": 31,
+        "col": 30,
+        "offset": 800
+      },
+      "end": {
+        "line": 31,
+        "col": 72,
+        "offset": 842
+      },
+      "extra": {
+        "message": "Every request to the public endpoint performs a synchronous requests.get() call inside an async handler without a timeout or response-size limit. A slow or malicious upstream can block the event loop indefinitely or consume excessive memory, denying service to other clients.",
         "severity": "WARNING",
         "metadata": {
           "cwe": [
             "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.credentials.hardcoded-secret",
+      "path": "app/config.py",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 353
+      },
+      "end": {
+        "line": 15,
+        "col": 82,
+        "offset": 434
+      },
+      "extra": {
+        "message": "SUPER_SECRET_TOKEN is assigned a plaintext credential directly in source code. The value is exposed through source control and is identical across deployments using this configuration.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.credentials.hardcoded-secret",
+      "path": "app/config.py",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 277
+      },
+      "end": {
+        "line": 13,
+        "col": 75,
+        "offset": 351
+      },
+      "extra": {
+        "message": "SUPER_SECRET_NAME is explicitly designated as secret configuration but is hardcoded in source instead of being loaded from the environment, exposing the value to anyone with repository access.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.misconfiguration.debug-mode",
+      "path": "app/main.py",
+      "start": {
+        "line": 14,
+        "col": 5,
+        "offset": 318
+      },
+      "end": {
+        "line": 14,
+        "col": 24,
+        "offset": 337
+      },
+      "extra": {
+        "message": "FastAPI debug mode is controlled by config.DEBUG, while the committed environment template sets DEBUG=True and the installation instructions direct users to copy that template. In the documented deployment, unhandled errors expose detailed tracebacks and internal paths to remote clients.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-489: Active Debug Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "configuration.security.disabled-waf",
+      "path": "caddy/Caddyfile",
+      "start": {
+        "line": 13,
+        "col": 13,
+        "offset": 168
+      },
+      "end": {
+        "line": 13,
+        "col": 30,
+        "offset": 185
+      },
+      "extra": {
+        "message": "SecRuleEngine Off disables the Coraza WAF, so the subsequently defined SSTI, SQL-injection, XSS, and path-traversal rules do not inspect or block requests.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-693: Protection Mechanism Failure"
           ],
           "confidence": "HIGH",
           "category": "security"

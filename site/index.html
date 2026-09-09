@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>RealVuln — An open benchmark for security scanners on real-world code</title>
-<meta name="description" content="RealVuln is an open-source benchmark comparing Rule-Based SAST, General-Purpose LLM, and Security-Specialized scanners on {{REPOS}} real-world vulnerable Python repositories with {{ENTRIES}} hand-labeled findings." />
+<meta name="description" content="RealVuln is an open-source benchmark comparing Rule-Based SAST, General-Purpose LLM, and Security-Specialized scanners on {{REPOS}} real-world vulnerable Python and TypeScript/JavaScript repositories with {{ENTRIES}} hand-labeled findings." />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -103,7 +103,7 @@
     <div class="hk">
       <div class="hk-ico"><svg viewBox="0 0 24 24"><path d="M9 8 5 12 9 16"/><path d="M15 8 19 12 15 16"/></svg></div>
       <div class="hk-n">{{LOC}}</div>
-      <div class="hk-l">Python LOC</div>
+      <div class="hk-l">Lines of code</div>
     </div>
     <div class="hk">
       <div class="hk-ico"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg></div>
@@ -134,8 +134,20 @@
           <button data-metric="f2">F2</button>
           <button data-metric="f3" class="active">F3 ◂ primary</button>
         </div>
+        <div class="lang-tabs" id="home-lang-tabs" role="tablist" aria-label="Language">
+          <button class="ltab active" data-lang="all" role="tab">Overall</button>
+        </div>
       </div>
       <div class="metric-note">F3 weights recall <strong>9×</strong> over precision · strict scoring counts unfinished repos as misses</div>
+    </div>
+
+    <div class="sev-filter" id="sev-filter" hidden style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--fg-3)">
+      <span style="text-transform:uppercase;letter-spacing:.04em;font-size:11px;color:var(--fg-faint)">Severity (investigative)</span>
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" data-sev="critical" checked> Critical</label>
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" data-sev="high" checked> High</label>
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" data-sev="medium" checked> Medium</label>
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" data-sev="low" checked> Low</label>
+      <span style="color:var(--fg-faint)" title="False positives have no ground-truth severity, so Prec % always reflects the whole corpus; only F3, Recall and Missed Vulns respond to this filter.">F3 / Missed Vulns only — Prec % is corpus-wide</span>
     </div>
 
     <div class="table-scroll">
@@ -145,44 +157,45 @@
             <th class="l" data-key="" style="cursor:default">#</th>
             <th class="l" data-key="name">Scanner <span class="arrow">▼</span></th>
             <th data-key="f3" class="sorted metric-th">F3 <span class="arrow">▼</span></th>
-            <th data-key="recall">Recall % <span class="arrow">▼</span></th>
-            <th data-key="prec">Prec % <span class="arrow">▼</span></th>
-            <th data-key="repos">Repos <span class="arrow">▼</span></th>
-            <th data-key="cost">Cost $ <span class="arrow">▼</span></th>
+            <th data-key="lf:python" class="lang-col" title="F3 on the Python corpus alone">Python F3 <span class="arrow">▼</span></th>
+            <th data-key="lf:tsjs" class="lang-col" title="F3 on the TypeScript/JavaScript corpus alone">TS/JS F3 <span class="arrow">▼</span></th>
+            <th data-key="fn" title="Real vulnerabilities missed (false negatives), out of the corpus total">Missed Vulns <span class="arrow">▼</span></th>
+            <th data-key="cost" title="Metered/estimated spend normalized to $ per 100,000 lines of code scanned">Cost /100k LoC <span class="arrow">▼</span></th>
+            <th data-key="cpv" title="Cost per 100 real vulnerabilities found">Cost/100 Vulns <span class="arrow">▼</span></th>
           </tr>
         </thead>
         <tbody id="lb-body"></tbody>
       </table>
     </div>
-    <p class="figure-cap" style="margin-top:14px"><span class="repos-bad" style="font-family:var(--mono)">Amber repo counts</span> mark runs that did not complete all {{REPOS}} repositories; under strict scoring their unscored repos count as misses. Cost is the total USD spend for the scored run; rule-based tools are free or variably priced (—).</p>
+    <p class="figure-cap" style="margin-top:14px"><span class="repos-bad" style="font-family:var(--mono)">Amber repo counts</span> mark runs that did not complete all repositories of the selected corpus; under strict scoring their unscored repos count as misses. The Overall tab ranks only scanners that covered every language in the corpus; a run that covered one language appears on that language's tab instead, so every ranking is like-for-like. Cost is the total USD spend for the scored run; rule-based tools are free or variably priced (—).</p>
 
     <div class="grid-2" style="margin-top:44px;align-items:start">
       <div class="figure">
-        <svg id="scatter" class="scatter" role="img" aria-label="Precision versus recall scatter plot for all {{SCANNERS}} scanners"></svg>
-        <p class="figure-cap"><b>Precision vs. recall, all {{SCANNERS}} scanners.</b> Security-Specialized systems (violet) reach the high-recall right; General-Purpose LLMs cluster center with strong precision; Rule-Based tools occupy the low-recall left.</p>
+        <svg id="scatter" class="scatter" role="img" aria-label="Precision versus recall scatter plot for the scanners on the selected leaderboard"></svg>
+        <p class="figure-cap"><b>Precision vs. recall, selected leaderboard.</b> Security-Specialized systems (violet) reach the high-recall right; General-Purpose LLMs cluster center with strong precision; Rule-Based tools occupy the low-recall left.</p>
       </div>
       <div>
-        <div class="tier-glance">
-          <div class="tg-row">
+        <div class="tier-glance" id="tier-glance">
+          <div class="tg-row" data-cat="sec">
             <span class="tgdot" style="background:var(--tier-sec)"></span>
-            <span class="tgname"><b>Security-Specialized</b><span>{{CAT_SEC}} systems</span></span>
-            <span class="tgmetric"><span class="v">{{BEST_SEC_F3}}</span><span class="l">best F3</span></span>
-            <span class="tgex">recall to {{BEST_SEC_REC}}<br>breadth-driven</span>
+            <span class="tgname"><b>Security-Specialized</b><span><span data-tg="n">{{CAT_SEC}}</span> <span data-tg="unit" data-one="system">systems</span></span></span>
+            <span class="tgmetric"><span class="v" data-tg="best">{{BEST_SEC_F3}}</span><span class="l">best F3</span></span>
+            <span class="tgex" data-tg="ex">recall to {{BEST_SEC_REC}}<br>breadth-driven</span>
           </div>
-          <div class="tg-row">
+          <div class="tg-row" data-cat="llm">
             <span class="tgdot" style="background:var(--tier-llm)"></span>
-            <span class="tgname"><b>General-Purpose LLM</b><span>{{CAT_LLM}} models</span></span>
-            <span class="tgmetric"><span class="v">{{BEST_LLM_F3}}</span><span class="l">best F3</span></span>
-            <span class="tgex">range {{BEST_LLM_MIN}}–{{BEST_LLM_F3}}<br>high variance</span>
+            <span class="tgname"><b>General-Purpose LLM</b><span><span data-tg="n">{{CAT_LLM}}</span> <span data-tg="unit" data-one="model">models</span></span></span>
+            <span class="tgmetric"><span class="v" data-tg="best">{{BEST_LLM_F3}}</span><span class="l">best F3</span></span>
+            <span class="tgex" data-tg="ex">range {{BEST_LLM_MIN}}–{{BEST_LLM_F3}}<br>high variance</span>
           </div>
-          <div class="tg-row">
+          <div class="tg-row" data-cat="rule">
             <span class="tgdot" style="background:var(--tier-rule)"></span>
-            <span class="tgname"><b>Rule-Based SAST</b><span>{{CAT_RULE}} tools</span></span>
-            <span class="tgmetric"><span class="v">{{BEST_RULE_F3}}</span><span class="l">best F3</span></span>
-            <span class="tgex">recall ≤ 0.19<br>syntactic only</span>
+            <span class="tgname"><b>Rule-Based SAST</b><span><span data-tg="n">{{CAT_RULE}}</span> <span data-tg="unit" data-one="tool">tools</span></span></span>
+            <span class="tgmetric"><span class="v" data-tg="best">{{BEST_RULE_F3}}</span><span class="l">best F3</span></span>
+            <span class="tgex" data-tg="ex">recall ≤ 0.19<br>syntactic only</span>
           </div>
         </div>
-        <p class="figure-cap" style="margin-top:14px">A three-tier ordering — Security-Specialized &gt; General-Purpose LLM &gt; Rule-Based SAST — holds under both F2 and F3, though within-tier rankings shift with the metric and strict/standard mode. <a href="findings.html">Read the analysis →</a></p>
+        <p class="figure-cap" style="margin-top:14px"><span id="tier-cap">Tier figures follow the selected leaderboard.</span> On the {{PROSE_LANG}} leaderboard ({{PROSE_REPOS}} repositories, where the most scanners have full coverage) a three-tier ordering — Security-Specialized &gt; General-Purpose LLM &gt; Rule-Based SAST — holds under both F2 and F3, though within-tier rankings shift with the metric and strict/standard mode. <a href="findings.html">Read the analysis →</a></p>
       </div>
     </div>
   </div>
@@ -206,7 +219,7 @@
         <span class="arr">→</span>
         <div class="sxn">02 / dataset</div>
         <h3>The corpus</h3>
-        <p>{{REPOS}} hand-labeled Python repositories, the ground-truth schema, false-positive traps, and framework coverage.</p>
+        <p>{{REPOS}} hand-labeled Python and TypeScript/JavaScript repositories, the ground-truth schema, false-positive traps, and framework coverage.</p>
       </a>
       <a class="sx-card" href="findings.html">
         <span class="arr">→</span>

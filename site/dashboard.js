@@ -12,16 +12,78 @@
   var TAB_TOTALS = window.RV.TAB_TOTALS || { all: (window.RV.SCANNERS || []).length };
   var METRIC_LABEL = { f2: 'F2', f3: 'F3' };
 
-  var state = { tab: 'all', metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1, cats: { sec: true, llm: true, rule: true } };
+  var LANG_LABELS = window.RV.LANG_LABELS || { all: 'Overall' };
+  var SHORT_LANG = { python: 'Python', tsjs: 'TS/JS', java: 'Java' };
+
+  // tab = "<lang>:<src>" collapsed: "all" when both are all, "<lang>" or "<src>" when one is.
+  var state = { lang: 'all', src: 'all', tab: 'all', metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1, cats: { sec: true, llm: true, rule: true } };
+  function tabKey() {
+    if (state.lang === 'all' && state.src === 'all') return 'all';
+    if (state.lang === 'all') return state.src;
+    if (state.src === 'all') return state.lang;
+    return state.lang + ':' + state.src;
+  }
   // active scanner list + repo total for the selected corpus tab (reassigned on tab switch)
   var SC = BY_TAB[state.tab] || window.RV.SCANNERS;
   function tabTotal() { return TAB_TOTALS[state.tab] || SC.length; }
+  // language badges: on a multi-language tab, a scanner that did not cover every
+  // language is flagged (amber) with the languages it did cover
+  function langBadges(s) {
+    if (!s.langs || s.full !== false) return '';
+    return s.langs.map(function (l) {
+      return '<span class="lang-badge limited" title="Language-limited run — scored on ' + (LANG_LABELS[l] || l) + ' repositories only">' + (SHORT_LANG[l] || l) + '</span>';
+    }).join('');
+  }
 
   function mk(base) { return state.mode === 'strict' ? base + 's' : base; }
   function val(s, base) { return s[mk(base)]; }
-  function activeF(s) { return val(s, state.metric); }
+
+  // ---- severity filter (investigative): affects TP/FN-derived numbers only,
+  // never precision/FP (false positives carry no ground-truth severity) ----
+  var ALL_SEV = ['critical', 'high', 'medium', 'low'];
+  var sevSel = { critical: true, high: true, medium: true, low: true };
+  function sevAllOn() { return ALL_SEV.every(function (k) { return sevSel[k]; }); }
+  function sevAgg(s) {
+    if (!s.sev) return null;
+    var tp = 0, fn = 0, any = false;
+    ALL_SEV.forEach(function (k) {
+      if (!sevSel[k]) return;
+      var d = s.sev[k]; if (!d) return;
+      any = true; tp += d[0]; fn += d[2];
+    });
+    return any ? { tp: tp, fn: fn } : { tp: 0, fn: 0 };
+  }
+  function effFn(s) {
+    if (sevAllOn() || !s.sev) return s.fn || 0;
+    return sevAgg(s).fn;
+  }
+  function effTotal(s) {
+    if (sevAllOn() || !s.sev) return (s.tp || 0) + (s.fn || 0);
+    var agg = sevAgg(s);
+    return agg.tp + agg.fn;
+  }
+  function sevFilterVisible() {
+    var el = document.getElementById('sev-filter');
+    return !!el && !el.hidden;
+  }
+  function effF3(s) {
+    if (sevAllOn() || !s.sev) return val(s, state.metric);
+    var agg = sevAgg(s), fp = s.fp || 0;
+    var p = (agg.tp + fp) > 0 ? agg.tp / (agg.tp + fp) : 0;
+    var r = (agg.tp + agg.fn) > 0 ? agg.tp / (agg.tp + agg.fn) : 0;
+    var beta2 = state.metric === 'f2' ? 4 : 9;
+    var denom = beta2 * p + r;
+    return denom === 0 ? 0 : (100 * (1 + beta2) * p * r / denom);
+  }
+  function activeF(s) { return effF3(s); }
   function on(s) { return state.cats[s.cat]; }
   function fmt(v) { return v.toFixed(1); }
+  function effortTag(s) {
+    return s.effort ? ' <span class="dim">·</span> <span title="Reasoning/thinking effort level">' + s.effort + ' effort</span>' : '';
+  }
+  // per-language F3 (only present on cross-language tabs): [standard, strict]
+  function langF(s, lk) { var v = s.lf && s.lf[lk]; return v ? v[state.mode === 'strict' ? 1 : 0] : null; }
+  function langCols() { return state.lang === 'all'; }
   function leaderName() { var r = SC.filter(function (s) { return !s.partial; }); if (!r.length) r = SC; return r.reduce(function (m, s) { return activeF(s) > activeF(m) ? s : m; }, r[0]).name; }
   // explicit vendor-site link on the tag line, labeled with the domain
   function extLink(s) {
@@ -55,9 +117,10 @@
     pool.forEach(function (s) { if (val(s, 'rec') > val(recLead, 'rec')) recLead = s; });
     setText('kpi-recall-val', (val(recLead, 'rec') * 100).toFixed(1));
     setText('kpi-recall-sub', recLead.name);
-    var loc = (window.RV.DATASET && window.RV.DATASET.loc) || 0;
+    var tabLoc = window.RV.TAB_LOC && window.RV.TAB_LOC[state.tab];
+    var loc = tabLoc || (window.RV.DATASET && window.RV.DATASET.loc) || 0;
     setText('kpi-loc-val', loc.toLocaleString());
-    setText('kpi-loc-sub', 'across all repos');
+    setText('kpi-loc-sub', state.tab === 'all' ? 'across all repos' : 'in the selected corpus');
   }
 
   // ---- leaderboard ----
@@ -77,7 +140,8 @@
       if (k === 'tp') return dir * ((a.tp || 0) - (b.tp || 0));
       if (k === 'fp') return dir * ((a.fp || 0) - (b.fp || 0));
       if (k === 'fptp') { var ar = a.tp ? a.fp / a.tp : Infinity, br = b.tp ? b.fp / b.tp : Infinity; return dir * (ar - br); }
-      if (k === 'recall') return dir * (val(a, 'rec') - val(b, 'rec'));
+      if (k === 'fn') return dir * (effFn(a) - effFn(b));
+      if (k.indexOf('lf:') === 0) { var la = langF(a, k.slice(3)), lb = langF(b, k.slice(3)); return dir * ((la == null ? -1 : la) - (lb == null ? -1 : lb)); }
       return dir * (val(a, k) - val(b, k));
     });
     var ranked = SC.filter(function (s) { return !s.partial; });
@@ -98,20 +162,17 @@
         : '<span class="rank">' + String(++rankNo).padStart(2, '0') + '</span>';
       tr.innerHTML =
         '<td class="l">' + rankCell + '</td>' +
-        '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' +
-          '<div class="cat-tag">' + s.ver + extLink(s) + '</div></td>' +
+        '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' + langBadges(s) +
+          '<div class="cat-tag">' + s.ver + effortTag(s) + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
-        '<td>' + (val(s, 'rec') * 100).toFixed(1) + '</td>' +
-        '<td title="Real vulnerabilities found (true positives)">' + (s.tp == null ? '—' : s.tp.toLocaleString()) + '</td>' +
-        '<td title="False positives — flagged but not a real vulnerability">' + (s.fp == null ? '—' : s.fp.toLocaleString()) + '</td>' +
-        '<td title="False positives per true positive (FP ÷ TP) — lower is better">' + (s.tp ? (s.fp / s.tp).toFixed(2) : '—') + '</td>' +
+        (langCols() ? ['python', 'tsjs'].map(function (lk) { var v = langF(s, lk); return '<td class="lang-col">' + (v == null ? '<span class="dim">—</span>' : fmt(v)) + '</td>'; }).join('') : '') +
+        '<td title="real vulnerabilities missed (false negatives)' + (sevAllOn() ? '' : ' — filtered to selected severities') + '">' + effFn(s) + (sevFilterVisible() ? ' <span class="dim">of ' + effTotal(s) + '</span>' : '') + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
-        '<td title="Noise — share of findings that were false alarms (100% − precision)">' + (100 - s.prec * 100).toFixed(1) + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/' + total + '</span></td>' +
-        '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : ' title="API spend per 100,000 lines of code scanned"') + '>' + (s.cost == null ? '—' : s.cost === 0 ? 'Free' : (s.est ? '~$' : '$') + s.cost.toLocaleString()) + '</td>' +
-        '<td class="dim" title="API spend per 100 real vulnerabilities found">' + (s.cpv == null ? '—' : s.cpv === 0 ? 'Free' : '$' + s.cpv.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})) + '</td>';
+        '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + (s.cost < 10 ? s.cost.toFixed(2) : s.cost.toFixed(0))) + '</td>';
       tbody.appendChild(tr);
     });
+    document.querySelectorAll('#dlb th.lang-col').forEach(function (th) { th.hidden = !langCols(); });
     var mth = document.querySelector('#dlb th.metric-th');
     if (mth) { mth.setAttribute('data-key', state.metric); mth.firstChild.nodeValue = METRIC_LABEL[state.metric] + ' '; }
 
@@ -247,18 +308,47 @@
   // ---- controls ----
   function rerenderAll() { renderKPIs(); renderLeaderboard(); renderPR(); renderCost(); renderRankings(); renderCategory(); }
 
-  // ---- corpus tabs (All / Intentionally Vulnerable / Vibe Coded) ----
+  // ---- corpus tabs: language (Overall / Python / TS-JS / ...) x authorship ----
+  function switchTab() {
+    var tab = tabKey();
+    if (!BY_TAB[tab]) return;
+    state.tab = tab;
+    SC = BY_TAB[tab];
+    var note = document.getElementById('lang-note');
+    if (note) note.hidden = !(state.lang === 'all' && Object.keys(LANG_LABELS).length > 1);
+    rerenderAll();
+  }
+  var langHost = document.getElementById('lang-tabs');
+  if (langHost) {
+    Object.keys(LANG_LABELS).forEach(function (lk) {
+      if (lk === 'all' || !BY_TAB[lk]) return;
+      var b = document.createElement('button');
+      b.className = 'ctab'; b.setAttribute('data-lang', lk); b.setAttribute('role', 'tab');
+      b.textContent = LANG_LABELS[lk];
+      langHost.appendChild(b);
+    });
+    langHost.querySelectorAll('.ctab').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var lang = btn.getAttribute('data-lang');
+        if (lang === state.lang) return;
+        langHost.querySelectorAll('.ctab').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        state.lang = lang;
+        switchTab();
+      });
+    });
+  }
   document.querySelectorAll('#corpus-tabs .ctab').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      var tab = btn.getAttribute('data-tab');
-      if (!BY_TAB[tab] || tab === state.tab) return;
+      var src = btn.getAttribute('data-tab');
+      if (src === state.src) return;
       document.querySelectorAll('#corpus-tabs .ctab').forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
-      state.tab = tab;
-      SC = BY_TAB[tab];
-      rerenderAll();
+      state.src = src;
+      switchTab();
     });
   });
+  (function () { var note = document.getElementById('lang-note'); if (note) note.hidden = !(state.lang === 'all' && Object.keys(LANG_LABELS).length > 1); })();
 
   document.querySelectorAll('.metric-toggle [data-metric]').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -274,6 +364,13 @@
       if (state.sortKey === key) state.sortDir *= -1;
       else { state.sortKey = key; state.sortDir = key === 'name' ? 1 : -1; }
       renderLeaderboard();
+    });
+  });
+
+  document.querySelectorAll('#sev-filter input[data-sev]').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      sevSel[cb.getAttribute('data-sev')] = cb.checked;
+      rerenderAll();
     });
   });
 

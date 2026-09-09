@@ -64,6 +64,17 @@ Each finding entry requires:
 
 Add entries with `"is_vulnerable": false` for code that *looks* suspicious but is actually safe. Aim for at least 1 trap per 5 vulnerabilities. These are critical for measuring false positive rates.
 
+### 4b. Non-scoring entries (rare)
+
+If a reviewed location is genuinely unsettleable from the source — intent or deployment context decides whether it is a vulnerability — do not guess. Keep the entry and mark it:
+
+```json
+"scoring": "non_scoring",
+"non_scoring_reason": "Endpoint is documented in-repo as intentionally public (see routes/README.md)."
+```
+
+Non-scoring entries are excluded from scoring in both directions and never counted in dataset totals. The reason is mandatory (≥ 20 characters) and must cite the evidence. Entries without a `scoring` field are scored. Use this sparingly — the burden sits with the exclusion.
+
 ### 5. Naming convention
 
 Use `realvuln-{repo-name}` as the directory name, all lowercase with hyphens.

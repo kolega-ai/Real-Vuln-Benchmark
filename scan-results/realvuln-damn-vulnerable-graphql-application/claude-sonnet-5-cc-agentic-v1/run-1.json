@@ -1,0 +1,361 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.security.injection.system-diagnostics-command-injection",
+      "path": "core/views.py",
+      "start": {
+        "line": 337,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 347,
+        "col": 20,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The GraphQL `systemDiagnostics` query accepts a `cmd` argument that, after a weak credential check via security.check_creds(), is passed unsanitized to helpers.run_cmd(cmd) which executes it with os.popen(). In 'easy' mode security.allowed_cmds() (core/security.py:33-39) always returns True, so any shell command (e.g. `cmd: \"whoami; cat /etc/passwd\"`) is executed on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.system-debug-command-injection",
+      "path": "core/views.py",
+      "start": {
+        "line": 349,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 355,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolve_system_debug builds a shell command with helpers.run_cmd('ps {}'.format(arg)) where `arg` is a fully user-controlled GraphQL argument on the `systemDebug` query. Since run_cmd() executes via os.popen() (core/helpers.py:8-9), an attacker can inject shell metacharacters, e.g. `arg: \"; id\"`, to execute arbitrary commands.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.import-paste-command-injection-ssrf",
+      "path": "core/views.py",
+      "start": {
+        "line": 209,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 211,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "ImportPaste.mutate builds a URL from fully user-controlled `host`, `port`, `path`, `scheme` arguments and passes it to helpers.run_cmd(f'curl --insecure {url}'), which shells out via os.popen(). security.strip_dangerous_characters() (core/security.py:41-46) only strips ';' and '&' and only in 'hard' mode, otherwise the URL passes through unchanged, allowing shell command injection (e.g. via backticks, `$()`, `|`) and also enabling SSRF against internal hosts/ports since host/scheme/path are unrestricted.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection",
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.pastes-filter-sql-injection",
+      "path": "core/views.py",
+      "start": {
+        "line": 319,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 320,
+        "col": 70,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolve_pastes builds a raw SQL fragment by directly interpolating the user-supplied `filter` GraphQL argument with Python string formatting: text(\"title = '%s' or content = '%s'\" % (filter, filter)). This is passed straight to SQLAlchemy's .filter(), allowing SQL injection, e.g. `filter: \"' OR '1'='1\"` or a UNION-based injection to read/modify arbitrary data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.auth.jwt-signature-not-verified",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 65,
+        "offset": 0
+      },
+      "extra": {
+        "message": "get_identity() decodes the JWT token supplied by the client with decode(token, options={\"verify_signature\": False, \"verify_exp\": False}). Because signature and expiry verification are disabled, any client can forge an arbitrary, unsigned/garbage-signed JWT claiming any `identity` (e.g. 'admin') and have it accepted. This is used by resolve_me (core/views.py:283-296) to authenticate/select a user identity, forming a full authentication bypass.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.password-disclosure-via-forged-identity",
+      "path": "core/models.py",
+      "start": {
+        "line": 60,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 65,
+        "col": 21,
+        "offset": 0
+      },
+      "extra": {
+        "message": "UserObject.resolve_password returns the real plaintext password field whenever info.context.json.get('identity') == 'admin'. The 'identity' key is set in resolve_me (core/views.py:291) from the unverified JWT decoded by get_identity() (core/helpers.py:20-21). An attacker can forge a JWT with identity claim 'admin' (no valid signature required) and query `me(token: <forged>) { username password }` to exfiltrate any user's stored password.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.delete-all-pastes-no-authorization",
+      "path": "core/views.py",
+      "start": {
+        "line": 385,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 389,
+        "col": 34,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolve_delete_all_pastes performs Paste.query.delete() and commits, wiping every paste in the database, with no authentication or authorization check of any kind on the `deleteAllPastes` GraphQL query. Any unauthenticated client can destroy all stored data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.edit-delete-paste-idor",
+      "path": "core/views.py",
+      "start": {
+        "line": 132,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 173,
+        "col": 34,
+        "offset": 0
+      },
+      "extra": {
+        "message": "EditPaste.mutate and DeletePaste.mutate operate on any Paste by numeric `id` argument with no check that the requesting client owns or is authorized to modify/delete that paste (no session/user binding at all). Any client can edit or delete any other user's private paste by guessing/incrementing the id (IDOR).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.path-traversal.upload-paste-save-file",
+      "path": "core/helpers.py",
+      "start": {
+        "line": 23,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 13,
+        "offset": 0
+      },
+      "extra": {
+        "message": "save_file() concatenates the caller-supplied `filename` directly onto WEB_UPLOADDIR ('pastes/') with no path sanitization or normalization: open(WEB_UPLOADDIR + filename, 'w'). It is reachable from the `uploadPaste` GraphQL mutation (core/views.py:175-198) where `filename` is a fully user-controlled string argument, allowing path traversal (e.g. `filename: \"../../../../tmp/evil.py\"`) to write files outside the intended upload directory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.hardcoded.flask-jwt-secret-keys",
+      "path": "app.py",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "app.config['SECRET_KEY'] and app.config['JWT_SECRET_KEY'] are hardcoded to the static string 'dvga'. These keys sign Flask session cookies and JWT access/refresh tokens (flask_graphql_auth); knowing this fixed value lets an attacker forge valid session cookies and JWTs with arbitrary claims (e.g. identity=admin) offline.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.crypto.plaintext-password-storage",
+      "path": "core/models.py",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The User model stores `password` as a plain String column and User.create_user() persists whatever password string is supplied with no hashing (e.g. bcrypt/argon2). Login.mutate (core/views.py:233-241) later compares it with a direct equality filter (User.query.filter_by(username=username, password=password)), confirming passwords are kept and checked in cleartext, so a database compromise or the password-disclosure issue above directly yields usable credentials.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Unprotected Storage of Credentials",
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.dos.graphql-protections-disabled-by-default",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 31,
+        "offset": 0
+      },
+      "extra": {
+        "message": "DepthProtectionMiddleware, CostProtectionMiddleware, OpNameProtectionMiddleware and IntrospectionMiddleware all short-circuit with `if helpers.is_level_easy(): return next(...)`, skipping all protection logic. The server starts in 'easy' mode by default (ServerMode.hardened=False, set in setup.py:110), so out of the box there is no query-depth limit, no cost limit, and introspection (`__schema`) is fully enabled, letting an unauthenticated client send arbitrarily deep/expensive nested GraphQL queries to exhaust server resources.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.access-control.graphiql-cookie-based-gate",
+      "path": "core/middleware.py",
+      "start": {
+        "line": 116,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 126,
+        "col": 47,
+        "offset": 0
+      },
+      "extra": {
+        "message": "IGQLProtectionMiddleware gates access to the GraphiQL IDE purely on the value of the client-supplied `env` cookie (request.cookies.get('env') == 'graphiql:enable'). Since the cookie is fully attacker-controlled (any client can set arbitrary cookie values), this provides no real access control and allows any unauthenticated client to enable the interactive GraphiQL/introspection interface simply by setting a cookie.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-565: Reliance on Cookies without Validation and Integrity Checking",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.hardcoded.seed-operator-password",
+      "path": "setup.py",
+      "start": {
+        "line": 64,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 64,
+        "col": 85,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The seeded 'operator' account is created with a hardcoded plaintext password 'password123'. Combined with plaintext password storage (core/models.py) and the password-disclosure bug (core/models.py:60-65), this is a known/guessable credential for a privileged-looking account on any freshly initialized instance.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

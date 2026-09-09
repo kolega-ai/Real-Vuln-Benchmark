@@ -1,0 +1,483 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "python.security.injection.sql-injection-string-concat",
+      "path": "target/project/models/Dashboard.py",
+      "start": {
+        "line": 7,
+        "col": 6,
+        "offset": 0
+      },
+      "end": {
+        "line": 7,
+        "col": 87,
+        "offset": 0
+      },
+      "extra": {
+        "message": "User-controlled `pageId` (from the URL path in `/dashboard/<pageId>`) is concatenated directly into a SQL query string passed to `db.execute()`. No parameterization is used, allowing SQL injection (e.g. `pageId = \"1 UNION SELECT UserName,Password,1 FROM users--\"`).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.server-side-template-injection",
+      "path": "target/project/controllers/404.py",
+      "start": {
+        "line": 7,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 95,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The 404 handler builds the Jinja template source itself via `.format(request.url)` (line 94) \u2014 inserting attacker-controlled `request.url` into the TEMPLATE STRING before it is compiled by `render_template_string()` (line 95). Any Jinja syntax in the URL (e.g. `/{{7*7}}` or `{{config}}`/`{{system_call('id')}}`) is executed server-side, giving Server-Side Template Injection that chains to full RCE (also reachable via the globally-registered `system_call` template function in controllers/Monitoring.py).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine",
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.deserialization.pickle-load-user-input",
+      "path": "target/project/controllers/About.py",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`request.form['data_obj']` is hex-decoded and written to a file, then loaded with `pickle.load()`. Pickle deserialization of attacker-controlled data allows arbitrary object construction and remote code execution via a crafted `__reduce__` payload.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.injection.command-injection-os-popen",
+      "path": "target/project/controllers/Monitoring.py",
+      "start": {
+        "line": 12,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`system_call()` runs `os.popen(command).read()` with no sanitization and is registered as a global Jinja context processor (`@app.context_processor`), meaning it is callable as `{{system_call(...)}}` from ANY template rendered anywhere in the app (including via the SSTI in controllers/404.py). Any caller-supplied string reaching this function results in arbitrary OS command execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.deserialization.unsafe-yaml-load",
+      "path": "target/project/controllers/Information.py",
+      "start": {
+        "line": 18,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 35,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Base64-decoded user input from the `<input>` URL segment is passed to `yaml.load()` without a safe `Loader`. PyYAML's default loader can instantiate arbitrary Python objects (e.g. via `!!python/object/apply`), leading to remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.hardcoded-secret-key",
+      "path": "target/project/__init__.py",
+      "start": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 5,
+        "col": 39,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Flask `SECRET_KEY` is hardcoded to the weak, guessable value `'random'`. This key signs the session cookie; an attacker who knows/guesses it can forge arbitrary session cookies (e.g. set `loggedin` to bypass the auth check in controllers/Confidential.py), fully defeating session integrity.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-330: Use of Insufficiently Random Values"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.debug-mode-enabled",
+      "path": "target/project/__init__.py",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 6,
+        "col": 17,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`app.debug = True` is set unconditionally, enabling the Werkzeug interactive debugger and verbose stack traces in what is otherwise run as production (`runserver.py` binds `0.0.0.0`). If reachable, the Werkzeug debugger allows arbitrary code execution and leaks source code/environment details on unhandled exceptions.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-215: Insertion of Sensitive Information Into Debugging Code"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.audit.path-traversal-file-read",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 29,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 70,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`fileName` comes directly from `request.form['example_file']` and is used unsanitized in `open(fileName, \"r\")` and `send_file(fileName, ...)`. An attacker can supply a path such as `../../project/__init__.py` or `/etc/passwd` to read arbitrary files on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.audit.http-header-injection",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 33,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The user-controlled `fileName` is concatenated directly into the `Content-Disposition` header value. If `fileName` contains CRLF sequences, this allows HTTP response header/header-splitting injection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.audit.path-traversal-file-upload",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 45,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`file.save('uploads/' + filename)` uses the client-supplied filename directly without `secure_filename()` or path normalization. `allowed_file()` only checks the extension suffix, so a name like `../../project/controllers/pwn.txt` passes validation and can write outside the intended `uploads/` directory.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.audit.xxe-entity-expansion",
+      "path": "target/project/controllers/Validator.py",
+      "start": {
+        "line": 15,
+        "col": 11,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`xml.dom.pulldom.parseString()` parses attacker-controlled XML (`request.form['customers']`) with no DTD/entity restrictions configured, exposing the endpoint to XML entity-expansion (billion-laughs) denial of service and potential XXE-style entity abuse.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.jinja.security.autoescape-disabled-xss",
+      "path": "target/project/controllers/Search.py",
+      "start": {
+        "line": 9,
+        "col": 14,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 66,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`request.form.get('search')` is rendered into `search/index.html` where it is wrapped in `{% autoescape false %}{{search}}{% endautoescape %}` (templates/search/index.html:13), disabling HTML escaping. This is a direct reflected XSS sink; the response also strips browser XSS protection via `X-XSS-Protection: 0` (line 11).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.jinja.security.autoescape-disabled-xss",
+      "path": "target/project/controllers/About.py",
+      "start": {
+        "line": 14,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 62,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Content loaded via `pickle.load()` is rendered into templates/about/index.html inside `{% autoescape false %}{{content}}{% endautoescape %}`, so any HTML/JS present in the deserialized object (itself attacker-reachable through the `/about/sync` pickle sink) is reflected unescaped, compounding the deserialization RCE with stored/reflected XSS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.stored-xss-javascript-uri",
+      "path": "target/project/controllers/Messaging.py",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 20,
+        "col": 46,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `link` form field is stored unsanitized (models/Messaging.py `storeMessages`) and later rendered as `href=\"{{item[3]}}\"` in templates/messaging/index.html:56. Jinja2's default autoescaping does not validate URL schemes, so a value like `javascript:alert(document.cookie)` produces stored XSS when a victim clicks the link.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.cors-wildcard-with-credentials",
+      "path": "target/runserver.py",
+      "start": {
+        "line": 8,
+        "col": 12,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 63,
+        "offset": 0
+      },
+      "extra": {
+        "message": "CORS is configured with `origins: \"*\"` for all routes, while controllers/Confidential.py explicitly sets `Access-Control-Allow-Credentials: true` on the credential-protected `/confidential` response. Combining a wildcard origin with allow-credentials is a dangerous CORS misconfiguration that can expose authenticated responses to arbitrary origins in permissive clients/proxies.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.hardcoded-credentials-auth-check",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Authentication is implemented as a hardcoded literal comparison (`password == \"admin\" and username == \"admin\"`) rather than a lookup against the `users` table, embedding fixed production credentials directly in source.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.flask.security.user-enumeration-distinct-errors",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 17,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Login failures return distinct messages (\"invalid username\" vs \"invalid password for username\") depending on which credential was wrong, letting an attacker enumerate valid usernames by observing the response.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-203: Observable Discrepancy"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.audit.insecure-session-token-generation",
+      "path": "target/project/controllers/Login.py",
+      "start": {
+        "line": 13,
+        "col": 18,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`uuid.uuid1()` is used to generate the session's `loggedin` token. UUID1 is derived from the host MAC address and current timestamp, which is predictable and not a cryptographically secure random value, weakening the session identifier.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-330: Use of Insufficiently Random Values"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "python.security.audit.hardcoded-password-hash-seed-data",
+      "path": "target/project/config/initializer.py",
+      "start": {
+        "line": 15,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 88,
+        "offset": 0
+      },
+      "extra": {
+        "message": "User records are seeded with hardcoded, unsalted MD5-looking password hashes (e.g. `0cef1fb10f60529028a71f58e54ed07b`) committed directly in source. MD5 is cryptographically broken for password storage and trivially reversible via rainbow tables.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

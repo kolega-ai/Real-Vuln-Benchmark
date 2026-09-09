@@ -1,0 +1,462 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "app/lib/queries.server.ts",
+      "start": {
+        "line": 69,
+        "col": 1,
+        "offset": 2742
+      },
+      "end": {
+        "line": 69,
+        "col": 35,
+        "offset": 2776
+      },
+      "extra": {
+        "message": "rankCompensationBandBySortField() interpolates the caller-supplied sortField directly into the SQL statement via sql.raw(sortField) inside an ORDER BY clause. The only caller is the compensation benchmark route, which passes the raw 'sortBy' query parameter (e.g. \"c.salary desc\") straight through (app/routes/app.compensation.benchmark.tsx:52-55). Any manager or HR admin can inject arbitrary SQL fragments (subqueries, UNION, etc.) to read or modify any table, since the route requires only the 'manager' or 'hr_admin' role. Note the safe counterpart teamRosterSortColumn() on line 85 uses a column allowlist.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "app/lib/exportArchive.server.ts",
+      "start": {
+        "line": 38,
+        "col": 1,
+        "offset": 1527
+      },
+      "end": {
+        "line": 40,
+        "col": 55,
+        "offset": 1734
+      },
+      "extra": {
+        "message": "convertArchivedExportToFormat() builds a shell command string with the caller-controlled outputPreset and fileName interpolated directly and executes it via spawn(command, [], { shell: true }). The route app/routes/app.admin.exports.convert.$preset.tsx passes the URL path segment 'preset' and the 'run' query parameter (both fully attacker-controlled by the requesting hr_admin) into this function at line 23. Shell metacharacters in either value yield OS command execution on the server. This contrasts with the safe pattern in app/lib/vendorPay.server.ts:97 which uses discrete argv arguments and shell:false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "app/lib/policyBinder.server.ts",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 936
+      },
+      "end": {
+        "line": 19,
+        "col": 69,
+        "offset": 1004
+      },
+      "extra": {
+        "message": "renderPolicyForBindery() executes execSync(`pandoc ${srcPath} --to=${layoutProfile} -o ${outPath}`) with layoutProfile interpolated into a shell string. The route app/routes/app.policies.$id.bindery.tsx takes layoutProfile from the client-supplied 'x-bindery-profile' request header (line 23) and passes it in at line 24, so any hr_admin can inject shell commands (e.g. header value `plain; touch /tmp/pwn`). The related renderOnboardingPacketForBindery() (lines 31-45) demonstrates the correct approach: an allowlist plus spawnSync with shell:false.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal",
+      "path": "app/lib/exportArchive.server.ts",
+      "start": {
+        "line": 27,
+        "col": 1,
+        "offset": 1030
+      },
+      "end": {
+        "line": 27,
+        "col": 56,
+        "offset": 1085
+      },
+      "extra": {
+        "message": "readArchivedExportRun() calls fs.readFile(path.join(ARCHIVE_DIR, fileName)) without confining fileName to the archive directory (no path.resolve + prefix check, no basename sanitization). The route app/routes/app.admin.exports.archive.$run.tsx passes the URL param 'run' (Remix URL-decodes segments, so '..%2f..%2fetc%2fpasswd' resolves to ../../etc/passwd) directly in at line 17, enabling arbitrary file read from the server. Compare readRetentionSnapshot() (lines 72-77) which correctly guards with a startsWith check.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.code-injection",
+      "path": "app/lib/compPresets.server.ts",
+      "start": {
+        "line": 56,
+        "col": 1,
+        "offset": 2225
+      },
+      "end": {
+        "line": 56,
+        "col": 122,
+        "offset": 2346
+      },
+      "extra": {
+        "message": "previewProratedStartingPay() compiles an attacker-controlled formula string with new Function(\"principal\", \"days\", `return ${formula};`) and executes it server-side. The route app/routes/app.compensation.proration-preview.tsx takes 'formula' straight from the query string (line 15) and calls this function at line 21; only the payroll_specialist/hr_admin role gate stands between a GET request and arbitrary synchronous code execution in the Node process (RCE). The safe alternative previewProratedAdjustment() selects from a fixed allowlist of named functions.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment",
+      "path": "app/lib/compPresets.server.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 741
+      },
+      "end": {
+        "line": 18,
+        "col": 47,
+        "offset": 787
+      },
+      "extra": {
+        "message": "applyCostOfLivingPreset() JSON.parses a caller-supplied preset payload and spreads every key onto db.update(compensationRequests).set({...preset}), so a payroll_specialist or hr_admin hitting /app/compensation/:id/apply-preset?preset=... can overwrite arbitrary columns of any compensation request, including workflow state such as status='effective', managerApprovedById/hrApprovedById, employeeId, and requestedById \u2014 bypassing the intended two-stage manager/HR approval workflow encoded in app/routes/app.compensation.$id.tsx. The parallel function applyStartingPreset() (lines 37-45) correctly validates with a strict zod schema (onboardingPresetSchema) before writing.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.insecure-signature",
+      "path": "app/lib/carrierAssertion.server.ts",
+      "start": {
+        "line": 27,
+        "col": 1,
+        "offset": 888
+      },
+      "end": {
+        "line": 31,
+        "col": 46,
+        "offset": 1186
+      },
+      "extra": {
+        "message": "readCarrierAssertion() decodes and JSON.parses the token payload but never verifies any MAC/signature (there is no secret, no timingSafeEqual, no exp check). The route app/routes/api.v1.requests.$id.eligibility-sync.tsx trusts its output (line 20) and applyCarrierEligibilityDecision() then flips a benefits HR request to resolved/waiting_on_employee based purely on these forged claims. An attacker who knows an HR request id in status 'waiting_on_hr' can craft a 3-segment base64 token (header.payload.sig) with decision approved/denied and arbitrarily approve or deny the request \u2014 a full authentication bypass on the carrier callback. Contrast verifyDisbursementAssertion() in the same file which does HMAC verification.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor",
+      "path": "app/routes/api.v1.employees.$id.tsx",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 787
+      },
+      "end": {
+        "line": 24,
+        "col": 38,
+        "offset": 960
+      },
+      "extra": {
+        "message": "fetchEmployeeProfileCard() returns the entire employees row (db.query.employees.findFirst without a column projection) and the loader only calls requireUser() \u2014 no authorization scoping. Any authenticated user (including a plain employee) can enumerate /api/v1/employees/:id for arbitrary ids and read every employee's ssnLast4, internalNote, home address, phone, and PTO balance. The 'quick view card' comment explicitly states any signed-in user may look up any employee, but the response leaks far more than a name/avatar card should. Other pages gate these fields through authz.server.ts helpers (loadViewableEmployee/canViewInternalNotes), so this endpoint is an oversight.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.idor",
+      "path": "app/routes/app.compensation.record.$id.tsx",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 1102
+      },
+      "end": {
+        "line": 26,
+        "col": 27,
+        "offset": 1185
+      },
+      "extra": {
+        "message": "loadCompensationRecordEntry() fetches any compensation_records row by id and the loader only calls requireUser() before returning the full record (salary, bonus, effectiveDate). No loadViewableEmployee/canViewCompensation check is performed, unlike app/employees/$id.tsx and pay-history. Any signed-in employee can walk record ids and learn any other employee's salary history \u2014 a broken-access-control/IDOR leak of confidential compensation data.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.authentication-bypass",
+      "path": "app/routes/kiosk.punch.tsx",
+      "start": {
+        "line": 66,
+        "col": 1,
+        "offset": 3001
+      },
+      "end": {
+        "line": 86,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The kiosk punch 'override.request' branch requires no authentication or supervisor proof: an unauthenticated attacker POSTs any employee's work email (intent=override.request) and the server returns the freshly generated 6-digit override code in the HTTP response (line 74). The attacker then submits intent=override.confirm with that code (lines 77-85), which calls attachKioskSession() and yields a fully authenticated session cookie for the victim user (redirect to /app). This defeats PIN/badge authentication for any account whose work email is known \u2014 a remote authentication bypass / account session hijack. Codes are also 6 decimal digits with no attempt throttling on the confirm step.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss",
+      "path": "app/lib/printouts.server.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 455
+      },
+      "end": {
+        "line": 19,
+        "col": 114,
+        "offset": 855
+      },
+      "extra": {
+        "message": "renderDocumentCoverSheet() interpolates doc.title and doc.originalName into a raw HTML string with no escaping \u2014 including inside a <script> block (`var coverSheetTitle = \"${doc.title}\";`). Document titles are user-controlled (any employee may upload an onboarding_evidence document with an arbitrary title via app/routes/app.documents._index.tsx). The cover/widged routes (app.documents.$id.cover.tsx:29, app.documents.$id.widget.tsx:46) return this as Content-Type text/html, so a title containing `</script><script>...` or an onerror payload yields stored XSS that executes in the session of any HR/payroll user who opens the print-cover link. Note renderPolicyCoverSheet() (lines 40-47) properly escapes via escapeForHtml(), showing the missing encoding here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.xss",
+      "path": "app/lib/printouts.server.ts",
+      "start": {
+        "line": 79,
+        "col": 1,
+        "offset": 3206
+      },
+      "end": {
+        "line": 79,
+        "col": 24,
+        "offset": 3229
+      },
+      "extra": {
+        "message": "renderAcknowledgementCertificatePrintout() merges policyTitle, version, and closingNote into the HTML template unescaped (the template only escapes recipientName via Handlebars). In app/routes/app.policies.ack.$id.tsx:43-46 the closingNote is taken directly from the 'note' query parameter when print=1, so a crafted URL like /app/policies/ack/5?print=1&note=<script>... reflects attacker HTML/script into a text/html response. Any user who can view the certificate (the subject employee, their manager, or HR) and follows such a link executes the payload in their own session \u2014 reflected XSS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.missing-authentication",
+      "path": "app/routes/kiosk.directory.tsx",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 602
+      },
+      "end": {
+        "line": 23,
+        "col": 2,
+        "offset": 1001
+      },
+      "extra": {
+        "message": "loadKioskDirectory() and the loader require no authentication at all \u2014 the only gate is the presence of the trivially spoofable 'x-station-id' request header. The endpoint returns the full employee roster (id, firstName, lastName, workEmail, and phone) for the entire company to any unauthenticated caller, exposing employee PII. The authenticated supervisor view (app.admin.kiosk-directory.tsx) demonstrates the intended access level for the same data.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect",
+      "path": "app/lib/nav.server.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 278
+      },
+      "end": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "postUploadRedirect() calls redirect() on an unvalidated, attacker-controlled 'returnTo' form value (no scheme/host check and no allowlist). The document upload action app/routes/app.documents._index.tsx:139 passes form.get('returnTo') straight in, so any authenticated user (even a plain employee uploading their own evidence) can submit returnTo=https://evil.example or //evil.example and turn the post-upload 3xx into an open redirect for phishing. Compare resolveRequestRedirect() in the same file, which validates against REQUEST_RETURN_PATHS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: Open Redirect"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf",
+      "path": "app/lib/ticketing.server.ts",
+      "start": {
+        "line": 98,
+        "col": 1,
+        "offset": 3499
+      },
+      "end": {
+        "line": 102,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importPolicyContent() performs a server-side fetch() of a caller-supplied sourceUrl with no host allowlist or scheme restriction (zod only enforces it is a syntactically valid URL). The route app/routes/app.admin.policies.tsx:63 passes the admin-typed 'sourceUrl' field into it, letting an hr_admin pivot the server into an internal proxy to scan/read intranet resources (e.g. http://169.254.169.254/, internal services) and reflect their bodies into the policy editor. The webhook test helper (testWebhookEndpoint, line 291) correctly restricts to ALLOWED_WEBHOOK_HOSTS, showing the missing control here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.access-control",
+      "path": "app/routes/app.compensation.benchmark.tsx",
+      "start": {
+        "line": 62,
+        "col": 1,
+        "offset": 2738
+      },
+      "end": {
+        "line": 77,
+        "col": 10,
+        "offset": 3418
+      },
+      "extra": {
+        "message": "The benchmark loader trusts the client-supplied 'x-marketdata-availability' request header to decide how many company-wide 'premium' salary rows a manager may see. It uses the loose premiumBandsRequestedSeats() (no integer bounds) and applies the resulting premiumSeats as an unbounded SQL LIMIT over ALL compensation_records ordered by salary desc, with no department/manager scoping. A manager can set x-marketdata-availability to base64('{\"planTier\":\"enterprise\",\"seatCount\":\"99999\",\"access\":\"true\"}') and dump the highest-paid employees across the whole company \u2014 bypassing the manager-only-sees-direct-reports rule. (The compensation list route correctly restricts the strict variant to hr_admin.)",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credential",
+      "path": "app/lib/vendorPay.server.ts",
+      "start": {
+        "line": 115,
+        "col": 1,
+        "offset": 4948
+      },
+      "end": {
+        "line": 115,
+        "col": 80,
+        "offset": 5027
+      },
+      "extra": {
+        "message": "notifyEquityVendor() sends a hardcoded production-looking bearer credential ('cq_live_7f2a9d4e1b6c8038f5a2d9e0c1b4a7f6d3e8c2b1') in the Authorization header to the equity vendor API. The key is embedded in source and identical for every deployment, so anyone with repo access can impersonate the app to the vendor; it cannot be rotated without a code change.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.default-crypto-key",
+      "path": "app/lib/vendorPay.server.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 144
+      },
+      "end": {
+        "line": 6,
+        "col": 138,
+        "offset": 281
+      },
+      "extra": {
+        "message": "VOUCHER_SIGNING_KEY silently falls back to a well-known constant string ('dev-only-vendor-voucher-key') whenever the VENDOR_VOUCHER_KEY environment variable is unset. Because the fallback value is public knowledge, any deployment running without the env var uses a predictable AES key, allowing an attacker to decrypt relocation/equity vouchers or forge valid ones (decryptRelocationVoucher/decryptEquityVoucher). The key should be required at startup instead of defaulted.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key",
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

