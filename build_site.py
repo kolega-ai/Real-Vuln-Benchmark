@@ -199,6 +199,7 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
     "glm-5.2-agentic-v1": ("GLM-5.2", "llm", "agentic-v1"),
     "glm-5.1-agentic-v1": ("GLM-5.1", "llm", "agentic-v1"),
     "glm-5-agentic-v1": ("GLM-5", "llm", "agentic-v1"),
+    "deepseek-v4.1-flash-agentic-v1": ("DeepSeek V4.1 Flash", "llm", "agentic-v1"),
     "deepseek-v4-flash-agentic-v1": ("DeepSeek V4 Flash", "llm", "agentic-v1"),
     "deepseek-v4-pro-agentic-v1": ("DeepSeek V4 Pro", "llm", "agentic-v1"),
     "kimi-k3-agentic-v1": ("Kimi K3", "llm", "agentic-v1"),
@@ -251,6 +252,7 @@ SCANNER_URLS: dict[str, str] = {
     "glm-5.2-agentic-v1": "https://docs.z.ai/guides/llm/glm-5.2",
     "glm-5.1-agentic-v1": "https://docs.z.ai/guides/llm/glm-5.1",
     "glm-5-agentic-v1": "https://docs.z.ai/guides/llm/glm-5",
+    "deepseek-v4.1-flash-agentic-v1": "https://www.deepseek.com",
     "deepseek-v4-flash-agentic-v1": "https://www.deepseek.com",
     "deepseek-v4-pro-agentic-v1": "https://www.deepseek.com",
     "kimi-k3-agentic-v1": "https://www.moonshot.ai",
@@ -301,6 +303,7 @@ SCANNER_PROVIDERS: dict[str, str] = {
     "glm-5.2-agentic-v1": "Z.ai",
     "glm-5.1-agentic-v1": "Z.ai",
     "glm-5-agentic-v1": "Z.ai",
+    "deepseek-v4.1-flash-agentic-v1": "DeepSeek",
     "deepseek-v4-flash-agentic-v1": "DeepSeek",
     "deepseek-v4-pro-agentic-v1": "DeepSeek",
     "kimi-k3-agentic-v1": "Moonshot AI",
@@ -372,9 +375,13 @@ SCANNER_NOTES: dict[str, str] = {
         "The four unfinished TS/JS repositories count as misses, giving F3 47.4 on TS/JS and 54.6 "
         "Overall (51.3 and 56.9 scored on completed repositories only) — fourth Overall, the "
         "best open-weight result in the benchmark. The retained raw output shows the four failures "
-        "were not context exhaustion: in three the agent's session ended while it was still reading "
-        "files, before it wrote any findings; in one the model hit its output-length limit "
-        "mid-answer. Total spend $105.73, including one retry pass."
+        "were the harness, not the model: in three the headless agent auto-rejected a permission "
+        "prompt (reading a <span class=\"mono\">.env</span> file, or a scratch write to "
+        "<span class=\"mono\">/tmp</span>) and ended the session before any findings were written; "
+        "in one the model hit its output-length limit mid-answer. That permission behaviour is "
+        "fixed as of 3.1.0 (see the DeepSeek V4.1 Flash note); the four repositories will be "
+        "re-run under the fixed harness in a future release. Total spend $105.73, including one "
+        "retry pass."
     ),
     "gpt-6-astra-codex-cli": (
         "<strong>Full coverage (140/140).</strong> GPT-6 Astra, OpenAI's newest flagship "
@@ -441,8 +448,23 @@ SCANNER_NOTES: dict[str, str] = {
         'as DeepSeek V4 Flash (prompt hash <span class="mono">sha256:45a1200d61e6</span>), '
         "for $3.85 in total at off-peak rates; all 74 runs validated first time."
     ),
+    "deepseek-v4.1-flash-agentic-v1": (
+        "<strong>Full coverage (140/140); preview model.</strong> DeepSeek's V4.1 Flash "
+        'preview (API id <span class="mono">deepseek-v4.1-flash-expires-on-0910</span>), run '
+        "on 2026-09-09/10 through the standard agentic-v1 harness with the same prompts as "
+        "V4 Flash, in the two days before the preview was withdrawn. F3 59.8 on Python, 43.4 "
+        "on TypeScript / JS, 50.9 Overall — 9.1 points above V4 Flash on the identical harness, "
+        "mostly from recall (50.7% against 40.7%) at slightly lower precision (52.3% against "
+        "56.3%). DeepSeek published no rate card for the preview, so its cost is shown as "
+        "unknown; token counts are stored per run and the figure will be backfilled if a price "
+        "appears. This was also the campaign that exposed the headless-opencode permission "
+        "failure: 24 of the first-pass runs died mid-read on an auto-rejected permission prompt "
+        "(reading a <span class=\"mono\">.env</span> file, or writing a scratch file to "
+        "<span class=\"mono\">/tmp</span>). With the harness fix in place, the affected "
+        "repositories re-ran to 140/140 with zero denials."
+    ),
     "deepseek-v4-flash-agentic-v1": (
-        "<strong>Full coverage.</strong> One of two third-party LLM scanners to date to "
+        "<strong>Full coverage.</strong> The first third-party LLM scanner to "
         "cover both languages. The Python results are the 2.1.0 runs, unchanged "
         "(three runs per repository). The 74 TypeScript / JS repositories were "
         "scanned once each on 2026-09-03 through the standard agentic-v1 harness with "

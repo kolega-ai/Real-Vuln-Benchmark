@@ -1,0 +1,560 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "javascript.security.injection.sql-injection",
+      "path": "src/lib/reportEngine.ts",
+      "start": {
+        "line": 14,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "runPatientRosterReport() builds a raw SQL string by concatenating the user-supplied filterValue into the WHERE clause ('%${filterValue}%') and the user-supplied sortField into ORDER BY, then executes it with prisma.$queryRawUnsafe(query). The report API (/api/reports) passes request query params filterValue and sortField straight through, allowing SQL injection (including ORDER BY injection since the ROSTER_SORT_COLUMNS allowlist is bypassed whenever sortField is not a known key).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.injection.command-injection",
+      "path": "src/lib/documentConversion.ts",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertDocumentForRelease() interpolates the caller-supplied outputFormat (and sourcePath) into a shell command passed to child_process.exec(). /api/documents/convert reads outputFormat directly from the request body and forwards it, so an authenticated staff user can inject arbitrary shell metacharacters (e.g. \"; rm -rf ...\").",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.file-read",
+      "path": "src/lib/documentTemplates.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderDocumentFromTemplate() joins the attacker-controlled templateName onto TEMPLATE_DIR with path.join and readFileSync without confining the resolved path. /api/documents/[id]/letterhead passes the user-controlled 'letterheadTemplate' cookie value as templateName, enabling path traversal (e.g. ../../../../etc/passwd) to read arbitrary files. Note the sibling renderVisitSummaryTemplate() correctly enforces the directory prefix, highlighting this one as unsafe.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.file-write",
+      "path": "src/lib/file-upload.ts",
+      "start": {
+        "line": 70,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 77,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "archiveVisitPacket() writes a file to path.join(PACKET_DIR, `${packetLabel}.txt`) using the caller-supplied packetLabel without path.basename()/containment. POST /api/visit-summaries/[id]/packet accepts packetLabel from the JSON body, allowing an authenticated user to write files anywhere writable (e.g. ../../../public/shell.js) via path traversal. The sibling archiveLabelPrintout() applies path.basename and is safe.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.path-traversal.file-write",
+      "path": "src/lib/clinicBranding.ts",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 20,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "saveLetterheadAsset() uses the raw multipart upload filename (file.name) in path.join(BRANDING_DIR, file.name) and writeFileSync() with no normalization, extension or MIME validation. POST /api/admin/branding accepts this file and BRANDING_DIR defaults to ./public/branding, so an admin/attacker controlling the filename can traverse out of the directory (e.g. ../../src/... or ../.env) and overwrite arbitrary files, including writing into the web-served public directory. The sibling savePatientIdPhoto() generates a UUID name and validates type/size and is safe.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.ssrf.fetch",
+      "path": "src/lib/labResultsSync.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "retrieveExternalLabReport() calls fetch(reportUrl) on a fully attacker-controlled URL with no scheme/host allowlist or private-IP filtering. POST /api/labs/inbound takes the URL from the 'lab-report-url' request header, so anyone able to reach the webhook (or who knows the shared LAB_FEED_SECRET) can make the server fetch internal services/cloud metadata (e.g. http://169.254.169.254/). The sibling retrieveExternalImagingReport() validates the hostname against TRUSTED_IMAGING_HOSTS and is safe.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.missing-authentication",
+      "path": "src/app/api/clinicians/kiosk-specialty/route.ts",
+      "start": {
+        "line": 8,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST handler performs no requireAuth()/getCurrentUser() check and no role check. It reads the target clinician from the client-controlled 'x-kiosk-clinician-id' header and updates that clinician's specialty. Any unauthenticated caller can modify arbitrary clinician profiles. Contrast with /api/clinicians/specialty which requires authentication and enforces ownership.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.open-redirect",
+      "path": "src/lib/scheduleSync.ts",
+      "start": {
+        "line": 38,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resumeVendorSyncDestination() returns the caller-supplied rawDestination verbatim whenever it is non-empty. GET /api/appointments/sync passes the 'x-redirect-url' request header into it and then calls NextResponse.redirect(new URL(destination, request.url)), allowing an open redirect to any external site (e.g. https://evil.example.com). The sibling resumeDirectoryRefreshDestination() validates against an allowlist and is safe.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.http-header-injection",
+      "path": "src/lib/file-upload.ts",
+      "start": {
+        "line": 94,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 99,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveLabelAttachmentHeaders() builds the Content-Disposition header by directly interpolating displayTitle without stripping CR/LF. GET /api/prescriptions/[id]/label takes displayTitle from the 'document_title' query parameter and returns these headers, allowing HTTP response header injection via a title containing %0d%0a. The sibling resolvePacketAttachmentHeaders() strips [\\r\\n] and is safe.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Response Splitting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.http-header-injection",
+      "path": "src/app/api/documents/[id]/download/route.ts",
+      "start": {
+        "line": 72,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 72,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The download route sets Content-Disposition using document.originalName, which is the user-supplied multipart filename persisted at upload time and never sanitized. A filename containing CR/LF enables HTTP response header injection, and an unsanitized quote can break out of the filename=\"...\" value.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers ('HTTP Response Splitting')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.sensitive-data-in-logs",
+      "path": "src/lib/intakeForms.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "submitPreVisitIntakeForm() logs the entire submission payload to the server console on validation failure (console.error(... payload)). The payload includes sensitive PHI/PII such as insuranceId, dateOfBirth and medical history, which then persists in logs. The sibling submitInsuranceVerificationForm() deliberately logs only non-sensitive metadata.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.log-injection",
+      "path": "src/lib/audit.ts",
+      "start": {
+        "line": 60,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 62,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "traceMessageSearchActivity() writes the raw, unescaped searchQuery into a console.log line without stripping CR/LF/NUL. A crafted search term can inject forged log lines or terminal control sequences (log injection / log forging). The sibling tracePatientSearchActivity() flattens these characters and is safe.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.weak-randomness",
+      "path": "src/lib/integrationKeys.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 12,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "issueLegacyLabFeedKey() generates a secret API key with Math.random(), a non-cryptographic PRNG with predictable state, making issued keys guessable/brute-forceable. The sibling issueClearinghouseFeedKey() uses crypto.randomBytes and is safe.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.insecure-crypto.padding-oracle",
+      "path": "src/lib/reviewDrafts.ts",
+      "start": {
+        "line": 28,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 42,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "reopenRefillDraft() decrypts attacker-controlled ciphertext using AES-256-CBC with no MAC/integrity protection, and catches decrypt failures to distinguish padding errors ('bad decrypt'/'padding') from other errors via a distinct message and HTTP 422 status (see /api/prescriptions/[id]/refill-draft). This creates a padding-oracle oracle over the shared DRAFT_KEY, allowing an attacker to decrypt/forge draft plaintext. The visit-summary variant correctly uses AES-256-GCM with an auth tag.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-649: Reliance on Obfuscation or Encryption of Security-Relevant Inputs without Integrity Checking",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.broken-access-control.unsigned-token",
+      "path": "src/lib/visitLinks.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "openVisitSummaryFromEmailLink() base64-decodes a client-supplied token and looks up the visit summary purely by the embedded summaryId, with no signature, HMAC or expiry. GET /api/visit-summaries/email-link requires no authentication, so anyone can craft a token {'summaryId':'<any id>'} and read any patient's visit summary (IDOR / missing authorization). openVisitSummaryFromPortalLink() adds an expiry but is likewise unsigned and forgeable.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.information-exposure.stack-trace",
+      "path": "src/lib/errors.ts",
+      "start": {
+        "line": 6,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "formatScheduleSyncError() returns the full error message, stack trace and request URL to the client whenever the requester adds '?verbose=1' to the URL. This is attacker-controllable (reachable from /api/appointments/sync) and leaks internal implementation details/paths. The sibling formatEligibilityError() gates stack output on NODE_ENV and is safe.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.prototype-pollution",
+      "path": "src/lib/clinicRuntimeConfig.ts",
+      "start": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadApplicationConfig() passes arbitrary, unvalidated JSON from the request body straight into Object.assign(runtimeConfig, overrides). Keys such as '__proto__' or 'constructor' allow prototype pollution / unexpected property injection into the shared runtime config. The admin settings PUT route sets 'const overrides = await request.json()' and calls this directly. The sibling registerUserPreferences() filters to an allowlist of keys and is safe.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1321: Improperly Controlled Modification of Object Prototype Attributes ('Prototype Pollution')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.improper-authorization",
+      "path": "src/lib/checkinGate.ts",
+      "start": {
+        "line": 7,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "admitFromWaitlist() grants admission using a truthy check (if (result.access)), so a clearinghouse response where access is the string 'false', a non-empty object, or any non-boolean truthy value is treated as confirmed coverage and the patient is admitted. The sibling reorderAndAdmitFromWaitlist() requires result.access === true and is safe.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.mass-assignment",
+      "path": "src/lib/scheduleSync.ts",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 31,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "applyLegacyScheduleSync() base64-decodes an attacker-supplied blob and spreads every decoded slot property directly into prisma.scheduleSlot.upsert (update: { ...slotUpdate, clinicianId }, create: { ...slotUpdate, clinicianId }) without schema validation or field allowlisting. Besides mass assignment of arbitrary model fields, the client controls the 'id' used for upsert, enabling writes to unintended records. The sibling applyPartnerScheduleSync() validates with a Zod schema and is safe.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.hardcoded-credentials",
+      "path": "src/lib/auth.ts",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The session signing secret falls back to a hardcoded, public string ('complex_password_at_least_32_characters_long_for_security') when SESSION_SECRET is unset (sessionOptions.password). Anyone who knows this value can forge iron-session cookies and impersonate any user/role. A similar fallback ('clinic-draft-signing-secret') exists in src/lib/reviewDrafts.ts.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-1188: Insecure Default Initialization of Resource"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.improper-access-control.impersonation",
+      "path": "src/app/api/patients/[id]/counter-session/route.ts",
+      "start": {
+        "line": 9,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST takes a patient user id from the URL and calls startCounterAssistedPortalSession() to overwrite the caller's own session with that patient's session (session.userId = patient id), turning the caller into the patient. A front_desk or clinic_admin account can therefore take over any patient's account and access all of that patient's records. There is no per-request authorization binding (e.g. verification that the patient is checking in at the counter), which violates the spec's 'impersonation-free support workflow' requirement.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-284: Improper Access Control",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "javascript.security.security-misconfiguration.cookie",
+      "path": "src/lib/kioskSession.ts",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 15,
+        "col": 2,
+        "offset": 0
+      },
+      "extra": {
+        "message": "startWaitingRoomCheckin() sets the 'sessionId' cookie with only { path: '/' }, omitting httpOnly, secure and sameSite attributes. The cookie is exposed to client-side JavaScript and sent over insecure connections, and the code also echoes the sessionId/patient name in the JSON response. The sibling startCounterAssistedPortalSession() uses hardened iron-session cookie handling and does not echo the id.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}
