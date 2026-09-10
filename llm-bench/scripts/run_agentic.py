@@ -94,6 +94,28 @@ logging.basicConfig(
 logger = logging.getLogger("run_agentic")
 
 
+OPENCODE_PERMISSION_FILE = LLM_BENCH_DIR / "config" / "opencode-permission.json"
+
+
+def _opencode_env() -> dict[str, str]:
+    """Environment for a headless `opencode run`.
+
+    Headless opencode auto-rejects every permission prompt and a rejection halts
+    the session, so its defaults (prompt on *.env reads, on /tmp, on doom-loop
+    detection) silently killed 25/28 failed GLM-5.3 and DeepSeek V4.1 runs
+    mid-read. OPENCODE_PERMISSION carries an explicit allow/deny policy instead
+    (see config/opencode-permission.md). OPENCODE_DISABLE_PROJECT_CONFIG stops a
+    scanned repo's own opencode.json from rerouting providers.
+    """
+    env = {**os.environ, "NO_COLOR": "1", "OPENCODE_DISABLE_PROJECT_CONFIG": "1"}
+    try:
+        policy = json.loads(OPENCODE_PERMISSION_FILE.read_text())
+        env["OPENCODE_PERMISSION"] = json.dumps(policy, separators=(",", ":"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("opencode permission policy not applied (%s): %s", OPENCODE_PERMISSION_FILE, exc)
+    return env
+
+
 def run_opencode_command(cmd: list[str], *, cwd: str, env: dict[str, str], timeout: int) -> subprocess.CompletedProcess:
     """Run OpenCode in its own process group so timeouts clean up child workers."""
     proc = subprocess.Popen(
@@ -265,7 +287,7 @@ def run_one_agentic(
             ["opencode", "run", "--format", "json", "-m", opencode_model, task],
             timeout=timeout,
             cwd=str(repo_path),
-            env={**os.environ, "NO_COLOR": "1"},
+            env=_opencode_env(),
         )
         raw_json_output = proc.stdout
     except subprocess.TimeoutExpired:
@@ -373,6 +395,7 @@ def run_one_agentic(
             (output_dir / f"run-{run_id}.failed-output.txt").write_text(
                 "### extracted text ###\n" + raw_output
                 + "\n\n### raw opencode stdout ###\n" + (raw_json_output or "")
+                + "\n\n### opencode stderr ###\n" + (getattr(proc, "stderr", "") or "")
             )
         except OSError as exc:
             logger.warning("could not save failed output for %s: %s", repo_slug, exc)
