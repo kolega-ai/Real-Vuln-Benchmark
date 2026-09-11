@@ -341,7 +341,7 @@ The scorer reports the number of withheld findings (`ns`) and non-scoring entrie
 
 ### Metrics
 
-**Primary metric: F2 Score** (0–100 scale). F-beta with beta=2 weights recall 4x more than precision — missing a real vulnerability is far worse than a false alarm.
+**Primary metric: F3 Score** (0–100 scale, strict mode). F-beta with beta=3 weights recall 9x more than precision — missing a real vulnerability is far worse than a false alarm. F2 is reported alongside for re-ranking.
 
 Full metrics computed per scorer run:
 
@@ -351,8 +351,12 @@ Full metrics computed per scorer run:
 | Recall (= TPR) | TP / (TP + FN) |
 | F1 | 2 × (Prec × Recall) / (Prec + Recall) |
 | F2 | 5 × (Prec × Recall) / (4 × Prec + Recall) |
-| F2 Score | F2 × 100 |
+| F3 | 10 × (Prec × Recall) / (9 × Prec + Recall) |
+| F2 / F3 Score | F2 × 100, F3 × 100 |
+| wF3 (CVSS-weighted F3) | F3 computed over CVSS-weighted sums: each TP/FN counts its ground-truth `cvss.base_score` (0–10) instead of 1; each FP counts the scanner's reported severity (critical 9.5, high 8.0, medium 5.5, low 2.0, info 0.5) |
 | FPR | FP / (FP + TN) |
+
+wF3 makes a missed 9.8 cost roughly ten times a missed 1.0. It is reported next to F3 (CLI column `wF3`, `cvss_*` fields in JSON, dashboard metric toggle) and never replaces it.
 
 Breakdowns: **per-CWE-family** (TP/FP/FN/precision/recall) and **per-severity** (TP/FP/FN/recall), both derived from ground truth entry metadata.
 

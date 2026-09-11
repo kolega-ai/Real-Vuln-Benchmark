@@ -51,6 +51,11 @@ Each finding entry requires:
   "file": "path/to/file.py",
   "location": { "start_line": 42, "end_line": 48, "function": "login" },
   "severity": "high",
+  "cvss": {
+    "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    "base_score": 9.8,
+    "severity": "CRITICAL"
+  },
   "expected_category": "injection",
   "evidence": {
     "source": "manual_review",
@@ -59,6 +64,8 @@ Each finding entry requires:
   }
 }
 ```
+
+`cvss` is the CVSS v3.1 base vector, score and band (`NONE`/`LOW`/`MEDIUM`/`HIGH`/`CRITICAL`) for this exact location — derived from what the code actually does (auth required? reachable? real impact?), not looked up from the CWE. Two findings of the same class may legitimately differ. It feeds the CVSS-weighted F3 metric; `severity` is the older informal label and is kept for the per-severity breakdown. Trap entries (`is_vulnerable: false`) may omit `cvss` or carry `0.0`.
 
 ### 4. Include false-positive traps
 
