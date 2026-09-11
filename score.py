@@ -47,20 +47,28 @@ def print_summary_table(
     print(f"RealVuln Scorecard — {repo_id} @ {commit_sha[:12]}")
     print()
     header = (
-        f"{'Scanner':<20} {'F2 Score':>8} {'F3 Score':>8}  "
+        f"{'Scanner':<20} {'F2 Score':>8} {'F3 Score':>8} {'wF3':>7}  "
         f"{'TP':>4} {'FP':>4} {'FN':>4} {'TN':>4} {'NS':>4}  "
-        f"{'Prec':>6} {'Recall':>6} {'F1':>6} {'F2':>6} {'F3':>6}"
+        f"{'Prec':>6} {'Recall':>6} {'F1':>6} {'F2':>6} {'F3':>6}  "
+        f"{'wPrec':>6} {'wRec':>6}"
     )
     print(header)
     print("=" * len(header))
 
     for card in scorecards:
         print(
-            f"{card.scanner:<20} {card.f2_score:>7.1f}  {card.f3_score:>7.1f}   "
+            f"{card.scanner:<20} {card.f2_score:>7.1f}  {card.f3_score:>7.1f} {card.cvss_f3_score:>7.1f}   "
             f"{card.tp:>4} {card.fp:>4} {card.fn:>4} {card.tn:>4} {card.ns:>4}  "
-            f"{card.precision:>6.3f} {card.recall:>6.3f} {card.f1:>6.3f} {card.f2:>6.3f} {card.f3:>6.3f}"
+            f"{card.precision:>6.3f} {card.recall:>6.3f} {card.f1:>6.3f} {card.f2:>6.3f} {card.f3:>6.3f}  "
+            f"{card.cvss_precision:>6.3f} {card.cvss_recall:>6.3f}"
         )
 
+    coverage = scorecards[0].cvss_coverage if scorecards else 0.0
+    print()
+    print(
+        f"wF3 = CVSS-weighted F3 (each GT hit/miss weighted by its CVSS base score; "
+        f"CVSS coverage of this repo's GT: {coverage:.0%})"
+    )
     print()
 
 
@@ -384,6 +392,9 @@ def build_report(
             scanner_data["stddev_f2_score"] = round(statistics.stdev(f2_scores), 1)
             scanner_data["mean_f3_score"] = round(statistics.mean(f3_scores), 1)
             scanner_data["stddev_f3_score"] = round(statistics.stdev(f3_scores), 1)
+            cvss_f3_scores = [c.cvss_f3_score for c in run_cards]
+            scanner_data["mean_cvss_f3_score"] = round(statistics.mean(cvss_f3_scores), 1)
+            scanner_data["stddev_cvss_f3_score"] = round(statistics.stdev(cvss_f3_scores), 1)
             scanner_data["mean_precision"] = round(statistics.mean(precisions), 4)
             scanner_data["stddev_precision"] = round(statistics.stdev(precisions), 4)
             scanner_data["mean_recall"] = round(statistics.mean(recalls), 4)
@@ -514,6 +525,14 @@ def main() -> int:
             avg_card.tpr = statistics.mean([c.tpr for c in run_cards])
             avg_card.fpr = statistics.mean([c.fpr for c in run_cards])
             avg_card.youden_j = statistics.mean([c.youden_j for c in run_cards])
+            avg_card.cvss_coverage = run_cards[0].cvss_coverage
+            avg_card.cvss_tp_weight = statistics.mean([c.cvss_tp_weight for c in run_cards])
+            avg_card.cvss_fp_weight = statistics.mean([c.cvss_fp_weight for c in run_cards])
+            avg_card.cvss_fn_weight = statistics.mean([c.cvss_fn_weight for c in run_cards])
+            avg_card.cvss_precision = statistics.mean([c.cvss_precision for c in run_cards])
+            avg_card.cvss_recall = statistics.mean([c.cvss_recall for c in run_cards])
+            avg_card.cvss_f3 = statistics.mean([c.cvss_f3 for c in run_cards])
+            avg_card.cvss_f3_score = round(statistics.mean([c.cvss_f3_score for c in run_cards]), 1)
             avg_card.per_family = run_cards[0].per_family
             avg_card.per_severity = run_cards[0].per_severity
             all_scorecards[slug] = avg_card

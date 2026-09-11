@@ -22,7 +22,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from parsers import get_parser
 from scorer.matcher import is_non_scoring, load_ground_truth, match_findings
-from scorer.metrics import compute_scorecard
+from scorer.metrics import compute_scorecard, cvss_base_score
 
 BASELINE_SCANNERS = {"semgrep", "snyk", "sonarqube"}
 
@@ -142,6 +142,17 @@ def score_all(
                     ), 1)
                     cell["f3_score"] = round(statistics.mean(
                         [rd["f3_score"] for rd in run_dicts]
+                    ), 1)
+                    for key in ("cvss_tp_weight", "cvss_fp_weight", "cvss_fn_weight"):
+                        cell[key] = round(statistics.mean(
+                            [rd.get(key, 0.0) for rd in run_dicts]
+                        ), 1)
+                    for key in ("cvss_precision", "cvss_recall", "cvss_f3"):
+                        cell[key] = round(statistics.mean(
+                            [rd.get(key, 0.0) for rd in run_dicts]
+                        ), 4)
+                    cell["cvss_f3_score"] = round(statistics.mean(
+                        [rd.get("cvss_f3_score", 0.0) for rd in run_dicts]
                     ), 1)
                     # Keep per_family / per_severity from first run
                     cell["per_family"] = run_dicts[0].get("per_family", {})
@@ -352,6 +363,10 @@ def compute_aggregates(
     # Pre-load vuln counts per repo for strict mode
     repo_vuln_counts: dict[str, int] = {}
     repo_trap_counts: dict[str, int] = {}
+    # CVSS weight a failed repo forfeits in strict mode: the summed base score
+    # of its real vulnerabilities (a vuln without cvss counts 1.0, matching the
+    # scorer's no-coverage fallback).
+    repo_vuln_weights: dict[str, float] = {}
     if gt_dir:
         for repo in grid:
             gt_path = gt_dir / repo / "ground-truth.json"
@@ -360,8 +375,13 @@ def compute_aggregates(
                     gt = json.load(f)
                 # Non-scoring entries are excluded from every published count.
                 findings = [f for f in gt.get("findings", []) if not is_non_scoring(f)]
-                repo_vuln_counts[repo] = sum(1 for f in findings if f.get("is_vulnerable", True))
+                vulns = [f for f in findings if f.get("is_vulnerable", True)]
+                repo_vuln_counts[repo] = len(vulns)
                 repo_trap_counts[repo] = sum(1 for f in findings if not f.get("is_vulnerable", True))
+                repo_vuln_weights[repo] = sum(
+                    (cvss_base_score(f) if cvss_base_score(f) is not None else 1.0)
+                    for f in vulns
+                )
 
     agg: dict[str, dict] = {}
 
@@ -372,6 +392,9 @@ def compute_aggregates(
         max_num_runs = 1
         # Strict mode
         strict_tp = strict_fp = strict_fn = strict_tn = 0
+        # CVSS-weighted sums (see scorer.metrics._apply_cvss_weights)
+        w_tp = w_fp = w_fn = 0.0
+        sw_tp = sw_fp = sw_fn = 0.0
         # Per-severity totals (scored repos only -- a failed repo's missed
         # vulns are not broken out by severity here, so this is an
         # optimistic-mode-only breakdown even when the headline metric is
@@ -392,6 +415,12 @@ def compute_aggregates(
                 strict_fp += cell["fp"]
                 strict_fn += cell["fn"]
                 strict_tn += cell["tn"]
+                w_tp += cell.get("cvss_tp_weight", cell["tp"])
+                w_fp += cell.get("cvss_fp_weight", cell["fp"])
+                w_fn += cell.get("cvss_fn_weight", cell["fn"])
+                sw_tp += cell.get("cvss_tp_weight", cell["tp"])
+                sw_fp += cell.get("cvss_fp_weight", cell["fp"])
+                sw_fn += cell.get("cvss_fn_weight", cell["fn"])
                 for sev, sd in (cell.get("per_severity") or {}).items():
                     bucket = sev_totals.setdefault(sev, {"tp": 0, "fp": 0, "fn": 0})
                     bucket["tp"] += sd.get("tp", 0)
@@ -401,6 +430,14 @@ def compute_aggregates(
                 # Failed — strict mode counts all vulns as missed
                 strict_fn += repo_vuln_counts.get(repo, 0)
                 strict_tn += repo_trap_counts.get(repo, 0)
+                sw_fn += repo_vuln_weights.get(repo, float(repo_vuln_counts.get(repo, 0)))
+
+        w_prec = _safe_div(w_tp, w_tp + w_fp)
+        w_rec = _safe_div(w_tp, w_tp + w_fn)
+        w_f3 = _safe_div(10.0 * w_prec * w_rec, 9.0 * w_prec + w_rec)
+        sw_prec = _safe_div(sw_tp, sw_tp + sw_fp)
+        sw_rec = _safe_div(sw_tp, sw_tp + sw_fn)
+        sw_f3 = _safe_div(10.0 * sw_prec * sw_rec, 9.0 * sw_prec + sw_rec)
 
         micro_prec = _safe_div(total_tp, total_tp + total_fp)
         micro_rec = _safe_div(total_tp, total_tp + total_fn)
@@ -430,6 +467,9 @@ def compute_aggregates(
                 "recall": round(micro_rec, 4),
                 "f2_score": round(micro_f2 * 100, 1),
                 "f3_score": round(micro_f3 * 100, 1),
+                "cvss_precision": round(w_prec, 4),
+                "cvss_recall": round(w_rec, 4),
+                "cvss_f3_score": round(w_f3 * 100, 1),
             },
             "strict_micro": {
                 "tp": strict_tp,
@@ -440,6 +480,9 @@ def compute_aggregates(
                 "recall": round(strict_rec, 4),
                 "f2_score": round(strict_f2 * 100, 1),
                 "f3_score": round(strict_f3 * 100, 1),
+                "cvss_precision": round(sw_prec, 4),
+                "cvss_recall": round(sw_rec, 4),
+                "cvss_f3_score": round(sw_f3 * 100, 1),
             },
             "macro": {
                 "f2_score": round(

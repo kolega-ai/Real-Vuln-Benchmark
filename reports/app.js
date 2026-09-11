@@ -21,7 +21,7 @@
 
   var state = { metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1 };
 
-  var METRIC_LABEL = { f2: 'F2', f3: 'F3' };
+  var METRIC_LABEL = { f2: 'F2', f3: 'F3', wf3: 'wF3' };
   // scanner tag line: version/org, effort (only where the model exposes one), external link
   function effortTag(s) {
     return s.effort ? ' <span class="dim">·</span> <span title="Reasoning/thinking effort level">' + s.effort + ' effort</span>' : '';
@@ -58,7 +58,8 @@
     return !!el && !el.hidden;
   }
   function effF3(s) {
-    if (sevAllOn() || !s.sev) return val(s, state.metric);
+    // wF3 weights are not available per severity bucket; show the full-corpus value.
+    if (sevAllOn() || !s.sev || state.metric === 'wf3') return val(s, state.metric);
     var agg = sevAgg(s), fp = s.fp || 0;
     var p = (agg.tp + fp) > 0 ? agg.tp / (agg.tp + fp) : 0;
     var r = (agg.tp + agg.fn) > 0 ? agg.tp / (agg.tp + agg.fn) : 0;
