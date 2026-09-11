@@ -241,3 +241,57 @@ class TestNonScoringMetrics:
         a = compute_scorecard("repo", "s", "ts", base, CWE_FAMILIES)
         b = compute_scorecard("repo", "s", "ts", with_ns, CWE_FAMILIES)
         assert (a.f2_score, a.f3_score, a.fpr, a.youden_j) == (b.f2_score, b.f3_score, b.fpr, b.youden_j)
+
+
+def _cvss_result(cls: str, gt_id: str, base_score: float | None, scanner_sev: str = "high") -> MatchResult:
+    r = _make_result(cls, gt_id=gt_id, severity=scanner_sev)
+    if r.ground_truth_entry is not None and base_score is not None:
+        r.ground_truth_entry["cvss"] = {
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            "base_score": base_score,
+            "severity": "HIGH",
+        }
+    return r
+
+
+class TestCvssWeightedF3:
+    def test_no_cvss_falls_back_to_unweighted(self):
+        results = [_make_result("TP", gt_id="a"), _make_result("FN", gt_id="b")]
+        card = compute_scorecard("r", "s", "t", results, CWE_FAMILIES)
+        assert card.cvss_coverage == 0.0
+        assert card.cvss_f3 == card.f3
+        assert card.cvss_tp_weight == 1.0 and card.cvss_fn_weight == 1.0
+
+    def test_missing_critical_costs_more_than_missing_low(self):
+        # Same counts (1 TP, 1 FN); only which one was missed differs.
+        miss_low = [_cvss_result("TP", "crit", 9.8), _cvss_result("FN", "low", 2.0)]
+        miss_crit = [_cvss_result("TP", "low", 2.0), _cvss_result("FN", "crit", 9.8)]
+        low = compute_scorecard("r", "s", "t", miss_low, CWE_FAMILIES)
+        crit = compute_scorecard("r", "s", "t", miss_crit, CWE_FAMILIES)
+        assert low.f3 == crit.f3  # unweighted cannot tell them apart
+        assert low.cvss_recall == 9.8 / (9.8 + 2.0)
+        assert crit.cvss_recall == 2.0 / (2.0 + 9.8)
+        assert low.cvss_f3 > crit.cvss_f3
+
+    def test_fp_weighted_by_scanner_severity_not_trap_score(self):
+        results = [
+            _cvss_result("TP", "a", 8.0),
+            _cvss_result("FP", "trap", 0.0, scanner_sev="critical"),  # trap GT scored 0.0
+            _make_result("FP", severity="low"),  # unmatched, no GT entry
+        ]
+        card = compute_scorecard("r", "s", "t", results, CWE_FAMILIES)
+        assert card.cvss_tp_weight == 8.0
+        assert card.cvss_fp_weight == 9.5 + 2.0
+        assert card.cvss_precision == 8.0 / (8.0 + 11.5)
+
+    def test_partial_coverage_uses_mean_for_unscored_gt(self):
+        results = [_cvss_result("TP", "a", 6.0), _cvss_result("FN", "b", None)]
+        card = compute_scorecard("r", "s", "t", results, CWE_FAMILIES)
+        assert card.cvss_coverage == 0.5
+        assert card.cvss_fn_weight == 6.0  # mean of known weights
+
+    def test_to_dict_exposes_weighted_fields(self):
+        card = compute_scorecard("r", "s", "t", [_cvss_result("TP", "a", 7.5)], CWE_FAMILIES)
+        d = card.to_dict()
+        assert d["cvss_f3_score"] == 100.0
+        assert d["cvss_coverage"] == 1.0

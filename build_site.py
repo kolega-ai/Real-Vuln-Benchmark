@@ -640,8 +640,15 @@ def scanners_from_aggregates(
                 "f2s": round1(strict["f2_score"]),
                 "f3": round1(micro["f3_score"]),
                 "f3s": round1(strict["f3_score"]),
+                # wf3: CVSS-weighted F3 — each GT hit/miss weighted by its CVSS
+                # base score, FPs by scanner-reported severity (scorer.metrics)
+                "wf3": round1(micro.get("cvss_f3_score", micro["f3_score"])),
+                "wf3s": round1(strict.get("cvss_f3_score", strict["f3_score"])),
                 "rec": round3(micro["recall"]),
                 "recs": round3(strict["recall"]),
+                "wrec": round3(micro.get("cvss_recall", micro["recall"])),
+                "wrecs": round3(strict.get("cvss_recall", strict["recall"])),
+                "wprec": round3(micro.get("cvss_precision", micro["precision"])),
                 # tp: real vulnerabilities found (true positives, micro)
                 "tp": micro.get("tp", 0) or 0,
                 # fp: false positives (flagged but not a real vuln, micro)
@@ -1054,8 +1061,13 @@ def emit_data_js(
         "f2s",
         "f3",
         "f3s",
+        "wf3",
+        "wf3s",
         "rec",
         "recs",
+        "wrec",
+        "wrecs",
+        "wprec",
         "tp",
         "fp",
         "fn",
