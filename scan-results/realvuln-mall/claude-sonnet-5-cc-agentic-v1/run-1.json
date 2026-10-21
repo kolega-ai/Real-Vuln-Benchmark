@@ -1,0 +1,413 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.access-control.idor-pay-success-no-ownership-check",
+      "path": "mall-portal/src/main/java/com/macro/mall/portal/service/impl/OmsPortalOrderServiceImpl.java",
+      "start": {
+        "line": 253,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 264,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "paySuccess(orderId, payType), exposed at POST /order/paySuccess (mall-portal/.../controller/OmsPortalOrderController.java:49-54), updates an order to 'paid' and deducts real stock using only the caller-supplied orderId. There is no check that the order belongs to the authenticated member and no verification of a real payment-gateway signature/callback. Any authenticated member can mark any other member's pending order as paid for free by guessing/incrementing orderId.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-cancel-order-no-ownership-check",
+      "path": "mall-portal/src/main/java/com/macro/mall/portal/service/impl/OmsPortalOrderServiceImpl.java",
+      "start": {
+        "line": 297,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 333,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "cancelOrder(orderId), exposed at POST /order/cancelOrder (OmsPortalOrderController.java:65-67), filters the order only by status=0 and deleteStatus=0, never by memberId. Any authenticated member can cancel another member's pending order, releasing their stock/coupon/points. Contrast with confirmReceiveOrder/deleteOrder in the same file, which correctly check member.getId().equals(order.getMemberId()).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-order-detail-disclosure",
+      "path": "mall-portal/src/main/java/com/macro/mall/portal/service/impl/OmsPortalOrderServiceImpl.java",
+      "start": {
+        "line": 396,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 405,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "detail(orderId), exposed at GET /order/detail/{orderId} (OmsPortalOrderController.java:84-90), fetches full order and item details (receiver name/phone/address, payment info) by primary key only with no member ownership check. Any authenticated member can read another member's order PII by incrementing orderId.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.unauthenticated-file-upload-public-bucket",
+      "path": "mall-admin/src/main/java/com/macro/mall/controller/MinioController.java",
+      "start": {
+        "line": 42,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 100,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST /minio/upload is whitelisted as unauthenticated in mall-admin/src/main/resources/application.yml:49. The handler (lines 42-85) accepts any MultipartFile with no content-type/extension validation, and on first use sets the bucket policy to world-readable (createBucketPolicyConfigDto, lines 90-99: Principal \"*\", Action s3:GetObject). Any anonymous user can upload and publicly host arbitrary content (phishing/malware/defacement).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.unauthenticated-admin-self-registration",
+      "path": "mall-admin/src/main/resources/application.yml",
+      "start": {
+        "line": 46,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 46,
+        "col": 20,
+        "offset": 0
+      },
+      "extra": {
+        "message": "/admin/register is whitelisted (secure.ignored.urls) to bypass Spring Security's auth filter. UmsAdminServiceImpl.register() (mall-admin/src/main/java/com/macro/mall/service/impl/UmsAdminServiceImpl.java:79-96) sets status=1 (enabled) immediately with no invite code, captcha, or approval step. Any unauthenticated user can create an enabled admin-panel login.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.jackson-unsafe-default-typing",
+      "path": "mall-common/src/main/java/com/macro/mall/common/config/BaseRedisConfig.java",
+      "start": {
+        "line": 43,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 45,
+        "col": 100,
+        "offset": 0
+      },
+      "extra": {
+        "message": "objectMapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL) enables Jackson polymorphic typing with a validator that accepts any subtype (no allowlist). This embeds a @class field in JSON serialized to/from Redis and lets Jackson instantiate an attacker-chosen class on deserialization \u2014 the classic unsafe-default-typing gadget-chain RCE pattern. This config backs the shared RedisTemplate used across mall-admin/mall-portal (via mall-security/.../config/RedisConfig.java). Exploitable if an attacker can write to the Redis keys this template reads back.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.reflected-xss-alipay-subject",
+      "path": "mall-portal/src/main/java/com/macro/mall/portal/controller/AlipayController.java",
+      "start": {
+        "line": 39,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 44,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The user-supplied GET parameter aliPayParam.subject (mall-portal/.../domain/AliPayParam.java:22) flows unmodified into bizContent (AlipayServiceImpl.java:58) and the Alipay SDK's auto-submit form HTML (pageExecute(...).getBody(), line 64) is written verbatim via response.getWriter().write() with Content-Type text/html and no output encoding (line 40-41). A crafted subject value can break out of the SDK's form-field markup, causing reflected XSS on GET /alipay/pay. Same pattern in webPay() at lines 47-53.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-site Scripting"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.data-exposure.plaintext-password-logging",
+      "path": "mall-common/src/main/java/com/macro/mall/common/log/WebLogAspect.java",
+      "start": {
+        "line": 76,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 89,
+        "col": 70,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getParameter() (lines 96-126) captures every @RequestParam/@RequestBody argument of all controller methods, and LOGGER.info(Markers.appendEntries(logMap), ...) at line 89 ships it to Logstash/Elasticsearch. UmsMemberController.login (mall-portal/.../controller/UmsMemberController.java:50-52, @RequestParam String password) and UmsAdminController.login (mall-admin/.../controller/UmsAdminController.java:60-61, UmsAdminLoginParam.getPassword()) both pass through this aspect, writing plaintext passwords into the centralized log pipeline on every login attempt.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.data-exposure.raw-sql-exception-message",
+      "path": "mall-common/src/main/java/com/macro/mall/common/exception/GlobalExceptionHandler.java",
+      "start": {
+        "line": 60,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 66,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "handleSQLSyntaxErrorException masks the message only when it contains \"denied\" (line 63); every other SQLSyntaxErrorException returns the raw DB driver message (line 65, e.getMessage()) directly in the API response, which can disclose table/column names and query fragments to the client.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfiguration.cors-wildcard-with-credentials",
+      "path": "mall-admin/src/main/java/com/macro/mall/config/GlobalCorsConfig.java",
+      "start": {
+        "line": 23,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 40,
+        "offset": 0
+      },
+      "extra": {
+        "message": "config.addAllowedOriginPattern(\"*\") (line 23) combined with config.setAllowCredentials(true) (line 25), addAllowedHeader(\"*\") (line 27) and addAllowedMethod(\"*\") (line 29), applied to /** . Spring reflects the request's actual Origin back in pattern mode, producing a working any-origin-with-credentials CORS policy that defeats same-origin protection for cookie/credentialed cross-site requests. Identical config exists in mall-portal/src/main/java/com/macro/mall/portal/config/GlobalCorsConfig.java:23-29.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfiguration.swagger-apidocs-unauthenticated-no-prod-override",
+      "path": "mall-admin/src/main/resources/application.yml",
+      "start": {
+        "line": 36,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 37,
+        "col": 25,
+        "offset": 0
+      },
+      "extra": {
+        "message": "/swagger-ui/ and /v3/api-docs/* are whitelisted as unauthenticated in secure.ignored.urls, and application-prod.yml contains no override disabling springdoc.swagger-ui.enabled / api-docs.enabled. The full API surface, including admin endpoints, stays exposed and browsable under the prod profile.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfiguration.druid-console-weak-creds-unauthenticated-path",
+      "path": "mall-admin/src/main/resources/application-prod.yml",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 14,
+        "col": 25,
+        "offset": 0
+      },
+      "extra": {
+        "message": "stat-view-servlet login-username/login-password are hardcoded to the weak default 'druid'/'druid' in the committed production config. Combined with /druid/** being whitelisted to bypass the app's own Spring Security auth filter (application.yml:44), this hardcoded weak login is the only gate on the Druid SQL-monitor console (live SQL, connection pool, potential data exposure). Same pattern repeats in application-dev.yml:13-14 and in mall-portal's equivalent files.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.credentials.hardcoded-prod-db-password",
+      "path": "mall-admin/src/main/resources/application-prod.yml",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 5,
+        "col": 20,
+        "offset": 0
+      },
+      "extra": {
+        "message": "MySQL username/password ('reader'/'123456') hardcoded in plaintext in the committed production configuration file. Same pattern in mall-portal/src/main/resources/application-prod.yml:7-8 and mall-search/src/main/resources/application-prod.yml:4-5 (and dev variants using root/root).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.credentials.hardcoded-jwt-secret",
+      "path": "mall-admin/src/main/resources/application.yml",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 30,
+        "offset": 0
+      },
+      "extra": {
+        "message": "JWT HMAC signing secret is hardcoded as the short, guessable, module-name-based string 'mall-admin-secret' (used directly as HMAC key bytes in mall-security/src/main/java/com/macro/mall/security/util/JwtTokenUtil.java). mall-portal/src/main/resources/application.yml:17 uses the equally weak 'mall-portal-secret'. An attacker who guesses/brute-forces either secret can forge valid JWTs for that module, bypassing authentication entirely.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-330: Use of Insufficiently Random Values"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.dos.unbounded-pagination-size-unauthenticated",
+      "path": "mall-portal/src/main/java/com/macro/mall/portal/service/impl/HomeServiceImpl.java",
+      "start": {
+        "line": 80,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 81,
+        "col": 50,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getSubjectList(cateId, pageSize, pageNum) passes the caller-supplied pageSize directly to PageHelper.startPage with no upper-bound validation. Exposed via GET /home/subjectList, which is unauthenticated (/home/** whitelisted in mall-portal/src/main/resources/application.yml). A very large pageSize can trigger excessive memory/DB load. Same unbounded pattern repeats for recommendProductList and hotProductList in the same file.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.minio-delete-no-ownership-check",
+      "path": "mall-admin/src/main/java/com/macro/mall/controller/MinioController.java",
+      "start": {
+        "line": 105,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 116,
+        "col": 10,
+        "offset": 0
+      },
+      "extra": {
+        "message": "delete(objectName) passes the raw client-supplied objectName straight to RemoveObjectArgs with no check that the object belongs to the caller or matches an expected prefix, allowing any authenticated admin user to delete arbitrary objects in the shared bucket.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

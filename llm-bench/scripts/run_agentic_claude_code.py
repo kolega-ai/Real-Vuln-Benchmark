@@ -35,7 +35,7 @@ sys.path.insert(0, str(LLM_BENCH_DIR))
 from harness.metrics_collector import RunMetrics, save_metrics
 from harness.output_validator import save_validated_output, validate_output
 from harness.prompt_builder import build_prompt, load_cwe_families
-from run_agentic import LANGUAGES, clone_or_find_repo, discover_repos, load_benchmark_manifest
+from run_agentic import LANGUAGES, clone_or_find_repo, discover_repos, discover_language_repos, load_benchmark_manifest
 
 
 def build_agentic_task(system_prompt: str, lang_files: str) -> str:
@@ -79,6 +79,10 @@ class RateLimitHit(RuntimeError):
 
 
 def is_rate_limit(envelope: dict, *texts: str) -> bool:
+    # A successful security finding can mention "rate limit". Only inspect
+    # result text when the CLI itself marks the invocation as an error.
+    if envelope and not envelope.get("is_error") and envelope.get("api_error_status") != 429:
+        return False
     combined = " ".join(str(text or "") for text in texts).lower()
     return envelope.get("api_error_status") == 429 or any(
         marker in combined for marker in _LIMIT_MARKERS
@@ -153,6 +157,18 @@ def result_paths(repo_slug: str, scanner_slug: str, run_id: int) -> tuple[Path, 
     return output_dir / f"run-{run_id}.json", output_dir / f"run-{run_id}.metrics.json"
 
 
+def save_trajectory(repo_slug: str, scanner_slug: str, run_id: int,
+                    stdout: str, stderr: str) -> None:
+    """Keep raw CLI events in a private directory outside public scan-results."""
+    root = os.environ.get("RV_TRAJECTORY_DIR")
+    if not root:
+        return
+    target = Path(root) / scanner_slug / repo_slug
+    target.mkdir(parents=True, exist_ok=True)
+    (target / f"run-{run_id}.jsonl").write_text(stdout)
+    (target / f"run-{run_id}.stderr.txt").write_text(stderr)
+
+
 def run_one(
     *,
     model: str,
@@ -190,12 +206,12 @@ def run_one(
         "-p",
         task,
         "--output-format",
-        "json",
+        "stream-json",
+        "--verbose",
         "--model",
         model,
         "--permission-mode",
         "bypassPermissions",
-        "--no-session-persistence",
         "--disallowedTools",
         "Edit,Write,NotebookEdit",
     ]
@@ -210,15 +226,17 @@ def run_one(
     try:
         proc = run_claude_command(cmd, cwd=str(repo_path), timeout=timeout)
         elapsed = time.time() - started
+        save_trajectory(repo_slug, scanner_slug, run_id, proc.stdout, proc.stderr)
         try:
-            envelope = json.loads(proc.stdout)
+            envelope = next((event for event in reversed([
+                json.loads(line) for line in proc.stdout.splitlines() if line.strip()
+            ]) if event.get("type") == "result"), {})
         except json.JSONDecodeError:
             envelope = {}
         limit_hit = is_rate_limit(
             envelope,
             proc.stderr,
-            proc.stdout,
-            str(envelope.get("result") or ""),
+            str(envelope.get("result") or "") if envelope.get("is_error") else "",
         )
         if limit_hit:
             candidate = validate_output(str(envelope.get("result") or ""))
@@ -371,11 +389,10 @@ def main() -> int:
         return 1
 
     scanner_slug = args.scanner_slug or default_scanner_slug(args.model)
-    repos = (
-        discover_repos(PROJECT_ROOT / "ground-truth")
-        if args.repos == ["all"]
-        else args.repos
-    )
+    repos = (discover_language_repos(PROJECT_ROOT / "ground-truth", "java")
+             if args.repos == ["java"] else
+             discover_repos(PROJECT_ROOT / "ground-truth")
+             if args.repos == ["all"] else args.repos)
     template_path = args.prompt_template or (
         LLM_BENCH_DIR / "prompts" / LANGUAGES[args.language]["template"]
     )

@@ -16,7 +16,8 @@
   var SHORT_LANG = { python: 'Python', tsjs: 'TS/JS', java: 'Java' };
 
   // tab = "<lang>:<src>" collapsed: "all" when both are all, "<lang>" or "<src>" when one is.
-  var state = { lang: 'all', src: 'all', tab: 'all', metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1, cats: { sec: true, llm: true, rule: true } };
+  var initialTab = 'all';
+  var state = { lang: initialTab, src: 'all', tab: initialTab, metric: 'f3', mode: 'strict', sortKey: 'f3', sortDir: -1, cats: { sec: true, llm: true, rule: true } };
   function tabKey() {
     if (state.lang === 'all' && state.src === 'all') return 'all';
     if (state.lang === 'all') return state.src;
@@ -118,9 +119,9 @@
     setText('kpi-recall-val', (val(recLead, 'rec') * 100).toFixed(1));
     setText('kpi-recall-sub', recLead.name);
     var tabLoc = window.RV.TAB_LOC && window.RV.TAB_LOC[state.tab];
-    var loc = tabLoc || (window.RV.DATASET && window.RV.DATASET.loc) || 0;
-    setText('kpi-loc-val', loc.toLocaleString());
-    setText('kpi-loc-sub', state.tab === 'all' ? 'across all repos' : 'in the selected corpus');
+    var loc = tabLoc != null ? tabLoc : ((window.RV.DATASET && window.RV.DATASET.loc) || 0);
+    setText('kpi-loc-val', loc ? loc.toLocaleString() : '—');
+    setText('kpi-loc-sub', state.lang === 'java' ? 'production source; tests excluded' : 'GT-recorded LOC');
   }
 
   // ---- leaderboard ----
@@ -165,11 +166,11 @@
         '<td class="l"><a class="sc-name sc-link" href="scanners/' + s.slug + '.html">' + s.name + '</a>' + langBadges(s) +
           '<div class="cat-tag">' + s.ver + effortTag(s) + extLink(s) + '</div></td>' +
         '<td class="metric-cell"><span class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:' + pct + '%"></span></span><span>' + fmt(activeF(s)) + '</span></span></td>' +
-        (langCols() ? ['python', 'tsjs'].map(function (lk) { var v = langF(s, lk); return '<td class="lang-col">' + (v == null ? '<span class="dim">—</span>' : fmt(v)) + '</td>'; }).join('') : '') +
+        (langCols() ? ['python', 'tsjs', 'java'].map(function (lk) { var v = langF(s, lk); return '<td class="lang-col">' + (v == null ? '<span class="dim">—</span>' : fmt(v)) + '</td>'; }).join('') : '') +
         '<td title="real vulnerabilities missed (false negatives)' + (sevAllOn() ? '' : ' — filtered to selected severities') + '">' + effFn(s) + (sevFilterVisible() ? ' <span class="dim">of ' + effTotal(s) + '</span>' : '') + '</td>' +
         '<td>' + (s.prec * 100).toFixed(1) + '</td>' +
         '<td><span' + reposCls + '>' + s.repos + '</span><span class="dim">/' + total + '</span></td>' +
-        '<td class="dim"' + (s.est ? ' title="Estimated cost — 2× Claude Opus 4.8; these runs were interactive and unmetered"' : '') + '>' + (s.cost == null ? '—' : (s.est ? '~$' : '$') + (s.cost < 10 ? s.cost.toFixed(2) : s.cost.toFixed(0))) + '</td>';
+        '<td class="dim"' + (s.rate_priced ? ' title="Calculated from saved tokens at published API rates, including cache hits; this is not billed spend"' : s.est ? ' title="Estimated model/API spend per 100,000 GT-recorded lines"' : '') + '>' + (s.cost == null ? '—' : (s.est && !s.rate_priced ? '~$' : '$') + s.cost.toFixed(2)) + '</td>';
       tbody.appendChild(tr);
     });
     document.querySelectorAll('#dlb th.lang-col').forEach(function (th) { th.hidden = !langCols(); });
@@ -236,7 +237,7 @@
       xMax: xMax, yMax: 100, xTicks: xTicks, yTicks: [0, 25, 50, 75, 100],
       xFmt: function (t) { return '$' + t.toLocaleString(); }, yFmt: function (t) { return String(t); },
       xLabel: 'Cost per 100k LOC (USD) →', yLabel: METRIC_LABEL[state.metric] + ' →',
-      tip: function (s) { return METRIC_LABEL[state.metric] + ' ' + fmt(activeF(s)) + ' · ' + (s.est ? '~$' : '$') + s.cost.toLocaleString() + '/100k LOC' + (s.est ? ' (est.)' : ''); }
+      tip: function (s) { return METRIC_LABEL[state.metric] + ' ' + fmt(activeF(s)) + ' · ' + (s.est && !s.rate_priced ? '~$' : '$') + s.cost.toLocaleString() + '/100k LOC' + (s.rate_priced ? ' (published peak-rate calculation)' : s.est ? ' (est.)' : ''); }
     });
     var tag = document.getElementById('cost-metric-tag'); if (tag) tag.textContent = METRIC_LABEL[state.metric] + ' vs cost/100k LOC';
   }
@@ -328,6 +329,7 @@
       langHost.appendChild(b);
     });
     langHost.querySelectorAll('.ctab').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-lang') === state.lang);
       btn.addEventListener('click', function () {
         var lang = btn.getAttribute('data-lang');
         if (lang === state.lang) return;

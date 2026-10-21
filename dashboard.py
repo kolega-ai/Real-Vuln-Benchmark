@@ -203,8 +203,8 @@ def compute_scanner_costs(
     """
     from collections import defaultdict
     costs: dict[str, dict] = defaultdict(
-        lambda: {"total_cost": 0.0, "successful_runs": 0, "repos_scanned": set(),
-                 "loc_passes": 0}
+        lambda: {"total_cost": 0.0, "successful_runs": 0, "priced_runs": 0, "repos_scanned": set(),
+                 "loc_passes": 0, "estimated": False}
     )
 
     for repo_dir in scan_dir.iterdir():
@@ -219,8 +219,11 @@ def compute_scanner_costs(
                         d = json.load(f)
                     cost = d.get("cost_usd", 0)
                     costs[scanner_dir.name]["total_cost"] += cost
+                    costs[scanner_dir.name]["estimated"] |= bool(d.get("cost_estimated"))
                     if d.get("exit_status") == "success":
                         costs[scanner_dir.name]["successful_runs"] += 1
+                        if cost > 0:
+                            costs[scanner_dir.name]["priced_runs"] += 1
                         costs[scanner_dir.name]["repos_scanned"].add(repo_dir.name)
                         # accumulate LOC per successful run so cost/LOC counts every
                         # pass over the code, matching the all-runs cost numerator
@@ -230,7 +233,7 @@ def compute_scanner_costs(
 
     result = {}
     for scanner in scanners:
-        c = costs.get(scanner, {"total_cost": 0.0, "successful_runs": 0,
+        c = costs.get(scanner, {"total_cost": 0.0, "successful_runs": 0, "priced_runs": 0,
                                 "repos_scanned": set(), "loc_passes": 0})
         runs = c["successful_runs"]
         # distinct LOC of the corpus this scanner covered (reported for reference)
@@ -238,15 +241,33 @@ def compute_scanner_costs(
         # LOC summed across every successful run — the denominator that matches the
         # all-runs total_cost numerator (a 3-run scanner scans the corpus ~3x)
         loc_passes = c["loc_passes"]
-        cost_per_100_loc = round(c["total_cost"] / (loc_passes / 100), 4) if loc_passes > 0 else 0
+        cost_per_100_loc = round(c["total_cost"] / (loc_passes / 100), 8) if loc_passes > 0 else 0
         result[scanner] = {
             "total_cost": round(c["total_cost"], 4),
             "successful_runs": runs,
+            "priced_runs": c.get("priced_runs", 0),
             "cost_per_run": round(c["total_cost"] / runs, 4) if runs > 0 else 0,
             "total_loc_scanned": total_loc,
             "cost_per_100_loc": cost_per_100_loc,
+            "estimated": c.get("estimated", False),
         }
     return result
+
+
+def mark_partial_costs(aggregate: dict) -> None:
+    """Hide corpus-wide price ratios when only some scored repos have metrics."""
+    for scores in aggregate.values():
+        cost = scores.get("cost") or {}
+        measured = cost.get("priced_runs", 0)
+        scored = scores.get("repos_scored", 0)
+        if not (0 < measured < scored):
+            continue
+        cost["partial"] = True
+        cost["measured_runs"] = measured
+        cost["measured_total_cost"] = cost.get("total_cost", 0)
+        cost["total_cost"] = 0
+        cost["cost_per_run"] = 0
+        cost["cost_per_100_loc"] = 0
 
 
 def _project_fable_cost(aggregates: dict) -> None:
@@ -1217,7 +1238,7 @@ def build_html(
     # ── Header ──
     w('<div class="page-header">')
     w('<h1>RealVuln Benchmark <span class="badge">Open Source</span></h1>')
-    w('<div class="subtitle">Security scanner evaluation against ground-truth vulnerabilities in real-world Python code</div>')
+    w('<div class="subtitle">Security scanner evaluation across Python, TypeScript/JavaScript, and Java repositories</div>')
     w('<div class="header-links">')
     w('<a href="https://github.com/kolega-ai/Real-Vuln-Benchmark" target="_blank">'
       '<svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>'
@@ -1230,8 +1251,8 @@ def build_html(
     w('<div class="hero-stats">')
     w(f'<div class="stat-card" title="Total confirmed vulnerabilities across all benchmark repositories — each one is a real, documented security issue."><div class="stat-icon" style="background:rgba(239,68,68,0.1);color:#ef4444">&#9888;</div><div><div class="stat-value" style="color:#ef4444">{gt_total_vulns}</div><div class="stat-label">Vulnerabilities</div></div></div>')
     w(f'<div class="stat-card" title="Code that looks suspicious but is actually safe. Scanners that flag these get penalized — tests whether scanners can tell real vulns from false alarms."><div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308">&#9678;</div><div><div class="stat-value" style="color:#eab308">{gt_total_traps}</div><div class="stat-label">FP Traps</div></div></div>')
-    w(f'<div class="stat-card" title="Intentionally-vulnerable Python applications used as benchmark targets — each pinned to a specific commit."><div class="stat-icon" style="background:rgba(168,85,247,0.1);color:#A076F9">&#9881;</div><div><div class="stat-value" style="color:#A076F9">{gt_total_repos}</div><div class="stat-label">Repositories</div></div></div>')
-    w(f'<div class="stat-card" title="Total lines of Python code across all benchmark repositories."><div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6">&#9998;</div><div><div class="stat-value" style="color:#3b82f6">{gt_total_loc:,}</div><div class="stat-label">Python LOC</div></div></div>')
+    w(f'<div class="stat-card" title="Benchmark targets pinned to specific commits."><div class="stat-icon" style="background:rgba(168,85,247,0.1);color:#A076F9">&#9881;</div><div><div class="stat-value" style="color:#A076F9">{gt_total_repos}</div><div class="stat-label">Repositories</div></div></div>')
+    w(f'<div class="stat-card" title="GT-recorded lines across the benchmark corpus; Java tests excluded, legacy Python and TS/JS counts unchanged."><div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6">&#9998;</div><div><div class="stat-value" style="color:#3b82f6">{gt_total_loc:,}</div><div class="stat-label">Recorded LOC</div></div></div>')
     w(f'<div class="stat-card" title="Number of security scanners evaluated — includes traditional SAST tools and LLM-based scanners."><div class="stat-icon" style="background:rgba(196,240,62,0.1);color:#C4F03E">&#9733;</div><div><div class="stat-value" style="color:#C4F03E">{total_scanners}</div><div class="stat-label">Scanners Tested</div></div></div>')
     w('</div>')
 
@@ -1802,9 +1823,14 @@ def build_scanner_detail_html(
         # Card 3: Cost
         w(f'<div style="{card_style}">')
         w(f'<div style="{label_style}">Cost</div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Total API cost across all runs and all repositories">Total</span><span style="{val_style}">${cost_info.get("total_cost", 0):.2f}</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average API cost to scan one repository (total cost / number of successful runs)">Per Repo</span><span style="{val_style}">${cost_info.get("cost_per_run", 0):.2f}</span></div>')
-        w(f'<div style="{row_style}"><span style="{lbl_style}" title="Cost normalized by codebase size — divide total cost by (total lines of code / 100)">Per 100 LOC</span><span style="{val_style}">${cost_info.get("cost_per_100_loc", 0):.4f}</span></div>')
+        if cost_info.get("partial"):
+            measured = cost_info.get("measured_runs", 0)
+            w(f'<div style="{row_style}"><span style="{lbl_style}">Corpus total</span><span style="{val_style}">—</span></div>')
+            w(f'<div style="{row_style}"><span style="{lbl_style}">Measured subset</span><span style="{val_style}">${cost_info.get("measured_total_cost", 0):.2f} / {measured} repos</span></div>')
+        else:
+            w(f'<div style="{row_style}"><span style="{lbl_style}" title="Total API cost across all runs and all repositories">Total</span><span style="{val_style}">${cost_info.get("total_cost", 0):.2f}</span></div>')
+            w(f'<div style="{row_style}"><span style="{lbl_style}" title="Average API cost to scan one repository (total cost / number of successful runs)">Per Repo</span><span style="{val_style}">${cost_info.get("cost_per_run", 0):.2f}</span></div>')
+            w(f'<div style="{row_style}"><span style="{lbl_style}" title="Cost normalized by codebase size — divide total cost by (total lines of code / 100)">Per 100 LOC</span><span style="{val_style}">${cost_info.get("cost_per_100_loc", 0):.4f}</span></div>')
         w('</div>')
 
         # Card 4: Reliability
@@ -2177,8 +2203,10 @@ def main() -> int:
         for scanner, a in agg.items():
             a["cost"] = tab_costs.get(scanner, {})
             a["metadata"] = scanner_metadata.get(scanner, {"has_metrics": False})
+        mark_partial_costs(agg)
         _project_fable_cost(agg)
 
+    mark_partial_costs(aggregates)
     _project_fable_cost(aggregates)
 
     # Filter scanners by minimum repo count

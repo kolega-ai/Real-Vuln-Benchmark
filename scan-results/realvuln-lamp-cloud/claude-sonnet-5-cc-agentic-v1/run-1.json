@@ -1,0 +1,655 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.authn.demo-backdoor-admin-takeover",
+      "path": "lamp-oauth/lamp-oauth-biz/src/main/java/top/tangyh/lamp/oauth/granter/AbstractTokenGranter.java",
+      "start": {
+        "line": 118,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 136,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The login() method contains an unconditional 'demo-only' backdoor: if the submitted username is not a real user, it checks a cache keyed by username populated by the unauthenticated endpoint POST /anyTenant/registerTempAdmin (DemoSiteController.java:29-32 -> UserInfoServiceImpl.registerTempAdmin(), lines 104-119). If the cached value matches the submitted password, the code logs the caller in as the hardcoded account 'lamp' (admin) or 'test1' and sets checkPassword=false, skipping real password verification entirely. The block is commented '\u6f14\u793a\u73af\u5883\u4e13\u7528\u4ee3\u7801\uff0c\u53ef\u76f4\u63a5\u5220\u9664' (demo-env-only, can be deleted) but has no environment/profile guard, so it runs in every deployment. An unauthenticated attacker can call registerTempAdmin(type=\"admin\") to receive a 4-digit username/password pair, then log in with that pair and be authenticated as the real 'lamp' admin account.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-288: Authentication Bypass Using an Alternate Path or Channel"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authn.unauthenticated-temp-admin-registration",
+      "path": "lamp-oauth/lamp-oauth-controller/src/main/java/top/tangyh/lamp/oauth/controller/DemoSiteController.java",
+      "start": {
+        "line": 29,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST /anyTenant/registerTempAdmin takes an unauthenticated 'type' param and calls userInfoService.registerTempAdmin(type), which (UserInfoServiceImpl.java:104-119) generates and returns a 4-digit username and password pair and caches it, feeding directly into the admin-bypass login path in AbstractTokenGranter.login(). No authentication is required to call this endpoint.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-arbitrary-session-disclosure",
+      "path": "lamp-oauth/lamp-oauth-controller/src/main/java/top/tangyh/lamp/oauth/controller/RootController.java",
+      "start": {
+        "line": 102,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 106,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET /anyTenant/verify?token=... returns StpUtil.getTokenSessionByToken(token) \u2014 the full Sa-Token session object (employeeId, companyId, deptId, login id, etc.) for any token string supplied, with no authentication required and no check that the caller owns that token. Enables session data disclosure / session enumeration for anyone able to guess or observe a token value.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.cross-tenant-idor-tenant-filter-disabled",
+      "path": "lamp-base/lamp-base-biz/src/main/java/top/tangyh/lamp/base/mapper/BaseEmployeeTestMapper.java",
+      "start": {
+        "line": 27,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 36,
+        "offset": 0
+      },
+      "extra": {
+        "message": "@TenantLine(false) explicitly disables the framework's automatic tenant-scoping on this raw SQL select (select * from base_employee where id = #{id}), reachable via GET /baseEmployeeController/get?id=... (BaseEmployeeTestController.java:46-50, comment '\u4e0d\u4f1a\u62fc\u63a5' = 'will not be tenant-filtered'). Any authenticated caller can enumerate id and retrieve any employee record from any tenant, bypassing multi-tenant data isolation with no ownership check anywhere in the call chain.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.file-chunk-merge-arbitrary-write",
+      "path": "lamp-base/lamp-base-biz/src/main/java/top/tangyh/lamp/file/strategy/impl/local/LocalFileChunkStrategyImpl.java",
+      "start": {
+        "line": 71,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 74,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "merge() builds the output file path via `new java.io.File(Paths.get(path, fileName).toString())` where fileName derives from the attacker-controlled FileChunksMergeDTO.name/.ext fields (set in AbstractFileChunkStrategy.java:84, 'String filename = info.getName() + StrPool.DOT + info.getExt();') with no path-traversal sanitization applied (unlike FileServiceImpl.upload(), which does check for '../'). A value containing '../' in name/ext lets an authenticated caller of POST /chunk/merge write an arbitrary file outside the configured upload root.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.xxl-job-command-injection",
+      "path": "lamp-support/lamp-job-executor/src/main/java/com/xxl/job/executor/service/jobhandler/SampleXxlJob.java",
+      "start": {
+        "line": 78,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 85,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "commandJobHandler() takes the raw xxl-job GLUE/job parameter string (XxlJobHelper.getJobParam()) and passes it unvalidated into processBuilder.command(command), which is then executed via processBuilder.start(). Any principal able to create/trigger an xxl-job task bound to this handler on the admin console fully controls the executed command with no allow-listing, quoting, or sanitization.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.codegen-project-arbitrary-write",
+      "path": "lamp-generator/lamp-generator-biz/src/main/java/top/tangyh/lamp/generator/utils/ProjectUtils.java",
+      "start": {
+        "line": 164,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 187,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generator() builds modulePath via Paths.get(outputDir, service, module) where outputDir, and the serviceName/parent/projectPrefix/moduleName feeding 'service'/'module', come directly from the request body (ProjectGeneratorVO) with only @NotEmpty validation \u2014 no path/identifier sanitization. These values flow into file/directory creation (mkMaven, mkBasePackage) and later FileOutputStream writes, letting a caller of POST /defGenProject/generator (DefGenProjectController.java:75-81) write generated files to an arbitrary filesystem path via '..' segments or an absolute outputDir.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.codegen-table-arbitrary-write",
+      "path": "lamp-generator/lamp-generator-biz/src/main/java/top/tangyh/lamp/generator/service/impl/DefGenTableServiceImpl.java",
+      "start": {
+        "line": 688,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 708,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "writeFile constructs outputFile via OutputFileUtils.getOutputFile(...) using DefGenTable fields (outputDir, frontOutputDir, parent, moduleName, serviceName, entityName, etc., editable via DefGenTableUpdateVO with only @Size constraints, no traversal filtering) and writes attacker-templated content via new FileOutputStream(outputFile). Reached via POST /defGenTable/generatorCode -> generatorCode() (lines 566-595), gated only by a 'spring.profiles.active=dev' runtime check rather than path validation, letting an attacker who can edit a table's generation config write files to an arbitrary filesystem path.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.cors-reflected-origin-with-credentials",
+      "path": "lamp-gateway/lamp-gateway-server/src/main/java/top/tangyh/lamp/gateway/config/CorsConfiguration.java",
+      "start": {
+        "line": 63,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 69,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The gateway's global CORS WebFilter unconditionally echoes the caller-supplied Origin header back as Access-Control-Allow-Origin (line 63) and sets Access-Control-Allow-Credentials: true (line 68) with no origin allowlist or validation. Any external site can issue credentialed (cookie/token-bearing) cross-origin requests to every route behind this gateway and read the response, since browsers accept a reflected-origin + credentials combination.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.auth-failure-returns-200-ok",
+      "path": "lamp-gateway/lamp-gateway-server/src/main/java/top/tangyh/lamp/gateway/filter/AuthenticationSaInterceptor.java",
+      "start": {
+        "line": 176,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 184,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "On SaTokenException (thrown by StpUtil.checkLogin()/checkPermissionOr() when auth/permission checks fail), the response.setStatusCode(HttpStatus.BAD_REQUEST) call is commented out (line 182), so the reactive response commits with the WebFlux default 200 OK while the JSON body carries the error code. Any caller, proxy, or client logic that gates on HTTP status rather than parsing the body will treat a denied/unauthenticated request as successful.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authn.groovy-glue-script-blacklist-bypass",
+      "path": "lamp-base/lamp-base-biz/src/main/java/top/tangyh/lamp/msg/glue/GlueFactory.java",
+      "start": {
+        "line": 184,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 200,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "checkScriptSafety() is a substring/regex blacklist over Groovy source (DANGEROUS_TOKENS, DANGEROUS_CALL_PATTERNS). It is bypassable: Groovy allows whitespace around the '.' member-access operator, so 'Class . forName(...)' defeats both the literal token check for 'Class.forName' (the token scan only compresses whitespace, it never removes it, so 'Class . forName' never equals the substring 'Class.forName') and the regex `\\.forName\\s*\\(` (which requires the dot immediately followed by 'forName', with no whitespace tolerated between them). Any principal able to create/update a DefInterface (DefInterfaceController/DefInterfaceSaveVO, lamp-system) with execMode=script can supply a script that reaches reflection/process-execution primitives despite the filter; the script is loaded and instantiated via groovyClassLoader.parseClass()/clazz.getDeclaredConstructor().newInstance() in loadNewInstance() (lines 122-138) when the interface is invoked.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.hardcoded-actuator-password",
+      "path": "lamp-public/lamp-common-config/src/main/java/top/tangyh/lamp/common/config/ActuatorSecurityConfig.java",
+      "start": {
+        "line": 32,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 35,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The admin password for the Actuator management endpoints ('Secure@2025') is a compile-time literal in a shared config class, used identically across every deployment that reuses this bean. The inline comment ('\u751f\u4ea7\u73af\u5883\u907f\u514d\u786c\u7f16\u7801' / 'avoid hardcoding in production') shows the authors knew it was wrong but shipped it anyway. Anyone with source/jar access can authenticate as 'actuator-admin' against /actuator/**.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.sensitive-data-logging-args-results",
+      "path": "lamp-public/lamp-common-config/src/main/java/top/tangyh/lamp/common/aspect/LampLogAspect.java",
+      "start": {
+        "line": 43,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 59,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "This aspect's pointcut covers every method under top.tangyh.lamp.*.controller/service/biz and, via BaseLogAspect, logs full method arguments and return values at INFO level when systemProperties.getRecordLampArgs()/getRecordLampResult() are true. Although SystemProperties.recordLamp defaults to false in code (SystemProperties.java:57), the bean registration in CommonAutoConfiguration uses @ConditionalOnProperty(..., name = \"recordLamp\", havingValue = \"true\", matchIfMissing = true) \u2014 so if a deployment simply omits the recordLamp property from its config (rather than explicitly setting it false), the aspect is registered anyway, and recordLampArgs/recordLampResult default to true (SystemProperties.java:61,65). This logs every controller/service/biz call's arguments and return values \u2014 including login, password-reset, and profile-update payloads \u2014 in cleartext to application logs with no field masking.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.refresh-token-logged",
+      "path": "lamp-oauth/lamp-oauth-biz/src/main/java/top/tangyh/lamp/oauth/granter/RefreshTokenGranter.java",
+      "start": {
+        "line": 58,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 58,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "log.info(\"token={},obj={}\", refreshToken, obj) logs the raw bearer refresh token at INFO level. Anyone with log access can hijack a user's session using the logged refresh token.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.otp-code-logged",
+      "path": "lamp-oauth/lamp-oauth-biz/src/main/java/top/tangyh/lamp/oauth/service/impl/CaptchaServiceImpl.java",
+      "start": {
+        "line": 97,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 140,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "sendMobileByCode() logs the actual SMS/email verification code (log.info(format, cacheKey, code)) used by registration, mobile/email login, and forgot-password flows, at lines 97, 106, 129, and 140. Anyone with log access can bypass OTP-gated authentication flows by reading the code from logs instead of the intended SMS/email channel.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.qiniu-upload-token-logged",
+      "path": "lamp-base/lamp-base-biz/src/main/java/top/tangyh/lamp/file/strategy/impl/qiniu/QiNiuFileStrategyImpl.java",
+      "start": {
+        "line": 63,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 67,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "log.info(\"token={}\", token) logs the signed Qiniu upload token, which grants upload rights to the configured bucket for its expiry duration, in cleartext to application logs.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-file-download-by-id",
+      "path": "lamp-base/lamp-base-biz/src/main/java/top/tangyh/lamp/file/service/impl/FileServiceImpl.java",
+      "start": {
+        "line": 108,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 120,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "download() fetches File fileManager.getById(id) by raw numeric id with no check that the file belongs to the caller's tenant/org/user, exposed via GET /anyone/file/down?id=... and /anyone/file/download?ids=... (FileAnyoneController.java:82-106). The 'anyone' path prefix matches this codebase's convention for no-login endpoints, making this a potential unauthenticated, sequential-ID file-exfiltration primitive; even with auth it remains a cross-tenant IDOR since no ownership filter exists.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-visible-resource-by-employee-id",
+      "path": "lamp-oauth/lamp-oauth-controller/src/main/java/top/tangyh/lamp/oauth/controller/ResourceController.java",
+      "start": {
+        "line": 56,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 82,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET /anyone/visible/resource and GET /anyone/findVisibleResource accept an arbitrary employeeId request parameter and return that employee's role codes and visible menu/resource list with no check that it belongs to the authenticated caller.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.zip-slip-unzip",
+      "path": "lamp-base/lamp-base-biz/src/main/java/top/tangyh/lamp/file/utils/ZipUtils.java",
+      "start": {
+        "line": 126,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 160,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "unZipFiles() computes outPath as (descDir + zipEntryName) with no check that the resulting path stays within descDir (no rejection of '../' segments, no canonical-path containment check), then writes to it via new FileOutputStream(outPath) \u2014 classic Zip Slip allowing arbitrary file write from a malicious zip archive.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.jvm-system-properties-endpoint",
+      "path": "lamp-generator/lamp-generator-controller/src/main/java/top/tangyh/lamp/generator/controller/DefGenProjectController.java",
+      "start": {
+        "line": 60,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 63,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST /anno/getProperties returns the full JVM System.getProperties() (file paths, user.dir, java.class.path, OS/user info, etc.) to any caller. The '/anno/' path does not match this codebase's established no-login whitelist patterns (/anyone/**, /anyUser/**, /anyTenant/**), so this endpoint is likely gated only by whatever the gateway enforces, but no in-module authorization annotation protects it directly.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authn.client-supplied-identity-headers-trusted",
+      "path": "lamp-public/lamp-sa-token-ext/src/main/java/top/tangyh/lamp/satoken/interceptor/HeaderThreadLocalInterceptor.java",
+      "start": {
+        "line": 36,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 55,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The interceptor sets the thread-local security/identity context (userId, employeeId, companyId, deptId) directly from inbound HTTP headers (X-User-Id etc.) with no signature or origin verification in this class. It relies on the upstream gateway to have stripped/overwritten any client-supplied copies of these headers; if a downstream service is reachable directly (bypassing the gateway), a caller can set these headers to impersonate any user or tenant.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-290: Authentication Bypass by Spoofing"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authn.gateway-identity-header-not-stripped",
+      "path": "lamp-gateway/lamp-gateway-server/src/main/java/top/tangyh/lamp/gateway/filter/TokenContextFilter.java",
+      "start": {
+        "line": 105,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 168,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The filter mutates the inbound request to add trusted identity headers (USER_ID_HEADER, EMPLOYEE_ID_HEADER, CURRENT_COMPANY_ID_HEADER, etc.) via request.mutate().header(...), which is additive rather than a replace of any client-supplied header of the same name. No explicit removal of these header names from the original inbound request is performed first, so if a client sends the same header names directly, a downstream consumer using a single-value header accessor could in some cases receive the attacker-supplied value instead of the gateway-derived one.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-290: Authentication Bypass by Spoofing"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.weak-hardcoded-default-password",
+      "path": "lamp-public/lamp-common/src/main/java/top/tangyh/lamp/common/properties/SystemProperties.java",
+      "start": {
+        "line": 40,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "defPwd defaults to \"123456\", a top-of-list password-cracking dictionary entry, used platform-wide to provision new user accounts. Any account left on the default is trivially compromised.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-521: Weak Password Requirements"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.hardcoded-minio-default-credentials",
+      "path": "lamp-base/lamp-base-biz/src/main/java/top/tangyh/lamp/file/properties/FileServerProperties.java",
+      "start": {
+        "line": 245,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 250,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "MinIO accessKey/secretKey default to \"minioadmin\"/\"minioadmin\" \u2014 MinIO's well-known default admin credential pair \u2014 shipped as the in-source fallback if not overridden in application.yml.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.broken-ignore-path-matching-logic",
+      "path": "lamp-public/lamp-common/src/main/java/top/tangyh/lamp/common/properties/IgnoreProperties.java",
+      "start": {
+        "line": 170,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 181,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "isIgnore()'s loop over the merged method->paths map unconditionally returns after inspecting only the first Map.Entry encountered, so when the map contains more than one HTTP-method key, every entry after the first is never evaluated. The auth/tenant/login exemption decision thus depends on undocumented HashMap iteration order rather than the full configured rule set whenever a deployment configures more than one method key for anyone/anyUser/anyTenant.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.mybatis-string-substitution-sql",
+      "path": "lamp-base/lamp-base-biz/src/main/resources/mapper_base/ext/user/BaseEmployeeMapper.xml",
+      "start": {
+        "line": 58,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 64,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The query uses ${userId} string substitution instead of the safe #{userId} parameter binding. The bound Java parameter is statically typed Long (BaseEmployeeMapper.java:44), so standard call sites cannot inject SQL syntax through it today, but the pattern violates safe-coding practice and becomes exploitable if the signature is ever changed to accept a String.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -17,7 +17,7 @@ GT_DIR = Path(__file__).parent / "ground-truth"
 
 # --- Schema constants ---
 
-VALID_SEVERITIES = {"critical", "high", "medium", "low"}
+VALID_SEVERITIES = {"critical", "high", "medium", "low", "unrated"}
 VALID_CATEGORIES = {"injection", "xss", "auth", "data_exposure", "session_config", "other"}
 VALID_AUTHORSHIPS = {"human_authored", "llm_assisted", "llm_generated", "unknown"}
 VALID_CONFIDENCE = {"high", "medium", "low"}

@@ -339,12 +339,14 @@ SCANNER_PROVIDERS: dict[str, str] = {
 # the version label. HTML allowed.
 SCANNER_NOTES: dict[str, str] = {
     "kolega-devsec-max-v0.1.0": (
-        "<strong>Full 140-repository coverage.</strong> Hybrid deterministic + LLM-review "
-        "scan over the 66 Python and 74 TypeScript/JavaScript repositories. The Python "
+        "<strong>Full 203-repository preview coverage.</strong> Hybrid deterministic + LLM-review "
+        "scan over 66 Python, 74 TypeScript/JavaScript, and 63 Java repositories. The Python "
         "results are the V0.0.1 run published in 2.1.0 (unchanged; the scanner's Python "
         "path did not change between the two versions); the TS/JS results are the 3.0.0 "
-        "run. Cost is $17.73 in total at off-peak API rates: $3.17 for Python and $14.56 "
-        "for TS/JS. Ground truth was never supplied to the scanner."
+        "run. The provisional Java 50-detector run recorded $9.13 for the exact 12,641-alert "
+        "set shown here. Combined model/API-equivalent cost is $26.86: $3.17 for Python "
+        "(legacy hand-entered figure), $14.56 for TS/JS, and $9.13 for Java. This is an "
+        "estimate, not billed spend. Ground truth was never supplied to the scanner."
     ),
     "claude-opus-5-cc-agentic-v1": (
         "<strong>Claude Code harness; post-hoc v2 scoring.</strong> Claude Opus 5 "
@@ -435,11 +437,15 @@ SCANNER_NOTES: dict[str, str] = {
         "79.5 vs 74.7) and on a same-repo pilot the gap was starker still (F3 88.3 vs 57.1). Whatever "
         "the Daybreak instructions change, it changes scanning behavior substantially. OpenAI's "
         "official Daybreak pricing card lists this alias at the identical rate as gpt-5.6-sol "
-        "($4.00/$20.00 per 1M input/output, short context), which is what the cost figure here uses -- "
-        "computed from Codex's reported token usage, not billed spend, same convention as Sol. All 74 "
+        "($4.00/$20.00 per 1M input/output, short context), with cached-input and long-context "
+        "rates applied where recorded. The cost figure uses Codex's reported token usage, "
+        "not billed spend, following the same convention as Sol. All 74 "
         "TypeScript / JS repositories were scanned on 2026-09-04 with the TS/JS prompt (hash "
         '<span class="mono">sha256:45a1200d61e6</span>); all 66 Python repositories were scanned '
-        "on 2026-09-05 with the standard prompt. All 140 runs validated first time."
+        "on 2026-09-05 with the standard prompt. All 140 runs validated first time. "
+        "The 63 Java runs use the same rate-based convention; their saved Codex usage "
+        "metrics were restored from the original ctx272k campaign after matching every "
+        "finding path and line to the normalized dashboard copy."
     ),
     "deepseek-v4-pro-agentic-v1": (
         "<strong>Full coverage.</strong> The Python results are the 2.1.0 runs, "
@@ -553,7 +559,7 @@ def scanners_from_aggregates(
     """
     out = []
     languages = languages or {}
-    # total Python LOC of the whole corpus — used to price fixed-rate products per vuln
+    # Total measured LOC of the whole corpus — used to price fixed-rate products per vuln.
     _, _, _, _, corpus_loc = count_ground_truth(ROOT / "ground-truth")
     group_loc = language_group_loc(ROOT / "ground-truth")
     for slug, meta in SCANNER_META.items():
@@ -567,7 +573,7 @@ def scanners_from_aggregates(
         # off-peak rates is recorded here and priced against the GT LOC of the
         # languages the row covers, so each tab shows the rate for its own corpus.
         KOLEGA_SPEND = {
-            "kolega-devsec-max-v0.1.0": {"python": 3.17, "tsjs": 14.56},
+            "kolega-devsec-max-v0.1.0": {"python": 3.17, "tsjs": 14.56, "java": 9.1261},
         }
         COST_OVERRIDES = {
             "kolega-devsec-core-v0.0.1": 5.69,
@@ -581,13 +587,13 @@ def scanners_from_aggregates(
             COST_OVERRIDES[slug] = round(sum(spend[l] for l in langs) / loc_l * 100000, 2) if loc_l else 0
         if slug in COST_OVERRIDES:
             cost_val = COST_OVERRIDES[slug]
-            cost_est = False
+            cost_est = slug == "kolega-devsec-max-v0.1.0"
         elif cat == "rule" or cost_per_100k <= 0:
             cost_val = None
             cost_est = False
         else:
             # keep cents for cheap models so $0.52/100k LOC does not round to "Free"
-            cost_val = round(cost_per_100k) if cost_per_100k >= 10 else round(cost_per_100k, 2)
+            cost_val = round(cost_per_100k, 2)
             cost_est = bool((a.get("cost") or {}).get("estimated"))
         total_cost = a.get("cost", {}).get("total_cost", 0) or 0
         tp = micro.get("tp", 0) or 0
@@ -672,6 +678,7 @@ def scanners_from_aggregates(
                 "cpv": cpv_val,
                 # est: True when cost is a projection rather than metered (rendered as ~$X)
                 "est": cost_est,
+                "rate_priced": slug in {"deepseek-v4.1-flash-agentic-v1", "gpt-daybreak-blue-codex-cli"},
                 # run-to-run F2 stddev (shown under the score for multi-run scanners)
                 "sd": (
                     round1(a.get("f2_stddev", 0)) if a.get("num_runs", 1) > 1 else None
@@ -1077,6 +1084,7 @@ def emit_data_js(
         "cost",
         "cpv",
         "est",
+        "rate_priced",
         "sd",
         "langs",
         "full",
