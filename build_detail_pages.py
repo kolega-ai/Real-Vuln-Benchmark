@@ -112,7 +112,9 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict) -> str:
     repos_total = agg.get("repos_total", 26)
     has_metrics = bool(meta.get("has_metrics"))
     cost_est = bool(cost_d.get("estimated"))
-    if cat == "rule" or cost <= 0:
+    if cost_d.get("partial"):
+        cost_str = "—"
+    elif cat == "rule" or cost <= 0:
         cost_str = "Free"
     elif cost_est:
         cost_str = f"~${cost:,.0f} <span style=\"font-size:.5em;color:var(--fg-3)\">est.</span>"

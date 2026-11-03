@@ -1,0 +1,107 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.race-condition.toctou-balance-check",
+      "path": "src/ledger/ledgerwriter/src/main/java/anthos/samples/bankofanthos/ledgerwriter/LedgerWriterController.java",
+      "start": {
+        "line": 159,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 171,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The sender's balance is checked via a separate call to getAvailableBalance() (a network request to the balancereader service) and then, if sufficient, the transaction is written via transactionRepository.save() with no locking or atomic check-and-decrement between the two steps. Two concurrent requests submitted by the same user (e.g. replayed before the first is persisted and the cache/balance-reader is updated) can both read the same pre-transaction balance, both pass the `balance < transaction.getAmount()` check, and both be saved, allowing the account to be overdrawn beyond its actual balance. The duplicate-transaction cache keyed on client-supplied UUID (line 150) does not prevent this because two distinct transactions (different UUIDs) can target the same account concurrently.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-367: Time-of-check Time-of-use (TOCTOU) Race Condition",
+            "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.race-condition.toctou-balance-check",
+      "path": "src/ledgermonolith/src/main/java/anthos/samples/bankofanthos/ledgermonolith/LedgerMonolithController.java",
+      "start": {
+        "line": 256,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 267,
+        "col": 51,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Same check-then-act flaw as the microservice LedgerWriter: getAvailableBalance() reads the cached balance, the amount is compared against it, and only afterward is transactionRepository.save(transaction) executed \u2014 with no synchronization/locking between the read and the write. Concurrent requests against the same account can each pass the balance check before either is persisted, enabling an overdraft beyond the account's real balance.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-367: Time-of-check Time-of-use (TOCTOU) Race Condition",
+            "CWE-362: Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.info-exposure.exception-message-disclosure",
+      "path": "src/ledger/ledgerwriter/src/main/java/anthos/samples/bankofanthos/ledgerwriter/LedgerWriterController.java",
+      "start": {
+        "line": 192,
+        "col": 17,
+        "offset": 0
+      },
+      "end": {
+        "line": 193,
+        "col": 70,
+        "offset": 0
+      },
+      "extra": {
+        "message": "On ResourceAccessException, CannotCreateTransactionException, or HttpServerErrorException, the raw exception message (e.getMessage()) is returned directly in the HTTP response body to the client. These exceptions originate from the internal RestTemplate call to the balancereader service and from the datasource layer, and their messages commonly include internal hostnames/ports, connection details, or backend stack information, which are disclosed to any caller that can trigger the failure (e.g. by taking down or overloading a backend dependency).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.info-exposure.exception-message-disclosure",
+      "path": "src/ledgermonolith/src/main/java/anthos/samples/bankofanthos/ledgermonolith/LedgerMonolithController.java",
+      "start": {
+        "line": 288,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 289,
+        "col": 66,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Identical issue to the LedgerWriter microservice: the raw message of ResourceAccessException/CannotCreateTransactionException/HttpServerErrorException is returned verbatim to the HTTP client in the 500 response body, potentially disclosing internal datasource/service connection details to an unauthenticated or semi-trusted caller.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

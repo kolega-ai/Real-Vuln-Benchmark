@@ -169,7 +169,16 @@ def load_model_config(name: str) -> dict:
 LANGUAGES = {
     "python": {"files": "Python files", "template": "system-prompt.md"},
     "tsjs": {"files": "TypeScript and JavaScript files", "template": "system-prompt-tsjs.md"},
+    "java": {"files": "Java files", "template": "system-prompt-java.md"},
+    "kotlin": {"files": "Kotlin files", "template": "system-prompt-kotlin.md"},
 }
+
+
+def discover_language_repos(gt_dir: Path, language: str) -> list[str]:
+    """Discover only repositories declared in GT for the requested language."""
+    return [slug for slug in discover_repos(gt_dir)
+            if str(json.loads((gt_dir / slug / "ground-truth.json").read_text())
+                   .get("language", "")).lower() == language]
 
 
 def clone_or_find_repo(repo_slug: str, repos_dir: Path | None = None) -> Path | None:
@@ -290,6 +299,12 @@ def run_one_agentic(
             env=_opencode_env(),
         )
         raw_json_output = proc.stdout
+        trajectory_root = os.environ.get("RV_TRAJECTORY_DIR")
+        if trajectory_root:
+            trajectory_dir = Path(trajectory_root) / scanner_slug / repo_slug
+            trajectory_dir.mkdir(parents=True, exist_ok=True)
+            (trajectory_dir / f"run-{run_id}.jsonl").write_text(proc.stdout)
+            (trajectory_dir / f"run-{run_id}.stderr.txt").write_text(proc.stderr)
     except subprocess.TimeoutExpired:
         elapsed = time.time() - start
         logger.error("Timeout for %s run-%d after %.0fs", repo_slug, run_id, elapsed)
@@ -475,7 +490,9 @@ def main() -> int:
     pricing = model_config["pricing"]
 
     gt_dir = PROJECT_ROOT / "ground-truth"
-    if args.repos == ["all"]:
+    if args.repos == ["java"]:
+        repos = discover_language_repos(gt_dir, "java")
+    elif args.repos == ["all"]:
         repos = discover_repos(gt_dir)
     else:
         repos = args.repos

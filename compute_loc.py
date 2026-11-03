@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Repeatable LOC counter for benchmark repos (Python and TypeScript/JavaScript).
+"""Repeatable LOC counter for benchmark repos (Python, TypeScript/JavaScript, and JVM).
 
 LOC = non-blank, non-comment *code* lines (docstring-only lines excluded for
-Python), counting application code and skipping dependency/build/cache dirs.
+Python), counting production project source and skipping tests,
+dependency/build/cache dirs.
 The language is read from the repo's ground-truth.json. Files are read from the
 pinned commit (`commit_sha`) when repos/<repo> is a git checkout, so untracked
 local artifacts never inflate the count. This is the figure the dashboard sums
@@ -16,7 +17,11 @@ Usage:
     python compute_loc.py                       # print LOC for every repos/* dir
     python compute_loc.py vc-codex-...          # specific repo(s)
     python compute_loc.py --glob 'vc-*'         # repos matching a glob
-    python compute_loc.py --glob 'vc-*' --write # also write `loc` into each ground-truth.json
+    python compute_loc.py --glob 'vc-*' --write # write Java/JVM `loc` only
+    python compute_loc.py --repos-root /path/to/pinned/checkouts --write
+
+Legacy Python and TS/JS GT LOC values are intentionally frozen; --write updates
+Java/JVM GT only unless --write-non-java is explicitly supplied.
 """
 from __future__ import annotations
 
@@ -26,6 +31,7 @@ import json
 import re
 import subprocess
 import tokenize
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -38,9 +44,12 @@ SKIP_DIRS = {
     "__pycache__", "migrations", "dist", "build", ".tox", ".mypy_cache",
     ".pytest_cache", ".ruff_cache", "egg-info", "vendor", "third_party",
     ".next", ".nuxt", ".cache", ".angular", "coverage", ".turbo", "out",
+    ".react-router",
     "storybook-static", ".svelte-kit",
     # vendored front-end libraries checked into the tree
     "plugins", "bower_components", "jspm_packages",
+    # Tool bootstrap and precompiled JTE output, not repository source.
+    ".mvn", "jte-classes",
 }
 
 # language (GT `language`) -> source extensions counted
@@ -54,11 +63,15 @@ LANG_EXTS = {
     "python": (".py",),
     "typescript": (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue"),
     "javascript": (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue"),
-    "java": (".java",),
+    # The Java leaderboard also contains Kotlin/JVM applications.
+    "java": (".java", ".kt", ".kts"),
 }
 # generated / bundled artefacts that are not application code
 SKIP_SUFFIXES = (".min.js", ".min.mjs", ".d.ts", ".bundle.js", ".chunk.js")
 SKIP_NAMES = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml"}
+TEST_DIRS = {"test", "tests", "__tests__", "spec", "specs", "cypress",
+             "playwright", "__mocks__", "test-suite", "integration-tests",
+             "test-helpers"}
 # third-party libraries copied into a static/asset directory instead of installed
 ASSET_DIRS = {"public", "private", "static", "assets", "javascripts", "js", "lib", "libs", "vendor"}
 VENDORED_LIB_NAMES = {
@@ -136,8 +149,39 @@ def code_loc_text(src: str) -> int:
 
 def _wanted(rel: str, exts: tuple[str, ...]) -> bool:
     parts = rel.split("/")
-    if any(part in SKIP_DIRS or part.endswith(".egg-info") for part in parts[:-1]):
+    lower_parts = [part.lower() for part in parts]
+    if lower_parts[0] in {"docs", "attacker-app", "security_examples", "fineract-command-test"}:
         return False
+    production_root = next((i + 1 for i in range(len(lower_parts) - 1)
+                            if lower_parts[i:i + 2] == ["src", "main"]), None)
+    for i, part in enumerate(lower_parts[:-1]):
+        if part in TEST_DIRS and not (production_root is not None and i > production_root):
+            return False
+    if any(part in {"test", "tests", "it", "integrationtest", "testfixtures"}
+           for parent, part in zip(lower_parts, lower_parts[1:]) if parent == "src"):
+        return False
+    if lower_parts[0].startswith("fineract-e2e-tests") or lower_parts[:2] == ["framework", "testtools"]:
+        return False
+    name_lower = lower_parts[-1]
+    if (name_lower.startswith("test_") or name_lower.endswith("_test.py")
+            or name_lower == "conftest.py" or ".test." in name_lower
+            or ".spec." in name_lower or name_lower in {"test.js", "test.ts", "jest.config.js", "vitest.config.ts", "playwright.config.ts", "cypress.config.ts", "karma.conf.js"}):
+        return False
+    for i, part in enumerate(parts[:-1]):
+        if part == "env" and i > 0 and lower_parts[i - 1] in {"config", "configs"}:
+            # Application environment configuration, e.g. NodeGoat config/env.
+            continue
+        if part == "plugins" and i > 0 and lower_parts[i - 1] == "src":
+            # First-party source plugins, not bundled public/plugins assets.
+            continue
+        if part in {"vendor", "plugins"} and any(
+            source_root in parts[:i] for source_root in ("java", "kotlin")
+        ):
+            # Java package names can describe first-party business concepts,
+            # e.g. Broadleaf's common/vendor/service package.
+            continue
+        if part in SKIP_DIRS or part.endswith(".egg-info"):
+            return False
     name = parts[-1]
     if name in SKIP_NAMES or name.endswith(SKIP_SUFFIXES):
         return False
@@ -166,6 +210,20 @@ def repo_loc(repo_dir: Path, language: str = "python", commit: str | None = None
                 if blob.returncode != 0:
                     continue
                 total += loc_of_text(blob.stdout.decode("utf-8", errors="ignore"), Path(rel).suffix)
+            if total == 0 and "xvna.zip" in ls.stdout.splitlines():
+                # XVNA's pinned repository contains only the application ZIP.
+                blob = subprocess.run(
+                    ["git", "-C", str(repo_dir), "show", f"{commit}:xvna.zip"],
+                    capture_output=True,
+                )
+                if blob.returncode == 0:
+                    with zipfile.ZipFile(io.BytesIO(blob.stdout)) as archive:
+                        for name in archive.namelist():
+                            if _wanted(name, exts) and not name.endswith("/"):
+                                total += loc_of_text(
+                                    archive.read(name).decode("utf-8", errors="ignore"),
+                                    Path(name).suffix,
+                                )
             return total
     total = 0
     for p in repo_dir.rglob("*"):
@@ -195,15 +253,19 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("repos", nargs="*", help="specific repo names (default: all under repos/)")
     ap.add_argument("--glob", help="select repos by glob, e.g. 'vc-*'")
-    ap.add_argument("--write", action="store_true", help="write `loc` into each repo's ground-truth.json")
+    ap.add_argument("--repos-root", type=Path, default=REPOS,
+                    help="source checkout directory (default: benchmark repos/)")
+    ap.add_argument("--write", action="store_true", help="write Java/JVM `loc` into ground truth")
+    ap.add_argument("--write-non-java", action="store_true",
+                    help="also overwrite legacy Python and TS/JS GT LOC values")
     args = ap.parse_args()
 
     if args.repos:
-        repo_dirs = [REPOS / r for r in args.repos]
+        repo_dirs = [args.repos_root / r for r in args.repos]
     elif args.glob:
-        repo_dirs = sorted(REPOS.glob(args.glob))
+        repo_dirs = sorted(args.repos_root.glob(args.glob))
     else:
-        repo_dirs = sorted(d for d in REPOS.iterdir() if d.is_dir())
+        repo_dirs = sorted(d for d in args.repos_root.iterdir() if d.is_dir())
 
     total = 0
     written = 0
@@ -215,7 +277,7 @@ def main() -> None:
         loc = repo_loc(d, language, commit)
         total += loc
         note = ""
-        if args.write:
+        if args.write and (language.lower() == "java" or args.write_non_java):
             gt_path = GT / d.name / "ground-truth.json"
             if gt_path.exists():
                 gt = json.loads(gt_path.read_text())
@@ -225,6 +287,8 @@ def main() -> None:
                 note = "  -> wrote loc to ground-truth.json"
             else:
                 note = "  (no ground-truth.json; not written)"
+        elif args.write:
+            note = "  (legacy non-Java GT LOC preserved)"
         print(f"{d.name:52s} {loc:7d}{note}")
     print(f"\nTOTAL code LOC: {total:,} across {len(repo_dirs)} repos"
           + (f"  ({written} GT files updated)" if args.write else ""))

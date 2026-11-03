@@ -1,0 +1,183 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.authentication.hardcoded-jwt-secret",
+      "path": "ruoyi-admin/src/main/resources/application.yml",
+      "start": {
+        "line": 100,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 100,
+        "col": 50,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The JWT signing secret ('token.secret: abcdefghijklmnopqrstuvwxyz') is a hardcoded, weak, publicly-known default value shipped in the repo. It is loaded via @Value(\"${token.secret}\") in ruoyi-framework/src/main/java/com/ruoyi/framework/web/service/TokenService.java (fields at lines 42-43) and used to sign (lines 179-185, HS512) and verify (lines 193-199) every session token. Any deployment that does not override this value allows an attacker to forge arbitrary JWTs (including for the admin account) and fully bypass authentication.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.file.code-generator-path-traversal-write",
+      "path": "ruoyi-generator/src/main/java/com/ruoyi/generator/service/GenTableServiceImpl.java",
+      "start": {
+        "line": 252,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 286,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "generatorCode(tableName) writes a rendered Velocity template to a filesystem path built by getGenPath() (lines 555-563: genPath + File.separator + VelocityUtils.getFileName(...)) and VelocityUtils.getFileName() (ruoyi-generator/.../util/VelocityUtils.java lines 199-277), which concatenates the table's packageName/moduleName/businessName/className fields with zero validation against '../' or absolute-path sequences. These fields (and genPath itself) are fully attacker-controlled via PUT /tool/gen (GenController.editSave -> validateEdit, which only checks tree/sub-table fields, never packageName/moduleName/businessName/genPath). When gen.allowOverwrite is enabled (generator.yml), GET /tool/gen/genCode/{tableName} (requires only 'tool:gen:code' permission, not admin) lets an authenticated low-privilege user write arbitrary content to an arbitrary file path on the server, e.g. by setting genPath=\"/some/absolute/path\" or packageName=\"../../../../etc\".",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.file.code-generator-zip-slip",
+      "path": "ruoyi-generator/src/main/java/com/ruoyi/generator/service/GenTableServiceImpl.java",
+      "start": {
+        "line": 419,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 432,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "writeToZip() creates ZIP entries using `new ZipEntry(fileName)` where fileName comes directly from VelocityUtils.getFileName(template, table) (ruoyi-generator/.../util/VelocityUtils.java lines 199-277), built from the unsanitized, user-settable packageName/moduleName/businessName fields of GenTable. This is reachable unauthenticated of any 'allowOverwrite' gate via GET /tool/gen/download/{tableName} and /tool/gen/batchGenCode (only 'tool:gen:code' permission required). An attacker who controls those fields can craft ZIP entry names containing '../' sequences (zip-slip), so that extracting the generated archive with a naive unzip tool overwrites files outside the intended output directory on whichever machine extracts it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xss.stored-xss-notice-content",
+      "path": "ruoyi-system/src/main/java/com/ruoyi/system/domain/SysNotice.java",
+      "start": {
+        "line": 72,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 80,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The noticeContent field (rich-text announcement body, set/read via setNoticeContent/getNoticeContent) has no @Xss validation or any sanitization, unlike noticeTitle which is protected by @Xss (line 54, 'noticeTitle' getter). In addition, the application's global XSS filter deliberately excludes this exact endpoint: ruoyi-admin/src/main/resources/application.yml line 145 sets `xss.excludes: /system/notice`, so POST/PUT /system/notice (SysNoticeController.add/edit) bypass XssHttpServletRequestWrapper entirely for this path. Any authenticated user holding the 'system:notice:add' or 'system:notice:edit' permission can therefore store arbitrary HTML/JavaScript in noticeContent, which is later displayed to every user who views the notice list/detail (e.g. GET /system/notice/listTop), resulting in persistent stored XSS against all users including admins.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.druid-console-weak-credentials",
+      "path": "ruoyi-admin/src/main/resources/application-druid.yml",
+      "start": {
+        "line": 47,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 51,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The Druid StatViewServlet monitoring console (enabled, url-pattern /druid/*) has an empty IP allow-list (line 47, which per the adjacent comment means 'allow access from any IP') and hardcoded, weak default login credentials login-username: ruoyi / login-password: 123456 (lines 50-51). Spring Security also explicitly permits all unauthenticated access to /druid/** (ruoyi-framework/src/main/java/com/ruoyi/framework/config/SecurityConfig.java line 106). Any remote attacker who guesses or finds these well-known default credentials gets full access to the SQL monitoring console, exposing executed SQL statements, bind parameters, data source URLs, and connection pool internals.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-16: Configuration"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.secrets.hardcoded-database-credentials",
+      "path": "ruoyi-admin/src/main/resources/application-druid.yml",
+      "start": {
+        "line": 10,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The primary MySQL datasource credentials (username: root, password: password) are hardcoded in plaintext in the shipped configuration file, disclosing a production-capable root database credential to anyone with source access.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-259: Use of Hard-coded Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.cors-wildcard-all-origins",
+      "path": "ruoyi-framework/src/main/java/com/ruoyi/framework/config/ResourcesConfig.java",
+      "start": {
+        "line": 54,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 71,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The global CorsFilter bean allows any origin (addAllowedOriginPattern(\"*\")), any header, and any method, mapped to all paths (source.registerCorsConfiguration(\"/**\", config)). This removes same-origin protection for every endpoint in the application, letting any third-party website issue cross-origin requests against the API.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

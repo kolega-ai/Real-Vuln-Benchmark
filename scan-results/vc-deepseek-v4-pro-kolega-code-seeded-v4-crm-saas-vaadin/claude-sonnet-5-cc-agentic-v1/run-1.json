@@ -1,0 +1,991 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.authn.jwt-signature-not-verified",
+      "path": "channel/src/main/java/com/crmops/channel/web/ShareLinkController.java",
+      "start": {
+        "line": 33,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 35,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The shared-document grant JWT is read with JWT.decode(grant), which only parses the token and never verifies its HMAC signature (no JWTVerifier/require(Algorithm...).build().verify(...) is ever called, anywhere in this class or DocumentService). The 'org' claim is trusted straight out of the unverified token and passed to documentService.openShared(id, orgId), which (DocumentService.java:310-323) only checks doc.getOrg().getId().equals(orgId) \u2014 trivially satisfied by a self-forged claim \u2014 and does not re-run DocumentAccessService visibility checks. Anyone can craft an arbitrary unsigned/garbage-signed JWT with any 'org' claim and any small sequential document id to download any organization's documents, including INTERNAL/BILLING_ONLY ones, via GET /api/share/documents/{id}?grant=...",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.hardcoded-aes-key-and-iv",
+      "path": "channel/src/main/java/com/crmops/channel/service/SharedLinkCodec.java",
+      "start": {
+        "line": 25,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "AES/CBC/PKCS5Padding is initialized with a hardcoded, deployment-fixed 16-byte key (\"Crm0psSharedL1nk\") and a hardcoded, fixed IV (\"Crm0psSharingIv0\"), both compiled into source rather than configured per-environment. Anyone with access to the jar/source can decrypt, or forge, arbitrary Spec(report, orgId) payloads offline and use them against GET /api/export/shared/{pack} (ExportController.java:70-91) and POST /api/rebates/preview (RebateClaimController.java:36-52) to access any report or rebate claim without ever having been issued a legitimate link. The reused fixed IV also breaks CBC confidentiality (identical plaintext prefixes produce identical ciphertext prefixes), and there is no MAC/AEAD for integrity.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-321: Use of Hard-coded Cryptographic Key",
+            "CWE-329: Not Using a Random IV with CBC Mode"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.sql-injection-native-query",
+      "path": "channel/src/main/java/com/crmops/channel/service/ImportExportService.java",
+      "start": {
+        "line": 238,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 241,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Each email value parsed from an uploaded CSV (`refs`) is wrapped in quotes and concatenated directly into a native SQL IN (...) list, which is itself concatenated with the orgId into a full SQL string run via entityManager.createNativeQuery(sql). A crafted email value like `x') UNION SELECT username, password_hash FROM user_accounts-- ` breaks out of the string literal and injects arbitrary SQL. This is reachable by any customer API-key holder with CONTACT_READ via POST /api/v1/contacts/match -> ApiV1Controller.matchContacts (ApiV1Controller.java:261-267) -> ImportExportService.matchContacts.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.xstream-unsafe-fromxml",
+      "path": "channel/src/main/java/com/crmops/channel/web/ApiV1Controller.java",
+      "start": {
+        "line": 297,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 297,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "new XStream().fromXML(view) deserializes a raw, attacker-controlled query-string parameter with no setupDefaultSecurity()/allow-list configured. The project depends on xstream 1.4.11.1, a version with known public RCE gadget-chain CVEs when used unguarded. Any API-key holder can submit a crafted XML payload via GET /api/v1/documents/saved?view=... to instantiate arbitrary classes on the classpath, leading to remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.objectinputstream-unsafe-readobject",
+      "path": "channel/src/main/java/com/crmops/channel/web/ApiV1Controller.java",
+      "start": {
+        "line": 245,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 246,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The X-CrmOps-Queue HTTP header is base64-decoded and passed directly to new ObjectInputStream(...).readObject() with no ObjectInputFilter/allow-list. ObjectInputStream deserializes the full class graph in the stream before the later `(EscQueue) cast` occurs, so any Serializable gadget chain reachable from the classpath can be triggered during deserialization. Reachable by any API-key holder via GET /api/v1/escalations/queue-view, leading to remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.os-command-injection-processbuilder",
+      "path": "channel/src/main/java/com/crmops/channel/web/ExportController.java",
+      "start": {
+        "line": 102,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 105,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "request.paper() and request.sourceUrl() come straight from the JSON request body and are concatenated with zero validation into a single command string executed via `new ProcessBuilder(\"cmd\", \"/c\", \"wkhtmltopdf --page-size \" + request.paper() + \" \" + request.sourceUrl() + \" \" + output)`, which `cmd /c` interprets through a shell. A value such as `http://x & calc.exe & echo` in sourceUrl injects arbitrary OS commands. No authorization check gates this endpoint beyond generic session authentication, so any logged-in user of any role can reach POST /api/export/{report}/pdf. This is also an independent SSRF vector since wkhtmltopdf itself fetches sourceUrl.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.spel-expression-injection",
+      "path": "channel/src/main/java/com/crmops/channel/service/RuleExpressionService.java",
+      "start": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A StandardEvaluationContext (full SpEL, not SimpleEvaluationContext) evaluates `expression` taken verbatim from the request body/param with no sanitization. SpEL on StandardEvaluationContext permits arbitrary code execution, e.g. `T(java.lang.Runtime).getRuntime().exec('...')`. Reachable via POST /api/export/score/preview (ExportController.java:127-132, `formula` request param), with no authorization check in the controller \u2014 any session-authenticated user can trigger remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.mvel-expression-injection",
+      "path": "channel/src/main/java/com/crmops/channel/service/ScoringFormulaService.java",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 18,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "MVEL.executeExpression(MVEL.compileExpression(formula), variables) evaluates an unsandboxed, attacker-controlled formula string with full MVEL semantics, allowing arbitrary static method/constructor invocation (e.g. `new java.lang.ProcessBuilder({'/bin/sh','-c','id'}).start()`). Reachable via POST /api/export/score/formula (ExportController.java:138-143, `request.formula()`), with no authorization check in the controller \u2014 remote code execution for any session-authenticated user.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.ldap-injection",
+      "path": "channel/src/main/java/com/crmops/channel/service/StaffDirectoryService.java",
+      "start": {
+        "line": 40,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`account` (from GET /api/staff/directory?account=...) is concatenated unescaped into the LDAP filter `\"(&(objectClass=person)(sAMAccountName=\" + account + \"))\"`. An attacker can inject LDAP filter metacharacters (e.g. `*)(|(objectClass=*`) to broaden the search or alter query logic. Neither StaffDirectoryController.find() nor the service performs any role/authorization check, so any authenticated session can query the internal corporate directory.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.ldap-injection-mailbox",
+      "path": "channel/src/main/java/com/crmops/channel/service/StaffDirectoryService.java",
+      "start": {
+        "line": 61,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 61,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Same unescaped-concatenation LDAP injection pattern as resolveStaffMail's filter `\"(&(objectClass=person)(mail=\" + mailbox + \"))\"`, where `mailbox` comes directly from the request body of POST /api/staff/directory/mail (StaffDirectoryController.java:38-41) with no authorization check on the controller.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xxe.sax-parser-no-hardening",
+      "path": "channel/src/main/java/com/crmops/channel/service/ImportExportService.java",
+      "start": {
+        "line": 131,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 132,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importContactsXml() parses a fully user/partner-supplied XML upload with a default SAXParserFactory.newInstance() \u2014 no disallow-doctype-decl, no external-general-entities/external-parameter-entities disabling, no FEATURE_SECURE_PROCESSING. Default JVM SAX parsers resolve external entities and DOCTYPEs unless explicitly hardened, so a crafted <!DOCTYPE>/<!ENTITY> in the uploaded XML can cause local file disclosure, SSRF via external entity fetch, or billion-laughs DoS.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authz.credential-reenrollment-takeover",
+      "path": "channel/src/main/java/com/crmops/channel/service/DeskSignonService.java",
+      "start": {
+        "line": 32,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 41,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "enroll() unconditionally overwrites the verifier for any operator name supplied by the caller \u2014 `repo.findByOperatorIgnoreCase(operator).orElseGet(...)` means an EXISTING operator's credential is silently reset with no proof of prior ownership and no role/authorization check anywhere in the call chain (DeskSignonController.enroll, lines 25-30, only requires generic session authentication). Any authenticated user (any role) can hijack any desk operator identity by re-enrolling it with a known passphrase, then sign on as that operator via the fully public POST /api/desk/signon endpoint (SecurityConfig.java:54, permitAll()).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-620: Unverified Password Change"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.webhook-probe-endpoint",
+      "path": "channel/src/main/java/com/crmops/channel/service/WebhookService.java",
+      "start": {
+        "line": 154,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 177,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "probeEndpoint(endpoint) issues a live HTTP POST to a caller-supplied URL (`validate()`, lines 244-257, only checks for an http(s) prefix \u2014 no blocklist for loopback/link-local 169.254.169.254/RFC1918 ranges or internal hostnames) and returns up to 200 characters of the response body back to the caller. This is a direct SSRF read-oracle reachable with the WEBHOOK_TEST permission, usable to probe/read from internal services, admin panels, or the cloud metadata endpoint.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.webhook-delivery-attempt",
+      "path": "channel/src/main/java/com/crmops/channel/service/WebhookService.java",
+      "start": {
+        "line": 205,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 213,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "attempt() sends a live HTTP request (including the HMAC signing secret in the X-Crmops-Signature header) to config.getUrl(), a tenant-configurable URL validated only for an http(s) scheme prefix (validate(), lines 244-257) with no internal/loopback/link-local address restriction. A tenant admin with WEBHOOK_MANAGE can point the config at an internal service to both probe it and leak the webhook HMAC secret to it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.webhook-batch-delivery-job",
+      "path": "batch/src/main/java/com/crmops/batch/job/WebhookDeliveryJob.java",
+      "start": {
+        "line": 69,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 79,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The batch delivery worker performs an outbound HTTP POST to config.getUrl() (a tenant-set WebhookConfig field) with no validation against internal/loopback/link-local/metadata addresses, and reflects up to 400 characters of the response body into WebhookDelivery.responseSummary (lines 80-83), creating a persisted SSRF response-exfiltration channel for any tenant able to configure a webhook URL.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.document-import-from-link",
+      "path": "channel/src/main/java/com/crmops/channel/service/DocumentService.java",
+      "start": {
+        "line": 137,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 149,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importFromLink() fetches an arbitrary caller-supplied assetUrl (validated only for an http(s) prefix, no internal-address blocklist) via RestClient and stores the response body/content-type as a document, which can later be downloaded \u2014 allowing SSRF-based exfiltration of internal HTTP responses (e.g. metadata endpoints, internal admin pages returning an allow-listed content-type) disguised as an uploaded document.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.cors-wildcard-with-credentials",
+      "path": "channel/src/main/java/com/crmops/channel/config/CorsConfig.java",
+      "start": {
+        "line": 22,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "config.setAllowedOriginPatterns(List.of(\"*\")) combined with config.setAllowCredentials(true) causes Spring to reflect any Origin header and permit credentialed cross-origin requests, applied to /api/export/** and /api/reference/**. These same paths are also CSRF-exempt (SecurityConfig.java:61) and session-cookie authenticated. A malicious webpage can do `fetch('https://victim/api/export/integrations', {credentials:'include'})` from any origin while a staff member's session is live and read the response cross-origin, exfiltrating exported CSVs (including the webhook secret leaked by ReportService.integrationsReport, see related finding).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-346: Origin Validation Error"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.webhook-secret-in-csv-export",
+      "path": "channel/src/main/java/com/crmops/channel/service/ReportService.java",
+      "start": {
+        "line": 174,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 175,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "integrationsReport() writes config.getSecret() (the raw webhook HMAC signing secret) directly into the exported integrations.csv row, contradicting WebhookService's own documented guarantee that the secret is \"masked in every UI and never returned after creation\" (WebhookService.java:46). This export only requires the generic EXPORT_RUN permission (not WEBHOOK_MANAGE or org-scoped), and \u2014 combined with the CORS+CSRF gap on /api/export/** (see related finding) \u2014 the secret is remotely exfiltratable cross-origin by any site while a staff session is active.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information",
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xss.vaadin-innerhtml-stored-xss",
+      "path": "channel/src/main/java/com/crmops/channel/ui/EscalationDetailView.java",
+      "start": {
+        "line": 279,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 279,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`summary.getElement().setProperty(\"innerHTML\", view.description())` injects the escalation's free-text description as raw HTML with no sanitization/escaping. The description is attacker-controlled: it is supplied by any role creating an escalation (including CUSTOMER_CONTACT via PortalRequestsView or the public API's POST /api/v1/escalations) and is persisted verbatim by EscalationService.create. A payload like `<img src=x onerror=...>` executes in the browser session of every subsequent viewer of this escalation, including SUPPORT_AGENT, ACCOUNT_MANAGER, and PLATFORM_ADMIN \u2014 a stored XSS crossing privilege boundaries.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xss.reflected-user-agent-and-path",
+      "path": "channel/src/main/java/com/crmops/channel/web/ExportController.java",
+      "start": {
+        "line": 122,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 123,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Both the `report` path variable and the raw `User-Agent` request header are concatenated unescaped into an HTML response written with response.getWriter().write(...) under Content-Type text/html. An attacker-controlled User-Agent such as `<script>...</script>` (trivial to set with any HTTP client) executes in the victim's authenticated session when they view GET /api/export/{report}/ready.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.hardcoded-admin-credentials-on-login-page",
+      "path": "channel/src/main/java/com/crmops/channel/ui/LoginView.java",
+      "start": {
+        "line": 97,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 106,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The fully public, @AnonymousAllowed login page (line 28) renders working username/password pairs for every role in plaintext, including the full platform-administrator account (\"admin \u00b7 Admin!Crmops2026 \u2014 platform admin\"). Any unauthenticated visitor to /login can read these and immediately sign in with full platform-admin privileges.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authn.password-reset-token-disclosed-and-enumeration",
+      "path": "channel/src/main/java/com/crmops/channel/ui/ForgotPasswordView.java",
+      "start": {
+        "line": 62,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 72,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "PasswordResetService.requestReset(email) returns the fully usable, plaintext reset link, which this view displays directly to whoever submitted the form (secretLink.setText(link)) rather than only emailing it \u2014 so anyone who knows or guesses a victim's email (staff or admin included) can self-service obtain the victim's password-reset link and take over the account without ever touching the victim's mailbox. The class's own Javadoc claims anti-enumeration, but the else-branch at line 66 shows an explicit \"No CrmOps account is registered for {email}\" message when the account doesn't exist, directly contradicting that claim and enabling account enumeration by email.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-640: Weak Password Recovery Mechanism",
+            "CWE-204: Observable Response Discrepancy"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authz.idor-org-workspace-enumeration",
+      "path": "channel/src/main/java/com/crmops/channel/web/PortalWorkspaceController.java",
+      "start": {
+        "line": 37,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 45,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "enter(orgId) never calls any CrmAuthorization/org-scope check before minting a workspace cookie bound to the supplied orgId \u2014 only SecurityUtils.requireUser() (any authenticated principal) is required. Combined with current() (lines 48-57), which discloses the organization's name from whatever orgId is embedded in the cookie with no ownership check either, any authenticated user can enumerate organization names across the entire id space by calling /api/portal/workspace/{orgId}/enter for sequential ids.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.xpath-injection-plans-feed",
+      "path": "channel/src/main/java/com/crmops/channel/web/ReferenceDataController.java",
+      "start": {
+        "line": 80,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 83,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The X-Crmops-Plan request header (`code`) is concatenated unescaped into an XPath expression `\"//plan[code='\" + code + \"']\"` evaluated against plans.xml. A value like `'] | //* | //plan[code='` alters the query to pull unintended nodes from the document, demonstrating unsafe dynamic XPath construction from user input.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.xpath-injection-plans-find",
+      "path": "channel/src/main/java/com/crmops/channel/web/ReferenceDataController.java",
+      "start": {
+        "line": 96,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 96,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The `code` query parameter from GET /api/reference/plans/find is concatenated unescaped into `catalog.selectNodes(\"//plan[code='\" + code + \"']\")`, the same unsafe dynamic-XPath pattern as plansFeed, letting an attacker alter query logic via XPath metacharacters in `code`.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.weak-hash-md5-credential-verifier",
+      "path": "channel/src/main/java/com/crmops/channel/service/DeskSignonService.java",
+      "start": {
+        "line": 76,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 87,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Desk operator passphrases are hashed with unsalted, unstretched MD5 (used as the stored `verifier`), unlike normal user passwords which use BCrypt (SecurityConfig.java:35-37) and password-reset tokens which use SHA-256 of 256-bit random values. If the desk_credentials table is ever exposed, these verifiers are trivially brute-forced or rainbow-tabled.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+            "CWE-759: Use of a One-Way Hash without a Salt"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.parameter-injection-desk-bridge-handoff",
+      "path": "channel/src/main/java/com/crmops/channel/service/DeskSignonService.java",
+      "start": {
+        "line": 57,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 62,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "operator and passphrase (from POST /api/desk/handoff request params) are concatenated unescaped into an x-www-form-urlencoded body `\"operator=\" + operator + \"&deskPass=\" + passphrase` with no URL-encoding. A value containing `&` lets an attacker smuggle additional form fields (e.g. `passphrase=x&admin=true`) into the request sent to the internal desk-bridge service at http://desk-bridge.crmops.local, over plaintext HTTP.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-88: Argument Injection"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authz.cross-tenant-webhook-receipt-disclosure",
+      "path": "core-mock/src/main/java/com/crmops/coremock/web/CoreMockController.java",
+      "start": {
+        "line": 83,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 89,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET /mock/webhook-sink/{tenant} is permitAll() (core-mock SecurityConfig.java:22, `/mock/**`) and returns the last 20 webhook receipts (event types, payload digests, timestamps) for whatever `tenant` path value is supplied, with zero authentication or ownership check binding the caller to that tenant. Any caller can enumerate/disclose webhook delivery metadata for any tenant string.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization",
+            "CWE-284: Improper Access Control"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.actuator-fully-exposed-unauthenticated",
+      "path": "channel/src/main/resources/application.yml",
+      "start": {
+        "line": 38,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 39,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "management.endpoints.web.exposure.include is set to \"*\", exposing every Spring Boot Actuator endpoint (/actuator/env, /actuator/heapdump, /actuator/beans, /actuator/mappings, /actuator/threaddump, etc.), and channel/src/main/java/com/crmops/channel/config/SecurityConfig.java:52 explicitly permitAll()s `/actuator/**` for the whole app. /actuator/env can surface resolved values of CHANNEL_DB_PASSWORD, CHANNEL_SERVICE_TOKEN, CORE_SERVICE_KEY and SHARE_SIGNING_KEY; /actuator/heapdump can leak live session tokens and PII in memory \u2014 all reachable by any unauthenticated network caller.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration",
+            "CWE-200: Exposure of Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.clickjacking-frame-options-disabled",
+      "path": "channel/src/main/java/com/crmops/channel/config/SecurityConfig.java",
+      "start": {
+        "line": 70,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 70,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`http.headers(headers -> headers.frameOptions(frame -> frame.disable()))` disables X-Frame-Options/frame-ancestors protection for the ENTIRE application (not scoped to a specific embeddable sub-path), including the login form and all authenticated screens, enabling clickjacking/UI-redress attacks from any third-party site.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendered UI Layers or Frames"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.internal-staff-directory-leaked-to-customers",
+      "path": "channel/src/main/java/com/crmops/channel/ui/EscalationDetailView.java",
+      "start": {
+        "line": 213,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 221,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The \"Pull someone into the thread\" ComboBox is built unconditionally (not gated by `if (staff)` like the internal-note TextArea a few lines above), so it is visible to CUSTOMER_CONTACT users too. It populates from userService.threadParticipants(), exposing internal staff display names and email addresses to customer-portal users, contradicting the documented staff/customer separation enforced everywhere else in this same view.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.webhook-secret-plaintext-storage",
+      "path": "channel/src/main/java/com/crmops/channel/domain/WebhookConfig.java",
+      "start": {
+        "line": 44,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 44,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The webhook HMAC signing secret is persisted as a plain String column with no encryption-at-rest, unlike ApiKey.keyHash, InviteToken.tokenHash and PasswordResetToken.tokenHash in the same package, which all store only a hash. Anyone with direct DB access or a backup can read every tenant's webhook signing secret in cleartext and forge spoofed webhook deliveries to customer endpoints.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.hardcoded-secrets.batch-application-yml",
+      "path": "batch/src/main/resources/application.yml",
+      "start": {
+        "line": 31,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`batch-admin-token: ${BATCH_ADMIN_TOKEN:dev-batch-admin-token-not-for-prod}` is the sole value BatchAdminTokenFilter (batch/src/main/java/com/crmops/batch/web/BatchAdminTokenFilter.java:31-33) compares against to guard every POST /api/jobs/{job}/run endpoint, which SecurityConfig.java:21 explicitly permitAll()s in reliance on this filter. If BATCH_ADMIN_TOKEN is not set in a given deployment, this published literal default becomes a valid admin credential letting anyone trigger arbitrary batch jobs.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.hardcoded-secrets.core-mock-application-yml",
+      "path": "core-mock/src/main/resources/application.yml",
+      "start": {
+        "line": 32,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`core-service-key` and `scope-token-secret` default to published literals (`dev-core-service-key-not-for-prod`, `dev-core-token-secret-0000000000000000`) that are the sole trust anchors for CoreServiceKeyFilter and ScopeTokenFilter's HMAC verification. The same `scope-token-secret` default string is also duplicated as decision's `core-token-secret` default (decision/src/main/resources/application.yml:34), so if either service is deployed without its env override, an attacker who reads this public default can forge valid scope tokens for cross-service access.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.hardcoded-secrets.decision-application-yml",
+      "path": "decision/src/main/resources/application.yml",
+      "start": {
+        "line": 33,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 35,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "channel-service-token, core-token-secret and session-token-secret all default to published literal values that are the sole trust anchors for ServiceTokenFilter and SessionTokenFilter. If deployed without the env overrides, an attacker who reads this source can mint valid service/session tokens for cross-service access and account impersonation.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.hardcoded-secrets.channel-share-signing-key",
+      "path": "channel/src/main/resources/application.yml",
+      "start": {
+        "line": 54,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 54,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "`share-signing-key: ${SHARE_SIGNING_KEY:dev-share-signing-key-not-for-prod}` is the HMAC key DocumentService.mintShareGrant uses to sign document-share JWTs. If deployed without the env override, this published default lets anyone forge valid, signed share grants for any document in any organization (note: ShareLinkController never even checks this signature today \u2014 see related finding \u2014 but fixing that bypass alone would still leave this hardcoded default exploitable).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.hardcoded-secrets.llm-router-api-key",
+      "path": "channel/src/main/java/com/crmops/channel/web/SupportInsightController.java",
+      "start": {
+        "line": 27,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "ROUTER_KEY is a hardcoded bearer token for the internal model-router service, committed in source. It is also concatenated into the LLM system prompt at line 52 (\"Desk router key: \" + ROUTER_KEY) and sent as the request's own Authorization header at line 58, exposing the secret to the model's input/output surface where it could leak back out via a crafted or logged response.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.logging.log-forging-unsanitized-header",
+      "path": "channel/src/main/java/com/crmops/channel/security/ApiKeyAuthenticationFilter.java",
+      "start": {
+        "line": 61,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 62,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The raw User-Agent header and request URI are concatenated directly into a log message with no CRLF/control-character stripping. An attacker can embed newlines in User-Agent to inject fake log lines, confusing log-based alerting or audit review.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-117: Improper Output Neutralization for Logs"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.csv-formula-injection-error-export",
+      "path": "channel/src/main/java/com/crmops/channel/ui/ImportExportView.java",
+      "start": {
+        "line": 334,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 338,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "errorCsv() only escapes double-quote characters in the exception message before writing it into a CSV cell; it does not neutralize leading `=`, `+`, `-` or `@` characters. If an exception message echoes attacker-influenced input (e.g. a validation error referencing an imported field value) and the resulting CSV is later opened in Excel/Sheets, a formula payload could execute in the context of whoever opens the file.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1236: Improper Neutralization of Formula Elements in a CSV File"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

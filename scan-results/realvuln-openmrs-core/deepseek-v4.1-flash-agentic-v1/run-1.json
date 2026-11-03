@@ -1,0 +1,206 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.injection.sql-injection",
+      "path": "web/src/main/java/org/openmrs/web/filter/initialization/InitializationFilter.java",
+      "start": {
+        "line": 1225,
+        "col": 4,
+        "offset": 48200
+      },
+      "end": {
+        "line": 1233,
+        "col": 48,
+        "offset": 48600
+      },
+      "extra": {
+        "message": "The database setup wizard builds SQL by string substitution: each user-controlled argument (database name, database username, generated/attacker-supplied password) is inserted into the statement with replacedSql.replaceFirst(\"\\\\?\", arg) and only semicolons are stripped (arg.replace(\";\", \"&#094\")). The resulting string is executed with connection.createStatement().executeUpdate(replacedSql). Sources are request parameters read in doPost (e.g. openmrs_new_database_name at line 618, create_database_username at line 622) or derived from them (connectionUsername at 1464). Quote/backtick payloads allow breaking out of the quoted/backticked SQL context (e.g. create database `?`, create user '?'@...), causing SQL injection.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xss.reflected-xss",
+      "path": "web/src/main/resources/org/openmrs/web/filter/initialization/databasesetup.vm",
+      "start": {
+        "line": 18,
+        "col": 32,
+        "offset": 834
+      },
+      "end": {
+        "line": 18,
+        "col": 58,
+        "offset": 860
+      },
+      "extra": {
+        "message": "Setup-wizard request parameters are written into the Velocity model unescaped and rendered directly into HTML attributes. InitializationFilter.java reads attacker-controlled values such as httpRequest.getParameter(\"database_connection\") (line 589) and httpRequest.getParameter(\"openmrs_new_database_name\") (line 618) into wizardModel, and this template emits them as value=\"${databaseConnection}\" with no HTML escaping (EscapeTool/esc is not configured in velocity.properties). A value like \"><script>alert(document.cookie)</script> is reflected back and executed, giving reflected XSS on the pre-authentication setup pages. Same pattern in remotedetails.vm:17 (${remoteUrl}), databasesetup.vm:54/78/89, implementationsetup.vm and others.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.server-side-request-forgery",
+      "path": "web/src/main/java/org/openmrs/web/filter/initialization/TestInstallUtil.java",
+      "start": {
+        "line": 224,
+        "col": 1,
+        "offset": 7500
+      },
+      "end": {
+        "line": 276,
+        "col": 2,
+        "offset": 9200
+      },
+      "extra": {
+        "message": "The testing-install flow fetches an attacker-supplied URL. testConnection(urlString) calls new URL(urlString).openConnection() with no scheme/host allow-list, and createConnection(url) does the same before POSTing base64 credentials to it. urlString comes from httpRequest.getParameter(\"remoteUrl\") (InitializationFilter.java:818) and flows through getResourceInputStream. This permits SSRF to internal services, cloud metadata endpoints, and file: URLs during setup.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.code-injection",
+      "path": "api/src/main/java/org/openmrs/parameter/ConceptSearchCriteriaBuilder.java",
+      "start": {
+        "line": 188,
+        "col": 2,
+        "offset": 6050
+      },
+      "end": {
+        "line": 201,
+        "col": 3,
+        "offset": 6420
+      },
+      "extra": {
+        "message": "User-supplied input selects a class and field to load/read via reflection. addConceptReference(String ref) (line 141) passes any reference containing a '.' to evaluateStaticConstant, which calls Context.loadClass(clazzName), clazz.getDeclaredField(constantName) and field.get(null) with attacker-chosen class/field names and setAccessible(true). getConceptByReference(conceptRef) (ConceptServiceImpl.java:359, ConceptService.java:377) is a public API with no privilege annotation, so externally-controlled strings can force loading/initialization of arbitrary classes (running their static initializers) and read arbitrary static fields (information disclosure).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-470: Use of Externally-Controlled Input to Select Classes or Code ('Unsafe Reflection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.insecure-deserialization",
+      "path": "api/src/main/java/org/openmrs/event/EntityEvent.java",
+      "start": {
+        "line": 40,
+        "col": 2,
+        "offset": 1600
+      },
+      "end": {
+        "line": 41,
+        "col": 18,
+        "offset": 1690
+      },
+      "extra": {
+        "message": "Polymorphic Jackson typing with JsonTypeInfo.Id.CLASS (@class) allows an attacker to control which class is instantiated during deserialization. EntityEvent payloads are persisted to the outbox_event table and later deserialized by OutboxPollingTaskHandler.java:107-113 using Context.loadClass(item.getEventType()) followed by objectMapper.readValue(item.getPayload(), eventClass). If the event type/payload can be influenced (persisted rows, broker input), this is arbitrary type instantiation / gadget-chain deserialization.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xxe.xml-external-entity",
+      "path": "liquibase/src/main/java/org/openmrs/liquibase/AbstractSnapshotTuner.java",
+      "start": {
+        "line": 156,
+        "col": 2,
+        "offset": 5550
+      },
+      "end": {
+        "line": 168,
+        "col": 3,
+        "offset": 6100
+      },
+      "extra": {
+        "message": "readChangeLogResource(resourceName) creates a dom4j SAXReader and calls reader.read(is) without disabling DOCTYPE/external entities, unlike readChangeLogFile (lines 141-144) which sets disallow-doctype-decl and disables external general/parameter entities. An XML document containing an external entity is therefore parsed with external entity resolution enabled, enabling XXE (local file disclosure / SSRF) when the parsed content can be influenced.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.path-traversal",
+      "path": "api/src/main/java/org/openmrs/api/storage/BaseStorageService.java",
+      "start": {
+        "line": 49,
+        "col": 2,
+        "offset": 1750
+      },
+      "end": {
+        "line": 55,
+        "col": 3,
+        "offset": 1980
+      },
+      "extra": {
+        "message": "getTempData(String key) resolves the caller-supplied key against the JVM temp directory with Path tempDir.resolve(key) and then opens it via Files.newInputStream(tempFile), with no normalization or containment check (contrast LocalStorageService.getPath/assertKeyInStorageDir, which validate against the storage dir). A key containing ../ sequences reads arbitrary files under the temp root. This is part of the public StorageService API (StorageService.java:51).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.hardcoded-key",
+      "path": "api/src/main/java/org/openmrs/util/OpenmrsConstants.java",
+      "start": {
+        "line": 557,
+        "col": 2,
+        "offset": 22850
+      },
+      "end": {
+        "line": 561,
+        "col": 70,
+        "offset": 23090
+      },
+      "extra": {
+        "message": "Hardcoded default AES key and initialization vector (ENCRYPTION_VECTOR_DEFAULT = \"9wyBUNglFCRVSUhMfsTa3Q==\", ENCRYPTION_KEY_DEFAULT = \"dTfyELRrAICGDwzjHDjuhw==\") are used by Security.getSavedInitVector()/getSavedSecretKey() (Security.java:312-321, 344-353) whenever the encryption.vector / encryption.key runtime properties are not configured, and then feed Security.encrypt/decrypt (AES/CBC, Security.java:228-288). Data encrypted with these publicly-known constants is trivially decryptable, and the static IV is reused.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

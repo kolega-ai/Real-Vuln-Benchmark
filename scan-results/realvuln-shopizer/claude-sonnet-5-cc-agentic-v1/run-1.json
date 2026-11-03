@@ -1,0 +1,1105 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.authn.password-compared-against-username-not-hash",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/security/admin/JWTAdminAuthenticationProvider.java",
+      "start": {
+        "line": 45,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 63,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Admin JWT login authenticate() calls passwordMatch(pass, usr) where usr is the raw username string (line 46), and passwordMatch() (line 62-64) does passwordEncoder.matches(rawPassword, user) passing the username as the 'encoded password'. The actual stored UserDetails password/hash (loaded at line 40) is never compared. BCryptPasswordEncoder is the configured bean (MultipleEntryPointsSecurityConfig.java:56-57), so a username is never a valid bcrypt hash \u2014 the comparison is fundamentally broken and does not validate credentials against the stored password at all.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authn.password-compared-against-username-not-hash",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/security/customer/JWTCustomerAuthenticationProvider.java",
+      "start": {
+        "line": 29,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 57,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Customer JWT login provider has the identical flaw as JWTAdminAuthenticationProvider: passwordMatch(pass, usr) (line 55-56) compares the raw submitted password against the plaintext username string instead of customer.getPassword(), so authentication never actually validates the stored credential for /api/v1/customer/login.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.user-creation-privilege-escalation",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/api/v1/user/UserApi.java",
+      "start": {
+        "line": 111,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 132,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "POST /private/user/ create() lets any caller in GROUP_SUPERADMIN, GROUP_ADMIN, or GROUP_ADMIN_RETAIL submit a PersistableUser with an arbitrary 'groups' list (e.g. SUPERADMIN) with no restriction. Unlike update() (line 149) which calls userFacade.authorizedGroups(authenticatedUser, user) to block a caller from granting a group higher than their own, create() never performs this check before userFacade.create(user, merchantStore). A lower-privileged ADMIN_RETAIL user can create an account with groups:[{\"name\":\"SUPERADMIN\"}] and obtain full super-admin rights.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-merchant-store-full-details",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/api/v1/store/MerchantStoreApi.java",
+      "start": {
+        "line": 91,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 101,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "GET /private/store/{code} storeFull() checks only that the authenticated user is in group SUPERADMIN/ADMIN_RETAILER (line 97) but never verifies the user is tied to the requested store 'code'. Sibling endpoints update() (line 230-237) and getStoreMarketing() (line 255-259) correctly call validateUserPermission(userName, code) -> userFacade.authorizedStore(). Any ADMIN_RETAILER of Store A can fetch full configuration details of Store B by supplying its code.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-merchant-child-stores-list",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/api/v1/store/MerchantStoreApi.java",
+      "start": {
+        "line": 107,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 121,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "GET /private/merchant/{code}/stores list() checks group membership only (line 115) and never binds the 'code' path variable to the caller's own retailer. The inline comment 'ADMIN_RETAILER only see pertaining stores' states the intended restriction but it is not implemented. Contrast with the near-duplicate endpoint children() (lines 272-281) which correctly calls validateUserPermission(userName, code) before the same facade call. Any ADMIN_RETAILER can enumerate another retailer's child-store list.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-get-customer-by-id",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/controller/customer/facade/CustomerFacadeImpl.java",
+      "start": {
+        "line": 557,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 564,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "getCustomerById(Long id, MerchantStore merchantStore, Language language) fetches customerService.getById(id) and returns the full PII (name/email/phone/address) with no check that the customer belongs to 'merchantStore'. Reached via GET /private/customer/{id} (CustomerApi.java:136-139). Any admin of Store A can read any customer's PII from any other store by ID.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-update-customer-by-id",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/controller/customer/facade/CustomerFacadeImpl.java",
+      "start": {
+        "line": 693,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 717,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "update(PersistableCustomer, MerchantStore) loads the target via customerService.getById(customer.getId()) with no store-ownership check before overwriting fields from the request body. Reached via PUT /private/customer/{id} (CustomerApi.java:71-79). An admin scoped to Store A can overwrite a customer belonging to Store B.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-update-customer-address",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/controller/customer/facade/CustomerFacadeImpl.java",
+      "start": {
+        "line": 496,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 554,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "updateAddress(Long userId, MerchantStore, Address, Language) calls customerService.getById(userId) (line 499) with no store check before persisting a billing/delivery address change. Reached from PATCH /private/customer/{id}/address via updateAddress(PersistableCustomer, MerchantStore) (lines 1034-1081). An admin of Store A can modify a Store B customer's address.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-delete-customer-by-id",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/controller/customer/facade/CustomerFacadeImpl.java",
+      "start": {
+        "line": 1026,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 1030,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "deleteById(Long id) calls getCustomerById(id) (private helper, lines 777-780, which itself calls customerService.getById with no store check) then delete(customer), with no verification the customer belongs to the admin's store. Reached via DELETE /private/customer/{id} (CustomerApi.java:91-105), which checks only the caller's admin group, not target ownership. A Store-A admin can delete a Store-B customer.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-get-customer-by-nickname",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/controller/customer/facade/CustomerFacadeImpl.java",
+      "start": {
+        "line": 922,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 937,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "getCustomerByNick(userName, merchantStore, language) delegates to private getByNick(userName) (line 934) which calls customerService.getByNick(userName) with no store id, despite the class javadoc stating 'Customer username is unique to each store' (implying the same username can exist in different stores). Reached via GET /private/customer/profile and /auth/customer/profile (CustomerApi.java:149-157). Sibling method getByUserName/getCustomerByNickAndStoreId (lines 298-309) correctly scopes by merchantStore.getId(), confirming this is an inconsistent/missing check, not intentional design. A customer in Store A whose username collides with one in Store B can be served Store B's record.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-customer-reviews-public",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/controller/customer/facade/CustomerFacadeImpl.java",
+      "start": {
+        "line": 752,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 765,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "getAllCustomerReviewsByReviewed calls the private getCustomerById(customerId) helper (lines 777-780) with no store filter. Reached via GET /customers/{id}/reviews (CustomerReviewApi.java:78-86), a path with no '/private/' prefix unlike sibling create/update/delete endpoints. An attacker can enumerate sequential customer IDs across all stores and read reviews tied to them.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.review-author-identity-not-bound",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/controller/customer/facade/CustomerFacadeImpl.java",
+      "start": {
+        "line": 977,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 1003,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "createCustomerReview() takes the reviewer id from review.getCustomerId() in the client-supplied request body (PersistableCustomerReview) rather than the authenticated principal; only a duplicate-review check is performed (lines 986-987). Reached via POST /private/customers/{id}/reviews (CustomerReviewApi.java:64-76). Any caller able to reach the endpoint can author a review attributed to an arbitrary customer id.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-customer-orders-by-id",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/api/v1/order/OrderApi.java",
+      "start": {
+        "line": 112,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 153,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "GET /private/orders/customers/{id} is the only /private/orders endpoint in this file that does not call authorizationUtils.authorizeUser(...) (every sibling method does: list() L245-247, get() L273-275, updateOrderCustomer() L485-487, updateOrderStatus() L506-508). It fetches customerService.getById(id) (line 122) with no merchant-store scoping, then returns full customer PII plus the order list for an arbitrary attacker-supplied id, with zero per-store admin-group check.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-shopping-cart-by-id",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/controller/shoppingCart/facade/ShoppingCartFacadeImpl.java",
+      "start": {
+        "line": 1100,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 1103,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "getShoppingCartModel(Long id, MerchantStore store) accepts a 'store' parameter but never uses it, returning shoppingCartService.getById(id) directly: 'return shoppingCartService.getById(id);'. Every sibling overload (by code, by customer) scopes the lookup to store. Reachable via OrderTotalApi.java:101 with id from @PathVariable Long id; that specific call site separately re-checks shoppingCart.getCustomerId() before use, so this is a latent broken-access-control defect rather than a demonstrated bypass at that call site \u2014 any other/future caller relying on the store parameter for tenant isolation would not get it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.business-logic.cvv-and-pan-copied-into-payment-metadata",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/controller/order/facade/OrderFacadeImpl.java",
+      "start": {
+        "line": 472,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 528,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "setCredidCardValidationNumber(order.getPayment().get(\"creditcard_card_cvv\")) (line ~476) and payment.setPaymentMetaData(order.getPayment()) (lines 484-485) copy the entire client-submitted map \u2014 including the raw PAN (creditcard_card_number) and CVV \u2014 into Payment.paymentMetaData, which then flows into orderService.processOrder(...) for persistence. PCI-DSS forbids retaining CVV under any circumstance; no redaction occurs before the object is handed off for persistence.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-311: Missing Encryption of Sensitive Data"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.business-logic.cvv-persisted-unmasked",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/populator/order/PersistableOrderPopulator.java",
+      "start": {
+        "line": 92,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 97,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "The populator masks only ccNumber (CreditCardUtils.maskCardNumber) before writing the embedded CreditCard object onto the Order entity; ccCvv is carried through unmasked into the CC_CVV database column (CreditCard.java field, Order.java:126-128 @Embedded creditCard has no @JsonIgnore unlike the adjacent 'merchant' field). PCI-DSS forbids storing CVV in any form.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.business-logic.order-lookup-bypasses-store-scope",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/populator/order/transaction/PersistableTransactionPopulator.java",
+      "start": {
+        "line": 46,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 46,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Order order = orderService.getById(source.getOrderId()) uses the generic, store-unscoped SalesManagerEntityServiceImpl.getById(Long) instead of the store-scoped OrderService.getOrder(Long id, MerchantStore store) that every other order lookup in OrderFacadeImpl/OrderApi deliberately uses. source.getOrderId() originates from a client-supplied transaction payload with no ownership/store check performed afterward.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.hql-order-by-field-injection",
+      "path": "sm-core/src/main/java/com/salesmanager/core/business/repositories/merchant/MerchantRepositoryImpl.java",
+      "start": {
+        "line": 52,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 55,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "req.append(\" order by m.\").append(criteria.getCriteriaOrderByField()) concatenates criteria.criteriaOrderByField directly into the JPQL ORDER BY clause with no whitelist, before em.createQuery(hql). Taint source: ServiceRequestCriteriaBuilderUtils.buildRequest() (sm-shop/src/main/java/com/salesmanager/shop/utils/ServiceRequestCriteriaBuilderUtils.java:84-88) sets this field directly from the raw HTTP parameter columns[N][data] when not in the caller's field-mapping table. That builder method currently has no live caller in this checkout (MerchantStoreApi.java uses a safer fixed-field-map builder instead), so reachability from a controller is unconfirmed, but the sink itself is a real unsanitized string-concatenation defect.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-564: SQL Injection: Hibernate"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.hql-order-by-field-injection",
+      "path": "sm-core/src/main/java/com/salesmanager/core/business/repositories/user/UserRepositoryImpl.java",
+      "start": {
+        "line": 45,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 48,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "req.append(\" order by u.\" + criteria.getCriteriaOrderByField() + \" \" + criteria.getOrderBy().name()...) concatenates an attacker-shaped field name directly into HQL before em.createQuery(hql); Criteria.criteriaOrderByField has no validator. UserFacadeImpl.getByCriteria(Criteria) reaches this sink via userService.listByCriteria(criteria), but no controller in sm-shop was found constructing a plain Criteria with criteriaOrderByField set for users (UserApi uses a separate UserCriteria/Pageable path) \u2014 reachability from the web tier is unconfirmed; the sink is a real latent injection defect in the repository.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-564: SQL Injection: Hibernate"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.hql-named-parameter-identifier-injection",
+      "path": "sm-core/src/main/java/com/salesmanager/core/business/repositories/catalog/product/ProductRepositoryImpl.java",
+      "start": {
+        "line": 648,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 666,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "AttributeCriteria.getAttributeCode() (an attacker-shaped String) is embedded directly as a JPQL named-parameter identifier rather than bound as a value: countBuilderWhere.append(\" and po.code =:\").append(attributeCriteria.getAttributeCode()), repeated at lines 873-877 for the main query. Since the value lands in the query text itself, a value like 'x or 1=1' becomes 'po.code = :x or 1=1', a syntactically valid boolean-altering HQL fragment (filter bypass / boolean-blind injection). No caller invoking AttributeCriteria.setAttributeCode(...) from sm-shop populators/controllers was found, so the feature appears unwired in this checkout; the sink itself is a real defect.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-564: SQL Injection: Hibernate"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.cms-static-content-file-write",
+      "path": "sm-core/src/main/java/com/salesmanager/core/business/modules/cms/content/local/CmsStaticContentFileManagerImpl.java",
+      "start": {
+        "line": 96,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 155,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "addFile() builds the destination path by string-concatenating merchantStoreCode, inputStaticContentData.getFileContentType(), and inputStaticContentData.getFileName() (lines 114-130) and passes the result straight to Paths.get()/Files.copy(..., REPLACE_EXISTING) with no normalization or containment check. A fileName containing '../../' sequences lets a caller write/overwrite arbitrary files outside the intended static/files/<merchant>/<type>/ directory. The same pattern (no traversal check) also appears in removeFile()/removeFiles() (lines 267-309, arbitrary file delete) and addFolder()/removeFolder() (lines 400-471).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.cms-product-image-file-write",
+      "path": "sm-core/src/main/java/com/salesmanager/core/business/modules/cms/product/local/CmsImageFileManagerImpl.java",
+      "start": {
+        "line": 83,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 133,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "addProductImage() concatenates merchant code, product SKU and contentImage.getFileName() (lines 95-118) into a filesystem path with no traversal check before Files.copy(isFile, path, REPLACE_EXISTING) \u2014 a crafted file name can write outside products/<merchant>/<sku>/. removeProductImage() (lines 185-222) builds the delete path from productImage.getProductImage() the same unsanitized way, enabling arbitrary file delete.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.static-iv-reused-cbc-mode",
+      "path": "sm-core/src/main/java/com/salesmanager/core/business/modules/utils/EncryptionImpl.java",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 61,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "IV_P = \"fedcba9876543210\" (line 13) is a fixed 16-byte constant reused as the IV for every AES/CBC/PKCS5Padding encrypt/decrypt call (lines 32-34, 53-55). Reusing a static IV across all ciphertexts with CBC mode leaks information about plaintext equality/prefixes across every value encrypted with the same key, undermining semantic security regardless of where the key itself comes from.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-329: Generation of Predictable IV with CBC Mode"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xxe.unhardened-digester-xml-parse",
+      "path": "sm-core/src/main/java/com/salesmanager/core/business/modules/integration/shipping/impl/UPSShippingQuote.java",
+      "start": {
+        "line": 414,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 472,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "new Digester() (line 414) is constructed with no hardening \u2014 no setValidating(false), no FEATURE_SECURE_PROCESSING, no explicit disabling of external-general/parameter-entities or DOCTYPE declarations \u2014 before parsing the UPS rate response body obtained over HTTP (digester.parse(xmlreader), line 472). If that response can be tampered with (MITM, DNS compromise, malicious carrier endpoint), a crafted DOCTYPE could trigger XXE (file disclosure/SSRF via external entities).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xxe.unhardened-digester-xml-parse",
+      "path": "sm-core/src/main/java/com/salesmanager/core/business/modules/integration/shipping/impl/USPSShippingQuote.java",
+      "start": {
+        "line": 474,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 547,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Same unhardened-Digester pattern as UPSShippingQuote.java: new Digester() (line 474) with no XXE hardening parses the USPS RateV3/IntlRate HTTP response body (digester.parse(xmlreader), line 547).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.smtp-password-in-json-serialization",
+      "path": "sm-core/src/main/java/com/salesmanager/core/business/modules/email/EmailConfig.java",
+      "start": {
+        "line": 20,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 29,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "toJSONString() serializes the SMTP password field in plaintext alongside host/port/username: data.put(\"password\", this.getPassword()) (line 27). If this JSON is ever returned to an admin UI, logged, or exposed via any endpoint serializing EmailConfig, it discloses the mail server credential.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-522: Insufficiently Protected Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.stack-trace-in-error-response",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/controller/error/ShopErrorController.java",
+      "start": {
+        "line": 26,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 48,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "@ControllerAdvice(\"com.salesmanager.shop.store.controller\") catches every Exception thrown by any controller in scope; handleException adds ExceptionUtils.getStackTrace(ex) (line 41) and ex.getMessage() (line 42) to the ModelAndView for view error/generic_error, exposing internal implementation details (class/package names, file paths, query text) to the client on any unhandled exception.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.stack-trace-in-error-response",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/controller/error/ShopErrorController.java",
+      "start": {
+        "line": 52,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 71,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Duplicate of the handleException issue in handleRuntimeException: full stack trace (line 63) and raw exception message (line 64) are placed into the error-page model for every uncaught RuntimeException.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.exception-message-in-response",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/api/v1/customer/AuthenticateCustomerApi.java",
+      "start": {
+        "line": 242,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 244,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "changePassword (POST /api/v1/auth/customer/password) catches Exception and returns ResponseEntity.badRequest().body(\"Exception when reseting password \"+e.getMessage()), leaking internal exception text directly to the client.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.exception-message-in-response",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/api/v1/order/OrderApi.java",
+      "start": {
+        "line": 384,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 391,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Checkout endpoint catches a generic Exception and returns response.sendError(503, \"Error while processing checkout \" + e.getMessage()), leaking internal exception detail to the client.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.exception-message-in-response",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/api/v1/order/OrderPaymentApi.java",
+      "start": {
+        "line": 173,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 180,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Generic catch(Exception e) block returns e.getMessage() directly in the HTTP error body for a payment endpoint.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.exception-message-in-response",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/api/v1/order/OrderPaymentApi.java",
+      "start": {
+        "line": 273,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 279,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Generic catch(Exception e) block returns e.getMessage() directly in the HTTP error body for a second payment endpoint in this controller.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.exception-message-in-response",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/api/v1/order/OrderTotalApi.java",
+      "start": {
+        "line": 146,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 153,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Generic catch(Exception e) block returns e.getMessage() directly in the HTTP error body for an order-total endpoint.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.exception-message-in-response",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/api/v1/order/OrderTotalApi.java",
+      "start": {
+        "line": 215,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 221,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Generic catch(Exception e) block returns e.getMessage() directly in the HTTP error body for a second order-total endpoint in this controller.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.exception-message-in-response",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/api/v1/order/OrderShippingApi.java",
+      "start": {
+        "line": 169,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 176,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Generic catch(Exception e) block returns e.getMessage() directly in the HTTP error body for a shipping endpoint.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.exception-message-in-response",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/api/v1/order/OrderShippingApi.java",
+      "start": {
+        "line": 281,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 288,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Generic catch(Exception e) block returns e.getMessage() directly in the HTTP error body for a second shipping endpoint in this controller.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.cors-allow-credentials-with-reflected-origin",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/security/AuthenticationTokenFilter.java",
+      "start": {
+        "line": 53,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 61,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "On every request to /api/v1/auth and /api/v1/private, Access-Control-Allow-Origin is set by reflecting the request's Origin header, combined with Access-Control-Allow-Credentials: true, allowing any origin to make credentialed cross-site requests against authenticated API endpoints.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.cors-wildcard-origin",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/filter/CorsFilter.java",
+      "start": {
+        "line": 33,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 40,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Access-Control-Allow-Origin reflects the request Origin header verbatim (defaulting to '*' only when absent), permitting cross-origin reads from any site. No Allow-Credentials is set here so impact is lower than the AuthenticationTokenFilter CORS issue.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.csrf-disabled-on-authenticated-shop-paths",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/application/config/MultipleEntryPointsSecurityConfig.java",
+      "start": {
+        "line": 116,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 144,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "CustomerConfigurationAdapter secures /shop/** with session/cookie-based httpBasic auth (JSESSIONID), but explicitly disables CSRF protection via .csrf().disable() (line 119) for all state-changing /shop/customer/** actions reachable by an authenticated session cookie.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.credentials.hardcoded-default-superadmin",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/admin/security/UserServicesImpl.java",
+      "start": {
+        "line": 42,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 139,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "createDefaultAdmin() provisions a default superadmin account with hardcoded credentials: username \"admin@shopizer.com\", password literal \"password\" (DEFAULT_INITIAL_PASSWORD, line 42), added to GROUP_SUPERADMIN/GROUP_ADMIN (lines 116-139). If this bootstrap path runs against a production deployment without a forced password change, it is a trivially guessable admin account.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.credentials.hardcoded-payment-gateway-creds-in-comment",
+      "path": "sm-core/src/main/java/com/salesmanager/core/business/modules/integration/payment/impl/BeanStreamPayment.java",
+      "start": {
+        "line": 261,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 261,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Commented-out sample request string hardcodes a BeanStream merchant_id (300200260), username (\"carlito\") and password (\"shopizer001\") plus a real-looking customer email and test card number directly in source. Not executed (commented out), but the credential string remains committed to source/repo history.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.weak-key-generation-for-aes-cipher",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/utils/TokenizeTool.java",
+      "start": {
+        "line": 12,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 46,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "Token-encryption helper uses AES/ECB/PKCS5Padding (ECB mode is deterministic/weak) and generates the key via KeyGenerator.getInstance(\"DES\") (line 24) instead of \"AES\" \u2014 a mismatched, weak key-generation algorithm feeding an AES cipher. No current callers were found (dead code in this checkout), but the insecure pattern is present and could be adopted by future callers.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.trust-boundary.unvalidated-x-forwarded-host",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/utils/FilePathUtils.java",
+      "start": {
+        "line": 204,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 212,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "buildStoreForwardedUri() returns the client-supplied X-Forwarded-Host header verbatim as the store's public URI (line 207) with no validation or allow-listing, used to build links such as social-sharing image URLs per the class javadoc. No sink rendering this as a redirect Location header was found in the files reviewed, so this is flagged as a potential host-header-trust issue rather than a confirmed open redirect.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.printstacktrace-instead-of-logger",
+      "path": "sm-shop/src/main/java/com/salesmanager/shop/store/controller/security/facade/SecurityFacadeImpl.java",
+      "start": {
+        "line": 39,
+        "col": 1,
+        "offset": 1
+      },
+      "end": {
+        "line": 61,
+        "col": 1,
+        "offset": 1
+      },
+      "extra": {
+        "message": "getPermissions() catches ServiceException and calls e.printStackTrace() (line 57) instead of using the class logger, leaking the stack trace to stdout/console rather than structured, access-controlled logs.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

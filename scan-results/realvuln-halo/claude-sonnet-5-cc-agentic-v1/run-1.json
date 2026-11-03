@@ -1,0 +1,557 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.injection.stored-xss-seo-meta-tags",
+      "path": "application/src/main/java/run/halo/app/theme/dialect/IndexSeoProcessor.java",
+      "start": {
+        "line": 37,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 46,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Admin-configured SEO 'keywords' and 'description' settings (SystemSetting.Seo, plain unescaped String fields) are concatenated directly into raw <meta> tag HTML strings ('\"<meta name=\\\"keywords\\\" content=\\\"\" + keywords + \"\\\" />\\n\"') and inserted as a text node into every rendered index page head via modelFactory.createText(). A value containing '\"><script>...</script>' breaks out of the attribute and injects arbitrary markup/script into every page view. Sibling processors GlobalSeoProcessor and ContentTemplateHeadProcessor escape equivalent values (HtmlUtils.htmlEscape / safe attribute APIs), confirming this is a missing-escaping defect rather than intended raw HTML.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authnz.password-totp-secret-exposed-in-api-response",
+      "path": "application/src/main/java/run/halo/app/core/endpoint/console/UserEndpoint.java",
+      "start": {
+        "line": 475,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 487,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getUserByName (GET /users/{name}), and similarly me()/list(), wrap the raw User extension in DetailedUser(User user, ...)/ListedUser(User user, ...) records (defined at lines 694 and 829) and return it verbatim as JSON. User.UserSpec (api/src/main/java/run/halo/app/core/extension/User.java:72-85) has no @JsonIgnore on 'password' (the encoded password hash) or 'totpEncryptedSecret', so both are serialized to any caller able to view/list users. UserEndpointTest.java:583-595 confirms the response body includes the full User object with its password field set. By contrast, the parallel uc endpoint (UcUserEndpoint) explicitly strips the password via a masked UcUserVo DTO, showing this console-side full-entity exposure is an oversight. An attacker/low-privileged user able to list or view users can harvest password hashes and TOTP secrets for offline cracking or 2FA bypass.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-522: Insufficiently Protected Credentials",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.file.path-traversal-theme-template-resolution",
+      "path": "application/src/main/java/run/halo/app/theme/DefaultViewNameResolver.java",
+      "start": {
+        "line": 30,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 42,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolveViewNameOrDefault resolves a caller-supplied 'name' directly onto disk with no normalization/containment check: 'themeContext.getPath().resolve(TEMPLATES).resolve(templateResourceName)' then checks Files.exists(). Unlike ThemeUiResources.getResource (same module), which calls FileUtils.checkDirectoryTraversal, no such check exists here. 'name' is reachable from unauthenticated content-rendering request paths via Post.spec.template, Category.spec.template/postTemplate, and SinglePage.spec.template -- all plain, unvalidated String fields. A '..'-laden value escapes the theme's templates/ directory; since TemplateEngineManager configures a plain Thymeleaf FileTemplateResolver with no path restriction, a resolved path outside the theme is then parsed and rendered as a Thymeleaf template, turning path traversal into potential Server-Side Template Injection if the attacker can also place content at the reached location (e.g. via an uploaded attachment).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.unrestricted-url-fetcher",
+      "path": "application/src/main/java/run/halo/app/infra/DefaultReactiveUrlDataBufferFetcher.java",
+      "start": {
+        "line": 31,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 57,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "DefaultReactiveUrlDataBufferFetcher builds its WebClient from a plain HttpClient.create().followRedirect(true) with no restriction on destination address/scheme, and fetch(URI uri) issues a GET to whatever URI is supplied. The codebase already contains a purpose-built SSRF mitigation, HttpSecurityUtils.secureHttpClient() (api/src/main/java/run/halo/app/infra/utils/HttpSecurityUtils.java:26-36), which explicitly blocks loopback/link-local/site-local/special-use addresses 'to prevent SSRF attacks' -- but this fetcher does not use it. This component is injected into ThemeEndpoint, PluginEndpoint, and MigrationEndpoint (see related findings) to fetch fully caller-supplied URIs, letting a caller make the server fetch cloud metadata endpoints, internal services, etc. followRedirect(true) also allows bypassing any later host allow-listing via redirects.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.theme-install-upgrade-from-uri",
+      "path": "application/src/main/java/run/halo/app/theme/endpoint/ThemeEndpoint.java",
+      "start": {
+        "line": 311,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 328,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "upgradeFromUri/installFromUri read a client-supplied URI from the request body and pass it straight to 'urlDataBufferFetcher::fetch' with no scheme/host/IP validation ('request.bodyToMono(UpgradeFromUriRequest.class).map(UpgradeFromUriRequest::uri).flatMapMany(urlDataBufferFetcher::fetch)'). Backed by the unrestricted DefaultReactiveUrlDataBufferFetcher, a console-privileged caller can make the server fetch arbitrary internal/cloud-metadata URLs under the guise of installing/upgrading a theme.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.plugin-install-upgrade-from-uri",
+      "path": "application/src/main/java/run/halo/app/core/endpoint/console/PluginEndpoint.java",
+      "start": {
+        "line": 412,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 429,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "upgradeFromUri/installFromUri take a client-supplied URI and pass it directly to 'reactiveUrlDataBufferFetcher::fetch' with no validation, identical pattern to ThemeEndpoint. Backed by the unrestricted DefaultReactiveUrlDataBufferFetcher (no loopback/link-local/metadata-IP blocking), a privileged caller can trigger server-side requests to arbitrary internal targets while ostensibly installing/upgrading a plugin from a URL.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.migration-restore-download-url",
+      "path": "application/src/main/java/run/halo/app/migration/MigrationEndpoint.java",
+      "start": {
+        "line": 140,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 152,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The backup-restore handler accepts a multipart 'downloadUrl' field and fetches it directly: 'var url = new URL(downloadURL); return dataBufferFetcher.fetch(url.toURI());' with no scheme/host allow-listing or private-network blocking. Backed by the unrestricted DefaultReactiveUrlDataBufferFetcher, this lets a caller make the Halo backend issue arbitrary outbound requests (e.g. to cloud metadata endpoints) with the response streamed through the restore pipeline. Reachable only by callers holding 'system:migrations:manage', so impact is admin-to-SSRF rather than anonymous.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authnz.open-redirect-thumbnail-via-uri",
+      "path": "application/src/main/java/run/halo/app/core/endpoint/theme/ThumbnailEndpoint.java",
+      "start": {
+        "line": 76,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 97,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The public (unauthenticated) 'GET /apis/api.storage.halo.run/v1alpha1/thumbnails/-/via-uri?uri=...' endpoint parses the 'uri' query parameter only via HaloUtils.safeToUri() (URL-decode/re-encode, no scheme/host allow-list). In getThumbnailByUri, 'thumbnailService.get(uri, size).defaultIfEmpty(uri.get())' falls back to the raw attacker-supplied URI when it doesn't match a known attachment permalink, and the handler then issues a 302 redirect to it: 'ServerResponse.status(HttpStatus.FOUND).location(thumbnailLink).build()'. This lets an attacker craft a trusted-domain link that redirects victims to an arbitrary external site (phishing/credential harvesting).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.file.path-traversal-plugin-reverse-proxy",
+      "path": "application/src/main/java/run/halo/app/plugin/resources/ReverseProxyRouterFunctionFactory.java",
+      "start": {
+        "line": 143,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 163,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "loadResourceByFileRule builds 'filename' straight from the live request path (extracted via PathPatternParser...extractPathWithinPattern) whenever a plugin's ReverseProxy rule configures a directory without a fixed filename (wildcard mode), then does 'PathUtils.combinePath(directory, filename)' and resolves it via 'getResourceLoader(pluginName).getResource(filePath)' with no call to FileUtils.checkDirectoryTraversal. This is inconsistent with the sibling method BundleResourceUtils.getBundleResource in the same package, which explicitly guards an equivalent attacker-supplied path segment with checkDirectoryTraversal before resource load. A request path containing '../' segments can escape the intended plugin asset directory and read files outside it when the plugin is loaded from an exploded directory (dev mode).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authnz.idor-notifier-receiver-config-store",
+      "path": "application/src/main/java/run/halo/app/notification/DefaultNotifierConfigStore.java",
+      "start": {
+        "line": 81,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 92,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "fetchConfig/saveConfig key the shared Secret 'notifier-setting-secret' purely by 'notifierDescriptorName + \".json\"' (resolveKey, line 90-92), with no per-user component anywhere in the storage key. Every authenticated user who can call this store therefore reads and writes the same global object for a given notifier, even though it is exposed as a 'user center' (personal) setting -- see related finding in UserNotifierEndpoint.java.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authnz.idor-notifier-receiver-config-endpoint",
+      "path": "application/src/main/java/run/halo/app/notification/endpoint/UserNotifierEndpoint.java",
+      "start": {
+        "line": 72,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 85,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "fetchReceiverConfig/saveReceiverConfig (GET/POST '/notifiers/{name}/receiver-config', tagged 'NotifierV1alpha1Uc' i.e. user-center/personal settings) take only the notifier 'name' path variable with no ownership/identity check, and delegate straight to DefaultNotifierConfigStore, whose storage key omits any user identifier. role-template-authenticated.yaml:174-175 grants every authenticated user get/update on 'notifiers/receiver-config' with no self-scoping. Consequently any logged-in user can read or silently overwrite another user's (or the whole system's) personal notifier receiver configuration (e.g. a webhook URL/token for a notification channel), hijacking or exfiltrating their notification destination.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.hardcoded-totp-keystore-password",
+      "path": "application/src/main/java/run/halo/app/security/authentication/twofactor/totp/DefaultTotpAuthService.java",
+      "start": {
+        "line": 39,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 67,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The KeyStore holding the AES key that encrypts/decrypts every user's TOTP secret is protected with a hard-coded literal password: 'var password = \"changeit\".toCharArray();', used both to create ('keyStore.load(null, password)') and persist ('keyStore.store(os, password)') halo.keystore. Anyone who can read the keystore file (backup, misconfigured permissions, container image layer, etc.) can open it with the well-known default password 'changeit' and recover the AES key, then decrypt every stored 'totpEncryptedSecret', fully defeating at-rest protection of all users' 2FA secrets.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.config.cors-wildcard-origin-with-credentials",
+      "path": "application/src/main/java/run/halo/app/security/CorsConfigurer.java",
+      "start": {
+        "line": 46,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 56,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The default CORS policy for '/api/**' and '/apis/**' sets 'configuration.setAllowedOriginPatterns(List.of(\"*\"))' together with 'configuration.setAllowCredentials(true)'. Since '*' is registered as an origin *pattern* (not a literal header value), Spring reflects back whatever Origin header the browser sends while still allowing credentials (cookies/Authorization), so any website can issue a credentialed cross-origin request to Halo's console/API endpoints (GET/POST/PUT/DELETE/PATCH all allowed) and have the browser attach credentials and read the response. This is compounded by CsrfConfigurer explicitly exempting '/api/**' and '/apis/**' from CSRF-token enforcement, removing the other layer that would otherwise constrain state-changing cross-site requests.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.dos.zip-decompression-bomb",
+      "path": "application/src/main/java/run/halo/app/infra/utils/FileUtils.java",
+      "start": {
+        "line": 77,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 111,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "unzip(ZipInputStream zis, Path targetPath) iterates every zip entry and calls Files.copy(zis, entryPath) with no cap on entry count, per-entry size, or total uncompressed size. This routine backs theme/plugin install-from-zip flows, so an authenticated user uploading or pointing to a crafted archive (e.g. a small zip expanding to gigabytes, or one with millions of entries) can exhaust disk space or inodes with no size/count guard in place.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-409: Improper Handling of Highly Compressed Data",
+            "CWE-400: Uncontrolled Resource Consumption"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.lucene-stored-annotations-objectinputstream",
+      "path": "application/src/main/java/run/halo/app/search/lucene/LuceneSearchEngine.java",
+      "start": {
+        "line": 415,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 425,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "DocumentConverter.convert reads a stored binary field back with raw Java native deserialization: 'var ois = new ObjectInputStream(bais); ... (Map<String,String>) ois.readObject();' with no type/allow-list filtering (no ObjectInputFilter). The corresponding writer persists annotations into the on-disk Lucene index using raw ObjectOutputStream. Any path that lets an attacker influence the index files (compromised backup, a buggy/malicious HaloDocumentsProvider plugin, or direct filesystem write access to the Lucene directory) can plant a serialized gadget chain that executes on readObject().",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authnz.spoofable-client-ip-header-trust",
+      "path": "application/src/main/java/run/halo/app/infra/utils/IpAddressUtils.java",
+      "start": {
+        "line": 35,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 51,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getClientIp returns the first non-blank value found by iterating client-supplied headers (X-Forwarded-For, X-Real-IP, Proxy-Client-IP, CF-Connecting-IP, etc.) before ever considering request.getRemoteAddress(), with no check that the request came through a trusted reverse proxy. This utility is consumed by pre-auth endpoints (sign up, email-code login, password reset) for IP-based rate limiting of unauthenticated, abuse-prone operations. Any client can set an arbitrary X-Forwarded-For/CF-Connecting-IP header to make each request appear to originate from a different IP, defeating per-IP throttling/brute-force protection.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-348: Use of Less Trusted Source"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "yaml.security.hardcoded-db-credentials-default",
+      "path": "application/src/main/resources/application.yaml",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The default (always-active) configuration hardcodes 'username: admin' / 'password: 123456' for the embedded H2 R2DBC connection. These credentials ship in source control and are used unless explicitly overridden.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "yaml.security.hardcoded-db-credentials-mysql",
+      "path": "application/src/main/resources/application-mysql.yaml",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "'username: root' / 'password: openmysql' hardcoded for the MySQL R2DBC connection. Root DB credentials committed in plaintext config.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "yaml.security.hardcoded-db-credentials-mariadb",
+      "path": "application/src/main/resources/application-mariadb.yaml",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "'username: root' / 'password: mariadb' hardcoded for the MariaDB R2DBC connection.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "yaml.security.hardcoded-db-credentials-postgresql",
+      "path": "application/src/main/resources/application-postgresql.yaml",
+      "start": {
+        "line": 4,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 5,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "'username: postgres' / 'password: openpostgresql' hardcoded for the PostgreSQL R2DBC connection.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "yaml.security.actuator-sensitive-endpoints-unrestricted",
+      "path": "application/src/main/resources/application.yaml",
+      "start": {
+        "line": 76,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 85,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "'management.endpoints.web.exposure.include: \"*\"' exposes every actuator endpoint, and 'shutdown.access: unrestricted' / 'heapdump.access: unrestricted' explicitly remove Spring's default protection for a remote-shutdown DoS vector and for heap-dump download (which can leak in-memory secrets/session data). Exploitability is bounded by the app's custom RBAC layer (role-template-actuator.yaml restricts '/actuator/*' to callers holding 'system:actuator:manage'), but Spring-level hardening for these two specifically dangerous endpoints is disabled regardless of that layer.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-16: Configuration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.logging.totp-code-logged",
+      "path": "application/src/main/java/run/halo/app/security/authentication/twofactor/totp/TotpAuthenticationManager.java",
+      "start": {
+        "line": 32,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 56,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The submitted TOTP code is written to the application log at debug level: 'log.debug(\"Got TOTP code {}\", code);' (line 33) and 'log.debug(\"TOTP authentication for {} with code {} successfully.\", previousAuth.getName(), code);' (lines 54-56), associating the one-time code with the username. If debug logging is enabled in production or logs are shipped to a less-trusted sink, this discloses a live second-factor credential that could be replayed before its ~10s expiry window closes.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

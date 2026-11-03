@@ -1,0 +1,505 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.injection.command-injection-document-render",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/service/documents/DocumentRenderService.java",
+      "start": {
+        "line": 22,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 22,
+        "col": 115,
+        "offset": 0
+      },
+      "extra": {
+        "message": "DocumentController.render() (DocumentController.java:104-109) passes the raw, client-supplied multipart filename (file.getOriginalFilename()) straight into DocumentRenderService.toPdf() as `fileName`, which is then concatenated unescaped into a single command string executed via `new ProcessBuilder(\"cmd\", \"/c\", \"soffice --headless --convert-to pdf \" + fileName)`. Because the whole command is parsed by cmd.exe (not passed as separate argv entries), shell metacharacters in the filename (e.g. `& calc.exe`, `| whoami`, `> out.txt`) are interpreted by the shell, giving an authenticated applicant full OS command injection / RCE on the document-conversion host. Unlike DocumentStorage.store(), which sanitizes the filename before use, this path never sanitizes it.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.unsafe-objectinputstream-partner-intake",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/web/PartnerFeedController.java",
+      "start": {
+        "line": 97,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 101,
+        "col": 10,
+        "offset": 0
+      },
+      "extra": {
+        "message": "partnerIntake() Base64-decodes the attacker-controlled `X-Intake-State` header and feeds it directly into `new ObjectInputStream(...).readObject()` with no class allow-list or filter. Java native deserialization of untrusted bytes is a well-known RCE primitive (gadget chains in libraries such as commons-collections present on the classpath). Critically, `/api/integration/partner/**` is listed in SecurityConfig.PUBLIC_ENDPOINTS, so this endpoint is reachable with no authentication at all.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.ssti-velocity-notice-preview",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/web/OfficerApiController.java",
+      "start": {
+        "line": 233,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 240,
+        "col": 101,
+        "offset": 0
+      },
+      "extra": {
+        "message": "noticePreview() takes the `wording` query parameter directly from the request and evaluates it as a Velocity template via `Velocity.evaluate(context, writer, \"officerNotice\", wording)`. Apache Velocity templates can invoke arbitrary Java via `#set($x=$class.inspect(...))`/`.getClass()` reflection gadgets, so an authenticated officer-role caller can achieve server-side template injection leading to remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.mvel-eval-cookie",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/web/CustomerApiController.java",
+      "start": {
+        "line": 134,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 146,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "estimateLimit() reads the `mb_limit_rule` cookie value verbatim and passes it to `org.mvel2.MVEL.executeExpression(expression, vars)`. MVEL expressions can call arbitrary Java methods/constructors (e.g. `Runtime.getRuntime().exec(...)` via reflection), and the cookie is fully client-controlled (any site can set it, or the user can edit it directly), so this is a direct remote-code-execution sink driven by untrusted input.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-95: Eval Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.xstream-legacy-branch-feed",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/web/AdminApiController.java",
+      "start": {
+        "line": 513,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 515,
+        "col": 45,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importLegacyBranchFeed() parses attacker-influenced `xml` (from the request body) with a plain `new com.thoughtworks.xstream.XStream()` and no security framework / type permissions configured (`XStream.setupDefaultSecurity` / allow-list is never called). Default-configured XStream is a documented RCE vector (e.g. CVE-2013-7285/CVE-2021-21341-class gadget chains) since it can instantiate arbitrary classes from the XML. This is distinct from, and far weaker than, the hardened SecureReferenceXmlParser used elsewhere in the same controller.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authn.unsigned-jwt-partner-decision",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/web/PartnerFeedController.java",
+      "start": {
+        "line": 67,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 67,
+        "col": 85,
+        "offset": 0
+      },
+      "extra": {
+        "message": "partnerDecision() parses the `X-Partner-Assertion` header with `Jwts.parserBuilder().build().parseClaimsJwt(assertion)`, which is the JJWT API for an UNSIGNED (plain) JWT \u2014 it performs no signature verification. Combined with `/api/integration/partner/**` being public (SecurityConfig.PUBLIC_ENDPOINTS), any anonymous caller can forge an assertion with an arbitrary `sub` (application id) and `bureauScore` claim and have it accepted as a trusted partner decision, injecting fabricated bureau scores for any application.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.session-role-self-elevation",
+      "path": "web/src/main/java/com/meridianbank/web/controller/CommonController.java",
+      "start": {
+        "line": 109,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 124,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "setWorkspaceContext() writes the client-supplied `role` (and `email`/`name`) from the JSON request body straight into the HTTP session's ROLE_ATTR/EMAIL_ATTR with no validation against the caller's real identity. SessionAuthFilter.applyPrincipal() (SessionAuthFilter.java:46,62-67) later builds the Spring Security authentication purely from these session attributes (`ROLE_<role>`), which WebSecurityConfig uses for `hasRole(\"BANK_ADMIN\")`-style gates on `/admin/**`, `/officer/**`, `/compliance/**`. Any already-authenticated low-privilege user (e.g. a PROSPECT) can POST `{\"role\":\"bank_admin\"}` to this endpoint and have the web tier treat them as BANK_ADMIN for route/menu authorization, bypassing the role checks in WebSecurityConfig.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authn.predictable-desk-session-identifier",
+      "path": "web/src/main/java/com/meridianbank/web/auth/DeskSessionStore.java",
+      "start": {
+        "line": 16,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Desk session references are generated from a simple incrementing `AtomicLong` starting at 1000 (\"DESK-1001\", \"DESK-1002\", ...) with no signing or randomness. CommonController.openDesk() (CommonController.java:130-139) lets any authenticated user mint such a session for an arbitrary `role`/`email` request parameter and stores the resulting `mb_desk` cookie value as the sole lookup key in a plain in-memory map (DeskSessionStore.java:17). SessionAuthFilter (SessionAuthFilter.java:48-50) grants the associated role purely from this guessable cookie value with no password or token check, so an attacker can enumerate/guess a desk reference (or just open their own with role=bank_admin via openDesk) to assume another workspace's role.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.cors-wildcard-with-credentials",
+      "path": "web/src/main/java/com/meridianbank/web/config/WebCorsConfig.java",
+      "start": {
+        "line": 15,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 54,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The CORS mapping for `/customer/**` combines `allowedOriginPatterns(\"*\")` with `allowCredentials(true)`. This permits any origin on the internet to issue credentialed (cookie-bearing) cross-site requests to the customer channel and read the JSON responses, letting a malicious site exfiltrate an authenticated customer's session data (dashboard, re-KYC case state, etc.) via cross-origin fetch with `credentials: 'include'`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.ldap-injection-staff-directory",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/service/StaffDirectoryService.java",
+      "start": {
+        "line": 58,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 58,
+        "col": 75,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchDirectory() builds the LDAP search filter by directly concatenating the caller-supplied `employeeRef` into `\"(&(objectClass=person)(uid=\" + employeeRef + \"))\"` with no escaping of LDAP special characters (`*`, `(`, `)`, `\\`, NUL). A crafted `employeeId` (reachable via AdminApiController.staffDirectory, AdminApiController.java:535-542) can inject additional filter clauses or a wildcard to alter the search semantics (LDAP filter injection).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.ldap-injection-staff-department",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/service/StaffDirectoryService.java",
+      "start": {
+        "line": 87,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 87,
+        "col": 59,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchDepartment() concatenates the caller-supplied `department` parameter directly into the LDAP filter `\"(department=\" + department + \")\"` with no escaping, reachable from StaffDirectoryController.searchStaffByDepartment (StaffDirectoryController.java:35-41). Same LDAP filter injection class as searchDirectory() in this file.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.xpath-injection-policy-register",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/web/ComplianceApiController.java",
+      "start": {
+        "line": 324,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 325,
+        "col": 88,
+        "offset": 0
+      },
+      "extra": {
+        "message": "searchPolicyRegister() builds an XPath expression by concatenating each CSV row's `identifier` field directly into `\"//holder[policyNo='\" + identifier + \"']\"` with no escaping of quote characters. A crafted identifier in the uploaded CSV (e.g. `' or '1'='1`) changes the XPath query logic, allowing an attacker to retrieve policy-holder records they should not match (XPath injection).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.pathtraversal.document-render-filename",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/service/documents/DocumentRenderService.java",
+      "start": {
+        "line": 19,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 13,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The client-supplied `fileName` (originalFilename) is used unsanitized in `workDir.resolve(fileName)` / `Files.write(source, content)`. A filename containing path traversal sequences (e.g. `../../../somefile`) can write the uploaded content outside the freshly created temp directory, unlike DocumentStorage.store() which sanitizes the filename and verifies containment before writing.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.pathtraversal.audit-export-filename",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/web/AdminApiController.java",
+      "start": {
+        "line": 447,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 449,
+        "col": 10,
+        "offset": 0
+      },
+      "extra": {
+        "message": "stageAuditExport() builds `new java.io.File(exportDir.toFile(), fileName)` from the raw `fileName` request parameter with no normalization or containment check against `exportDir`. A value such as `../../../../etc/cron.d/evil` lets an authenticated bank-admin write the CSV content to an arbitrary path reachable from the storage root (arbitrary file write via path traversal).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.pathtraversal.storage-browse",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/web/AdminApiController.java",
+      "start": {
+        "line": 485,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 486,
+        "col": 83,
+        "offset": 0
+      },
+      "extra": {
+        "message": "browseStorage() resolves the client-supplied `folder` field against the storage root and normalizes it, but never verifies the result still starts with `root` (unlike PortalDocumentsController.content(), which performs that check). A `folder` value such as `../../../..` lets an admin-authenticated caller list directories anywhere on the filesystem the process can read.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.pathtraversal.inspect-stored-document",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/web/OfficerApiController.java",
+      "start": {
+        "line": 250,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 252,
+        "col": 109,
+        "offset": 0
+      },
+      "extra": {
+        "message": "inspectStoredDocument() resolves the client-supplied `reference` field directly against `storageDir` with `Paths.get(storageDir).resolve(reference)` and reads its file attributes, with no normalization or containment check at all. A `reference` such as `../../../../etc/passwd` lets an authenticated officer probe the existence, size and mtime of arbitrary files on the host filesystem.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.customer-self-assign-kyc-tier",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/web/CustomerApiController.java",
+      "start": {
+        "line": 161,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 161,
+        "col": 54,
+        "offset": 0
+      },
+      "extra": {
+        "message": "updateAccountProfile() calls `BeanUtils.copyProperties(form, account)` against the customer's own Account entity using an `AccountProfileForm` that exposes both `product` and `kycTier` fields. `Account.kycTier` is the authoritative value read back by ViewService.java:142 to look up the KycTierPolicy (daily transaction limit / balance ceiling) and by ReKycService, not merely a display label. Despite the method comment describing this as a 'display settings' endpoint, a customer can PATCH an arbitrary `kycTier` string (e.g. \"tier_3\") directly onto their account, self-escalating their transaction/balance limits without ever passing the real KYC tier derivation or compliance override flow.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.hardcoded-envelope-key",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/service/EnvelopeCodec.java",
+      "start": {
+        "line": 17,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 97,
+        "offset": 0
+      },
+      "extra": {
+        "message": "EnvelopeCodec uses a hardcoded default AES key (`Meridian-Envelope-Key-2026-000000`, via the `@Value` default) together with a fixed all-zero 16-byte IV (`private static final byte[] IV = new byte[16]`) for every AES/CBC decryption. If the key is left at its default (as many such `@Value` defaults are in practice) or the IV reuse is exploited, this is both a hardcoded-credential and a broken-cryptography weakness: encrypting any two envelopes with the same key/IV pair leaks structural information and makes the scheme vulnerable to standard CBC attacks.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.weak-hash-roster-credential",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/service/AdminService.java",
+      "start": {
+        "line": 196,
+        "col": 21,
+        "offset": 0
+      },
+      "end": {
+        "line": 201,
+        "col": 22,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importStaffRoster() takes the CSV-supplied `initial_code` value and stores it as the new staff account's `passwordHash` via `md5Digest(row[6])` (defined at AdminService.java:378-390) \u2014 a single unsalted MD5 digest \u2014 bypassing the `PasswordEncoder` (BCrypt) used everywhere else in AuthService/AdminService. AuthService.legacyDigestMatches() (AuthService.java:346-363) will subsequently accept logins against this weak digest, so any account provisioned this way has credential storage equivalent to unsalted MD5 instead of BCrypt.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.weak-hash-desk-credential",
+      "path": "onboarding-api/src/main/java/com/meridianbank/onboarding/web/OfficerApiController.java",
+      "start": {
+        "line": 267,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 267,
+        "col": 54,
+        "offset": 0
+      },
+      "extra": {
+        "message": "enrolDeskCredential() lets any authenticated officer overwrite their account's `passwordHash` with `deskCredentialHash(deskCode)` (OfficerApiController.java:272-283), an unsalted MD5 digest of a client-supplied `X-Desk-Code` header, instead of going through the BCrypt `PasswordEncoder`. This downgrades that account's credential storage to unsalted MD5 going forward (and is accepted at login via AuthService.legacyDigestMatches()).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

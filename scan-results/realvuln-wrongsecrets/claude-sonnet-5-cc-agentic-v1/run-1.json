@@ -1,0 +1,848 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.audit.missing-auth-env-dump-mcp",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge60McpController.java",
+      "start": {
+        "line": 46,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 152,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST /mcp has no authentication/authorization (confirmed: SecurityConfig.configureBasicAuthentication only restricts patterns registered via BasicAuthentication beans, and configureCsrf explicitly exempts /mcp; anyRequest() is permitAll()). The 'tools/call' -> 'execute_command' path (lines 135-152) returns the entire process environment via System.getenv() to any unauthenticated caller, filtering only one specific variable. Any secret exposed to the process via env vars (used throughout this app's other challenges) is disclosed.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.missing-auth-credential-disclosure-endpoint",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge58Controller.java",
+      "start": {
+        "line": 21,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET /error-demo/database-connection is unauthenticated and unconditionally calls Challenge58.simulateDatabaseConnectionError(), which (Challenge58.java:46-58) builds an error message embedding the full DB connection string including the plaintext password 'SuperSecretDB2024!' (Challenge58.java:18-19) and returns it verbatim in the HTTP response body, also logging it via log.error at line 55.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-db-credential",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge58.java",
+      "start": {
+        "line": 18,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 19,
+        "col": 0,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A full JDBC connection string with embedded plaintext DB credential ('user=dbadmin&password=SuperSecretDB2024!') is a hardcoded constant in source, and is both logged (line 55) and returned to any caller via Challenge58Controller's unauthenticated endpoint.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.missing-auth-confused-deputy-mcp",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge62McpController.java",
+      "start": {
+        "line": 87,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 205,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "POST /mcp62 is unauthenticated (not covered by SecurityConfig's BasicAuthentication patterns; explicitly CSRF-exempted). handleReadGoogleDriveDocument (lines 163-205) lets any unauthenticated caller supply an arbitrary document_id, which is then fetched from Google Drive using the server's privileged service-account OAuth token (getServiceAccountAccessToken, lines 307-322). The caller thereby borrows the service account's elevated Drive permissions to read documents they would not otherwise be authorized to access -- a confused-deputy privilege escalation reachable without any authentication. Document-id format validation (line 364-366) mitigates classic SSRF but not this authorization bypass.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-441: Unintended Proxy or Intermediary ('Confused Deputy')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-telegram-bot-token",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge61.java",
+      "start": {
+        "line": 203,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 206,
+        "col": 0,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getBotToken() double-Base64-decodes a literal string into a live Telegram Bot API token, used to call api.telegram.org (e.g. line 91, 135, 156, 174). The obfuscation (double base64) is trivially reversible and the credential grants full control of the bot. The identical pattern is duplicated in challenge61/TelegramWebhookController.java:128-131.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.webhook-auth-bypass-on-empty-token",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/challenge61/TelegramWebhookController.java",
+      "start": {
+        "line": 35,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 53,
+        "col": 70,
+        "offset": 0
+      },
+      "extra": {
+        "message": "webhookToken defaults to \"\" via @Value(\"${challenge61.webhook.token:}\"). The guard 'if (!webhookToken.isEmpty() && !webhookToken.equals(secretToken))' (line 53) is a no-op whenever the property is left unset, so POST /telegram/webhook/challenge61 accepts and processes ANY unauthenticated request (triggering sendSecretMessage) when the webhook is enabled but no token is configured -- the default-safe behavior should be to reject, not accept, when no token is configured.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-admin-credential-security-filter",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/authchallenge/Challenge37.java",
+      "start": {
+        "line": 23,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 42,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A fixed double-Base64-encoded password literal (line 23) is decoded and wired directly into a live Spring Security BasicAuthentication bean (lines 34-42) that gates the real /authenticated/** URL pattern (enforced by SecurityConfig.configureBasicAuthentication). Anyone who reads the source recovers the admin ('Aladdin') credential and can authenticate to every endpoint under /authenticated/**, including AuthenticatedRestControllerChallenge37's /authenticated/challenge37.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.missing-auth-localstorage-secret-endpoint",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/challenge30/ChallengeRestController.java",
+      "start": {
+        "line": 19,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "GET /hidden has no Spring Security restriction (only @Hidden, which merely removes it from Swagger docs -- security through obscurity, not access control) and returns challenge30's full secret solution to any unauthenticated caller.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.sensitive-data-in-audit-log",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/challenge42/AuditConfiguration.java",
+      "start": {
+        "line": 17,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 0,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A generated apiKey (line 17) is written directly into an InMemoryAuditEventRepository AuditEvent (lines 22-23) at startup. If Spring Boot Actuator's audit-events endpoint is exposed, this discloses the key to anyone who can query it.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.secret-value-logged",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge8.java",
+      "start": {
+        "line": 42,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 42,
+        "col": 61,
+        "offset": 0
+      },
+      "extra": {
+        "message": "log.info writes the computed challenge answer/secret value in plaintext to application logs at INFO level, exposing it to anyone with log access.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.generic-exception-message-leak",
+      "path": "src/main/java/org/owasp/wrongsecrets/ApiExceptionAdvice.java",
+      "start": {
+        "line": 46,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 53,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The catch-all @ExceptionHandler(Exception.class) returns ex.getMessage() verbatim (line 50) to the client for any unhandled exception thrown by any @RestController in the app. Unlike the sibling ResponseStatusException handler whose messages are developer-authored, this echoes arbitrary runtime exception text (potential internal class names, paths, driver/IO errors) to an unauthenticated caller.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-209: Generation of Error Message Containing Sensitive Information"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-login-password",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/WrongSecretsConstants.java",
+      "start": {
+        "line": 9,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 9,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Login password literal embedded directly in source, exposed via Challenge1.getAnswer() (Challenge1.java:12).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-key-material",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/WrongSecretsConstants.java",
+      "start": {
+        "line": 10,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 10,
+        "col": 70,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Base64 cryptographic key material baked into source as a public constant.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-value-annotation-literal",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge18.java",
+      "start": {
+        "line": 24,
+        "col": 25,
+        "offset": 0
+      },
+      "end": {
+        "line": 24,
+        "col": 58,
+        "offset": 0
+      },
+      "extra": {
+        "message": "@Value is given a bare literal 'aHVudGVyMg==' (no ${...} placeholder), so Spring injects this fixed base64-encoded password unconditionally; it cannot be externally configured, making it a true hardcoded secret in source.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-aes-key",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/kubernetes/Challenge33.java",
+      "start": {
+        "line": 54,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 54,
+        "col": 75,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Fixed 16-byte AES key 'Letsencryptnow!!' embedded in source, used in decrypt() (called 3x from getSolution(), lines 42-47) to recover the real challenge secret from ciphertext. Anyone with source access recovers the key and decrypts the protected value.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-aes-key",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge25.java",
+      "start": {
+        "line": 36,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 36,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Fixed AES key 'thiszthekeytoday' embedded in source and used to decrypt the challenge's actual ciphertext in quickDecrypt().",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-aes-key",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge26.java",
+      "start": {
+        "line": 36,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 36,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Fixed AES key 'thiszthekeytoday' embedded in source and used to decrypt the challenge's actual ciphertext in quickDecrypt() (identical pattern to Challenge25/Challenge27).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-aes-key",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge27.java",
+      "start": {
+        "line": 36,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 36,
+        "col": 76,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Fixed AES key 'thiszthekeytoday' embedded in source and used to decrypt the challenge's actual ciphertext in quickDecrypt() (identical pattern to Challenge25/Challenge26).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-aes-key",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge32.java",
+      "start": {
+        "line": 40,
+        "col": 11,
+        "offset": 0
+      },
+      "end": {
+        "line": 40,
+        "col": 73,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Fixed AES key 'AIKnowsThisKey12' embedded in source, used to triple-decrypt the challenge's real ciphertext in getSolution()/decrypt().",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-aes-key-iv-cbc-no-integrity",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge35.java",
+      "start": {
+        "line": 51,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 54,
+        "col": 0,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Fixed AES key ('1234567890123456...') and fixed IV ('1234567890123456') embedded in source and used for AES/CBC/PKCS5Padding decryption with no HMAC/integrity check (FindBugs CIPHER_INTEGRITY explicitly suppressed at line 40-43).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-321: Use of Hard-coded Cryptographic Key"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-passphrase-iv",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge54.java",
+      "start": {
+        "line": 32,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 39,
+        "col": 0,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Hardcoded passphrase ('key_to_decrypt_the_secret', line 33) and hardcoded IV ('0123456789abcdef', line 39) used to AES/CBC-decrypt the real embedded ciphertext (line 32) in decryptAES().",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-key-iv-padding-oracle",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge63.java",
+      "start": {
+        "line": 28,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 0,
+        "offset": 0
+      },
+      "extra": {
+        "message": "HARDCODED_KEY and HARDCODED_IV literals used with AES/CBC/PKCS5Padding (line 41) to decrypt an embedded ciphertext, in a class whose own documentation acknowledges the padding-oracle weakness.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-key-iv",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge68.java",
+      "start": {
+        "line": 25,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 26,
+        "col": 0,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Fixed AES key 'SuperSecretKey12' and fixed IV 'InitVector12' embedded in source, used for AES/GCM decryption of an embedded ciphertext.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-pbkdf2-input-static-salt",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge34.java",
+      "start": {
+        "line": 29,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 36,
+        "col": 0,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A static plaintext string (line 29) is fed into PBKDF2 together with a hardcoded, non-random salt 'secret_salt' (line 33, the code's own comment notes it must stay static 'otherwise the key is not reusable'). A fixed salt defeats PBKDF2's protection against precomputation/rainbow-table attacks across deployments.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-760: Use of a One-Way Hash with a Predictable Salt"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.static-iv-gcm-reuse",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge13.java",
+      "start": {
+        "line": 65,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 71,
+        "col": 0,
+        "offset": 0
+      },
+      "extra": {
+        "message": "An all-zero 12-byte IV (Arrays.fill, line 66-69) is used as the GCM nonce for AES/GCM/NoPadding encryption with a user-supplied key. Reusing a static/zero nonce under AES-GCM breaks GCM's authentication and confidentiality guarantees for any key reused across invocations (nonce-reuse attack), acknowledged in the code's own comment as a deliberately weak 'poor-man's convergent encryption'.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-329: Not Using a Random IV with CBC Mode",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.static-iv-gcm-reuse",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge15.java",
+      "start": {
+        "line": 68,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 71,
+        "col": 0,
+        "offset": 0
+      },
+      "extra": {
+        "message": "An all-zero 12-byte IV (Arrays.fill, line 69-71) is used as the GCM nonce in quickDecrypt(), the function that recovers the actual secret (spoiler()/answerCorrect() both call it). Static/zero IVs with AES-GCM break the mode's security guarantees under key reuse.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-329: Not Using a Random IV with CBC Mode",
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.ecb-mode-weak-crypto",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge39.java",
+      "start": {
+        "line": 51,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 56,
+        "col": 46,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Cipher.getInstance(\"AES\") with no mode specified defaults to ECB, which leaks block-level plaintext patterns. Used to decrypt the challenge's real secret; the key is the classpath resource's filename, which is itself discoverable, compounding the weakness.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.ecb-mode-key-colocated-with-secret",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge40.java",
+      "start": {
+        "line": 52,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 57,
+        "col": 44,
+        "offset": 0
+      },
+      "extra": {
+        "message": "Cipher.getInstance(\"AES\") defaults to ECB mode (weak). Additionally the decryption key ('key' field, line 49) is read from the exact same JSON resource as the ciphertext ('secret' field, line 47), so the key and the data it protects are co-located in the same shipped artifact.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+            "CWE-312: Cleartext Storage of Sensitive Information"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.weak-hash-md5-password-comparison",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge41.java",
+      "start": {
+        "line": 52,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 52,
+        "col": 55,
+        "offset": 0
+      },
+      "extra": {
+        "message": "MessageDigest.getInstance(\"MD5\") is used to hash candidate password values (hashWithMd5) that feed the real answerCorrect() comparison logic (lines 34-44) -- a cryptographically broken digest used in an actual credential-verification path.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.weak-hash-md5-as-kdf-ecb-decrypt",
+      "path": "src/main/java/org/owasp/wrongsecrets/challenges/docker/Challenge49.java",
+      "start": {
+        "line": 68,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 89,
+        "col": 29,
+        "offset": 0
+      },
+      "extra": {
+        "message": "MD5 (line 68) is used as an ad-hoc KDF whose output directly becomes an AES key (line 85), and Cipher.getInstance(\"AES\") (line 89) defaults to ECB mode -- a stacked weak-crypto pattern (weak KDF + weak mode) protecting the real challenge secret in decrypt().",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.plaintext-password-storage-noop-encoder",
+      "path": "src/main/java/org/owasp/wrongsecrets/SecurityConfig.java",
+      "start": {
+        "line": 36,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 48,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "userDetailsService registers every BasicAuthentication bean's password with Spring's '{noop}' PasswordEncoder prefix (line 43), meaning passwords are held and compared in plaintext by the live Spring Security UserDetailsService rather than being hashed.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-256: Unprotected Storage of Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.weak-csp-unsafe-inline",
+      "path": "src/main/java/org/owasp/wrongsecrets/SecurityHeaderAddingFilter.java",
+      "start": {
+        "line": 23,
+        "col": 7,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 17,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The application-wide Content-Security-Policy header includes 'script-src 'self' 'unsafe-inline'' and 'style-src 'self' 'unsafe-inline'', which permits execution of inline <script> and inline style blocks, substantially weakening CSP's main XSS-mitigation benefit for every response in the app.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag",
+            "CWE-16: Configuration"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.non-constant-time-secret-comparison",
+      "path": "src/main/java/org/owasp/wrongsecrets/oauth/TokenController.java",
+      "start": {
+        "line": 36,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 36,
+        "col": 56,
+        "offset": 0
+      },
+      "extra": {
+        "message": "client_secret is compared via String.equals (short-circuits on first mismatching byte), a non-constant-time comparison of a secret value on the /token OAuth endpoint, which could theoretically enable a timing side-channel to recover the secret byte-by-byte.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-208: Observable Timing Discrepancy"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

