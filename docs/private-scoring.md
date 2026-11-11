@@ -17,6 +17,10 @@ The private authority fixes five repository commits and a versioned GT snapshot.
 
 Publishing a receipt exposes aggregate counts but no vulnerability locations, labels, snippets or submitted finding files. The receipt's source-commit field is a participant assertion, not execution proof. Because GT is withheld, external readers cannot independently reproduce the score from public data. The authority hash commits to a fixed private snapshot for later confidential audit; it does not reveal that snapshot or independently certify its quality.
 
+## Launch preview
+
+Kolega's `python-large` hybrid profile produced the published dev receipt `5e1866eda9274e55ac9eaa2a4b17a11b` on five pinned repositories: F3 **0.5684**, recall **0.6847**, 1,331 matches, 4,588 unmatched findings and 613 misses against 1,944 scored rows. The private run record verifies five successful scan outputs and an exact local scorer match. This receipt remains a dev preview under the internal category contract, separate from the public benchmark ranking and from saved-output research projections.
+
 The current large-repository authority has no row-level CWE labels and its matching contract uses private category IDs. External scanners cannot fairly submit under that contract without receiving the private taxonomy. Before external onboarding, a new private authority needs reviewed row-level standard identities, a versioned matcher, and like-for-like rescoring of every entrant. The receipt transport and dashboard can stay the same.
 
 `build_site.py` writes `private-score-config.js` from `REALVULN_PRIVATE_SCORE_API`. Leave it unset until the production API is approved and configured. Only an HTTPS API origin may be supplied. The dev endpoint is intentionally absent from this repository.
