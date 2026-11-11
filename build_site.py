@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -1405,15 +1406,25 @@ def main() -> None:
             tokens[f"{{{{CWE_{tag}_LLM}}}}"] = str(c["llm"])
             tokens[f"{{{{CWE_{tag}_RULE}}}}"] = str(c["rule"])
 
+    private_api = (_load_dotenv_flag("REALVULN_PRIVATE_SCORE_API") or "").rstrip("/")
+    if private_api and not re.fullmatch(r"https://[A-Za-z0-9.-]+(?::[0-9]+)?", private_api):
+        raise ValueError("REALVULN_PRIVATE_SCORE_API must be an HTTPS origin")
+    private_config_version = hashlib.sha256(private_api.encode()).hexdigest()[:12]
+
     # cache-busting version derived from the data build time, so a regen forces
     # browsers (and dev servers like Live Server) to reload the generated assets
     cb_ver = re.sub(r"\D", "", str(data.get("generated_at", "")))[:14] or "1"
 
     def bust(text: str) -> str:
         # append ?v=<ver> to local generated JS/CSS refs (skip absolute URLs)
+        def replacement(match: re.Match[str]) -> str:
+            asset = match.group(2)
+            version = private_config_version if asset == "private-score-config.js" else cb_ver
+            return f'{match.group(1)}="{asset}?v={version}"'
+
         return re.sub(
             r'(src|href)="(?!https?:)([^"?]+\.(?:js|css))"',
-            lambda m: f'{m.group(1)}="{m.group(2)}?v={cb_ver}"',
+            replacement,
             text,
         )
 
@@ -1478,6 +1489,11 @@ def main() -> None:
             shutil.copy2(src, dst)
         print(f"copied {src.name}")
 
+    # This public value selects the receipt API. It contains no GT or credentials.
+    (REPORTS / "private-score-config.js").write_text(
+        "window.REALVULN_PRIVATE_SCORE_API = " + json.dumps(private_api) + ";\n"
+    )
+
     # sitemap.xml — generated from the pages that actually exist so it never
     # drifts as scanner detail pages are added/removed.
     write_sitemap()
@@ -1509,6 +1525,7 @@ def write_sitemap() -> None:
     nav_pages = [
         ("index.html", "1.0"),
         ("dashboard.html", "0.9"),
+        ("private-scores.html", "0.6"),
         ("methodology.html", "0.7"),
         ("dataset.html", "0.7"),
         ("findings.html", "0.7"),
