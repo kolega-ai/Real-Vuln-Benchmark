@@ -1,1 +1,1 @@
-window.REALVULN_PRIVATE_SCORE_API = "";
+window.REALVULN_PRIVATE_SCORE_API = "https://results.realvuln.com";

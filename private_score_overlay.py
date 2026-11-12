@@ -17,7 +17,7 @@ TABS = ("all", "python", "intentional", "python:intentional")
 AUTHORITY = "large-five-v1.0.0"
 AUTHORITY_SHA256 = "0feaa1f936e69d655ac5e520b8b57c5193c0b440c0896601de5199369710f414"
 CONTRACT = "python-large-five-span-v1"
-OFFICIAL_RUN = "775af0788f2f4f5087c922f85794fa2e"
+OFFICIAL_RUN = "bd2cab542e0041e788e4cc6b480196f2"
 
 
 def _metrics(row: dict) -> None:
