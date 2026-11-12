@@ -340,14 +340,15 @@ SCANNER_PROVIDERS: dict[str, str] = {
 # the version label. HTML allowed.
 SCANNER_NOTES: dict[str, str] = {
     "kolega-devsec-max-v0.1.0": (
-        "<strong>Full 203-repository preview coverage.</strong> Hybrid deterministic + LLM-review "
-        "scan over 66 Python, 74 TypeScript/JavaScript, and 63 Java repositories. The Python "
+        "<strong>Full 208-repository coverage.</strong> The 203 public results comprise a hybrid deterministic + LLM-review "
+        "scan over 66 Python, 74 TypeScript/JavaScript, and 63 Java repositories. Five large Python repositories "
+        "are scored privately and contribute aggregate receipt counts to this headline. The public Python "
         "results are the V0.0.1 run published in 2.1.0 (unchanged; the scanner's Python "
         "path did not change between the two versions); the TS/JS results are the 3.0.0 "
         "run. The provisional Java 50-detector run recorded $9.13 for the exact 12,641-alert "
-        "set shown here. Combined model/API-equivalent cost is $26.86: $3.17 for Python "
+        "public set. Public-repository model/API-equivalent cost is $26.86: $3.17 for Python "
         "(legacy hand-entered figure), $14.56 for TS/JS, and $9.13 for Java. This is an "
-        "estimate, not billed spend. Ground truth was never supplied to the scanner."
+        "estimate, not billed spend; private-run cost is unavailable. Ground truth was never supplied to the scanner."
     ),
     "claude-opus-5-cc-agentic-v1": (
         "<strong>Claude Code harness; post-hoc v2 scoring.</strong> Claude Opus 5 "
@@ -635,6 +636,9 @@ def scanners_from_aggregates(
             cpv_val = None
         else:
             cpv_val = round(total_cost / tp * 100, 2)
+        if a.get("private_receipt"):
+            cost_val = None  # no measured cost for the five private repository runs
+            cpv_val = None
         out.append(
             {
                 "name": name,
@@ -645,8 +649,8 @@ def scanners_from_aggregates(
                 "repos": a.get("repos_scored", repos_total),
                 "f2": round1(micro["f2_score"]),
                 "f2s": round1(strict["f2_score"]),
-                "f3": round1(micro["f3_score"]),
-                "f3s": round1(strict["f3_score"]),
+                "f3": round(micro["f3_score"], 2) if a.get("private_receipt") else round1(micro["f3_score"]),
+                "f3s": round(strict["f3_score"], 2) if a.get("private_receipt") else round1(strict["f3_score"]),
                 # wf3: CVSS-weighted F3 — each GT hit/miss weighted by its CVSS
                 # base score, FPs by scanner-reported severity (scorer.metrics)
                 "wf3": round1(micro.get("cvss_f3_score", micro["f3_score"])),
@@ -944,7 +948,7 @@ def per_tier_bests(scanners: list[dict]) -> dict:
     return tok
 
 
-def repo_table_rows(gt_dir: Path) -> str:
+def repo_table_rows(gt_dir: Path, private_receipt: dict | None = None) -> str:
     """<tr> rows for the dataset repo table — name, framework pill, vuln/trap
     counts — straight from ground truth, sorted by vulnerability count desc."""
     FW = {"none": "custom"}
@@ -960,6 +964,9 @@ def repo_table_rows(gt_dir: Path) -> str:
         fw = (gt.get("framework") if isinstance(gt, dict) else None) or "none"
         lang = ((gt.get("language") if isinstance(gt, dict) else None) or "unknown").lower()
         repos.append((name, LANGUAGE_DISPLAY.get(lang, lang.title()), FW.get(fw, fw), vulns, traps))
+    if private_receipt:
+        repos.extend((name, "Python", "private GT", row["gt"], 0)
+                     for name, row in private_receipt["repo_scores"].items())
     repos.sort(key=lambda r: r[3], reverse=True)
     return "\n          ".join(
         f'<tr><td class="repo-id">{n}</td><td><span class="fw-pill">{lang}</span></td>'
@@ -999,6 +1006,9 @@ def count_ground_truth(gt_dir: Path) -> tuple[int, int, int, int, int]:
 def dataset_stats(data: dict, scanners: list[dict], repos_total: int) -> dict:
     # total Python LOC across every benchmark repo (summed from ground truth)
     repos, vulns, traps, non_scoring, loc = count_ground_truth(ROOT / "ground-truth")
+    if data.get("private_score_receipt"):
+        repos += 5
+        vulns += data["private_score_gt"]
     return {
         "repos": repos or repos_total,
         "vulns": vulns,
@@ -1200,15 +1210,15 @@ def write_llms_txt(dataset: dict, version: str) -> None:
         "",
         f"> An open, reproducible benchmark measuring how well security scanners "
         f"find real vulnerabilities in real code. Version {version}: "
-        f"{dataset['repos']} pinned Python repositories, "
+        f"{dataset['repos']} pinned repositories across Python, Java and TypeScript/JavaScript, "
         f"{dataset['vulns']:,} hand-labeled vulnerabilities and "
         f"{dataset['traps']:,} false-positive traps, "
         f"{dataset['scanners']} scanners compared. Ranked by F3 (recall-weighted).",
         "",
-        "Every ground-truth label, scanner output and scoring script is public so "
-        "results can be reproduced independently. RealVuln is maintained by John "
-        "Pellew and Faizan Raza of Kolega.Dev, whose scanner is itself one of the "
-        "evaluated tools — hence the open audit trail.",
+        "Public-corpus ground truth and scoring code are open. Five large Python "
+        "repositories use withheld ground truth and publish aggregate score receipts. "
+        "RealVuln is maintained by John Pellew and Faizan Raza of Kolega.Dev, "
+        "whose scanner is itself one of the evaluated tools.",
         "",
         "## Core pages",
         "",
@@ -1294,6 +1304,9 @@ def main() -> None:
     args = ap.parse_args()
 
     data = json.loads(Path(args.data).read_text())
+    from private_score_overlay import load_and_apply
+
+    data = load_and_apply(data, REPORTS / "private-score-launch.json")
     scanners, repos_total = build_scanners(data)
     tabs, tab_totals = build_tab_datasets(data, scanners, repos_total)
     cwe = build_cwe(data)
@@ -1349,6 +1362,20 @@ def main() -> None:
         "{{TRAP_PCT}}": f"{(dataset['traps'] / entries * 100):.1f}" if entries else "0",
         "{{VULN_PCT}}": f"{(dataset['vulns'] / entries * 100):.1f}" if entries else "0",
     }
+    receipt = json.loads((REPORTS / "private-score-launch.json").read_text())
+    pooled = data["aggregates"]["kolega-devsec-max-v0.1.0"]["strict_micro"]
+    tokens.update({
+        "{{POOLED_F3}}": f"{pooled['f3_score']:.2f}",
+        "{{PRIVATE_F3}}": f"{receipt['f3'] * 100:.2f}",
+        "{{PRIVATE_TP}}": f"{receipt['tp']:,}",
+        "{{PRIVATE_FP}}": f"{receipt['fp']:,}",
+        "{{PRIVATE_FN}}": f"{receipt['fn']:,}",
+        "{{PRIVATE_RECEIPT}}": receipt["run_id"],
+        "{{PRIVATE_REPO_ROWS}}": "".join(
+            f'<tr><td class="l">{("NetBox" if repo == "netbox" else repo.title())}</td><td>{row["f3"] * 100:.2f}%</td><td>{row["tp"]:,}</td><td>{row["fp"]:,}</td><td>{row["fn"]:,}</td></tr>'
+            for repo, row in sorted(receipt["repo_scores"].items())
+        ),
+    })
     # framework distribution + scanner-category bars/counts + per-tier bests,
     # all computed from live data so prose & panels never drift from the dataset
     fw_dist = framework_distribution(ROOT / "ground-truth")
@@ -1361,16 +1388,17 @@ def main() -> None:
     for gf in sorted((ROOT / "ground-truth").glob("*/ground-truth.json")):
         gd = json.loads(gf.read_text())
         auth[(gd.get("authorship") if isinstance(gd, dict) else None) or "unknown"] += 1
-    human = auth.get("human_authored", 0)
+    human = auth.get("human_authored", 0) + 5
     llm = auth.get("llm_generated", 0)
-    tot = sum(auth.values()) or 1
+    tot = (sum(auth.values()) + 5) or 1
     tokens["{{HUMAN_REPOS}}"] = str(human)
     tokens["{{LLM_REPOS}}"] = str(llm)
     tokens["{{HUMAN_PCT}}"] = f"{human / tot * 100:.0f}"
     tokens["{{LLM_PCT}}"] = f"{llm / tot * 100:.0f}"
-    tokens["{{REPO_TABLE_ROWS}}"] = repo_table_rows(ROOT / "ground-truth")
+    tokens["{{REPO_TABLE_ROWS}}"] = repo_table_rows(ROOT / "ground-truth", receipt)
     # per-language corpus split, from ground truth
     lang_counts = language_distribution(ROOT / "ground-truth")
+    lang_counts = [(lang, n + 5 if lang.lower() == "python" else n) for lang, n in lang_counts]
     tokens["{{LANG_COUNT}}"] = str(len(lang_counts))
     tokens["{{LANGUAGE_BARS}}"] = bar_rows(lang_counts)
     tokens["{{LANGUAGE_LIST}}"] = ", ".join(f"{n} {k}" for k, n in lang_counts)

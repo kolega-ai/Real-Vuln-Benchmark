@@ -1,6 +1,6 @@
 # Private scoring receipts
 
-The private benchmark uses a separate authority and scoring contract from the public corpus. Its ground truth, taxonomy and matching details stay in a private service. The public site displays only aggregate, service-issued receipts. The first dev service scores internal submissions; external registration is not open yet.
+The main RealVuln leaderboard includes five large Python repositories scored by a private authority. Their ground truth, taxonomy and submitted finding locations stay in the private service. The public site receives only aggregate, service-issued receipts. The first dev service scores internal submissions; external registration is not open yet.
 
 ## Submission
 
@@ -19,12 +19,12 @@ Publishing a receipt exposes aggregate counts but no vulnerability locations, la
 
 ## Launch preview
 
-Kolega's official private submission scored **F3 0.6002 (60.02%)** and recall **0.7253**: 1,410 matches, 4,585 unmatched findings and 534 misses against 1,944 scored rows on five pinned repositories. The private scorer independently scored all 5,995 submitted finding locations and issued published receipt `775af0788f2f4f5087c922f85794fa2e`. This is the score shown in the dev preview and remains separate from the public RealVuln corpus ranking.
+Kolega's official private submission scored **F3 0.6002 (60.02%)** and recall **0.7253**: 1,410 matches, 4,585 unmatched findings and 534 misses against 1,944 scored rows on five pinned repositories. The private scorer scored all 5,995 submitted finding locations and issued published receipt `775af0788f2f4f5087c922f85794fa2e`. Combined with Kolega DevSec Max's 203 public-repository counts, the main leaderboard covers **208 repositories**, with **7,559 matches, 17,817 unmatched findings, 1,503 misses and F3 70.69%**. The five-repository 60.02% is its component score, displayed on the same dashboard.
 
 The dashboard also shows aggregate F3, recall, matches, unmatched findings and misses for Sentry, Odoo, NetBox, Airflow and Saleor. The receipt contains only those per-repository totals, never finding or GT locations.
 
-The current large-repository authority has no row-level CWE labels and its matching contract uses private category IDs. External scanners cannot fairly submit under that contract without receiving the private taxonomy. Before external onboarding, a new private authority needs reviewed row-level standard identities, a versioned matcher, and like-for-like rescoring of every entrant. The receipt transport and dashboard can stay the same.
+The current large-repository authority has no row-level CWE labels and its matching contract uses private category IDs, whereas the public matcher gates on CWE. The pooled F3 uses the same TP/FP/FN formula, but its matching identity differs across the two subsets. External scanners cannot fairly submit under the current private contract without receiving the private taxonomy. Before external onboarding, a new private authority needs reviewed row-level standard identities, a versioned matcher, and like-for-like rescoring of every entrant. The receipt transport and dashboard can stay the same. CVSS-weighted and severity-filtered mixed-corpus metrics are withheld until the private receipt carries the required aggregates.
 
 `build_site.py` writes `private-score-config.js` from `REALVULN_PRIVATE_SCORE_API`. Leave it unset until the production API is approved and configured. Only an HTTPS API origin may be supplied. The dev endpoint is intentionally absent from this repository.
 
-The withheld authority has its own version and source pins. Scores from it must never be merged into the public benchmark ranking. No ground truth row, finding location, private category list, or scanner output belongs in this repository or its Git history.
+The withheld authority has its own version and source pins. Its aggregate counts are merged into the main ranking; no ground truth row, finding location, private category list, or scanner output belongs in this repository or its Git history. Scanners without a five-repository receipt have five additional unscanned repositories counted as misses in strict mode.

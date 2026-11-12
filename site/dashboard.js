@@ -78,7 +78,7 @@
   }
   function activeF(s) { return effF3(s); }
   function on(s) { return state.cats[s.cat]; }
-  function fmt(v) { return v.toFixed(1); }
+  function fmt(v) { return (Math.abs(v * 10 - Math.round(v * 10)) > 0.00001 ? v.toFixed(2) : v.toFixed(1)); }
   function effortTag(s) {
     return s.effort ? ' <span class="dim">·</span> <span title="Reasoning/thinking effort level">' + s.effort + ' effort</span>' : '';
   }
@@ -111,7 +111,7 @@
     setText('kpi-metric-lbl', 'Best ' + METRIC_LABEL[state.metric] + ' (' + state.mode + ')');
     setText('kpi-metric-sub', lead.name);
     // corpus-tab-dependent KPIs
-    setText('kpi-scanners-val', SC.length);
+    setText('kpi-scanners-val', state.tab === 'all' ? window.RV.DATASET.scanners : SC.length);
     setText('kpi-repos-val', tabTotal());
     setText('kpi-repos-sub', window.RV.TAB_LABELS ? window.RV.TAB_LABELS[state.tab] : 'All apps');
     var recLead = pool[0];
@@ -121,7 +121,7 @@
     var tabLoc = window.RV.TAB_LOC && window.RV.TAB_LOC[state.tab];
     var loc = tabLoc != null ? tabLoc : ((window.RV.DATASET && window.RV.DATASET.loc) || 0);
     setText('kpi-loc-val', loc ? loc.toLocaleString() : '—');
-    setText('kpi-loc-sub', state.lang === 'java' ? 'production source; tests excluded' : 'GT-recorded LOC');
+    setText('kpi-loc-sub', state.lang === 'java' ? 'public source; tests excluded' : 'public GT LOC; private LOC excluded');
   }
 
   // ---- leaderboard ----
