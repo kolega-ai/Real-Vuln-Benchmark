@@ -19,7 +19,7 @@ Publishing a receipt exposes aggregate counts but no vulnerability locations, la
 
 ## Launch preview
 
-Kolega's `python-large` hybrid profile produced the published dev receipt `5e1866eda9274e55ac9eaa2a4b17a11b` on five pinned repositories: F3 **0.5684**, recall **0.6847**, 1,331 matches, 4,588 unmatched findings and 613 misses against 1,944 scored rows. The private run record verifies five successful scan outputs and an exact local scorer match. This receipt remains a dev preview under the internal category contract, separate from the public benchmark ranking and from saved-output research projections.
+Kolega's official private submission scored **F3 0.6002 (60.02%)** and recall **0.7253**: 1,410 matches, 4,585 unmatched findings and 534 misses against 1,944 scored rows on five pinned repositories. The private scorer independently scored all 5,995 submitted finding locations and issued published receipt `775af0788f2f4f5087c922f85794fa2e`. This is the score shown in the dev preview and remains separate from the public RealVuln corpus ranking.
 
 The current large-repository authority has no row-level CWE labels and its matching contract uses private category IDs. External scanners cannot fairly submit under that contract without receiving the private taxonomy. Before external onboarding, a new private authority needs reviewed row-level standard identities, a versioned matcher, and like-for-like rescoring of every entrant. The receipt transport and dashboard can stay the same.
 
