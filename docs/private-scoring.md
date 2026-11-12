@@ -21,6 +21,8 @@ Publishing a receipt exposes aggregate counts but no vulnerability locations, la
 
 Kolega's official private submission scored **F3 0.6002 (60.02%)** and recall **0.7253**: 1,410 matches, 4,585 unmatched findings and 534 misses against 1,944 scored rows on five pinned repositories. The private scorer independently scored all 5,995 submitted finding locations and issued published receipt `775af0788f2f4f5087c922f85794fa2e`. This is the score shown in the dev preview and remains separate from the public RealVuln corpus ranking.
 
+The dashboard also shows aggregate F3, recall, matches, unmatched findings and misses for Sentry, Odoo, NetBox, Airflow and Saleor. The receipt contains only those per-repository totals, never finding or GT locations.
+
 The current large-repository authority has no row-level CWE labels and its matching contract uses private category IDs. External scanners cannot fairly submit under that contract without receiving the private taxonomy. Before external onboarding, a new private authority needs reviewed row-level standard identities, a versioned matcher, and like-for-like rescoring of every entrant. The receipt transport and dashboard can stay the same.
 
 `build_site.py` writes `private-score-config.js` from `REALVULN_PRIVATE_SCORE_API`. Leave it unset until the production API is approved and configured. Only an HTTPS API origin may be supplied. The dev endpoint is intentionally absent from this repository.

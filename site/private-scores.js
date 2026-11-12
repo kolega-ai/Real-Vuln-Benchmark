@@ -5,7 +5,26 @@
   function status(id, message) { el(id).textContent = message; }
   function validId(value) { return /^[0-9a-f]{32}$/.test(value); }
   function cell(row, value) { var td = document.createElement('td'); td.textContent = String(value); row.appendChild(td); }
-  function percent(value) { return (Number(value) * 100).toFixed(1) + '%'; }
+  function percent(value) { return (Number(value) * 100).toFixed(2) + '%'; }
+  function renderRepoScores(receipt) {
+    var body = el('repo-scores'); body.replaceChildren();
+    var scores = receipt && receipt.repo_scores;
+    if (!scores) { status('repo-status', 'Repository breakdown is unavailable for this receipt.'); return; }
+    var names = { sentry: 'Sentry', odoo: 'Odoo', netbox: 'NetBox', airflow: 'Airflow', saleor: 'Saleor' };
+    ['sentry', 'odoo', 'netbox', 'airflow', 'saleor'].forEach(function (repo) {
+      if (!scores[repo]) return;
+      var r = scores[repo], row = document.createElement('tr');
+      cell(row, names[repo]); cell(row, percent(r.f3)); cell(row, percent(r.recall));
+      cell(row, r.tp); cell(row, r.fp); cell(row, r.fn); body.appendChild(row);
+    });
+    status('repo-status', body.children.length + ' pinned repositories · ' + receipt.gt + ' scored ground-truth rows in total.');
+  }
+  function renderFeatured(receipt) {
+    if (!receipt) { status('featured-score', 'No score yet'); status('featured-detail', ''); return; }
+    status('featured-score', percent(receipt.f3));
+    status('featured-detail', receipt.scanner + ' · ' + receipt.tp + ' matches · ' + receipt.fp + ' unmatched · ' + receipt.fn + ' misses');
+    renderRepoScores(receipt);
+  }
   var navToggle = document.querySelector('.nav-toggle'), navMenu = el('mobile-menu');
   if (navToggle && navMenu) navToggle.addEventListener('click', function () {
     var open = navMenu.classList.toggle('open');
@@ -38,6 +57,7 @@
         } else td.textContent = r.run_id.slice(0, 8);
         row.appendChild(td); body.appendChild(row);
       });
+      renderFeatured(result.receipts[0]);
       status('leaderboard-status', api
         ? (result.receipts.length ? result.receipts.length + ' published receipt(s)' : 'No published receipts yet.')
         : 'Dev preview receipt. Production submissions are not open yet.');
@@ -49,6 +69,7 @@
     try {
       var r = await get('/receipts/' + id);
       status('lookup-status', r.scanner + ': F3 ' + percent(r.f3) + ', ' + r.tp + ' matches, ' + r.fp + ' unmatched, ' + r.fn + ' misses. ' + (r.published ? 'Published.' : 'Unpublished.'));
+      renderFeatured(r);
     } catch (_) { status('lookup-status', 'Receipt not found or access denied.'); }
   });
   el('publish-button').addEventListener('click', async function () {
