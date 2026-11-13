@@ -7,7 +7,7 @@ The main RealVuln leaderboard includes five large Python repositories scored by 
 1. A participant runs their scanner on the specified pinned repositories.
 2. The participant sends normalized locations (`repo`, `file`, category, line or bounded span, optional CWE labels) to the private API over HTTPS. The dashboard never accepts finding files.
 3. The service scores locations in memory, returns an unpublished receipt and discards the submitted locations. It stores the receipt and a hash of the normalized submission, not the findings.
-4. To request publication, the participant opens a RealVuln GitHub issue with the receipt ID. An operator reviews and publishes an approved receipt using AWS IAM, then updates the dashboard. The participant cannot publish through the scoring API.
+4. The participant can look up the aggregate receipt by its unguessable ID, even while unpublished. To request dashboard publication, they open a RealVuln GitHub issue with that ID. An operator reviews and publishes an approved receipt using AWS IAM, then updates the dashboard. The participant cannot publish through the scoring API.
 
 The private service necessarily sees locations while scoring. A participant who cannot disclose even transient normalized locations needs a separately agreed trusted execution arrangement; a self-reported score is not verifiable. A receipt proves the service computed the score for a submission. It does not attest that the scanner independently found the locations or completed every repository. The receipt lookup explains this limit.
 

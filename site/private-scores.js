@@ -15,6 +15,7 @@
     el('result-title').textContent = names[receipt.scanner] || receipt.scanner;
     el('result-f3').textContent = percent(receipt.f3) + ' F3';
     el('result-detail').textContent = percent(receipt.recall) + ' recall · ' + Number(receipt.tp).toLocaleString() + ' matches · ' + Number(receipt.fp).toLocaleString() + ' unmatched · ' + Number(receipt.fn).toLocaleString() + ' misses';
+    el('result-state').textContent = receipt.published ? 'Published receipt.' : 'Unpublished receipt · visible by ID only.';
     el('receipt-result').hidden = false;
     el('lookup-status').textContent = '';
   }
