@@ -184,6 +184,82 @@
     });
   }
 
+  // ---- repository size / per-repository F3 ----
+  var sizeHighlight = '';
+  function renderSizeChart() {
+    var svg = document.getElementById('size-chart');
+    var picker = document.getElementById('size-chart-scanner');
+    if (!svg || !picker) return;
+    var points = (window.RV.REPO_SIZE_POINTS || []).filter(function (p) {
+      return p.tabs.indexOf(state.tab) !== -1;
+    });
+    var scanners = SC.filter(on);
+    if (!scanners.some(function (s) { return s.slug === sizeHighlight; })) sizeHighlight = '';
+    picker.replaceChildren();
+    picker.add(new Option('All scanners', ''));
+    scanners.forEach(function (s) { picker.add(new Option(s.name, s.slug)); });
+    picker.value = sizeHighlight;
+    svg.replaceChildren();
+    if (!points.length || !scanners.length) return;
+
+    var W = 1150, H = 390, m = { t: 18, r: 25, b: 54, l: 57 };
+    var pw = W - m.l - m.r, ph = H - m.t - m.b;
+    var lo = Math.floor(Math.log10(Math.min.apply(null, points.map(function (p) { return p.loc; }))));
+    var hi = Math.ceil(Math.log10(Math.max.apply(null, points.map(function (p) { return p.loc; }))));
+    if (hi === lo) hi++;
+    function X(loc) { return m.l + (Math.log10(loc) - lo) / (hi - lo) * pw; }
+    function Y(score) { return m.t + (1 - score) * ph; }
+    function focus(slug) {
+      svg.classList.toggle('focused', !!slug);
+      svg.querySelectorAll('.size-series').forEach(function (g) {
+        g.classList.toggle('active', g.getAttribute('data-slug') === slug);
+      });
+    }
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.classList.toggle('few', scanners.length <= 6);
+    svg.classList.toggle('focused', !!sizeHighlight);
+    for (var y = 0; y <= 100; y += 20) {
+      svg.appendChild(svgEl('line', { class: 'size-grid', x1: m.l, y1: Y(y / 100), x2: W - m.r, y2: Y(y / 100) }));
+      svg.appendChild(svgEl('text', { class: 'size-axis', x: m.l - 10, y: Y(y / 100) + 4, 'text-anchor': 'end' }, y + '%'));
+    }
+    for (var power = lo; power <= hi; power++) {
+      var loc = Math.pow(10, power);
+      svg.appendChild(svgEl('line', { class: 'size-grid', x1: X(loc), y1: m.t, x2: X(loc), y2: H - m.b }));
+      svg.appendChild(svgEl('text', { class: 'size-axis', x: X(loc), y: H - m.b + 19, 'text-anchor': 'middle' }, loc >= 1000000 ? (loc / 1000000) + 'M' : loc >= 1000 ? (loc / 1000) + 'k' : String(loc)));
+    }
+    svg.appendChild(svgEl('text', { class: 'size-axis', x: m.l + pw / 2, y: H - 7, 'text-anchor': 'middle' }, 'Repository size · source LOC (log scale)'));
+    svg.appendChild(svgEl('text', { class: 'size-axis', x: 13, y: m.t + ph / 2, 'text-anchor': 'middle', transform: 'rotate(-90 13 ' + (m.t + ph / 2) + ')' }, 'F3 per repository'));
+
+    scanners.forEach(function (s, i) {
+      var rows = points.filter(function (p) { return p.scores[s.slug] != null; });
+      if (!rows.length) return;
+      var color = 'hsl(' + ((34 + i * 137.508) % 360) + ' 58% 67%)';
+      var g = svgEl('g', { class: 'size-series' + (s.slug === sizeHighlight ? ' active' : ''), 'data-slug': s.slug });
+      var d = rows.map(function (p, j) { return (j ? 'L' : 'M') + X(p.loc).toFixed(2) + ',' + Y(p.scores[s.slug]).toFixed(2); }).join(' ');
+      g.appendChild(svgEl('path', { d: d, stroke: color }));
+      rows.forEach(function (p) {
+        var score = p.scores[s.slug];
+        var c = svgEl('circle', { cx: X(p.loc), cy: Y(score), r: 3.2, fill: color });
+        c.addEventListener('mouseenter', function (e) {
+          focus(s.slug);
+          showTip('<div class="tt-name">' + s.name + '</div><div class="tt-cat">' + p.repo + ' · ' + p.loc.toLocaleString() + ' LOC · ' + (score * 100).toFixed(2) + '% F3</div>', e.clientX, e.clientY);
+        });
+        c.addEventListener('mousemove', function (e) { if (tip) { tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; } });
+        c.addEventListener('mouseleave', function () { hideTip(); focus(sizeHighlight); });
+        g.appendChild(c);
+      });
+      svg.appendChild(g);
+    });
+  }
+  var sizePicker = document.getElementById('size-chart-scanner');
+  if (sizePicker) sizePicker.addEventListener('change', function () {
+    sizeHighlight = sizePicker.value;
+    document.getElementById('size-chart').classList.toggle('focused', !!sizeHighlight);
+    document.querySelectorAll('#size-chart .size-series').forEach(function (g) {
+      g.classList.toggle('active', g.getAttribute('data-slug') === sizeHighlight);
+    });
+  });
+
   // ---- scatter ----
   function renderScatter(id, cfg) {
     var svg = document.getElementById(id); if (!svg) return;
@@ -307,7 +383,7 @@
   }
 
   // ---- controls ----
-  function rerenderAll() { renderKPIs(); renderLeaderboard(); renderPR(); renderCost(); renderRankings(); renderCategory(); }
+  function rerenderAll() { renderKPIs(); renderLeaderboard(); renderSizeChart(); renderPR(); renderCost(); renderRankings(); renderCategory(); }
 
   // ---- corpus tabs: language (Overall / Python / TS-JS / ...) x authorship ----
   function switchTab() {

@@ -1058,6 +1058,7 @@ def emit_data_js(
     tab_totals: dict | None = None,
     languages: dict | None = None,
     tab_loc: dict | None = None,
+    repo_size_points: list[dict] | None = None,
 ) -> str:
     lines = []
     lines.append("/* ============================================================")
@@ -1138,6 +1139,7 @@ def emit_data_js(
         lines.append("    LANG_LABELS: " + json.dumps(lang_labels) + ",")
         lines.append("    SRC_LABELS: " + json.dumps(src_labels) + ",")
     lines.append("    CWE: CWE,")
+    lines.append("    REPO_SIZE_POINTS: " + json.dumps(repo_size_points or [], separators=(",", ":")) + ",")
     lines.append(
         "    CAT_LABEL: { sec: 'Security-Specialized', llm: 'General-Purpose LLM', rule: 'Rule-Based SAST' },"
     )
@@ -1153,6 +1155,39 @@ def emit_data_js(
     lines.append("})();")
     lines.append("")
     return "\n".join(lines)
+
+
+def repo_size_points(data: dict, gt_dir: Path, receipts: list[dict]) -> list[dict]:
+    """Public per-repo scores plus published aggregate private-repo scores."""
+    from private_score_overlay import RECEIPT_SCANNERS, REPOS, _validated_totals
+
+    points = []
+    tab_sets = {tab: set(repos) for tab, repos in data["tab_repos"].items()}
+    for repo, scores in data["grid"].items():
+        gt = json.loads((gt_dir / repo / "ground-truth.json").read_text())
+        loc = int(gt.get("loc") or 0)
+        if loc <= 0:
+            continue
+        fs = {slug: row["f3"] for slug, row in scores.items()
+              if row is not None and row.get("f3") is not None}
+        points.append({"repo": repo, "loc": loc, "scores": fs,
+                       "tabs": [tab for tab, members in tab_sets.items() if repo in members]})
+
+    # These are source-size aggregates only, recorded for the same five pinned
+    # repositories as the private receipts. No GT rows or finding locations cross.
+    private_loc = {"airflow": 639003, "netbox": 291915, "odoo": 680640,
+                   "saleor": 262936, "sentry": 816371}
+    private_points = {repo: {"repo": repo, "loc": private_loc[repo], "scores": {},
+                             "tabs": [tab for tab, members in tab_sets.items()
+                                      if "private-" + repo in members]}
+                      for repo in REPOS}
+    for receipt in receipts:
+        _validated_totals(receipt)
+        slug = RECEIPT_SCANNERS[receipt["scanner"]]
+        for repo, score in receipt["repo_scores"].items():
+            private_points[repo]["scores"][slug] = score["f3"]
+    points.extend(private_points.values())
+    return sorted(points, key=lambda p: (p["loc"], p["repo"]))
 
 
 CAT_INDEX_LABEL = {
@@ -1307,6 +1342,9 @@ def main() -> None:
     from private_score_overlay import load_and_apply
 
     data = load_and_apply(data, REPORTS / "private-score-launch.json")
+    receipts = json.loads((REPORTS / "private-score-launch.json").read_text())
+    if not isinstance(receipts, list):
+        receipts = [receipts]
     scanners, repos_total = build_scanners(data)
     tabs, tab_totals = build_tab_datasets(data, scanners, repos_total)
     cwe = build_cwe(data)
@@ -1321,6 +1359,7 @@ def main() -> None:
         emit_data_js(
             scanners, cwe, dataset, tabs, tab_totals, data.get("languages"),
             tab_loc(data, ROOT / "ground-truth"),
+            repo_size_points(data, ROOT / "ground-truth", receipts),
         )
     )
     print(
