@@ -1,6 +1,8 @@
 (function () {
   'use strict';
   var api = window.REALVULN_PRIVATE_SCORE_API;
+  var launchReceipts = [];
+  var officialScanner = 'kolega-python-large-official';
   function el(id) { return document.getElementById(id); }
   function status(id, message) { el(id).textContent = message; }
   function validId(value) { return /^[0-9a-f]{32}$/.test(value); }
@@ -20,7 +22,12 @@
     status('repo-status', body.children.length + ' pinned repositories · ' + receipt.gt + ' scored ground-truth rows in total.');
   }
   function renderFeatured(receipt) {
-    if (!receipt) { status('featured-score', 'No score yet'); status('featured-detail', ''); return; }
+    if (!receipt) {
+      status('featured-score', 'No score yet'); status('featured-detail', '');
+      status('repo-status', 'Repository breakdown is unavailable.');
+      el('repo-scores').replaceChildren();
+      return;
+    }
     status('featured-score', percent(receipt.f3));
     status('featured-detail', receipt.scanner + ' · ' + receipt.tp + ' matches · ' + receipt.fp + ' unmatched · ' + receipt.fn + ' misses');
     renderRepoScores(receipt);
@@ -35,17 +42,21 @@
     if (!res.ok) throw new Error('Request failed (' + res.status + ')');
     return res.json();
   }
+  async function loadLaunch() {
+    try {
+      var response = await fetch('private-score-launch.json', { cache: 'no-store' });
+      if (!response.ok) throw new Error('No launch receipt');
+      var data = await response.json();
+      launchReceipts = Array.isArray(data) ? data : [data];
+      renderFeatured(launchReceipts.find(function (r) { return r.scanner === officialScanner; }));
+    } catch (_) { renderFeatured(null); }
+  }
   async function refresh() {
     try {
-      var result;
-      if (api) result = await get('/leaderboard');
-      else {
-        var preview = await fetch('private-score-launch.json', { cache: 'no-store' });
-        if (!preview.ok) throw new Error('No launch receipt');
-        result = { receipts: [await preview.json()] };
-      }
+      var result = api ? await get('/leaderboard') : { receipts: launchReceipts };
+      var receipts = result.receipts.slice().sort(function (a, b) { return b.f3 - a.f3; });
       var body = el('private-leaderboard'); body.replaceChildren();
-      result.receipts.forEach(function (r) {
+      receipts.forEach(function (r) {
         var row = document.createElement('tr');
         cell(row, r.scanner); cell(row, percent(r.f3)); cell(row, percent(r.recall));
         cell(row, r.tp); cell(row, r.fp); cell(row, r.fn);
@@ -57,10 +68,10 @@
         } else td.textContent = r.run_id.slice(0, 8);
         row.appendChild(td); body.appendChild(row);
       });
-      renderFeatured(result.receipts[0]);
+      if (!launchReceipts.length) renderFeatured(receipts.find(function (r) { return r.scanner === officialScanner; }));
       status('leaderboard-status', api
-        ? (result.receipts.length ? result.receipts.length + ' published receipt(s)' : 'No published receipts yet.')
-        : 'Dev preview receipt. Production submissions are not open yet.');
+        ? (receipts.length ? receipts.length + ' published receipt(s)' : 'No published receipts yet.')
+        : 'Published score preview. Live receipts are unavailable.');
     } catch (_) { status('leaderboard-status', api ? 'Could not load private scores.' : 'The private scoring endpoint has not been configured.'); }
   }
   el('lookup-button').addEventListener('click', async function () {
@@ -69,7 +80,6 @@
     try {
       var r = await get('/receipts/' + id);
       status('lookup-status', r.scanner + ': F3 ' + percent(r.f3) + ', ' + r.tp + ' matches, ' + r.fp + ' unmatched, ' + r.fn + ' misses. ' + (r.published ? 'Published.' : 'Unpublished.'));
-      renderFeatured(r);
     } catch (_) { status('lookup-status', 'Receipt not found or access denied.'); }
   });
   el('publish-button').addEventListener('click', async function () {
@@ -90,5 +100,5 @@
     status('lookup-status', 'Receipt lookup opens when the production API is configured.');
     status('publish-status', 'External submissions are not open yet.');
   }
-  refresh();
+  loadLaunch().then(refresh);
 }());

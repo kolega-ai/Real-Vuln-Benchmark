@@ -297,7 +297,9 @@ VER = "1.0"
 def main() -> None:
     global VER
     data = load_and_apply(json.loads((REPORTS / "dashboard.json").read_text()), REPORTS / "private-score-launch.json")
-    private_receipt = json.loads((REPORTS / "private-score-launch.json").read_text())
+    private_receipts = json.loads((REPORTS / "private-score-launch.json").read_text())
+    from private_score_overlay import RECEIPT_SCANNERS
+    private_scores_by_slug = {RECEIPT_SCANNERS[r["scanner"]]: r["repo_scores"] for r in private_receipts}
     bv = str(data.get("benchmark_version", "") or "")
     VER = ".".join(bv.split(".")[:2]) if bv else "1.0"
     aggs, grid = data["aggregates"], data["grid"]
@@ -319,7 +321,7 @@ def main() -> None:
             agg = dict(tab_aggs[scanned[0]][slug])
             agg["cost"] = aggs[slug].get("cost")
             agg["scope_label"] = f"{lang_labels.get(scanned[0], scanned[0])} "
-        private_scores = private_receipt["repo_scores"] if slug == "kolega-devsec-max-v0.1.0" else None
+        private_scores = private_scores_by_slug.get(slug)
         (outdir / f"{slug}.html").write_text(build_page(slug, agg, grid, meta_all.get(slug, {}), private_scores))
         n += 1
     print(f"wrote {n} reskin-styled scanner detail pages -> reports/scanners/")

@@ -1,4 +1,4 @@
-"""Merge a published private receipt into public dashboard aggregates.
+"""Merge published private receipts into public dashboard aggregates.
 
 Only counts and repository names cross this boundary. Ground-truth rows and
 submitted findings stay in the private scoring service.
@@ -11,13 +11,23 @@ import json
 from pathlib import Path
 
 
-SCANNER = "kolega-devsec-max-v0.1.0"
+RECEIPT_SCANNERS = {
+    "kolega-python-large-official": "kolega-devsec-max-v0.1.0",
+    "gpt-daybreak-blue-codex-cli": "gpt-daybreak-blue-codex-cli",
+    "deepseek-v4.1-flash-agentic-v1": "deepseek-v4.1-flash-agentic-v1",
+    "claude-sonnet-5-cc-agentic-v1": "claude-sonnet-5-cc-agentic-v1",
+}
 REPOS = ("airflow", "netbox", "odoo", "saleor", "sentry")
 TABS = ("all", "python", "intentional", "python:intentional")
 AUTHORITY = "large-five-v1.0.0"
 AUTHORITY_SHA256 = "0feaa1f936e69d655ac5e520b8b57c5193c0b440c0896601de5199369710f414"
 CONTRACT = "python-large-five-span-v1"
-OFFICIAL_RUN = "bd2cab542e0041e788e4cc6b480196f2"
+OFFICIAL_RUNS = {
+    "kolega-python-large-official": "bd2cab542e0041e788e4cc6b480196f2",
+    "gpt-daybreak-blue-codex-cli": "a77299a5bf3f47caada1993f6a0bd94b",
+    "deepseek-v4.1-flash-agentic-v1": "53e78122c76242bd9d3d7c23eaf9ac95",
+    "claude-sonnet-5-cc-agentic-v1": "ac16d907d76f4b9ebdde1537f52837d8",
+}
 
 
 def _metrics(row: dict) -> None:
@@ -32,8 +42,11 @@ def _metrics(row: dict) -> None:
         row.pop(key, None)
 
 
-def apply_private_receipt(data: dict, receipt: dict) -> dict:
-    if (receipt.get("authority"), receipt.get("authority_sha256"), receipt.get("contract"), receipt.get("run_id")) != (AUTHORITY, AUTHORITY_SHA256, CONTRACT, OFFICIAL_RUN):
+def _validated_totals(receipt: dict) -> dict:
+    scanner = receipt.get("scanner")
+    if scanner not in OFFICIAL_RUNS or (receipt.get("authority"), receipt.get("authority_sha256"),
+            receipt.get("contract"), receipt.get("run_id")) != (
+            AUTHORITY, AUTHORITY_SHA256, CONTRACT, OFFICIAL_RUNS[scanner]):
         raise ValueError("Unexpected private score authority, contract, or run")
     if not receipt.get("published") or set(receipt.get("repo_scores", {})) != set(REPOS):
         raise ValueError("Private receipt must be published and contain exactly five repositories")
@@ -42,12 +55,23 @@ def apply_private_receipt(data: dict, receipt: dict) -> dict:
         raise ValueError("Private receipt aggregate does not match repository counts")
     if round(10 * totals["tp"] / (10 * totals["tp"] + totals["fp"] + 9 * totals["fn"]), 4) != receipt.get("f3"):
         raise ValueError("Private receipt F3 does not match its counts")
+    if totals["gt"] != 1944:
+        raise ValueError("Private receipt GT count changed")
+    return totals
+
+
+def apply_private_receipts(data: dict, receipts: list[dict]) -> dict:
+    if {r.get("scanner") for r in receipts} != set(RECEIPT_SCANNERS) or len(receipts) != len(RECEIPT_SCANNERS):
+        raise ValueError("Exactly one receipt is required for each released scanner")
+    totals_by_slug = {RECEIPT_SCANNERS[r["scanner"]]: _validated_totals(r) for r in receipts}
+    runs_by_slug = {RECEIPT_SCANNERS[r["scanner"]]: r["run_id"] for r in receipts}
     if data.get("private_score_receipt"):
         raise ValueError("Private receipt already applied")
 
     out = copy.deepcopy(data)
-    out["private_score_receipt"] = receipt["run_id"]
-    out["private_score_gt"] = totals["gt"]
+    out["private_score_receipt"] = OFFICIAL_RUNS["kolega-python-large-official"]
+    out["private_score_receipts"] = runs_by_slug
+    out["private_score_gt"] = 1944
     out["repos"].extend(f"private-{repo}" for repo in REPOS)
     for tab in TABS:
         out["tab_repos"][tab].extend(f"private-{repo}" for repo in REPOS)
@@ -61,26 +85,28 @@ def apply_private_receipt(data: dict, receipt: dict) -> dict:
         for ag in groups:
             for slug, a in ag.items():
                 a["repos_total"] += len(REPOS)
+                a["private_gt_included"] = True
                 cov = a.get("language_coverage") or {}
                 if "python" in cov:
                     cov["python"][1] += len(REPOS)
-                    if slug == SCANNER:
+                    if slug in totals_by_slug:
                         cov["python"][0] += len(REPOS)
-                if slug == SCANNER:
+                if slug in totals_by_slug:
                     a["repos_scored"] += len(REPOS)
-                    a["private_receipt"] = receipt["run_id"]
+                    a["private_receipt"] = runs_by_slug[slug]
                     for metric in ("micro", "strict_micro"):
                         for key in ("tp", "fp", "fn"):
-                            a[metric][key] += totals[key]
+                            a[metric][key] += totals_by_slug[slug][key]
                         _metrics(a[metric])
-                    # Public-only severity and cost are not mixed-corpus facts.
-                    a["per_severity"] = {}
-                    a["cost"] = {}
                 else:
-                    a["strict_micro"]["fn"] += totals["gt"]
+                    a["strict_micro"]["fn"] += 1944
                     _metrics(a["strict_micro"])
+                # Receipts do not carry severity, weighted or per-scan cost data.
+                a["per_severity"] = {}
+                a["cost"] = {}
     return out
 
 
 def load_and_apply(data: dict, receipt_path: Path) -> dict:
-    return apply_private_receipt(data, json.loads(receipt_path.read_text()))
+    receipts = json.loads(receipt_path.read_text())
+    return apply_private_receipts(data, receipts if isinstance(receipts, list) else [receipts])

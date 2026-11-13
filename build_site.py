@@ -636,8 +636,8 @@ def scanners_from_aggregates(
             cpv_val = None
         else:
             cpv_val = round(total_cost / tp * 100, 2)
-        if a.get("private_receipt"):
-            cost_val = None  # no measured cost for the five private repository runs
+        if a.get("private_gt_included"):
+            cost_val = None  # no complete mixed-corpus cost
             cpv_val = None
         out.append(
             {
@@ -653,13 +653,13 @@ def scanners_from_aggregates(
                 "f3s": round(strict["f3_score"], 2) if a.get("private_receipt") else round1(strict["f3_score"]),
                 # wf3: CVSS-weighted F3 — each GT hit/miss weighted by its CVSS
                 # base score, FPs by scanner-reported severity (scorer.metrics)
-                "wf3": round1(micro.get("cvss_f3_score", micro["f3_score"])),
-                "wf3s": round1(strict.get("cvss_f3_score", strict["f3_score"])),
+                "wf3": None if a.get("private_gt_included") else round1(micro.get("cvss_f3_score", micro["f3_score"])),
+                "wf3s": None if a.get("private_gt_included") else round1(strict.get("cvss_f3_score", strict["f3_score"])),
                 "rec": round3(micro["recall"]),
                 "recs": round3(strict["recall"]),
-                "wrec": round3(micro.get("cvss_recall", micro["recall"])),
-                "wrecs": round3(strict.get("cvss_recall", strict["recall"])),
-                "wprec": round3(micro.get("cvss_precision", micro["precision"])),
+                "wrec": None if a.get("private_gt_included") else round3(micro.get("cvss_recall", micro["recall"])),
+                "wrecs": None if a.get("private_gt_included") else round3(strict.get("cvss_recall", strict["recall"])),
+                "wprec": None if a.get("private_gt_included") else round3(micro.get("cvss_precision", micro["precision"])),
                 # tp: real vulnerabilities found (true positives, micro)
                 "tp": micro.get("tp", 0) or 0,
                 # fp: false positives (flagged but not a real vuln, micro)
@@ -965,13 +965,13 @@ def repo_table_rows(gt_dir: Path, private_receipt: dict | None = None) -> str:
         lang = ((gt.get("language") if isinstance(gt, dict) else None) or "unknown").lower()
         repos.append((name, LANGUAGE_DISPLAY.get(lang, lang.title()), FW.get(fw, fw), vulns, traps))
     if private_receipt:
-        repos.extend((name, "Python", "private GT", row["gt"], 0)
+        repos.extend((name, "Python", "private GT", row["gt"], None)
                      for name, row in private_receipt["repo_scores"].items())
     repos.sort(key=lambda r: r[3], reverse=True)
     return "\n          ".join(
         f'<tr><td class="repo-id">{n}</td><td><span class="fw-pill">{lang}</span></td>'
         f'<td><span class="fw-pill">{fw}</span></td>'
-        f'<td class="r">{v}</td><td class="r">{t}</td></tr>'
+        f'<td class="r">{v}</td><td class="r">{t if t is not None else "—"}</td></tr>'
         for n, lang, fw, v, t in repos
     )
 
@@ -1362,7 +1362,9 @@ def main() -> None:
         "{{TRAP_PCT}}": f"{(dataset['traps'] / entries * 100):.1f}" if entries else "0",
         "{{VULN_PCT}}": f"{(dataset['vulns'] / entries * 100):.1f}" if entries else "0",
     }
-    receipt = json.loads((REPORTS / "private-score-launch.json").read_text())
+    launch = json.loads((REPORTS / "private-score-launch.json").read_text())
+    receipts = launch if isinstance(launch, list) else [launch]
+    receipt = next(r for r in receipts if r["scanner"] == "kolega-python-large-official")
     pooled = data["aggregates"]["kolega-devsec-max-v0.1.0"]["strict_micro"]
     tokens.update({
         "{{POOLED_F3}}": f"{pooled['f3_score']:.2f}",
