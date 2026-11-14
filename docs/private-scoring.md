@@ -7,9 +7,9 @@ The main RealVuln leaderboard includes five large Python repositories scored by 
 1. A participant runs their scanner on the specified pinned repositories.
 2. The participant sends normalized locations (`repo`, `file`, category, line or bounded span, optional CWE labels) to the private API over HTTPS. The dashboard never accepts finding files.
 3. The service scores locations in memory, returns an unpublished receipt and discards the submitted locations. It stores the receipt and a hash of the normalized submission, not the findings.
-4. The service gives the participant a one-use publication secret with the unpublished receipt. The participant can publish that receipt by ID and secret; the reusable scoring token never enters the public page. The page lists published receipts from the API.
+4. The participant can look up the aggregate receipt by its unguessable ID, even while unpublished. To request dashboard publication, they open a RealVuln GitHub issue with that ID. An operator reviews and publishes an approved receipt using AWS IAM, then updates the dashboard. The participant cannot publish through the scoring API.
 
-The private service necessarily sees locations while scoring. A participant who cannot disclose even transient normalized locations needs a separately agreed trusted execution arrangement; a self-reported score is not verifiable. A receipt proves the service computed the score for a submission. It does not attest that the scanner independently found the locations or completed every repository. This distinction is shown beside the published receipts.
+The private service necessarily sees locations while scoring. A participant who cannot disclose even transient normalized locations needs a separately agreed trusted execution arrangement; a self-reported score is not verifiable. A receipt proves the service computed the score for a submission. It does not attest that the scanner independently found the locations or completed every repository. The receipt lookup explains this limit.
 
 ## Score and integrity
 
@@ -19,7 +19,7 @@ Publishing a receipt exposes aggregate counts but no vulnerability locations, la
 
 ## Published scores
 
-Kolega's official private submission scored **F3 0.6002 (60.02%)** and recall **0.7253**: 1,410 matches, 4,585 unmatched findings and 534 misses against 1,944 scored rows on five pinned repositories. The production private scorer scored all 5,995 submitted finding locations and issued published receipt `bd2cab542e0041e788e4cc6b480196f2`. Combined with Kolega DevSec Max's 203 public-repository counts, the main leaderboard covers **208 repositories**, with **7,559 matches, 17,817 unmatched findings, 1,503 misses and F3 70.69%**. The five-repository 60.02% is its component score, displayed on the same dashboard.
+Kolega's official private submission scored **F3 0.6002 (60.02%)** and recall **0.7253**: 1,410 matches, 4,585 unmatched findings and 534 misses against 1,944 scored rows on five pinned repositories. The production private scorer scored all 5,995 submitted finding locations and issued published receipt `bd2cab542e0041e788e4cc6b480196f2`. Combined with Kolega DevSec Max's 203 public-repository counts, the main leaderboard covers **208 repositories**, with **7,559 matches, 17,817 unmatched findings, 1,503 misses and F3 70.69%**. The five-repository component is available by receipt lookup.
 
 Three additional registered scanners have production receipts from the same frozen five-repository authority and matcher. Their standard-CWE output was translated into private scoring categories by a versioned, privately held adapter fixed before submission. The adapter and result-file provenance are retained privately. All four receipts contain only aggregate and per-repository totals, never finding or GT locations.
 

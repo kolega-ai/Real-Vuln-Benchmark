@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from private_score_overlay import apply_private_receipts
+from build_site import repo_size_points
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,6 +52,16 @@ class PrivateScoreOverlayTests(unittest.TestCase):
     def test_requires_every_released_receipt(self):
         with self.assertRaisesRegex(ValueError, "Exactly one receipt"):
             apply_private_receipts(self.data, self.receipts[:-1])
+
+    def test_size_chart_uses_published_repo_aggregates(self):
+        merged = apply_private_receipts(self.data, self.receipts)
+        points = repo_size_points(merged, ROOT / "ground-truth", self.receipts)
+        self.assertEqual(len(points), 206)  # two public repos have no recorded LOC
+        sentry = next(p for p in points if p["repo"] == "sentry")
+        self.assertEqual(sentry["loc"], 816371)
+        self.assertEqual(sentry["scores"]["kolega-devsec-max-v0.1.0"], 0.575)
+        self.assertEqual(len(sentry["scores"]), 4)
+        self.assertIn("python", sentry["tabs"])
 
 
 if __name__ == "__main__":
