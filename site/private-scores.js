@@ -44,7 +44,7 @@
         if (response.ok) { show(await response.json()); return; }
       } catch (_) { /* Local preview may not be permitted by production CORS. */ }
     }
-    el('lookup-status').textContent = 'Receipt not found, not published, or live lookup is unavailable.';
+    el('lookup-status').textContent = 'Receipt not found or live lookup is unavailable.';
   }
   el('lookup-form').addEventListener('submit', function (event) {
     event.preventDefault();
