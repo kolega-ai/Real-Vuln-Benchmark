@@ -184,12 +184,43 @@
     });
   }
 
-  // ---- repository size / moving average of per-repository F3 ----
+  // ---- repository size / smoothed per-repository F3 ----
   var sizeHighlight = '';
+  var sizeSmoothing = 'log35';
+  function smoothSizeRows(rows, slug) {
+    if (sizeSmoothing.indexOf('ma') === 0) {
+      var half = (Number(sizeSmoothing.slice(2)) - 1) / 2;
+      return rows.map(function (_, j) {
+        var first = Math.max(0, j - half), last = Math.min(rows.length, j + half + 1);
+        var sum = 0;
+        for (var k = first; k < last; k++) sum += rows[k].scores[slug];
+        return { score: sum / (last - first), count: last - first };
+      });
+    }
+    // Distance in log10(LOC) keeps the large, sparse repositories local to
+    // each other instead of averaging them with dozens of tiny repositories.
+    var bandwidth = sizeSmoothing === 'log25' ? 0.25 : 0.35;
+    return rows.map(function (target) {
+      var center = Math.log10(target.loc), weight = 0, weight2 = 0, total = 0;
+      rows.forEach(function (row) {
+        var z = (Math.log10(row.loc) - center) / bandwidth;
+        var w = Math.exp(-0.5 * z * z);
+        weight += w; weight2 += w * w; total += w * row.scores[slug];
+      });
+      return { score: total / weight, count: Math.round(weight * weight / weight2) };
+    });
+  }
   function renderSizeChart() {
     var svg = document.getElementById('size-chart');
     var picker = document.getElementById('size-chart-scanner');
-    if (!svg || !picker) return;
+    var smoothingPicker = document.getElementById('size-chart-smoothing');
+    if (!svg || !picker || !smoothingPicker) return;
+    smoothingPicker.value = sizeSmoothing;
+    var note = document.getElementById('size-chart-note');
+    var methodNote = sizeSmoothing.indexOf('ma') === 0
+      ? 'Centered moving average of up to ' + sizeSmoothing.slice(2) + ' repositories sorted by size; fewer at the ends.'
+      : 'Gaussian-weighted average of nearby repository sizes on the log scale; bandwidth ' + (sizeSmoothing === 'log25' ? '0.25' : '0.35') + ' decades.';
+    if (note) note.textContent = methodNote + ' Two public repositories lack recorded source LOC and cannot be placed on this axis. The five large repositories use published aggregate receipts.';
     var points = (window.RV.REPO_SIZE_POINTS || []).filter(function (p) {
       return p.tabs.indexOf(state.tab) !== -1;
     });
@@ -233,12 +264,7 @@
     scanners.forEach(function (s, i) {
       var rows = points.filter(function (p) { return p.scores[s.slug] != null; });
       if (!rows.length) return;
-      var averaged = rows.map(function (_, j) {
-        var first = Math.max(0, j - 7), last = Math.min(rows.length, j + 8);
-        var sum = 0;
-        for (var k = first; k < last; k++) sum += rows[k].scores[s.slug];
-        return { score: sum / (last - first), count: last - first };
-      });
+      var averaged = smoothSizeRows(rows, s.slug);
       var color = 'hsl(' + ((34 + i * 137.508) % 360) + ' 58% 67%)';
       var g = svgEl('g', { class: 'size-series' + (s.slug === sizeHighlight ? ' active' : ''), 'data-slug': s.slug });
       var d = rows.map(function (p, j) { return (j ? 'L' : 'M') + X(p.loc).toFixed(2) + ',' + Y(averaged[j].score).toFixed(2); }).join(' ');
@@ -251,7 +277,8 @@
         for (var j = 1; j < rows.length; j++) {
           if (Math.abs(X(rows[j].loc) - x) < Math.abs(X(rows[nearest].loc) - x)) nearest = j;
         }
-        showTip('<div class="tt-name">' + s.name + '</div><div class="tt-cat">' + averaged[nearest].count + '-repository moving average · ' + rows[nearest].loc.toLocaleString() + ' LOC · ' + (averaged[nearest].score * 100).toFixed(1) + '% F3</div>', e.clientX, e.clientY);
+        var support = sizeSmoothing.indexOf('ma') === 0 ? averaged[nearest].count + '-repo MA' : 'log-local · ~' + averaged[nearest].count + ' effective repos';
+        showTip('<div class="tt-name">' + s.name + '</div><div class="tt-cat">' + support + ' · ' + rows[nearest].loc.toLocaleString() + ' LOC · ' + (averaged[nearest].score * 100).toFixed(1) + '% F3</div>', e.clientX, e.clientY);
       });
       hit.addEventListener('mouseleave', function () { hideTip(); focus(sizeHighlight); });
       g.appendChild(hit);
@@ -265,6 +292,11 @@
     document.querySelectorAll('#size-chart .size-series').forEach(function (g) {
       g.classList.toggle('active', g.getAttribute('data-slug') === sizeHighlight);
     });
+  });
+  var smoothingPicker = document.getElementById('size-chart-smoothing');
+  if (smoothingPicker) smoothingPicker.addEventListener('change', function () {
+    sizeSmoothing = smoothingPicker.value;
+    renderSizeChart();
   });
 
   // ---- scatter ----
