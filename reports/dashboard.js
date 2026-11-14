@@ -184,7 +184,7 @@
     });
   }
 
-  // ---- repository size / per-repository F3 ----
+  // ---- repository size / moving average of per-repository F3 ----
   var sizeHighlight = '';
   function renderSizeChart() {
     var svg = document.getElementById('size-chart');
@@ -233,21 +233,28 @@
     scanners.forEach(function (s, i) {
       var rows = points.filter(function (p) { return p.scores[s.slug] != null; });
       if (!rows.length) return;
+      var averaged = rows.map(function (_, j) {
+        var first = Math.max(0, j - 7), last = Math.min(rows.length, j + 8);
+        var sum = 0;
+        for (var k = first; k < last; k++) sum += rows[k].scores[s.slug];
+        return { score: sum / (last - first), count: last - first };
+      });
       var color = 'hsl(' + ((34 + i * 137.508) % 360) + ' 58% 67%)';
       var g = svgEl('g', { class: 'size-series' + (s.slug === sizeHighlight ? ' active' : ''), 'data-slug': s.slug });
-      var d = rows.map(function (p, j) { return (j ? 'L' : 'M') + X(p.loc).toFixed(2) + ',' + Y(p.scores[s.slug]).toFixed(2); }).join(' ');
+      var d = rows.map(function (p, j) { return (j ? 'L' : 'M') + X(p.loc).toFixed(2) + ',' + Y(averaged[j].score).toFixed(2); }).join(' ');
       g.appendChild(svgEl('path', { d: d, stroke: color }));
-      rows.forEach(function (p) {
-        var score = p.scores[s.slug];
-        var c = svgEl('circle', { cx: X(p.loc), cy: Y(score), r: 3.2, fill: color });
-        c.addEventListener('mouseenter', function (e) {
-          focus(s.slug);
-          showTip('<div class="tt-name">' + s.name + '</div><div class="tt-cat">' + p.repo + ' · ' + p.loc.toLocaleString() + ' LOC · ' + (score * 100).toFixed(2) + '% F3</div>', e.clientX, e.clientY);
-        });
-        c.addEventListener('mousemove', function (e) { if (tip) { tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; } });
-        c.addEventListener('mouseleave', function () { hideTip(); focus(sizeHighlight); });
-        g.appendChild(c);
+      var hit = svgEl('path', { class: 'size-hit', d: d, stroke: color });
+      hit.addEventListener('mousemove', function (e) {
+        focus(s.slug);
+        var x = (e.clientX - svg.getBoundingClientRect().left) / svg.getBoundingClientRect().width * W;
+        var nearest = 0;
+        for (var j = 1; j < rows.length; j++) {
+          if (Math.abs(X(rows[j].loc) - x) < Math.abs(X(rows[nearest].loc) - x)) nearest = j;
+        }
+        showTip('<div class="tt-name">' + s.name + '</div><div class="tt-cat">' + averaged[nearest].count + '-repository moving average · ' + rows[nearest].loc.toLocaleString() + ' LOC · ' + (averaged[nearest].score * 100).toFixed(1) + '% F3</div>', e.clientX, e.clientY);
       });
+      hit.addEventListener('mouseleave', function () { hideTip(); focus(sizeHighlight); });
+      g.appendChild(hit);
       svg.appendChild(g);
     });
   }
