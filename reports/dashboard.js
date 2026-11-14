@@ -186,7 +186,7 @@
 
   // ---- repository size / smoothed per-repository F3 ----
   var sizeHighlight = '';
-  var sizeSmoothing = 'log35';
+  var sizeSmoothing = 'log50';
   function smoothSizeRows(rows, slug) {
     if (sizeSmoothing.indexOf('ma') === 0) {
       var half = (Number(sizeSmoothing.slice(2)) - 1) / 2;
@@ -199,7 +199,7 @@
     }
     // Distance in log10(LOC) keeps the large, sparse repositories local to
     // each other instead of averaging them with dozens of tiny repositories.
-    var bandwidth = sizeSmoothing === 'log25' ? 0.25 : 0.35;
+    var bandwidth = sizeSmoothing === 'log25' ? 0.25 : sizeSmoothing === 'log35' ? 0.35 : 0.5;
     return rows.map(function (target) {
       var center = Math.log10(target.loc), weight = 0, weight2 = 0, total = 0;
       rows.forEach(function (row) {
@@ -219,7 +219,7 @@
     var note = document.getElementById('size-chart-note');
     var methodNote = sizeSmoothing.indexOf('ma') === 0
       ? 'Centered moving average of up to ' + sizeSmoothing.slice(2) + ' repositories sorted by size; fewer at the ends.'
-      : 'Gaussian-weighted average of nearby repository sizes on the log scale; bandwidth ' + (sizeSmoothing === 'log25' ? '0.25' : '0.35') + ' decades.';
+      : 'Gaussian-weighted average of nearby repository sizes on the log scale; bandwidth ' + (sizeSmoothing === 'log25' ? '0.25' : sizeSmoothing === 'log35' ? '0.35' : '0.50') + ' decades.';
     if (note) note.textContent = methodNote + ' Two public repositories lack recorded source LOC and cannot be placed on this axis. The five large repositories use published aggregate receipts.';
     var points = (window.RV.REPO_SIZE_POINTS || []).filter(function (p) {
       return p.tabs.indexOf(state.tab) !== -1;
