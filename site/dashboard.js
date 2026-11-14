@@ -186,41 +186,36 @@
 
   // ---- repository size / smoothed per-repository F3 ----
   var sizeHighlight = '';
-  var sizeSmoothing = 'log50';
   function smoothSizeRows(rows, slug) {
-    if (sizeSmoothing.indexOf('ma') === 0) {
-      var half = (Number(sizeSmoothing.slice(2)) - 1) / 2;
-      return rows.map(function (_, j) {
-        var first = Math.max(0, j - half), last = Math.min(rows.length, j + half + 1);
-        var sum = 0;
-        for (var k = first; k < last; k++) sum += rows[k].scores[slug];
-        return { score: sum / (last - first), count: last - first };
-      });
-    }
     // Distance in log10(LOC) keeps the large, sparse repositories local to
     // each other instead of averaging them with dozens of tiny repositories.
-    var bandwidth = sizeSmoothing === 'log25' ? 0.25 : sizeSmoothing === 'log35' ? 0.35 : 0.5;
     return rows.map(function (target) {
       var center = Math.log10(target.loc), weight = 0, weight2 = 0, total = 0;
       rows.forEach(function (row) {
-        var z = (Math.log10(row.loc) - center) / bandwidth;
+        var z = (Math.log10(row.loc) - center) / 0.5;
         var w = Math.exp(-0.5 * z * z);
         weight += w; weight2 += w * w; total += w * row.scores[slug];
       });
       return { score: total / weight, count: Math.round(weight * weight / weight2) };
     });
   }
+  function selectSizeScanner(slug) {
+    sizeHighlight = slug;
+    var svg = document.getElementById('size-chart');
+    svg.classList.toggle('focused', !!slug);
+    svg.querySelectorAll('.size-series').forEach(function (g) {
+      g.classList.toggle('active', g.getAttribute('data-slug') === slug);
+    });
+    document.getElementById('size-chart-scanner').value = slug;
+    document.querySelectorAll('#size-chart-legend .size-legend-item').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-slug') === slug && !!slug));
+    });
+  }
   function renderSizeChart() {
     var svg = document.getElementById('size-chart');
     var picker = document.getElementById('size-chart-scanner');
-    var smoothingPicker = document.getElementById('size-chart-smoothing');
-    if (!svg || !picker || !smoothingPicker) return;
-    smoothingPicker.value = sizeSmoothing;
-    var note = document.getElementById('size-chart-note');
-    var methodNote = sizeSmoothing.indexOf('ma') === 0
-      ? 'Centered moving average of up to ' + sizeSmoothing.slice(2) + ' repositories sorted by size; fewer at the ends.'
-      : 'Gaussian-weighted average of nearby repository sizes on the log scale; bandwidth ' + (sizeSmoothing === 'log25' ? '0.25' : sizeSmoothing === 'log35' ? '0.35' : '0.50') + ' decades.';
-    if (note) note.textContent = methodNote + ' Two public repositories lack recorded source LOC and cannot be placed on this axis. The five large repositories use published aggregate receipts.';
+    var legend = document.getElementById('size-chart-legend');
+    if (!svg || !picker || !legend) return;
     var points = (window.RV.REPO_SIZE_POINTS || []).filter(function (p) {
       return p.tabs.indexOf(state.tab) !== -1;
     });
@@ -231,6 +226,7 @@
     scanners.forEach(function (s) { picker.add(new Option(s.name, s.slug)); });
     picker.value = sizeHighlight;
     svg.replaceChildren();
+    legend.replaceChildren();
     if (!points.length || !scanners.length) return;
 
     var W = 1150, H = 390, m = { t: 18, r: 25, b: 54, l: 57 };
@@ -266,6 +262,16 @@
       if (!rows.length) return;
       var averaged = smoothSizeRows(rows, s.slug);
       var color = 'hsl(' + ((34 + i * 137.508) % 360) + ' 58% 67%)';
+      var button = document.createElement('button');
+      button.type = 'button'; button.className = 'size-legend-item';
+      button.setAttribute('data-slug', s.slug);
+      button.setAttribute('aria-pressed', String(s.slug === sizeHighlight));
+      var swatch = document.createElement('span');
+      swatch.className = 'size-legend-swatch'; swatch.style.backgroundColor = color;
+      button.appendChild(swatch);
+      button.appendChild(document.createTextNode(s.name));
+      button.addEventListener('click', function () { selectSizeScanner(sizeHighlight === s.slug ? '' : s.slug); });
+      legend.appendChild(button);
       var g = svgEl('g', { class: 'size-series' + (s.slug === sizeHighlight ? ' active' : ''), 'data-slug': s.slug });
       var d = rows.map(function (p, j) { return (j ? 'L' : 'M') + X(p.loc).toFixed(2) + ',' + Y(averaged[j].score).toFixed(2); }).join(' ');
       g.appendChild(svgEl('path', { d: d, stroke: color }));
@@ -277,7 +283,7 @@
         for (var j = 1; j < rows.length; j++) {
           if (Math.abs(X(rows[j].loc) - x) < Math.abs(X(rows[nearest].loc) - x)) nearest = j;
         }
-        var support = sizeSmoothing.indexOf('ma') === 0 ? averaged[nearest].count + '-repo MA' : 'log-local · ~' + averaged[nearest].count + ' effective repos';
+        var support = 'log-local · ~' + averaged[nearest].count + ' effective repos';
         showTip('<div class="tt-name">' + s.name + '</div><div class="tt-cat">' + support + ' · ' + rows[nearest].loc.toLocaleString() + ' LOC · ' + (averaged[nearest].score * 100).toFixed(1) + '% F3</div>', e.clientX, e.clientY);
       });
       hit.addEventListener('mouseleave', function () { hideTip(); focus(sizeHighlight); });
@@ -287,16 +293,7 @@
   }
   var sizePicker = document.getElementById('size-chart-scanner');
   if (sizePicker) sizePicker.addEventListener('change', function () {
-    sizeHighlight = sizePicker.value;
-    document.getElementById('size-chart').classList.toggle('focused', !!sizeHighlight);
-    document.querySelectorAll('#size-chart .size-series').forEach(function (g) {
-      g.classList.toggle('active', g.getAttribute('data-slug') === sizeHighlight);
-    });
-  });
-  var smoothingPicker = document.getElementById('size-chart-smoothing');
-  if (smoothingPicker) smoothingPicker.addEventListener('change', function () {
-    sizeSmoothing = smoothingPicker.value;
-    renderSizeChart();
+    selectSizeScanner(sizePicker.value);
   });
 
   // ---- scatter ----
