@@ -1,39 +1,44 @@
-# Private scoring receipts
+# Private ground truth scoring
 
-The main RealVuln leaderboard includes five large Python repositories scored by a private authority. Their ground truth, taxonomy and submitted finding locations stay in the private service. The public site receives only aggregate, service-issued receipts. The production service scores registered submissions; open external registration is not available yet.
+The five large Python repositories contribute to the main 208-repository leaderboard. Their ground truth stays in a versioned, private S3 object. Anyone can submit CWE-labelled findings to the public scorer at `https://results.realvuln.com`; no account, token or registration is needed.
 
-## Submission
+## Submit findings
 
-1. A participant runs their scanner on the specified pinned repositories.
-2. The participant sends normalized locations (`repo`, `file`, category, line or bounded span, optional CWE labels) to the private API over HTTPS. The dashboard never accepts finding files.
-3. The service scores locations in memory, returns an unpublished receipt and discards the submitted locations. It stores the receipt and a hash of the normalized submission, not the findings.
-4. The participant can look up the aggregate receipt by its unguessable ID, even while unpublished. To request dashboard publication, they open a RealVuln GitHub issue with that ID. An operator reviews and publishes an approved receipt using AWS IAM, then updates the dashboard. The participant cannot publish through the scoring API.
+1. Read `GET https://results.realvuln.com/meta` for the current authority, pinned commits and limits. Scan those exact commits.
+2. POST a normalized JSON results file to `https://results.realvuln.com/score`:
 
-The private service necessarily sees locations while scoring. A participant who cannot disclose even transient normalized locations needs a separately agreed trusted execution arrangement; a self-reported score is not verifiable. A receipt proves the service computed the score for a submission. It does not attest that the scanner independently found the locations or completed every repository. The receipt lookup explains this limit.
+```bash
+curl -sS -H 'content-type: application/json' --data-binary @submission.json https://results.realvuln.com/score
+```
 
-## Score and integrity
+The JSON envelope contains `scanner`, `authority`, `source_commits` and `findings`. The `authority` and `source_commits` must equal `/meta`. Each finding contains `repo`, repository-relative `file`, one to three standard `cwes` (for example `CWE-79`), and either `line` or `start_line` plus `end_line`. A span may cover at most 50 lines. Paths and lines refer to the pinned source tree. The service rejects other finding fields. Semgrep output can be converted to this shape using its path, start/end lines and CWE metadata.
 
-The private authority fixes five repository commits and a versioned GT snapshot. A receipt records the authority version and hash, source commits, matcher version, submitted-location hash, true matches, unmatched alerts, misses, recall and F3. The F3 formula is `10 × TP / (10 × TP + FP + 9 × FN)`. Matching is one-to-one: an alert can match at most one GT row. The current internal contract accepts source spans of at most 50 lines and a ±10-line location tolerance. Excluded GT lineage does not enter the denominator.
+```json
+{
+  "scanner": "example-scanner",
+  "authority": "large-five-cwe-v1.0.0",
+  "source_commits": {"airflow": "<commit from /meta>", "netbox": "<commit from /meta>", "odoo": "<commit from /meta>", "saleor": "<commit from /meta>", "sentry": "<commit from /meta>"},
+  "findings": [{"repo": "airflow", "file": "path/in/repository.py", "start_line": 10, "end_line": 12, "cwes": ["CWE-79"]}]
+}
+```
 
-Publishing a receipt exposes aggregate counts but no vulnerability locations, labels, snippets or submitted finding files. The receipt's source-commit field is a participant assertion, not execution proof. Because GT is withheld, external readers cannot independently reproduce the score from public data. The authority hash commits to a fixed private snapshot for later confidential audit; it does not reveal that snapshot or independently certify its quality.
+The service accepts up to 20,000 findings, 200 findings per file and 5 MB per submission. It permits 10 score attempts per source IP per UTC day, with an additional burst limit. Score attempts and API request metadata are logged without finding bodies; submitted locations are scored in memory and discarded. Only aggregate receipts and submission hashes are stored. Receipt IDs are unguessable but visible to anyone holding the ID.
 
-## Published scores
+## Read and publish a receipt
 
-Kolega's official private submission scored **F3 0.6002 (60.02%)** and recall **0.7253**: 1,410 matches, 4,585 unmatched findings and 534 misses against 1,944 scored rows on five pinned repositories. The production private scorer scored all 5,995 submitted finding locations and issued published receipt `bd2cab542e0041e788e4cc6b480196f2`. Combined with Kolega DevSec Max's 203 public-repository counts, the main leaderboard covers **208 repositories**, with **7,559 matches, 17,817 unmatched findings, 1,503 misses and F3 70.69%**. The five-repository component is available by receipt lookup.
+The POST response contains a receipt ID, aggregate TP/FP/FN, recall and F3. Read it at `GET https://results.realvuln.com/receipts/<receipt-id>` or on the [private scores page](https://realvuln.com/private-scores.html). A receipt is initially unpublished. **For a benchmark submission, include your public-repository result files as usual and put the private-five receipt ID in the submission PR. Do not attach or commit the five private-repository result files.** If you want the receipt considered for the dashboard before a PR is ready, [open a GitHub issue](https://github.com/kolega-ai/Real-Vuln-Benchmark/issues/new) with its ID and requested scanner name. The RealVuln maintainers review the request, publish the receipt using operator credentials and add its aggregates to the dashboard. Participants cannot publish receipts through this API.
 
-Three additional registered scanners have production receipts from the same frozen five-repository authority and matcher. Their standard-CWE output was translated into private scoring categories by a versioned, privately held adapter fixed before submission. The adapter and result-file provenance are retained privately. All four receipts contain only aggregate and per-repository totals, never finding or GT locations.
+The service matches exact repository and file, a standard CWE accepted by the GT row, and a reported line or span within ±10 lines of the GT location. Matching is one-to-one. F3 is `10 × TP / (10 × TP + FP + 9 × FN)`. Unreported GT rows count as misses. The receipt's pinned commits are asserted by the participant; the service does not execute or verify the scanner. Repeated score queries can reveal some information about withheld labels, so quotas limit this risk but cannot remove it completely.
 
-| Scanner | Private five F3 | Private TP / FP / FN | Receipt | Main 208-repo F3 |
+## Current published scores
+
+All four submitted result files were rescored against the same CWE authority and matcher. The earlier category-based receipts remain accessible by ID as history; the leaderboard uses these current receipts.
+
+| Scanner | Private five F3 | Private TP / FP / FN | Current receipt | Main 208-repo F3 |
 | --- | ---: | ---: | --- | ---: |
-| Kolega DevSec Max | 60.02% | 1,410 / 4,585 / 534 | `bd2cab542e0041e788e4cc6b480196f2` | 70.69% |
-| Daybreak Blue | 2.45% | 43 / 45 / 1,901 | `a77299a5bf3f47caada1993f6a0bd94b` | 48.31% |
-| DeepSeek V4.1 Flash | 0.91% | 16 / 26 / 1,928 | `53e78122c76242bd9d3d7c23eaf9ac95` | 34.27% |
-| Sonnet 5 | 0.46% | 8 / 10 / 1,936 | `ac16d907d76f4b9ebdde1537f52837d8` | 28.41% |
+| Kolega DevSec Max | 59.94% | 1,408 / 4,587 / 536 | `1daf0fa9de2548fc96030dc0665c7bae` | 70.67% |
+| Daybreak Blue | 1.42% | 25 / 63 / 1,919 | `1f85bb121add49cfa52e06bbfa24ce3d` | 48.11% |
+| DeepSeek V4.1 Flash | 0.51% | 9 / 33 / 1,935 | `2d35315a13494a69ab5a94fcbc74ec46` | 34.19% |
+| Sonnet 5 | 0.34% | 6 / 12 / 1,938 | `8c07ce1b9330460997c8457ceaf4cf8a` | 28.39% |
 
-These are scores of submitted result files. The receipts do not attest independent scanner operation, complete source coverage, or the submitter's identity. Unreported private GT rows count as misses.
-
-The current large-repository authority has no row-level CWE labels and its matching contract uses private category IDs, whereas the public matcher gates on CWE. The pooled F3 uses the same TP/FP/FN formula, but its matching identity differs across the two subsets. Open external submissions need a publicly specified standard input identity and like-for-like rescoring of every entrant; the current private adapter is frozen for these four released results. CVSS-weighted and severity-filtered mixed-corpus metrics are withheld until the private receipt carries the required aggregates.
-
-`build_site.py` writes `private-score-config.js` from `REALVULN_PRIVATE_SCORE_API`. The production value is `https://results.realvuln.com`; only an HTTPS API origin may be supplied. The dev endpoint is absent from this repository.
-
-The withheld authority has its own version and source pins. Its aggregate counts are merged into the main ranking; no ground truth row, finding location, private category list, or scanner output belongs in this repository or its Git history. Scanners without a five-repository receipt have five additional unscanned repositories counted as misses in strict mode.
+Kolega's previous 60.02% receipt used the old private-category matcher. It is retained for audit but not pooled into the current headline. The saved submission had explicit CWEs on 1,791 findings; the original detector CWE mapping supplied labels for the remaining 4,204 during replay. The other three raw submissions already contained CWE labels. Only counts and per-repository aggregates enter this public repository; neither finding files nor private GT are published.

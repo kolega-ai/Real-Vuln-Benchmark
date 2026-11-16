@@ -12,21 +12,21 @@ from pathlib import Path
 
 
 RECEIPT_SCANNERS = {
-    "kolega-python-large-official": "kolega-devsec-max-v0.1.0",
+    "kolega-devsec-max-v0.1.0": "kolega-devsec-max-v0.1.0",
     "gpt-daybreak-blue-codex-cli": "gpt-daybreak-blue-codex-cli",
     "deepseek-v4.1-flash-agentic-v1": "deepseek-v4.1-flash-agentic-v1",
     "claude-sonnet-5-cc-agentic-v1": "claude-sonnet-5-cc-agentic-v1",
 }
 REPOS = ("airflow", "netbox", "odoo", "saleor", "sentry")
 TABS = ("all", "python", "intentional", "python:intentional")
-AUTHORITY = "large-five-v1.0.0"
-AUTHORITY_SHA256 = "0feaa1f936e69d655ac5e520b8b57c5193c0b440c0896601de5199369710f414"
-CONTRACT = "python-large-five-span-v1"
+AUTHORITY = "large-five-cwe-v1.0.0"
+AUTHORITY_SHA256 = "067f9e1f3aa3e416a50b60f6136c35ffc5dead1abc8b2cb3190905b0c7fe130d"
+CONTRACT = "python-large-five-cwe-span-v2"
 OFFICIAL_RUNS = {
-    "kolega-python-large-official": "bd2cab542e0041e788e4cc6b480196f2",
-    "gpt-daybreak-blue-codex-cli": "a77299a5bf3f47caada1993f6a0bd94b",
-    "deepseek-v4.1-flash-agentic-v1": "53e78122c76242bd9d3d7c23eaf9ac95",
-    "claude-sonnet-5-cc-agentic-v1": "ac16d907d76f4b9ebdde1537f52837d8",
+    "kolega-devsec-max-v0.1.0": "1daf0fa9de2548fc96030dc0665c7bae",
+    "gpt-daybreak-blue-codex-cli": "1f85bb121add49cfa52e06bbfa24ce3d",
+    "deepseek-v4.1-flash-agentic-v1": "2d35315a13494a69ab5a94fcbc74ec46",
+    "claude-sonnet-5-cc-agentic-v1": "8c07ce1b9330460997c8457ceaf4cf8a",
 }
 
 
@@ -69,7 +69,7 @@ def apply_private_receipts(data: dict, receipts: list[dict]) -> dict:
         raise ValueError("Private receipt already applied")
 
     out = copy.deepcopy(data)
-    out["private_score_receipt"] = OFFICIAL_RUNS["kolega-python-large-official"]
+    out["private_score_receipt"] = OFFICIAL_RUNS["kolega-devsec-max-v0.1.0"]
     out["private_score_receipts"] = runs_by_slug
     out["private_score_gt"] = 1944
     out["repos"].extend(f"private-{repo}" for repo in REPOS)

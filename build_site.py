@@ -1403,7 +1403,7 @@ def main() -> None:
     }
     launch = json.loads((REPORTS / "private-score-launch.json").read_text())
     receipts = launch if isinstance(launch, list) else [launch]
-    receipt = next(r for r in receipts if r["scanner"] == "kolega-python-large-official")
+    receipt = next(r for r in receipts if r["scanner"] == "kolega-devsec-max-v0.1.0")
     pooled = data["aggregates"]["kolega-devsec-max-v0.1.0"]["strict_micro"]
     tokens.update({
         "{{POOLED_F3}}": f"{pooled['f3_score']:.2f}",
