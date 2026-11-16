@@ -8,26 +8,59 @@ from __future__ import annotations
 
 import copy
 import json
+import re
+from urllib.request import urlopen
 from pathlib import Path
 
 
-RECEIPT_SCANNERS = {
-    "kolega-devsec-max-v0.1.0": "kolega-devsec-max-v0.1.0",
-    "gpt-daybreak-blue-codex-cli": "gpt-daybreak-blue-codex-cli",
-    "deepseek-v4.1-flash-agentic-v1": "deepseek-v4.1-flash-agentic-v1",
-    "claude-sonnet-5-cc-agentic-v1": "claude-sonnet-5-cc-agentic-v1",
-}
+RECEIPT_API = "https://results.realvuln.com"
+RECEIPT_ID = re.compile(r"[0-9a-f]{32}\Z")
 REPOS = ("airflow", "netbox", "odoo", "saleor", "sentry")
 TABS = ("all", "python", "intentional", "python:intentional")
 AUTHORITY = "large-five-cwe-v1.0.0"
 AUTHORITY_SHA256 = "067f9e1f3aa3e416a50b60f6136c35ffc5dead1abc8b2cb3190905b0c7fe130d"
 CONTRACT = "python-large-five-cwe-span-v2"
-OFFICIAL_RUNS = {
-    "kolega-devsec-max-v0.1.0": "1daf0fa9de2548fc96030dc0665c7bae",
-    "gpt-daybreak-blue-codex-cli": "1f85bb121add49cfa52e06bbfa24ce3d",
-    "deepseek-v4.1-flash-agentic-v1": "2d35315a13494a69ab5a94fcbc74ec46",
-    "claude-sonnet-5-cc-agentic-v1": "8c07ce1b9330460997c8457ceaf4cf8a",
-}
+
+
+def attached_receipt_ids(submissions_dir: Path) -> dict[str, str]:
+    """Read optional receipt IDs attached to public scanner submissions."""
+    result = {}
+    for path in sorted(submissions_dir.glob("*.json")):
+        data = json.loads(path.read_text())
+        if (not isinstance(data, dict) or set(data) != {"scanner", "private_receipt_id"}
+                or data["scanner"] != path.stem or not isinstance(data["private_receipt_id"], str)
+                or not RECEIPT_ID.fullmatch(data["private_receipt_id"])):
+            raise ValueError(f"Invalid private receipt attachment: {path}")
+        result[path.stem] = data["private_receipt_id"]
+    return result
+
+
+def resolve_attached_receipts(submissions_dir: Path, snapshot_path: Path,
+                              *, fetch=None) -> list[dict]:
+    """Fetch service-issued aggregates; keep only verified historical repo totals."""
+    ids = attached_receipt_ids(submissions_dir)
+    snapshot = json.loads(snapshot_path.read_text()) if snapshot_path.exists() else []
+    previous = {row["run_id"]: row for row in snapshot}
+    fetch = fetch or (lambda receipt_id: json.load(urlopen(
+        f"{RECEIPT_API}/receipts/{receipt_id}", timeout=10)))
+    receipts = []
+    previous_order = [row["scanner"] for row in snapshot if row.get("scanner") in ids]
+    order = previous_order + sorted(set(ids) - set(previous_order))
+    for scanner in order:
+        receipt_id = ids[scanner]
+        live = fetch(receipt_id)
+        if not isinstance(live, dict) or live.get("run_id") != receipt_id or live.get("scanner") != scanner:
+            raise ValueError(f"Receipt does not belong to scanner: {scanner}")
+        row = dict(live)
+        cached = previous.get(receipt_id)
+        if cached and "repo_scores" in cached:
+            if any(cached.get(key) != live.get(key) for key in
+                   ("scanner", "authority", "authority_sha256", "contract", "tp", "fp", "fn", "gt", "f3")):
+                raise ValueError(f"Cached repository totals disagree with service: {scanner}")
+            row["repo_scores"] = cached["repo_scores"]
+        _validated_totals(row)
+        receipts.append(row)
+    return receipts
 
 
 def _metrics(row: dict) -> None:
@@ -43,16 +76,21 @@ def _metrics(row: dict) -> None:
 
 
 def _validated_totals(receipt: dict) -> dict:
-    scanner = receipt.get("scanner")
-    if scanner not in OFFICIAL_RUNS or (receipt.get("authority"), receipt.get("authority_sha256"),
-            receipt.get("contract"), receipt.get("run_id")) != (
-            AUTHORITY, AUTHORITY_SHA256, CONTRACT, OFFICIAL_RUNS[scanner]):
-        raise ValueError("Unexpected private score authority, contract, or run")
-    if not receipt.get("published") or set(receipt.get("repo_scores", {})) != set(REPOS):
-        raise ValueError("Private receipt must be published and contain exactly five repositories")
-    totals = {k: sum(int(r[k]) for r in receipt["repo_scores"].values()) for k in ("tp", "fp", "fn", "gt")}
-    if any(totals[k] != receipt[k] for k in totals) or totals["tp"] + totals["fn"] != totals["gt"]:
+    if (receipt.get("authority"), receipt.get("authority_sha256"), receipt.get("contract")) != (
+            AUTHORITY, AUTHORITY_SHA256, CONTRACT):
+        raise ValueError("Unexpected private score authority or contract")
+    if not receipt.get("published") or not isinstance(receipt.get("run_id"), str) or not RECEIPT_ID.fullmatch(receipt["run_id"]):
+        raise ValueError("Private receipt must be published with a valid ID")
+    totals = {k: int(receipt[k]) for k in ("tp", "fp", "fn", "gt")}
+    if any(value < 0 for value in totals.values()) or totals["tp"] + totals["fn"] != totals["gt"]:
         raise ValueError("Private receipt aggregate does not match repository counts")
+    if "repo_scores" in receipt:
+        if set(receipt["repo_scores"]) != set(REPOS):
+            raise ValueError("Repository totals must cover exactly five repositories")
+        repo_totals = {k: sum(int(r[k]) for r in receipt["repo_scores"].values())
+                       for k in ("tp", "fp", "fn", "gt")}
+        if totals != repo_totals:
+            raise ValueError("Private receipt aggregate does not match repository counts")
     if round(10 * totals["tp"] / (10 * totals["tp"] + totals["fp"] + 9 * totals["fn"]), 4) != receipt.get("f3"):
         raise ValueError("Private receipt F3 does not match its counts")
     if totals["gt"] != 1944:
@@ -61,15 +99,16 @@ def _validated_totals(receipt: dict) -> dict:
 
 
 def apply_private_receipts(data: dict, receipts: list[dict]) -> dict:
-    if {r.get("scanner") for r in receipts} != set(RECEIPT_SCANNERS) or len(receipts) != len(RECEIPT_SCANNERS):
-        raise ValueError("Exactly one receipt is required for each released scanner")
-    totals_by_slug = {RECEIPT_SCANNERS[r["scanner"]]: _validated_totals(r) for r in receipts}
-    runs_by_slug = {RECEIPT_SCANNERS[r["scanner"]]: r["run_id"] for r in receipts}
+    slugs = [r.get("scanner") for r in receipts]
+    if len(set(slugs)) != len(slugs) or any(slug not in data["aggregates"] for slug in slugs):
+        raise ValueError("Receipt scanner missing from public results or duplicated")
+    totals_by_slug = {r["scanner"]: _validated_totals(r) for r in receipts}
+    runs_by_slug = {r["scanner"]: r["run_id"] for r in receipts}
     if data.get("private_score_receipt"):
         raise ValueError("Private receipt already applied")
 
     out = copy.deepcopy(data)
-    out["private_score_receipt"] = OFFICIAL_RUNS["kolega-devsec-max-v0.1.0"]
+    out["private_score_receipt"] = runs_by_slug.get("kolega-devsec-max-v0.1.0")
     out["private_score_receipts"] = runs_by_slug
     out["private_score_gt"] = 1944
     out["repos"].extend(f"private-{repo}" for repo in REPOS)

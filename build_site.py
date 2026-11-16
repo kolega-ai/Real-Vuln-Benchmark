@@ -1006,7 +1006,7 @@ def count_ground_truth(gt_dir: Path) -> tuple[int, int, int, int, int]:
 def dataset_stats(data: dict, scanners: list[dict], repos_total: int) -> dict:
     # total Python LOC across every benchmark repo (summed from ground truth)
     repos, vulns, traps, non_scoring, loc = count_ground_truth(ROOT / "ground-truth")
-    if data.get("private_score_receipt"):
+    if data.get("private_score_gt"):
         repos += 5
         vulns += data["private_score_gt"]
     return {
@@ -1159,7 +1159,7 @@ def emit_data_js(
 
 def repo_size_points(data: dict, gt_dir: Path, receipts: list[dict]) -> list[dict]:
     """Public per-repo scores plus published aggregate private-repo scores."""
-    from private_score_overlay import RECEIPT_SCANNERS, REPOS, _validated_totals
+    from private_score_overlay import REPOS, _validated_totals
 
     points = []
     tab_sets = {tab: set(repos) for tab, repos in data["tab_repos"].items()}
@@ -1183,8 +1183,8 @@ def repo_size_points(data: dict, gt_dir: Path, receipts: list[dict]) -> list[dic
                       for repo in REPOS}
     for receipt in receipts:
         _validated_totals(receipt)
-        slug = RECEIPT_SCANNERS[receipt["scanner"]]
-        for repo, score in receipt["repo_scores"].items():
+        slug = receipt["scanner"]
+        for repo, score in receipt.get("repo_scores", {}).items():
             private_points[repo]["scores"][slug] = score["f3"]
     points.extend(private_points.values())
     return sorted(points, key=lambda p: (p["loc"], p["repo"]))
@@ -1339,12 +1339,13 @@ def main() -> None:
     args = ap.parse_args()
 
     data = json.loads(Path(args.data).read_text())
-    from private_score_overlay import load_and_apply
+    from private_score_overlay import apply_private_receipts, resolve_attached_receipts
 
-    data = load_and_apply(data, REPORTS / "private-score-launch.json")
-    receipts = json.loads((REPORTS / "private-score-launch.json").read_text())
-    if not isinstance(receipts, list):
-        receipts = [receipts]
+    receipt_path = REPORTS / "private-score-launch.json"
+    receipts = resolve_attached_receipts(ROOT / "submissions", receipt_path)
+    receipt_path.write_text(json.dumps(receipts, indent=2, sort_keys=True) + "\n")
+    (SITE_SRC / "private-score-launch.json").write_text(receipt_path.read_text())
+    data = apply_private_receipts(data, receipts)
     scanners, repos_total = build_scanners(data)
     tabs, tab_totals = build_tab_datasets(data, scanners, repos_total)
     cwe = build_cwe(data)
@@ -1524,7 +1525,7 @@ def main() -> None:
 
     # copy static site source into reports/, replacing old dashboard.html
     for src in sorted(SITE_SRC.iterdir()):
-        if src.name == "realvuln-data.js":
+        if src.name in ("realvuln-data.js", "private-score-launch.json"):
             continue  # generated above
         if src.is_dir():
             if src.name == "journal":

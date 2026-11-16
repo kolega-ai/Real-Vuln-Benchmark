@@ -1,8 +1,9 @@
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
-from private_score_overlay import apply_private_receipts
+from private_score_overlay import apply_private_receipts, resolve_attached_receipts
 from build_site import repo_size_points
 
 
@@ -49,9 +50,35 @@ class PrivateScoreOverlayTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             apply_private_receipts(self.data, self.receipts)
 
-    def test_requires_every_released_receipt(self):
-        with self.assertRaisesRegex(ValueError, "Exactly one receipt"):
-            apply_private_receipts(self.data, self.receipts[:-1])
+    def test_receipt_is_optional_and_new_scanner_can_attach_one(self):
+        without = apply_private_receipts(self.data, self.receipts[:-1])
+        sonnet = "claude-sonnet-5-cc-agentic-v1"
+        self.assertEqual(without["aggregates"][sonnet]["repos_scored"], 203)
+        self.assertEqual(without["aggregates"][sonnet]["strict_micro"]["fn"],
+                         self.data["aggregates"][sonnet]["strict_micro"]["fn"] + 1944)
+        new = dict(self.receipts[0], scanner="gpt-5.5-agentic-v1", run_id="f" * 32)
+        new.pop("repo_scores")
+        with_new = apply_private_receipts(self.data, self.receipts + [new])
+        row = with_new["aggregates"][new["scanner"]]
+        self.assertEqual(row["repos_scored"], self.data["aggregates"][new["scanner"]]["repos_scored"] + 5)
+        self.assertEqual(row["private_receipt"], new["run_id"])
+
+    def test_submission_attachment_fetches_service_receipt(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            submissions = root / "submissions"
+            submissions.mkdir()
+            scanner = self.receipts[0]["scanner"]
+            (submissions / f"{scanner}.json").write_text(json.dumps(
+                {"scanner": scanner, "private_receipt_id": self.receipts[0]["run_id"]}))
+            snapshot = root / "snapshot.json"
+            snapshot.write_text(json.dumps(self.receipts))
+            live = {k: v for k, v in self.receipts[0].items() if k != "repo_scores"}
+            resolved = resolve_attached_receipts(submissions, snapshot, fetch=lambda _: live)
+            self.assertEqual(resolved[0]["repo_scores"], self.receipts[0]["repo_scores"])
+            with self.assertRaisesRegex(ValueError, "does not belong"):
+                resolve_attached_receipts(submissions, snapshot,
+                                          fetch=lambda _: dict(live, scanner="another-scanner"))
 
     def test_size_chart_uses_published_repo_aggregates(self):
         merged = apply_private_receipts(self.data, self.receipts)

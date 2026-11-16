@@ -26,7 +26,15 @@ The service accepts up to 20,000 findings, 200 findings per file and 5 MB per su
 
 ## Read and publish a receipt
 
-The POST response contains a receipt ID, aggregate TP/FP/FN, recall and F3. Read it at `GET https://results.realvuln.com/receipts/<receipt-id>` or on the [private scores page](https://realvuln.com/private-scores.html). A receipt is initially unpublished. **For a benchmark submission, include your public-repository result files as usual and put the private-five receipt ID in the submission PR. Do not attach or commit the five private-repository result files.** If you want the receipt considered for the dashboard before a PR is ready, [open a GitHub issue](https://github.com/kolega-ai/Real-Vuln-Benchmark/issues/new) with its ID and requested scanner name. The RealVuln maintainers review the request, publish the receipt using operator credentials and add its aggregates to the dashboard. Participants cannot publish receipts through this API.
+The POST response contains a receipt ID, aggregate TP/FP/FN, recall and F3. Read it at `GET https://results.realvuln.com/receipts/<receipt-id>` or on the [private scores page](https://realvuln.com/private-scores.html). A receipt is initially unpublished. **For a benchmark submission, include your public-repository result files as usual and add the optional receipt attachment below. Do not attach or commit the five private-repository result files.** If you want the receipt considered before a PR is ready, [open a GitHub issue](https://github.com/kolega-ai/Real-Vuln-Benchmark/issues/new) with its ID and requested scanner name. Maintainers review and publish the receipt using operator credentials. Participants cannot publish receipts through this API.
+
+Create `submissions/<scanner-slug>.json` in your benchmark PR:
+
+```json
+{"scanner": "your-scanner-slug", "private_receipt_id": "your-32-character-receipt-id"}
+```
+
+The scanner slug must match the public result directory and the receipt. A maintainer publishes the selected receipt before merging the PR. On merge, the deployment build retrieves it from the service, verifies its authority, scanner and score arithmetic, and automatically pools its TP/FP/FN into that scanner's 208-repository headline. The attachment is **optional**: without it, the five unscanned repositories remain misses in strict scoring. No maintainer needs to copy counts into the dashboard.
 
 The service matches exact repository and file, a standard CWE accepted by the GT row, and a reported line or span within ±10 lines of the GT location. Matching is one-to-one. F3 is `10 × TP / (10 × TP + FP + 9 × FN)`. Unreported GT rows count as misses. The receipt's pinned commits are asserted by the participant; the service does not execute or verify the scanner. Repeated score queries can reveal some information about withheld labels, so quotas limit this risk but cannot remove it completely.
 
