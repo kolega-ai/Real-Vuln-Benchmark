@@ -3,6 +3,7 @@
   var api = window.REALVULN_PRIVATE_SCORE_API;
   var names = {
     'kolega-python-large-official': 'Kolega DevSec Max',
+    'kolega-devsec-max-v0.1.0': 'Kolega DevSec Max',
     'gpt-daybreak-blue-codex-cli': 'Daybreak Blue',
     'deepseek-v4.1-flash-agentic-v1': 'DeepSeek V4.1 Flash',
     'claude-sonnet-5-cc-agentic-v1': 'Sonnet 5'

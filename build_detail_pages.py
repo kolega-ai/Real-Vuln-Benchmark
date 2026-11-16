@@ -208,7 +208,7 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict, private_scores: dic
 
     # KPI strip (8)
     out.append('<section class="wrap" style="padding-bottom:8px"><div class="hero-kpis sd-kpis">')
-    out.append(kpi(f'{strict.get("f3_score", 0):.2f}' if private_scores else f'{strict.get("f3_score", 0):.1f}', "F3 (strict)"))
+    out.append(kpi(f'{strict.get("f3_score", 0):.2f}' if agg.get("private_receipt") else f'{strict.get("f3_score", 0):.1f}', "F3 (strict)"))
     out.append(kpi(f'{strict.get("f2_score", 0):.1f}', "F2 (strict)"))
     out.append(kpi(f'{strict.get("recall", 0) * 100:.1f}%', "Recall (strict)"))
     out.append(kpi(f'{micro.get("precision", 0) * 100:.1f}%', "Precision"))
@@ -298,8 +298,8 @@ def main() -> None:
     global VER
     data = load_and_apply(json.loads((REPORTS / "dashboard.json").read_text()), REPORTS / "private-score-launch.json")
     private_receipts = json.loads((REPORTS / "private-score-launch.json").read_text())
-    from private_score_overlay import RECEIPT_SCANNERS
-    private_scores_by_slug = {RECEIPT_SCANNERS[r["scanner"]]: r["repo_scores"] for r in private_receipts}
+    private_scores_by_slug = {r["scanner"]: r["repo_scores"] for r in private_receipts
+                              if "repo_scores" in r}
     bv = str(data.get("benchmark_version", "") or "")
     VER = ".".join(bv.split(".")[:2]) if bv else "1.0"
     aggs, grid = data["aggregates"], data["grid"]
