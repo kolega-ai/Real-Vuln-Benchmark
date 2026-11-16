@@ -79,6 +79,9 @@ class PrivateScoreOverlayTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not belong"):
                 resolve_attached_receipts(submissions, snapshot,
                                           fetch=lambda _: dict(live, scanner="another-scanner"))
+            with self.assertRaisesRegex(ValueError, "must be published"):
+                resolve_attached_receipts(submissions, snapshot,
+                                          fetch=lambda _: dict(live, published=False))
 
     def test_size_chart_uses_published_repo_aggregates(self):
         merged = apply_private_receipts(self.data, self.receipts)
