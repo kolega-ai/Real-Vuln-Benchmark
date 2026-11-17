@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from build_site import SCANNER_META, SCANNER_NOTES, SCANNER_PROVIDERS, SCANNER_URLS, SITE_BASE_URL, inject_analytics  # slug -> (name, cat, ver); slug -> note html
-from private_score_overlay import load_and_apply
+from build_site import SCANNER_META, SCANNER_NOTES, SCANNER_PROVIDERS, SCANNER_URLS, SITE_BASE_URL, inject_analytics, language_group_loc, mixed_run_cost
+from private_score_overlay import PRIVATE_RUN_COSTS, load_and_apply
 
 ROOT = Path(__file__).resolve().parent
 REPORTS = ROOT / "reports"
@@ -103,7 +103,8 @@ def simple_table(headers, rows):
     return f'<div class="table-scroll" style="margin-top:20px"><table class="simple"><thead><tr>{h}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
-def build_page(slug: str, agg: dict, grid: dict, meta: dict, private_scores: dict | None = None) -> str:
+def build_page(slug: str, agg: dict, grid: dict, meta: dict, private_scores: dict | None = None,
+               mixed_cost: tuple[float, int, bool] | None = None) -> str:
     name, cat, ver = SCANNER_META.get(slug, (slug, "llm", ""))
     strict = agg.get("strict_micro", agg.get("micro", {}))
     micro = agg.get("micro", {})
@@ -113,10 +114,14 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict, private_scores: dic
     repos_total = agg.get("repos_total", 26)
     has_metrics = bool(meta.get("has_metrics"))
     cost_est = bool(cost_d.get("estimated"))
+    if mixed_cost:
+        cost, mixed_loc, cost_est = mixed_cost
     if cost_d.get("partial"):
         cost_str = "—"
-    elif agg.get("private_receipt"):
+    elif agg.get("private_receipt") and not mixed_cost:
         cost_str = "—"
+    elif mixed_cost:
+        cost_str = f'{"~" if cost_est else ""}${cost:,.2f}'
     elif cat == "rule" or cost <= 0:
         cost_str = "Free"
     elif cost_est:
@@ -277,11 +282,16 @@ def build_page(slug: str, agg: dict, grid: dict, meta: dict, private_scores: dic
     out.append(subhead("Cost"))
     out.append('  <div class="mgrid" style="margin-top:20px">')
     out.append(mg(cost_str, "Total cost"))
-    if cost > 0:
+    if mixed_cost:
+        out.append(mg(f'${sum(PRIVATE_RUN_COSTS[slug].values()):.2f}', "Five private repositories"))
+        out.append(mg(f'${cost / mixed_loc * 100000:.2f}', "Cost / 100k LOC"))
+        out.append(mg(f'{mixed_loc:,}', "Recorded source LOC"))
+    elif cost > 0:
         out.append(mg(f'${cost_d.get("cost_per_run", 0):.2f}', "Cost / run"))
         out.append(mg(f'${cost_d.get("cost_per_100_loc", 0):.3f}', "Cost / 100 LOC"))
-    out.append(mg(f'{cost_d.get("total_loc_scanned", 0):,}', "Lines of code scanned"))
-    out.append(mg(f'{cost_d.get("successful_runs", 0)}', "Successful runs"))
+    if not mixed_cost:
+        out.append(mg(f'{cost_d.get("total_loc_scanned", 0):,}', "Lines of code scanned"))
+        out.append(mg(f'{cost_d.get("successful_runs", 0)}', "Successful runs"))
     out.append("  </div>")
 
     out.append('  <p class="figure-cap" style="margin-top:30px"><a href="../dashboard.html">← Back to the leaderboard</a></p>')
@@ -304,6 +314,7 @@ def main() -> None:
     VER = ".".join(bv.split(".")[:2]) if bv else "1.0"
     aggs, grid = data["aggregates"], data["grid"]
     meta_all = data.get("scanner_metadata", {})
+    group_loc = language_group_loc(ROOT / "ground-truth")
     outdir = REPORTS / "scanners"
     outdir.mkdir(exist_ok=True)
     n = 0
@@ -322,7 +333,9 @@ def main() -> None:
             agg["cost"] = aggs[slug].get("cost")
             agg["scope_label"] = f"{lang_labels.get(scanned[0], scanned[0])} "
         private_scores = private_scores_by_slug.get(slug)
-        (outdir / f"{slug}.html").write_text(build_page(slug, agg, grid, meta_all.get(slug, {}), private_scores))
+        (outdir / f"{slug}.html").write_text(build_page(
+            slug, agg, grid, meta_all.get(slug, {}), private_scores,
+            mixed_run_cost(slug, agg, group_loc)))
         n += 1
     print(f"wrote {n} reskin-styled scanner detail pages -> reports/scanners/")
 
