@@ -110,6 +110,7 @@
   }
 
   function render() {
+    window.renderRepoSizeChart(lang, SC);
     renderTiers();
     if (!tbody) return;
     var rows = SC.slice();

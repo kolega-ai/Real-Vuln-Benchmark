@@ -1481,9 +1481,10 @@ def main() -> None:
         raise ValueError("REALVULN_PRIVATE_SCORE_API must be an HTTPS origin")
     private_config_version = hashlib.sha256(private_api.encode()).hexdigest()[:12]
 
-    # cache-busting version derived from the data build time, so a regen forces
-    # browsers (and dev servers like Live Server) to reload the generated assets
-    cb_ver = re.sub(r"\D", "", str(data.get("generated_at", "")))[:14] or "1"
+    # Receipt attachments can change generated scores without changing the
+    # source data timestamp. Version assets by generated content so browsers
+    # fetch the new leaderboard after every such deployment.
+    cb_ver = hashlib.sha256((REPORTS / "realvuln-data.js").read_bytes()).hexdigest()[:12]
 
     def bust(text: str) -> str:
         # append ?v=<ver> to local generated JS/CSS refs (skip absolute URLs)
