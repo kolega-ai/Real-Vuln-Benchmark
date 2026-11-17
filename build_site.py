@@ -1542,7 +1542,10 @@ def main() -> None:
     # Receipt attachments can change generated scores without changing the
     # source data timestamp. Version assets by generated content so browsers
     # fetch the new leaderboard after every such deployment.
-    cb_ver = hashlib.sha256((REPORTS / "realvuln-data.js").read_bytes()).hexdigest()[:12]
+    asset_hash = hashlib.sha256((REPORTS / "realvuln-data.js").read_bytes())
+    for asset in ("app.js", "dashboard.js", "repo-size-chart.js", "repo-size-chart.css"):
+        asset_hash.update((SITE_SRC / asset).read_bytes())
+    cb_ver = asset_hash.hexdigest()[:12]
 
     def bust(text: str) -> str:
         # append ?v=<ver> to local generated JS/CSS refs (skip absolute URLs)
