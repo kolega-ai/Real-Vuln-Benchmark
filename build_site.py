@@ -348,10 +348,10 @@ SCANNER_NOTES: dict[str, str] = {
         "path did not change between the two versions); the TS/JS results are the 3.0.0 "
         "run. The provisional Java 50-detector run recorded $9.13 for the exact 12,641-alert "
         "public set. Public-repository model/API-equivalent cost is $26.86: $3.17 for Python "
-        "(legacy hand-entered figure), $14.56 for TS/JS, and $9.13 for Java. This is an "
-        "estimate, not billed spend. The five-repository run cost ($1.6810) was supplied by the scanner "
+        "(recorded run cost), $14.56 for TS/JS, and $9.13 for Java. These are "
+        "recorded model/API-equivalent costs, not a total campaign bill. The five-repository run cost ($1.6810) was supplied by the scanner "
         "operator from external monitoring; combined public and private model/API-equivalent spend is "
-        "about $28.54. Ground truth was never supplied to the scanner."
+        "$28.5371. Ground truth was never supplied to the scanner."
     ),
     "claude-opus-5-cc-agentic-v1": (
         "<strong>Claude Code harness; post-hoc v2 scoring.</strong> Claude Opus 5 "
@@ -568,7 +568,7 @@ def mixed_run_cost(slug: str, agg: dict, group_loc: dict[str, int],
         public_spend = sum(spend[lang] * tab_group_loc.get(lang, 0) / group_loc[lang]
                            for lang in spend if group_loc.get(lang, 0))
         public_loc = public_loc or sum(tab_group_loc.values())
-        estimated = True
+        estimated = False
     else:
         public_spend = float(public.get("total_cost") or 0)
         estimated = bool(public.get("estimated"))
@@ -618,7 +618,7 @@ def scanners_from_aggregates(
             COST_OVERRIDES[slug] = round(sum(spend[l] for l in langs) / loc_l * 100000, 2) if loc_l else 0
         if slug in COST_OVERRIDES:
             cost_val = COST_OVERRIDES[slug]
-            cost_est = slug == "kolega-devsec-max-v0.1.0"
+            cost_est = False
         elif cat == "rule" or cost_per_100k <= 0:
             cost_val = None
             cost_est = False

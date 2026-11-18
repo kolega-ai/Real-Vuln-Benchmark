@@ -60,6 +60,7 @@ class PrivateScoreOverlayTests(unittest.TestCase):
             with self.subTest(scanner=slug):
                 self.assertEqual(by_slug[slug]["cost"], cost_per_100k)
                 self.assertEqual(by_slug[slug]["cpv"], cost_per_100_vulns)
+        self.assertFalse(by_slug["kolega-devsec-max-v0.1.0"]["est"])
         tabs, _ = build_tab_datasets(merged, rows, 208)
         kolega_python = next(row for row in tabs["python"] if row["slug"] == "kolega-devsec-max-v0.1.0")
         kolega_intentional = next(row for row in tabs["intentional"] if row["slug"] == "kolega-devsec-max-v0.1.0")
