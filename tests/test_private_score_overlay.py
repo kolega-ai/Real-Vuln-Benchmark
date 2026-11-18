@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from private_score_overlay import apply_private_receipts, resolve_attached_receipts
-from build_site import repo_size_points
+from private_score_overlay import PRIVATE_RUN_COSTS, apply_private_receipts, resolve_attached_receipts
+from build_site import build_scanners, build_tab_datasets, repo_size_points
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,6 +44,30 @@ class PrivateScoreOverlayTests(unittest.TestCase):
         after = merged["aggregates"][slug]
         self.assertEqual(after["strict_micro"]["fn"], before["strict_micro"]["fn"] + 1944)
         self.assertEqual(after["micro"]["fn"], before["micro"]["fn"])
+
+    def test_accepted_private_run_costs_restore_combined_leaderboard_rates(self):
+        self.assertAlmostEqual(sum(PRIVATE_RUN_COSTS["kolega-devsec-max-v0.1.0"].values()), 1.681)
+        merged = apply_private_receipts(self.data, self.receipts)
+        rows, _ = build_scanners(merged)
+        by_slug = {row["slug"]: row for row in rows}
+        expected = {
+            "kolega-devsec-max-v0.1.0": (0.55, 0.38),
+            "gpt-daybreak-blue-codex-cli": (22.13, 26.60),
+            "deepseek-v4.1-flash-agentic-v1": (0.27, 0.47),
+            "claude-sonnet-5-cc-agentic-v1": (5.53, 11.58),
+        }
+        for slug, (cost_per_100k, cost_per_100_vulns) in expected.items():
+            with self.subTest(scanner=slug):
+                self.assertEqual(by_slug[slug]["cost"], cost_per_100k)
+                self.assertEqual(by_slug[slug]["cpv"], cost_per_100_vulns)
+        tabs, _ = build_tab_datasets(merged, rows, 208)
+        kolega_python = next(row for row in tabs["python"] if row["slug"] == "kolega-devsec-max-v0.1.0")
+        kolega_intentional = next(row for row in tabs["intentional"] if row["slug"] == "kolega-devsec-max-v0.1.0")
+        self.assertEqual(kolega_python["cost"], 0.17)
+        self.assertEqual(kolega_intentional["cost"], 0.30)
+        without_sonnet = apply_private_receipts(self.data, self.receipts[:-1])
+        rows, _ = build_scanners(without_sonnet)
+        self.assertIsNone(next(row for row in rows if row["slug"] == "claude-sonnet-5-cc-agentic-v1")["cost"])
 
     def test_rejects_mutated_receipt(self):
         self.receipts[0]["repo_scores"]["sentry"]["tp"] += 1

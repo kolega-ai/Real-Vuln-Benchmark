@@ -1,7 +1,7 @@
 """Merge published private receipts into public dashboard aggregates.
 
-Only counts and repository names cross this boundary. Ground-truth rows and
-submitted findings stay in the private scoring service.
+Receipts carry only counts and repository names. Separately recorded run-cost
+aggregates contain no ground-truth rows or submitted findings.
 """
 
 from __future__ import annotations
@@ -16,6 +16,33 @@ from pathlib import Path
 RECEIPT_API = "https://results.realvuln.com"
 RECEIPT_ID = re.compile(r"[0-9a-f]{32}\Z")
 REPOS = ("airflow", "netbox", "odoo", "saleor", "sentry")
+PRIVATE_REPO_LOC = {
+    "airflow": 639003, "netbox": 291915, "odoo": 680640,
+    "saleor": 262936, "sentry": 816371,
+}
+# USD for the five accepted submissions, excluding failed or invalid attempts.
+# Kolega: repository costs supplied by its operator on 2026-11-17 from external
+# monitoring. The other three: saved per-repository run metrics for the exact
+# submitted findings (private comparison, 2026-11-12). These are model/API
+# equivalents, not a claim about the total billed campaign spend.
+PRIVATE_RUN_COSTS = {
+    "kolega-devsec-max-v0.1.0": {
+        "airflow": 0.66, "netbox": 0.0438, "odoo": 0.0188,
+        "saleor": 0.9079, "sentry": 0.0505,
+    },
+    "gpt-daybreak-blue-codex-cli": {
+        "airflow": 5.766969, "netbox": 17.826306, "odoo": 10.435107,
+        "saleor": 5.671202, "sentry": 16.085008,
+    },
+    "deepseek-v4.1-flash-agentic-v1": {
+        "airflow": 0.448376142, "netbox": 0.01676523, "odoo": 0.008806566,
+        "saleor": 0.43794219, "sentry": 0.025449306,
+    },
+    "claude-sonnet-5-cc-agentic-v1": {
+        "airflow": 6.9037931, "netbox": 2.3976345, "odoo": 2.2759881,
+        "saleor": 0.5518896, "sentry": 1.7877198,
+    },
+}
 TABS = ("all", "python", "intentional", "python:intentional")
 AUTHORITY = "large-five-cwe-v1.0.0"
 AUTHORITY_SHA256 = "067f9e1f3aa3e416a50b60f6136c35ffc5dead1abc8b2cb3190905b0c7fe130d"
@@ -140,9 +167,13 @@ def apply_private_receipts(data: dict, receipts: list[dict]) -> dict:
                 else:
                     a["strict_micro"]["fn"] += 1944
                     _metrics(a["strict_micro"])
-                # Receipts do not carry severity, weighted or per-scan cost data.
+                # Receipts do not carry severity or weighted-score data. Preserve
+                # public cost for receipt holders so the site can add the separately
+                # recorded five-repository run cost. Unscored rows have no full
+                # corpus cost and retain a blank cost field.
                 a["per_severity"] = {}
-                a["cost"] = {}
+                if slug not in totals_by_slug or slug not in PRIVATE_RUN_COSTS:
+                    a["cost"] = {}
     return out
 
 

@@ -23,6 +23,7 @@ from datetime import date
 from pathlib import Path
 
 from scorer.matcher import is_non_scoring
+from private_score_overlay import PRIVATE_REPO_LOC, PRIVATE_RUN_COSTS
 
 ROOT = Path(__file__).resolve().parent
 SITE_SRC = ROOT / "site"
@@ -348,7 +349,9 @@ SCANNER_NOTES: dict[str, str] = {
         "run. The provisional Java 50-detector run recorded $9.13 for the exact 12,641-alert "
         "public set. Public-repository model/API-equivalent cost is $26.86: $3.17 for Python "
         "(legacy hand-entered figure), $14.56 for TS/JS, and $9.13 for Java. This is an "
-        "estimate, not billed spend; private-run cost is unavailable. Ground truth was never supplied to the scanner."
+        "estimate, not billed spend. The five-repository run cost ($1.6810) was supplied by the scanner "
+        "operator from external monitoring; combined public and private model/API-equivalent spend is "
+        "about $28.54. Ground truth was never supplied to the scanner."
     ),
     "claude-opus-5-cc-agentic-v1": (
         "<strong>Claude Code harness; post-hoc v2 scoring.</strong> Claude Opus 5 "
@@ -546,10 +549,38 @@ def round3(x: float) -> float:
 # fail on some repos mid-run (18/26 or ~50/66 still counts as a full attempt);
 # what it excludes is runs that never attempted the bulk of the corpus.
 COVERAGE_THRESHOLD = 0.69
+KOLEGA_PUBLIC_SPEND = {"python": 3.17, "tsjs": 14.56, "java": 9.1261}
+
+
+def mixed_run_cost(slug: str, agg: dict, group_loc: dict[str, int],
+                   tab_group_loc: dict[str, int] | None = None) -> tuple[float, int, bool] | None:
+    """Public run spend plus the accepted five-repository run spend and LOC."""
+    if not agg.get("private_receipt"):
+        return None
+    private_costs = PRIVATE_RUN_COSTS.get(slug)
+    if not private_costs or set(private_costs) != set(PRIVATE_REPO_LOC):
+        return None
+    public = agg.get("cost") or {}
+    public_loc = int(public.get("total_loc_scanned") or 0)
+    if slug == "kolega-devsec-max-v0.1.0":
+        spend = KOLEGA_PUBLIC_SPEND
+        tab_group_loc = tab_group_loc or group_loc
+        public_spend = sum(spend[lang] * tab_group_loc.get(lang, 0) / group_loc[lang]
+                           for lang in spend if group_loc.get(lang, 0))
+        public_loc = public_loc or sum(tab_group_loc.values())
+        estimated = True
+    else:
+        public_spend = float(public.get("total_cost") or 0)
+        estimated = bool(public.get("estimated"))
+    if not public_loc:
+        return None
+    return (public_spend + sum(private_costs.values()),
+            public_loc + sum(PRIVATE_REPO_LOC.values()), estimated)
 
 
 def scanners_from_aggregates(
-    ag: dict, repos_total: int, languages: dict[str, str] | None = None
+    ag: dict, repos_total: int, languages: dict[str, str] | None = None,
+    tab_group_loc: dict[str, int] | None = None,
 ) -> list[dict]:
     """Leaderboard rows for one tab.
 
@@ -574,9 +605,7 @@ def scanners_from_aggregates(
         # Kolega runs are not metered by the harness; per-language spend at
         # off-peak rates is recorded here and priced against the GT LOC of the
         # languages the row covers, so each tab shows the rate for its own corpus.
-        KOLEGA_SPEND = {
-            "kolega-devsec-max-v0.1.0": {"python": 3.17, "tsjs": 14.56, "java": 9.1261},
-        }
+        KOLEGA_SPEND = {"kolega-devsec-max-v0.1.0": KOLEGA_PUBLIC_SPEND}
         COST_OVERRIDES = {
             "kolega-devsec-core-v0.0.1": 5.69,
             "kolega-devsec-max-v0.0.1": 2.37,  # retired slug: Python results now live under v0.1.0
@@ -637,8 +666,15 @@ def scanners_from_aggregates(
         else:
             cpv_val = round(total_cost / tp * 100, 2)
         if a.get("private_gt_included"):
-            cost_val = None  # no complete mixed-corpus cost
-            cpv_val = None
+            mixed = mixed_run_cost(slug, a, group_loc, tab_group_loc)
+            if mixed and tp > 0:
+                mixed_spend, mixed_loc, mixed_est = mixed
+                cost_val = round(mixed_spend / mixed_loc * 100000, 2)
+                cpv_val = round(mixed_spend / tp * 100, 2)
+                cost_est = mixed_est
+            else:
+                cost_val = None
+                cpv_val = None
         out.append(
             {
                 "name": name,
@@ -727,6 +763,7 @@ def build_tab_datasets(
     languages = data.get("languages") or {}
     tab_ag = data.get("tab_aggregates") or {}
     tab_repos = data.get("tab_repos") or {}
+    tab_group_locs = tab_language_group_loc(data, ROOT / "ground-truth")
     if not tab_ag:
         # pre-3.0 dashboard.json: authorship tabs only
         tab_ag = data.get("source_aggregates", {}) or {}
@@ -737,7 +774,8 @@ def build_tab_datasets(
         n = len(tab_repos.get(key, []))
         if not n:
             continue
-        tabs[key] = scanners_from_aggregates(ag, n, languages)
+        tabs[key] = scanners_from_aggregates(ag, n, languages,
+                                            tab_group_locs.get(key))
         totals[key] = n
     # On cross-language tabs ("all", "intentional", "vibe") attach each row's
     # per-language F3 [standard, strict] from the matching single-language tab,
@@ -821,6 +859,28 @@ def tab_loc(data: dict, gt_dir: Path) -> dict[str, int]:
     out = {"all": sum(loc_by_repo.values())}
     for tab, repos in (data.get("tab_repos") or {}).items():
         out[tab] = sum(loc_by_repo.get(r, 0) for r in repos)
+    return out
+
+
+def tab_language_group_loc(data: dict, gt_dir: Path) -> dict[str, dict[str, int]]:
+    """Public recorded LOC by language for each tab; private repos are separate."""
+    by_repo: dict[str, tuple[str, int]] = {}
+    for path in gt_dir.glob("*/ground-truth.json"):
+        gt = json.loads(path.read_text())
+        for group, languages in LANGUAGE_GROUPS.items():
+            if gt.get("language") in languages:
+                by_repo[path.parent.name] = (group, int(gt.get("loc") or 0))
+                break
+    out = {"all": {group: 0 for group in LANGUAGE_GROUPS}}
+    for group, loc in by_repo.values():
+        out["all"][group] += loc
+    for tab, repos in (data.get("tab_repos") or {}).items():
+        amounts = {group: 0 for group in LANGUAGE_GROUPS}
+        for repo in repos:
+            if repo in by_repo:
+                group, loc = by_repo[repo]
+                amounts[group] += loc
+        out[tab] = amounts
     return out
 
 
@@ -1175,9 +1235,7 @@ def repo_size_points(data: dict, gt_dir: Path, receipts: list[dict]) -> list[dic
 
     # These are source-size aggregates only, recorded for the same five pinned
     # repositories as the private receipts. No GT rows or finding locations cross.
-    private_loc = {"airflow": 639003, "netbox": 291915, "odoo": 680640,
-                   "saleor": 262936, "sentry": 816371}
-    private_points = {repo: {"repo": repo, "loc": private_loc[repo], "scores": {},
+    private_points = {repo: {"repo": repo, "loc": PRIVATE_REPO_LOC[repo], "scores": {},
                              "tabs": [tab for tab, members in tab_sets.items()
                                       if "private-" + repo in members]}
                       for repo in REPOS}
@@ -1484,7 +1542,10 @@ def main() -> None:
     # Receipt attachments can change generated scores without changing the
     # source data timestamp. Version assets by generated content so browsers
     # fetch the new leaderboard after every such deployment.
-    cb_ver = hashlib.sha256((REPORTS / "realvuln-data.js").read_bytes()).hexdigest()[:12]
+    asset_hash = hashlib.sha256((REPORTS / "realvuln-data.js").read_bytes())
+    for asset in ("app.js", "dashboard.js", "repo-size-chart.js", "repo-size-chart.css"):
+        asset_hash.update((SITE_SRC / asset).read_bytes())
+    cb_ver = asset_hash.hexdigest()[:12]
 
     def bust(text: str) -> str:
         # append ?v=<ver> to local generated JS/CSS refs (skip absolute URLs)
