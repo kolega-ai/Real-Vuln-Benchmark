@@ -6,6 +6,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- Corrected three Damn Vulnerable Flask Application ground-truth entries: `-004` and `-006` are unreachable reflected-XSS claims, and `-013` cannot execute the command claimed by its missing-authentication entry. They remain as false-positive traps. See [issue #55](https://github.com/kolega-ai/Real-Vuln-Benchmark/issues/55).
+
 ### Documentation
 - Dataset page and `compute_loc.py` document why TS/JS LOC (607,252) runs well
   ahead of Python's (133,782) at a similar repo count: LOC is counted per
