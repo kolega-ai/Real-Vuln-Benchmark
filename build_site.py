@@ -851,11 +851,13 @@ LANGUAGE_DISPLAY = {
 
 
 def tab_loc(data: dict, gt_dir: Path) -> dict[str, int]:
-    """Total GT `loc` of the repositories behind each leaderboard tab."""
+    """Recorded source LOC of the repositories behind each leaderboard tab."""
     loc_by_repo: dict[str, int] = {}
     for f in gt_dir.glob("*/ground-truth.json"):
         gt = json.loads(f.read_text())
         loc_by_repo[f.parent.name] = int(gt.get("loc") or 0) if isinstance(gt, dict) else 0
+    if data.get("private_score_gt"):
+        loc_by_repo.update({f"private-{repo}": loc for repo, loc in PRIVATE_REPO_LOC.items()})
     out = {"all": sum(loc_by_repo.values())}
     for tab, repos in (data.get("tab_repos") or {}).items():
         out[tab] = sum(loc_by_repo.get(r, 0) for r in repos)
@@ -951,14 +953,32 @@ def bar_rows(items: list[tuple[str, int]], color: str | None = None) -> str:
     return "\n              ".join(rows)
 
 
-def per_tier_bests(scanners: list[dict]) -> dict:
-    """Best/extreme figures per scanner category, ranked by strict F3 (the live
-    dashboard's primary metric). Returns token dict."""
+def scanner_category_bars(scanners: list[dict]) -> str:
     CAT_COLOR = {
         "llm": "var(--tier-llm)",
         "rule": "var(--tier-rule)",
         "sec": "var(--accent)",
     }
+    CAT_LABEL = {"llm": "GP-LLM", "rule": "Rule SAST", "sec": "Sec.-spec."}
+    # category bars (ordered llm, rule, sec — as on the dashboard)
+    rows = []
+    for cat in ("llm", "rule", "sec"):
+        rows.append((CAT_LABEL[cat], sum(sc["cat"] == cat for sc in scanners)))
+    mx = max((c for _, c in rows), default=1) or 1
+    bars = []
+    for cat, (lab, c) in zip(("llm", "rule", "sec"), rows):
+        w = round(c / mx * 100)
+        bars.append(
+            f'<div class="fw-row"><span class="fwn">{lab}</span>'
+            f'<span class="fwt"><span class="fwf" style="width:{w}%;background:{CAT_COLOR[cat]}"></span></span>'
+            f'<span class="fwc">{c}</span></div>'
+        )
+    return "\n              ".join(bars)
+
+
+def per_tier_bests(scanners: list[dict]) -> dict:
+    """Best/extreme figures per scanner category, ranked by strict F3 (the live
+    dashboard's primary metric). Returns token dict."""
     CAT_LABEL = {"llm": "GP-LLM", "rule": "Rule SAST", "sec": "Sec.-spec."}
     by_cat: dict[str, list[dict]] = {"sec": [], "llm": [], "rule": []}
     # prose tokens compare fully-covered scanners only; fall back to partial
@@ -979,21 +999,6 @@ def per_tier_bests(scanners: list[dict]) -> dict:
             tok[f"BEST_{cat.upper()}_NAME"] = best["name"]
             tok[f"BEST_{cat.upper()}_REC"] = f"{best['recs']:.2f}"
             tok[f"BEST_{cat.upper()}_MIN"] = f"{min(s['f3s'] for s in grp):.1f}"
-    # category bars (ordered llm, rule, sec — as on the dashboard)
-    rows = []
-    for cat in ("llm", "rule", "sec"):
-        grp = by_cat.get(cat, [])
-        rows.append((CAT_LABEL[cat], len(grp)))
-    mx = max((c for _, c in rows), default=1) or 1
-    bars = []
-    for cat, (lab, c) in zip(("llm", "rule", "sec"), rows):
-        w = round(c / mx * 100)
-        bars.append(
-            f'<div class="fw-row"><span class="fwn">{lab}</span>'
-            f'<span class="fwt"><span class="fwf" style="width:{w}%;background:{CAT_COLOR[cat]}"></span></span>'
-            f'<span class="fwc">{c}</span></div>'
-        )
-    tok["CATEGORY_BARS"] = "\n              ".join(bars)
     # tier gaps (best Sec F3 over best LLM / best rule), for findings prose
     try:
         sec, llm, rule = (
@@ -1064,11 +1069,11 @@ def count_ground_truth(gt_dir: Path) -> tuple[int, int, int, int, int]:
 
 
 def dataset_stats(data: dict, scanners: list[dict], repos_total: int) -> dict:
-    # total Python LOC across every benchmark repo (summed from ground truth)
     repos, vulns, traps, non_scoring, loc = count_ground_truth(ROOT / "ground-truth")
     if data.get("private_score_gt"):
-        repos += 5
+        repos += len(PRIVATE_REPO_LOC)
         vulns += data["private_score_gt"]
+        loc += sum(PRIVATE_REPO_LOC.values())
     return {
         "repos": repos or repos_total,
         "vulns": vulns,
@@ -1494,6 +1499,8 @@ def main() -> None:
     tokens["{{HUMAN_REPOS}}"] = str(human)
     tokens["{{LLM_REPOS}}"] = str(llm)
     tokens["{{HUMAN_PCT}}"] = f"{human / tot * 100:.0f}"
+    tokens["{{LLM_ASSISTED_REPOS}}"] = str(auth.get("llm_assisted", 0))
+    tokens["{{UNKNOWN_AUTHORSHIP_REPOS}}"] = str(auth.get("unknown", 0))
     tokens["{{LLM_PCT}}"] = f"{llm / tot * 100:.0f}"
     tokens["{{REPO_TABLE_ROWS}}"] = repo_table_rows(ROOT / "ground-truth", receipt)
     # per-language corpus split, from ground truth
@@ -1519,6 +1526,18 @@ def main() -> None:
     tokens["{{PROSE_REPOS}}"] = str(tab_totals.get(prose_tab, repos_total))
     for k, v in per_tier_bests(tabs.get(prose_tab, scanners)).items():
         tokens[f"{{{{{k}}}}}"] = str(v)
+
+    overall = tabs.get("all", scanners)
+    ranked_overall = [sc for sc in overall if not sc.get("partial")] or overall
+    if ranked_overall:
+        f3_leader = max(ranked_overall, key=lambda sc: sc["f3s"])
+        recall_leader = max(ranked_overall, key=lambda sc: sc["recs"])
+        tokens.update({
+            "{{OVERALL_BEST_F3}}": f"{f3_leader['f3s']:.1f}",
+            "{{OVERALL_BEST_F3_NAME}}": f3_leader["name"],
+            "{{OVERALL_BEST_RECALL}}": f"{recall_leader['recs'] * 100:.1f}",
+            "{{OVERALL_BEST_RECALL_NAME}}": recall_leader["name"],
+        })
 
     # per-CWE recall tokens (best LLM vs best rule), keyed by family slug → e.g. {{CWE_SQL_LLM}}
     SLUG_TOKEN = {
@@ -1584,6 +1603,7 @@ def main() -> None:
             if sc["slug"] not in ranked_rows or sc["f3s"] > ranked_rows[sc["slug"]]["f3s"]:
                 ranked_rows[sc["slug"]] = sc
     tokens["{{SCANNER_INDEX}}"] = scanner_index_html(list(ranked_rows.values()))
+    tokens["{{CATEGORY_BARS}}"] = scanner_category_bars(list(ranked_rows.values()))
 
     # copy static site source into reports/, replacing old dashboard.html
     for src in sorted(SITE_SRC.iterdir()):

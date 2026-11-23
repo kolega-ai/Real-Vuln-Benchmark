@@ -121,7 +121,6 @@
     var tabLoc = window.RV.TAB_LOC && window.RV.TAB_LOC[state.tab];
     var loc = tabLoc != null ? tabLoc : ((window.RV.DATASET && window.RV.DATASET.loc) || 0);
     setText('kpi-loc-val', loc ? loc.toLocaleString() : '—');
-    setText('kpi-loc-sub', state.lang === 'java' ? 'public source; tests excluded' : 'public GT LOC; private LOC excluded');
   }
 
   // ---- leaderboard ----
