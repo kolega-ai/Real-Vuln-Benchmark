@@ -23,125 +23,30 @@ Full story: [Why We Built Our Own Security Benchmark](https://kolega.ai/blog/why
 
 ### Dataset
 
-**Benchmark version: `3.0.0`**
+**Benchmark version: `3.1.1`**
 
-**140 repos · 66 Python + 74 TypeScript/JavaScript · 4,138 vulnerabilities · 280 FP traps · 176 non-scoring entries**
+The current dashboard covers **208 repositories** with **9,059 vulnerabilities**,
+**283 public false-positive traps**, and **5,155,194 recorded lines of code**.
+Two public repositories have no recorded LoC.
 
-All targets are **Type 1 (intentionally vulnerable apps)**. RealVuln 3.0.0 adds
-a TypeScript/JavaScript corpus (24 community apps + 50 LLM-generated apps) to
-the Python benchmark set, and introduces **non-scoring** ground-truth entries:
-reviewed locations whose status is too discretionary to grade, excluded from
-every metric in both directions. Scores against 2.x and 3.x are not directly
-comparable because the official repo set changed; the Python subset is
-unchanged, so per-language Python scores remain comparable.
+| Corpus | Repos | Vulnerabilities | Public FP traps | Public non-scoring entries | Recorded LoC |
+|---|---:|---:|---:|---:|---:|
+| Public Python | 66 | 1,899 | 283 | 0 | 133,782 |
+| Public TypeScript/JavaScript | 74 | 2,236 | 0 | 176 | 607,252 |
+| Public Java/JVM | 63 | 2,980 | 0 | 287 | 1,723,295 |
+| Large Python with private ground truth | 5 | 1,944 | — | — | 2,690,865 |
+| **Total** | **208** | **9,059** | **283** | **463** | **5,155,194** |
 
-> **Language coverage:** Python (Flask, Django, FastAPI, aiohttp, Tornado) and
-> TypeScript/JavaScript (Express, Next.js, NestJS + Angular, Remix, Fastify + Vue,
-> React, Koa). Java is the next planned language. The leaderboard shows an
-> overall score plus one tab per language. The overall tab ranks only scanners that
-> covered every language; a single-language run appears on its language tab.
-
-| Corpus | Repos | Vulns | FP Traps | Non-scoring | Authorship |
-|---|---:|---:|---:|---:|---|
-| Python — community intentionally vulnerable apps | 26 | 703 | 121 | 0 | `human_authored` |
-| Python — LLM-generated seeded apps | 40 | 1,199 | 159 | 0 | `llm_generated` |
-| TS/JS — community intentionally vulnerable apps | 24 | 535 | 0 | 114 | mixed (see GT) |
-| TS/JS — LLM-generated seeded apps | 50 | 1,701 | 0 | 62 | `llm_generated` |
-| **Total** | **140** | **4,138** | **280** | **176** |  |
-
-The TS/JS corpus ships without false-positive traps in this release; trap
-labelling for TS/JS is on the roadmap.
-
-#### LLM-Generated Seeded Corpus
-
-Company-style applications generated end-to-end by coding agents, then seeded
-with reviewed ground-truth vulnerabilities. Each generated repo is a pinned,
-single-snapshot public repository under `kolega-ai-dev`, recorded by commit SHA
-in `benchmark-manifest.json`.
-
-| Language | Authorship Model | Repos | Vulns | FP Traps | Non-scoring |
-|---|---|---:|---:|---:|---:|
-| Python | Claude Opus 4.7 | 10 | 308 | 40 | 0 |
-| Python | GPT-5.5 | 10 | 339 | 39 | 0 |
-| Python | GPT-5.5 x-high | 10 | 263 | 40 | 0 |
-| Python | Kimi K2.6 | 10 | 289 | 40 | 0 |
-| TS/JS | Claude Opus 4.7 | 10 | 399 | 0 | 0 |
-| TS/JS | GPT-5.5 x-high | 10 | 421 | 0 | 5 |
-| TS/JS | Kimi K2.6 | 10 | 392 | 0 | 34 |
-| TS/JS | DeepSeek V4 Pro | 10 | 255 | 0 | 0 |
-| TS/JS | DeepSeek V4 Flash | 10 | 234 | 0 | 23 |
-| **Total** |  | **90** | **2,900** | **159** | **62** |
-
-#### Community Corpus — Python
-
-| Repo | Language | Framework | Vulns | FP Traps |
-|------|----------|-----------|------:|--------:|
-| realvuln-damn-vulnerable-flask-application | python | flask | 15 | 4 |
-| realvuln-damn-vulnerable-graphql-application | python | flask | 36 | 4 |
-| realvuln-djangoat | python | django | 52 | 6 |
-| realvuln-dsvpwa | python | — | 32 | 6 |
-| realvuln-dsvw | python | — | 27 | 4 |
-| realvuln-dvblab | python | flask | 22 | 4 |
-| realvuln-dvpwa | python | aiohttp | 23 | 4 |
-| realvuln-extremely-vulnerable-flask-app | python | flask | 32 | 4 |
-| realvuln-flask-xss | python | flask | 30 | 5 |
-| realvuln-insecure-web | python | flask | 9 | 2 |
-| realvuln-intentionally-vulnerable-python-application | python | flask | 7 | 2 |
-| realvuln-lets-be-bad-guys | python | django | 24 | 4 |
-| realvuln-owasp-web-playground | python | flask | 28 | 6 |
-| realvuln-pygoat | python | django | 78 | 10 |
-| realvuln-python-app | python | flask | 21 | 4 |
-| realvuln-python-insecure-app | python | fastapi | 8 | 2 |
-| realvuln-pythonssti | python | fastapi | 2 | 1 |
-| realvuln-threatbyte | python | flask | 26 | 5 |
-| realvuln-vampi | python | flask | 15 | 4 |
-| realvuln-vfapi | python | fastapi | 9 | 2 |
-| realvuln-vulnerable-api | python | flask | 14 | 3 |
-| realvuln-vulnerable-flask-app | python | flask | 21 | 4 |
-| realvuln-vulnerable-python-apps | python | flask | 22 | 5 |
-| realvuln-vulnerable-tornado-app | python | tornado | 14 | 3 |
-| realvuln-vulnpy | python | — | 80 | 16 |
-| realvuln-vulpy | python | flask | 57 | 6 |
-
-#### Community Corpus — TypeScript/JavaScript
-
-| Repo | Language | Framework | Vulns | Non-scoring |
-|------|----------|-----------|------:|------------:|
-| realvuln-dvna | javascript | express | 17 | 0 |
-| realvuln-dvws-node | javascript | express | 77 | 0 |
-| realvuln-ivna | javascript | express | 19 | 0 |
-| realvuln-juice-shop | typescript | express | 81 | 64 |
-| realvuln-juice-shop-goof | typescript | express | 51 | 37 |
-| realvuln-nextjs-vulnerable-app | javascript | nextjs | 1 | 0 |
-| realvuln-ninjasworkout | javascript | express | 22 | 0 |
-| realvuln-node-api-goat | javascript | express | 7 | 0 |
-| realvuln-nodegoat | javascript | express | 28 | 0 |
-| realvuln-nodejs-goof | javascript | express | 17 | 0 |
-| realvuln-oss-oopssec-store | typescript | nextjs | 40 | 6 |
-| realvuln-react-security | javascript | react | 7 | 0 |
-| realvuln-react-test-bench | javascript | react | 1 | 0 |
-| realvuln-reactvulna | javascript | react | 1 | 0 |
-| realvuln-simply-vulnerable-react | javascript | react | 1 | 0 |
-| realvuln-vuln-node-express | javascript | express | 5 | 4 |
-| realvuln-vuln-node-express-swagger | javascript | express | 49 | 3 |
-| realvuln-vulnerable-app-angular | javascript | express | 8 | 0 |
-| realvuln-vulnerable-node | javascript | express | 21 | 0 |
-| realvuln-vulnerable-nodejs | javascript | express | 19 | 0 |
-| realvuln-vulnerable-react-fatih | javascript | react | 7 | 0 |
-| realvuln-vulnerable-rest-api-owasp-2023 | javascript | express | 15 | 0 |
-| realvuln-vulnnodeapp | javascript | express | 29 | 0 |
-| realvuln-xvna | javascript | express | 12 | 0 |
-
-> `realvuln-xvna` ships its source as `xvna.zip`; ground-truth paths are
-> relative to the extracted `xvna/` directory (see `source_layout` in its
-> ground-truth.json). Extract the archive before scanning.
-
-The full official repo list, pinned commit SHAs, authorship metadata, and GT
-content hash are in `benchmark-manifest.json`.
+The [public manifest](benchmark-manifest.json) lists the 203 public repositories,
+pinned commits, authorship, and ground-truth hash. The [dataset page](https://realvuln.com/dataset.html)
+lists individual repositories. Scores for the five large Python repositories
+use private ground truth with [public aggregate receipts](https://realvuln.com/private-scores.html).
+For the `realvuln-xvna` target, extract `xvna.zip` before scanning. Its ground-truth
+paths are relative to the extracted `xvna/` directory.
 
 ### What Works Today
 
-- **Scoring engine** — F2, precision, recall, per-CWE-family and per-severity breakdowns
+- **Scoring engine** — F3, F2, precision, recall, per-CWE-family and per-severity breakdowns
 - **Finding matching** — file path + CWE + line tolerance (±10 lines)
 - **FP traps** — `is_vulnerable: false` entries for measuring false positive rates
 - **Non-scoring entries** — `scoring: "non_scoring"` rows excluded from every metric in both directions (`ns` column in every score)
@@ -157,7 +62,7 @@ content hash are in `benchmark-manifest.json`.
 
 ### Not Yet Implemented
 
-- Java, Go and other languages (Python and TypeScript/JavaScript are covered today)
+- Go and other languages beyond Python, TypeScript/JavaScript, and Java/JVM
 - False-positive traps for the TypeScript/JavaScript corpus
 - Target types beyond Type 1 (no CVE-based, library, or benchmark roll-up targets)
 
@@ -169,7 +74,7 @@ content hash are in `benchmark-manifest.json`.
 # Install
 pip install -e ".[dev]"
 
-# Clone all 140 benchmark repos at pinned commits
+# Clone all 203 public benchmark repos at pinned commits
 python3 clone_repos.py
 
 # Verify your setup
@@ -225,7 +130,7 @@ Run `make help` to see all available commands.
 | `score.py` | Score one repo against one or all scanners. Outputs CLI table, per-repo JSON + Markdown scorecard. Supports `--runs` for multi-run mean ± stddev. |
 | `dashboard.py` | Score all repos × all scanners. Outputs interactive HTML dashboard with heatmaps and Plotly charts. |
 | `validate_gt.py` | Schema validation for ground-truth JSON files. |
-| `clone_repos.py` | Clone all 140 benchmark repos at their pinned commit SHAs. |
+| `clone_repos.py` | Clone all 203 public benchmark repos at their pinned commit SHAs. |
 | `smoke_test.py` | Verify the scoring pipeline against known reference values. |
 
 For the LLM benchmark harness, see [`llm-bench/README.md`](llm-bench/README.md).
@@ -448,7 +353,7 @@ This would be a publishable contribution independent of who wins the benchmark. 
 
 ### Other Planned Work
 
-- Multi-language support (JavaScript/TypeScript, Go, Java)
+- Additional language coverage, including Go
 - Additional scanner integrations (Bandit, CodeQL, AI-native scanners)
 
 ---

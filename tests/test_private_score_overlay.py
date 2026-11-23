@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from private_score_overlay import PRIVATE_RUN_COSTS, apply_private_receipts, resolve_attached_receipts
-from build_site import build_scanners, build_tab_datasets, repo_size_points
+from build_site import build_scanners, build_tab_datasets, dataset_stats, repo_size_points, tab_loc
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,20 +22,33 @@ class PrivateScoreOverlayTests(unittest.TestCase):
         self.assertEqual(len(merged["tab_repos"]["intentional"]), 79)
         row = merged["aggregates"]["kolega-devsec-max-v0.1.0"]
         self.assertEqual(row["repos_scored"], 208)
-        self.assertEqual(tuple(row["strict_micro"][k] for k in ("tp", "fp", "fn")), (7557, 17819, 1505))
-        self.assertEqual(row["strict_micro"]["f3_score"], 70.67)
+        self.assertEqual(tuple(row["strict_micro"][k] for k in ("tp", "fp", "fn")), (7554, 17822, 1505))
+        self.assertEqual(row["strict_micro"]["f3_score"], 70.66)
         self.assertEqual(row["language_coverage"]["python"], [71, 71])
         self.assertEqual(self.data["aggregates"]["kolega-devsec-max-v0.1.0"]["repos_scored"], 203)
         expected = {
-            "gpt-daybreak-blue-codex-cli": (4289, 3299, 4773, 48.11),
-            "deepseek-v4.1-flash-agentic-v1": (2996, 3069, 6066, 34.19),
-            "claude-sonnet-5-cc-agentic-v1": (2462, 2703, 6600, 28.39),
+            "gpt-daybreak-blue-codex-cli": (4287, 3301, 4772, 48.10),
+            "deepseek-v4.1-flash-agentic-v1": (2994, 3071, 6065, 34.18),
+            "claude-sonnet-5-cc-agentic-v1": (2462, 2703, 6597, 28.40),
         }
         for slug, (tp, fp, fn, f3) in expected.items():
             row = merged["aggregates"][slug]
             self.assertEqual(row["repos_scored"], 208)
             self.assertEqual(tuple(row["strict_micro"][k] for k in ("tp", "fp", "fn")), (tp, fp, fn))
             self.assertEqual(row["strict_micro"]["f3_score"], f3)
+
+    def test_corpus_loc_includes_private_repos_only_on_their_tabs(self):
+        gt_dir = ROOT / "ground-truth"
+        public = tab_loc(self.data, gt_dir)
+        merged = apply_private_receipts(self.data, self.receipts)
+        combined = tab_loc(merged, gt_dir)
+        self.assertEqual(public["all"], 2_464_329)
+        self.assertEqual(combined["all"], 5_155_194)
+        self.assertEqual(dataset_stats(merged, [], 208)["loc"], combined["all"])
+        for tab in ("all", "python", "intentional", "python:intentional"):
+            self.assertEqual(combined[tab] - public[tab], 2_690_865)
+        for tab in set(public) - {"all", "python", "intentional", "python:intentional"}:
+            self.assertEqual(combined[tab], public[tab])
 
     def test_unscanned_repositories_are_strict_misses(self):
         merged = apply_private_receipts(self.data, self.receipts)
@@ -52,7 +65,7 @@ class PrivateScoreOverlayTests(unittest.TestCase):
         by_slug = {row["slug"]: row for row in rows}
         expected = {
             "kolega-devsec-max-v0.1.0": (0.55, 0.38),
-            "gpt-daybreak-blue-codex-cli": (22.13, 26.60),
+            "gpt-daybreak-blue-codex-cli": (22.13, 26.61),
             "deepseek-v4.1-flash-agentic-v1": (0.27, 0.47),
             "claude-sonnet-5-cc-agentic-v1": (5.53, 11.58),
         }
