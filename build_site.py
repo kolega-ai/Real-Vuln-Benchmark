@@ -155,6 +155,9 @@ def inject_canonical(html: str, name: str) -> str:
 # --- scanner slug -> (display name, category, version label) -----------------
 # category: sec = Security-Specialized, llm = General-Purpose LLM, rule = Rule-Based SAST
 SCANNER_META: dict[str, tuple[str, str, str]] = {
+    "tracehunt-lite-preview-v0.1.0": (
+        "AccuKnox TraceHunt 1.0 Preview", "sec", "AccuKnox"
+    ),
     "kolega-devsec-max-v0.0.1": (
         "Kolega DevSec Max V0.0.1",
         "sec",
@@ -236,6 +239,7 @@ SCANNER_META: dict[str, tuple[str, str, str]] = {
 # model (or the provider site where none exists); rule-based tools at their
 # product page.
 SCANNER_URLS: dict[str, str] = {
+    "tracehunt-lite-preview-v0.1.0": "https://accuknox.com/",
     "kolega-devsec-max-v0.0.1": "https://kolega.ai/devsec",
     "kolega-devsec-core-v0.0.1": "https://kolega.ai/devsec",
     "kolega-devsec-max-v0.1.0": "https://kolega.ai/devsec",
@@ -287,6 +291,7 @@ SCANNER_URLS: dict[str, str] = {
 # Provider display name per scanner, shown with a link (SCANNER_URLS) on the
 # deep-dive pages.
 SCANNER_PROVIDERS: dict[str, str] = {
+    "tracehunt-lite-preview-v0.1.0": "AccuKnox",
     "kolega-devsec-max-v0.0.1": "Kolega DevSec Platform",
     "kolega-devsec-core-v0.0.1": "Kolega DevSec Platform",
     "kolega-devsec-max-v0.1.0": "Kolega DevSec Platform",

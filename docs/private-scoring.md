@@ -40,11 +40,12 @@ The service matches exact repository and file, a standard CWE accepted by the GT
 
 ## Current published scores
 
-All four submitted result files were rescored against the same CWE authority and matcher. The earlier category-based receipts remain accessible by ID as history; the leaderboard uses these current receipts.
+The first four submitted result files were rescored against the same CWE authority and matcher. TraceHunt's receipt uses that authority and matcher too. The earlier category-based receipts remain accessible by ID as history; the leaderboard uses these current receipts.
 
 | Scanner | Private five F3 | Private TP / FP / FN | Current receipt | Main 208-repo F3 |
 | --- | ---: | ---: | --- | ---: |
 | Kolega DevSec Max | 59.94% | 1,408 / 4,587 / 536 | `1daf0fa9de2548fc96030dc0665c7bae` | 70.67% |
+| AccuKnox TraceHunt 1.0 Preview | 12.87% | 270 / 3,206 / 1,674 | `8e6f875f496a4e5790c83542df790f69` | 49.42% |
 | Daybreak Blue | 1.42% | 25 / 63 / 1,919 | `1f85bb121add49cfa52e06bbfa24ce3d` | 48.11% |
 | DeepSeek V4.1 Flash | 0.51% | 9 / 33 / 1,935 | `2d35315a13494a69ab5a94fcbc74ec46` | 34.19% |
 | Sonnet 5 | 0.34% | 6 / 12 / 1,938 | `8c07ce1b9330460997c8457ceaf4cf8a` | 28.39% |

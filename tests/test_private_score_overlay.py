@@ -36,6 +36,10 @@ class PrivateScoreOverlayTests(unittest.TestCase):
             self.assertEqual(row["repos_scored"], 208)
             self.assertEqual(tuple(row["strict_micro"][k] for k in ("tp", "fp", "fn")), (tp, fp, fn))
             self.assertEqual(row["strict_micro"]["f3_score"], f3)
+        tracehunt = merged["aggregates"]["tracehunt-lite-preview-v0.1.0"]
+        self.assertEqual(tuple(tracehunt["strict_micro"][k] for k in ("tp", "fp", "fn")),
+                         (5088, 16333, 3971))
+        self.assertEqual(tracehunt["strict_micro"]["f3_score"], 49.42)
 
     def test_corpus_loc_includes_private_repos_only_on_their_tabs(self):
         gt_dir = ROOT / "ground-truth"
@@ -79,7 +83,8 @@ class PrivateScoreOverlayTests(unittest.TestCase):
         kolega_intentional = next(row for row in tabs["intentional"] if row["slug"] == "kolega-devsec-max-v0.1.0")
         self.assertEqual(kolega_python["cost"], 0.17)
         self.assertEqual(kolega_intentional["cost"], 0.30)
-        without_sonnet = apply_private_receipts(self.data, self.receipts[:-1])
+        without_sonnet = apply_private_receipts(
+            self.data, [r for r in self.receipts if r["scanner"] != "claude-sonnet-5-cc-agentic-v1"])
         rows, _ = build_scanners(without_sonnet)
         self.assertIsNone(next(row for row in rows if row["slug"] == "claude-sonnet-5-cc-agentic-v1")["cost"])
 
@@ -89,7 +94,8 @@ class PrivateScoreOverlayTests(unittest.TestCase):
             apply_private_receipts(self.data, self.receipts)
 
     def test_receipt_is_optional_and_new_scanner_can_attach_one(self):
-        without = apply_private_receipts(self.data, self.receipts[:-1])
+        without = apply_private_receipts(
+            self.data, [r for r in self.receipts if r["scanner"] != "claude-sonnet-5-cc-agentic-v1"])
         sonnet = "claude-sonnet-5-cc-agentic-v1"
         self.assertEqual(without["aggregates"][sonnet]["repos_scored"], 203)
         self.assertEqual(without["aggregates"][sonnet]["strict_micro"]["fn"],
