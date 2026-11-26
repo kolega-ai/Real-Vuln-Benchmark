@@ -110,7 +110,7 @@ def score_all(
                 grid[repo][scanner] = None
                 continue
 
-            parser = get_parser(scanner)
+            parser = get_parser(scanner, repo_slug=repo)
             try:
                 run_dicts: list[dict] = []
                 for rf in result_files:

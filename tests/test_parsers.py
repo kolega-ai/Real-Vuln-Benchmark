@@ -85,6 +85,19 @@ class TestSemgrepParser:
         assert f.scanner == "semgrep"
         Path(path).unlink()
 
+    def test_semgrep_strips_only_the_known_checkout_prefix(self, tmp_path):
+        paths = ["repos/target/app.py", "repos/target-other/app.py", "src/app.py"]
+        report = tmp_path / "results.json"
+        report.write_text(json.dumps({"results": [
+            {"path": path, "extra": {"metadata": {"cwe": ["CWE-89"]}}}
+            for path in paths
+        ]}))
+
+        findings = get_parser("semgrep", repo_slug="target").parse(str(report))
+        assert [finding.file for finding in findings] == ["app.py", *paths[1:]]
+        assert [finding.file for finding in get_parser("semgrep").parse(str(report))] == paths
+        assert [finding.file for finding in get_parser("snyk", repo_slug="target").parse(str(report))] == paths
+
     def test_multiple_cwes(self):
         """A finding with multiple CWEs should produce multiple NormalisedFindings."""
         path = self._write_semgrep_json([

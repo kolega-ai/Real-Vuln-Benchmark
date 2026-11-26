@@ -16,6 +16,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   assets are real frontend code that is not `.py` and so is not counted,
   while a Next.js/Vue app's frontend is itself `.tsx`/`.vue` and is.
 
+## [3.1.2] - 2026-11-26
+
+### Fixed
+- Normalize the known checkout prefix when scoring Semgrep reports and run new Semgrep scans from the target root. Corrects 41 reports and raises strict Semgrep F3 from 6.0% to 8.3% on the 203-repository public dashboard. See [issue #69](https://github.com/kolega-ai/Real-Vuln-Benchmark/issues/69) and [the scoring erratum](docs/errata/semgrep-path-prefix.json).
+
 ## [3.0.0] - 2026-09-02
 
 ### Added

@@ -10,12 +10,12 @@ run_semgrep() { env -i PATH=/usr/bin:/bin HOME="$HOME" "$SEMGREP" "$@"; }
 
 for repo_path in repos/*-seeded-v2-*/; do
   repo=$(basename "$repo_path")
-  out="scan-results/$repo/semgrep"
+  out="$(pwd)/scan-results/$repo/semgrep"
   if [[ -f "$out/results.json" && "${FORCE:-0}" != "1" ]]; then
     echo "skip  $repo (already scanned)"; continue
   fi
   mkdir -p "$out"
   echo "scan  $repo"
-  run_semgrep --config auto --json --oss-only \
-    -o "$out/results.json" "$repo_path" || echo "WARN  $repo failed"
+  (cd "$repo_path" && run_semgrep --config auto --json --oss-only \
+    -o "$out/results.json" .) || echo "WARN  $repo failed"
 done

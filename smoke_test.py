@@ -61,7 +61,7 @@ def run_smoke_test() -> bool:
 
     # Load and score
     gt = load_ground_truth(str(gt_path))
-    parser = get_parser(scanner)
+    parser = get_parser(scanner, repo_slug=repo)
     findings = parser.parse(str(results_file))
     matches = match_findings(findings, gt)
 

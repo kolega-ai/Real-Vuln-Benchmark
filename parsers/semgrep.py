@@ -16,8 +16,9 @@ class SemgrepParser(BaseParser):
 
     scanner_name: str = "semgrep"
 
-    def __init__(self, scanner_slug: str = "semgrep"):
+    def __init__(self, scanner_slug: str = "semgrep", *, repo_slug: str | None = None):
         self.scanner_name = scanner_slug
+        self.repo_prefix = f"repos/{repo_slug}/" if repo_slug and scanner_slug == "semgrep" else ""
 
     def parse(self, file_path: str) -> list[NormalisedFinding]:
         with open(file_path) as f:
@@ -26,6 +27,8 @@ class SemgrepParser(BaseParser):
         findings = []
         for result in data.get("results", []):
             path = normalise_path(result.get("path", ""))
+            if self.repo_prefix:
+                path = path.removeprefix(self.repo_prefix)
             if not path:
                 continue
 

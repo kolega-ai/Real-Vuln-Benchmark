@@ -483,7 +483,7 @@ def main() -> int:
             continue
 
         try:
-            p = get_parser(slug)
+            p = get_parser(slug, repo_slug=args.repo)
         except ValueError as e:
             print(f"Warning: {e}")
             continue
