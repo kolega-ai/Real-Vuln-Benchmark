@@ -435,3 +435,49 @@ class TestNonScoring:
     def test_is_non_scoring_rejects_invalid_value(self):
         with pytest.raises(ValueError, match="invalid scoring"):
             is_non_scoring({"id": "x", "scoring": "indeterminate"})
+
+
+class TestMaximumMatcher:
+    @staticmethod
+    def row(id: str, line: int, *, vulnerable: bool = True, **extra) -> dict:
+        return {
+            "id": id,
+            "file": "app.py",
+            "location": {"start_line": line},
+            "acceptable_cwes": ["CWE-89"],
+            "is_vulnerable": vulnerable,
+            **extra,
+        }
+
+    def test_recovers_credit_and_is_order_independent(self):
+        rows = [self.row("a", 42), self.row("b", 50)]
+        findings = [_make_finding(line=42), _make_finding(line=39)]
+        gt = _make_gt(rows)
+
+        assert [r.classification for r in match_findings(findings, gt, matcher_version="greedy-v1")] == ["TP", "FP", "FN"]
+        results = match_findings(findings, gt)
+        assert [(r.scanner_finding.line, r.ground_truth_id) for r in results] == [(39, "a"), (42, "b")]
+        assert match_findings(
+            findings[::-1], _make_gt(rows[::-1]), matcher_version="maximum-v2",
+        ) == results
+
+    def test_uses_closest_eligible_location_before_id_or_severity(self):
+        rows = [
+            self.row("a", 39, cvss={"base_score": 9.0}),
+            self.row("b", 80, acceptable_locations=[{"file": "app.py", "start_line": 42}]),
+            self.row("c", 42),
+        ]
+        matches = match_findings([_make_finding()], _make_gt(rows), matcher_version="maximum-v2")
+        assert matches[0].ground_truth_id == "b"
+
+    def test_positive_priority_and_non_scoring_classification(self):
+        rows = [
+            self.row("trap", 42, vulnerable=False),
+            self.row("positive", 44),
+            self.row("withheld", 58, scoring="non_scoring"),
+        ]
+        findings = [_make_finding(line=42), _make_finding(line=58)]
+        matches = match_findings(findings, _make_gt(rows), matcher_version="maximum-v2")
+        assert [(r.classification, r.ground_truth_id) for r in matches] == [
+            ("TP", "positive"), ("NS", "withheld"), ("TN", "trap"), ("NS", "withheld"),
+        ]

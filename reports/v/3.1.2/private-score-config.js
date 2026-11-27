@@ -1,0 +1,1 @@
+window.REALVULN_PRIVATE_SCORE_API = "";
