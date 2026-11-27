@@ -22,14 +22,14 @@ class PrivateScoreOverlayTests(unittest.TestCase):
         self.assertEqual(len(merged["tab_repos"]["intentional"]), 79)
         row = merged["aggregates"]["kolega-devsec-max-v0.1.0"]
         self.assertEqual(row["repos_scored"], 208)
-        self.assertEqual(tuple(row["strict_micro"][k] for k in ("tp", "fp", "fn")), (7554, 17822, 1505))
-        self.assertEqual(row["strict_micro"]["f3_score"], 70.66)
+        self.assertEqual(tuple(row["strict_micro"][k] for k in ("tp", "fp", "fn")), (7555, 17821, 1504))
+        self.assertEqual(row["strict_micro"]["f3_score"], 70.67)
         self.assertEqual(row["language_coverage"]["python"], [71, 71])
         self.assertEqual(self.data["aggregates"]["kolega-devsec-max-v0.1.0"]["repos_scored"], 203)
         expected = {
-            "gpt-daybreak-blue-codex-cli": (4287, 3301, 4772, 48.10),
+            "gpt-daybreak-blue-codex-cli": (4288, 3300, 4771, 48.12),
             "deepseek-v4.1-flash-agentic-v1": (2994, 3071, 6065, 34.18),
-            "claude-sonnet-5-cc-agentic-v1": (2462, 2703, 6597, 28.40),
+            "claude-sonnet-5-cc-agentic-v1": (2465, 2700, 6594, 28.43),
         }
         for slug, (tp, fp, fn, f3) in expected.items():
             row = merged["aggregates"][slug]
@@ -38,8 +38,8 @@ class PrivateScoreOverlayTests(unittest.TestCase):
             self.assertEqual(row["strict_micro"]["f3_score"], f3)
         tracehunt = merged["aggregates"]["tracehunt-lite-preview-v0.1.0"]
         self.assertEqual(tuple(tracehunt["strict_micro"][k] for k in ("tp", "fp", "fn")),
-                         (5088, 16333, 3971))
-        self.assertEqual(tracehunt["strict_micro"]["f3_score"], 49.42)
+                         (5093, 16328, 3966))
+        self.assertEqual(tracehunt["strict_micro"]["f3_score"], 49.47)
 
     def test_corpus_loc_includes_private_repos_only_on_their_tabs(self):
         gt_dir = ROOT / "ground-truth"
@@ -69,9 +69,9 @@ class PrivateScoreOverlayTests(unittest.TestCase):
         by_slug = {row["slug"]: row for row in rows}
         expected = {
             "kolega-devsec-max-v0.1.0": (0.55, 0.38),
-            "gpt-daybreak-blue-codex-cli": (22.13, 26.61),
+            "gpt-daybreak-blue-codex-cli": (22.13, 26.60),
             "deepseek-v4.1-flash-agentic-v1": (0.27, 0.47),
-            "claude-sonnet-5-cc-agentic-v1": (5.53, 11.58),
+            "claude-sonnet-5-cc-agentic-v1": (5.53, 11.56),
         }
         for slug, (cost_per_100k, cost_per_100_vulns) in expected.items():
             with self.subTest(scanner=slug):

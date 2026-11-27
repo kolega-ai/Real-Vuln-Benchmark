@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from collections import defaultdict
+from dataclasses import astuple, dataclass
 from typing import Optional
 
 from parsers.base import NormalisedFinding, normalise_path
 
+from .assignment import maximum_weight_assignment
+
 DEFAULT_LINE_TOLERANCE = 10
+GREEDY_MATCHER = "greedy-v1"
+MAXIMUM_MATCHER = "maximum-v2"
+MATCHER_VERSIONS = (GREEDY_MATCHER, MAXIMUM_MATCHER)
+DEFAULT_MATCHER = MAXIMUM_MATCHER
 
 # Values of a GT entry's optional ``scoring`` field. Entries without the field
 # are scored (the default); ``non_scoring`` entries are reviewed locations whose
@@ -155,13 +162,68 @@ def _first_non_scoring_hit(
     return min(hits, key=lambda e: e["id"]) if hits else None
 
 
+def _finding_order(finding: NormalisedFinding) -> tuple:
+    file, cwe, line, *rest = astuple(finding)
+    metadata = tuple((type(value).__name__, str(value)) for value in rest)
+    return file, cwe, line is None, line or 0, metadata
+
+
+def _location_distance(finding: NormalisedFinding, entry: dict) -> int:
+    """Closest eligible region, preferring known lines over unknown lines."""
+    line = finding.line
+    unknown = DEFAULT_LINE_TOLERANCE + 1
+    if line is None:
+        return unknown
+    locations = [(entry["file"], _gt_line_range(entry))]
+    locations.extend(
+        (loc.get("file"), _location_line_range(loc))
+        for loc in entry.get("acceptable_locations", [])
+    )
+    distances = [
+        max(start - line, line - (end if end is not None else start), 0)
+        for file, (start, end) in locations
+        if file == finding.file and start is not None and _line_within_tolerance(line, start, end)
+    ]
+    return min(distances, default=unknown)
+
+
+def _maximum_matches(findings: list[NormalisedFinding], entries: list[dict]) -> dict[int, int]:
+    by_file_and_cwe: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for index, entry in enumerate(entries):
+        files = {entry["file"]}
+        files.update(loc["file"] for loc in entry.get("acceptable_locations", []) if "file" in loc)
+        for file in files:
+            for cwe in set(entry["acceptable_cwes"]):
+                by_file_and_cwe[file, cwe].append(index)
+
+    # Each higher priority outweighs every possible gain at lower priorities.
+    limit = min(len(findings), len(entries))
+    match_weight = limit * (DEFAULT_LINE_TOLERANCE + 1) + 1
+    positive_weight = (limit + 1) * match_weight
+    candidates = []
+    for index, finding in enumerate(findings):
+        for entry_index in by_file_and_cwe.get((finding.file, finding.cwe), ()):
+            entry = entries[entry_index]
+            if _finding_matches_gt(finding, entry):
+                weight = positive_weight if entry["is_vulnerable"] else match_weight
+                candidates.append((index, entry_index, weight - _location_distance(finding, entry)))
+    return maximum_weight_assignment(candidates)
+
+
 def match_findings(
     findings: list[NormalisedFinding],
     ground_truth: dict,
+    *,
+    matcher_version: str = DEFAULT_MATCHER,
 ) -> list[MatchResult]:
     """Match scanner findings against ground truth (file + cwe + line mode).
 
-    Algorithm:
+    The version selects greedy assignment or maximum assignment. Both classify
+    matches using the same rules. The algorithm below describes greedy-v1.
+    Maximum-v2 maximizes true positives, then trap matches, then minimizes
+    total distance to eligible regions. Canonical finding and GT order
+    resolves equal-cost paths. Non-scoring entries stay out of assignment.
+
     1. Partition GT into scored entries and non-scoring entries. Non-scoring
        entries take NO part in matching: a label-blind assignment could let
        one win a finding away from a co-located vulnerable entry and silently
@@ -184,6 +246,9 @@ def match_findings(
     6. Unmatched scored GT: is_vulnerable=true -> FN; is_vulnerable=false -> TN.
        Every non-scoring GT entry -> NS.
     """
+    if matcher_version not in MATCHER_VERSIONS:
+        raise ValueError(f"Unknown matcher version: {matcher_version}")
+
     gt_entries = ground_truth["findings"]
     scored_entries = [e for e in gt_entries if not is_non_scoring(e)]
     non_scoring_entries = [e for e in gt_entries if is_non_scoring(e)]
@@ -191,18 +256,25 @@ def match_findings(
     results: list[MatchResult] = []
     matched_gt_ids: set[str] = set()
 
-    for finding in findings:
-        candidates = [
-            gt_entry
-            for gt_entry in scored_entries
-            if gt_entry["id"] not in matched_gt_ids
-            and _finding_matches_gt(finding, gt_entry)
-        ]
+    assignment = None
+    if matcher_version == MAXIMUM_MATCHER:
+        findings = sorted(findings, key=_finding_order)
+        scored_entries.sort(key=lambda entry: entry["id"])
+        non_scoring_entries.sort(key=lambda entry: entry["id"])
+        assignment = _maximum_matches(findings, scored_entries)
 
-        if candidates:
-            # Prefer is_vulnerable=true so scanner gets credit for real vuln
-            candidates.sort(key=lambda g: (not g["is_vulnerable"],))
-            best = candidates[0]
+    for index, finding in enumerate(findings):
+        if assignment is None:
+            candidates = [
+                entry for entry in scored_entries
+                if entry["id"] not in matched_gt_ids and _finding_matches_gt(finding, entry)
+            ]
+            best = min(candidates, key=lambda entry: not entry["is_vulnerable"], default=None)
+        else:
+            entry_index = assignment.get(index)
+            best = scored_entries[entry_index] if entry_index is not None else None
+
+        if best is not None:
             classification = "TP" if best["is_vulnerable"] else "FP"
             results.append(
                 MatchResult(

@@ -21,7 +21,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from parsers import get_parser
-from scorer.matcher import is_non_scoring, load_ground_truth, match_findings
+from scorer.matcher import (
+    DEFAULT_MATCHER, MATCHER_VERSIONS, MAXIMUM_MATCHER, is_non_scoring, load_ground_truth, match_findings,
+)
 from scorer.metrics import compute_scorecard, cvss_base_score
 
 BASELINE_SCANNERS = {"semgrep", "snyk", "sonarqube"}
@@ -87,6 +89,8 @@ def score_all(
     gt_dir: Path,
     scan_dir: Path,
     cwe_families: dict,
+    *,
+    matcher_version: str = DEFAULT_MATCHER,
 ) -> dict[str, dict[str, dict | None]]:
     """Score every (repo, scanner) pair.
 
@@ -115,7 +119,7 @@ def score_all(
                 run_dicts: list[dict] = []
                 for rf in result_files:
                     findings = parser.parse(str(rf))
-                    results = match_findings(findings, ground_truth)
+                    results = match_findings(findings, ground_truth, matcher_version=matcher_version)
                     card = compute_scorecard(
                         repo_id, scanner, timestamp, results, cwe_families
                     )
@@ -132,6 +136,10 @@ def score_all(
                         cell[key] = round(statistics.mean(
                             [rd[key] for rd in run_dicts]
                         ))
+                    if matcher_version == MAXIMUM_MATCHER:
+                        # All runs share a fixed positive population. Round TP
+                        # once so half-to-even rounding cannot add or drop a GT row.
+                        cell["fn"] = run_dicts[0]["tp"] + run_dicts[0]["fn"] - cell["tp"]
                     for key in ("precision", "recall", "f1", "f2", "f3",
                                 "tpr", "fpr", "youden_j"):
                         cell[key] = round(statistics.mean(
@@ -2064,8 +2072,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--json",
-        default=str(SCRIPT_DIR / "reports" / "dashboard.json"),
-        help="JSON output path (default: reports/dashboard.json)",
+        help="JSON output path (defaults to a separate file for experimental matchers)",
     )
     parser.add_argument(
         "--repos",
@@ -2111,6 +2118,10 @@ def main() -> int:
             "a scanner that fully covered one language is kept even if it never "
             "attempted another."
         ),
+    )
+    parser.add_argument(
+        "--matcher", choices=MATCHER_VERSIONS, default=DEFAULT_MATCHER,
+        help="Scoring assignment policy (default: %(default)s)",
     )
     args = parser.parse_args()
 
@@ -2179,7 +2190,7 @@ def main() -> int:
             manifest = json.load(f)
 
     # Score everything
-    grid = score_all(repos, scanners, gt_dir, scan_dir, cwe_families)
+    grid = score_all(repos, scanners, gt_dir, scan_dir, cwe_families, matcher_version=args.matcher)
     aggregates = compute_aggregates(grid, scanners, gt_dir)
     source_aggregates, source_repos = compute_source_aggregates(grid, scanners, gt_dir)
     tab_aggregates, tab_repos, languages = compute_tab_aggregates(grid, scanners, gt_dir)
@@ -2263,7 +2274,9 @@ def main() -> int:
         tab_aggregates=tab_aggregates, tab_repos=tab_repos, languages=languages,
     )
 
-    json_path = Path(args.json)
+    report["matcher_version"] = args.matcher
+    filename = "dashboard.json" if args.matcher == DEFAULT_MATCHER else f"dashboard-{args.matcher}.json"
+    json_path = Path(args.json) if args.json else SCRIPT_DIR / "reports" / filename
     json_path.parent.mkdir(parents=True, exist_ok=True)
     with open(json_path, "w") as f:
         json.dump(report, f, indent=2)

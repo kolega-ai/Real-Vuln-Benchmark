@@ -16,6 +16,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   assets are real frontend code that is not `.py` and so is not counted,
   while a Next.js/Vue app's frontend is itself `.tsx`/`.vue` and is.
 
+## [4.0.0] - 2026-11-27
+
+### Changed
+- Public scoring now defaults to `maximum-v2`, a deterministic one-to-one matcher
+  that maximizes true positives, then trap matches, then prefers closer eligible
+  regions. File, CWE, ±10-line tolerance and non-scoring rules are unchanged.
+  The former assignment policy remains available as `--matcher greedy-v1`.
+  Multi-run summaries preserve the total number of positive ground-truth rows.
+  See [the matcher contract](docs/matcher-versions.md) and [issue #68](https://github.com/kolega-ai/Real-Vuln-Benchmark/issues/68).
+- Recomputed scores for all saved public results. The five private repository
+  scores continue to use their published receipt contract.
+
 ## [3.1.2] - 2026-11-26
 
 ### Fixed

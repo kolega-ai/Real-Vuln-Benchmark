@@ -15,7 +15,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from parsers import get_parser
-from scorer.matcher import is_non_scoring, load_ground_truth, match_findings
+from scorer.matcher import (
+    DEFAULT_MATCHER, MATCHER_VERSIONS, MAXIMUM_MATCHER, is_non_scoring, load_ground_truth, match_findings,
+)
 from scorer.metrics import compute_scorecard, ScoreCard
 
 
@@ -438,6 +440,10 @@ def main() -> int:
         default=None,
         help="Override ground truth directory (default: ground-truth/)",
     )
+    parser.add_argument(
+        "--matcher", choices=MATCHER_VERSIONS, default=DEFAULT_MATCHER,
+        help="Scoring assignment policy (default: %(default)s)",
+    )
     args = parser.parse_args()
 
     # Load ground truth
@@ -494,7 +500,7 @@ def main() -> int:
             run_entries: list[tuple[str, ScoreCard]] = []
             for rf in result_files:
                 findings = p.parse(str(rf))
-                results = match_findings(findings, ground_truth)
+                results = match_findings(findings, ground_truth, matcher_version=args.matcher)
                 card = compute_scorecard(
                     repo_id, slug, timestamp, results, cwe_families
                 )
@@ -515,6 +521,8 @@ def main() -> int:
                 ns=round(statistics.mean([c.ns for c in run_cards])),
                 ns_gt=run_cards[0].ns_gt,  # run-invariant: a property of the GT
             )
+            if args.matcher == MAXIMUM_MATCHER:
+                avg_card.fn = run_cards[0].tp + run_cards[0].fn - avg_card.tp
             avg_card.precision = statistics.mean([c.precision for c in run_cards])
             avg_card.recall = statistics.mean([c.recall for c in run_cards])
             avg_card.f1 = statistics.mean([c.f1 for c in run_cards])
@@ -540,7 +548,7 @@ def main() -> int:
             # Single run: use first (or only) file
             rf = result_files[0]
             findings = p.parse(str(rf))
-            results = match_findings(findings, ground_truth)
+            results = match_findings(findings, ground_truth, matcher_version=args.matcher)
             card = compute_scorecard(
                 repo_id, slug, timestamp, results, cwe_families
             )
@@ -565,9 +573,12 @@ def main() -> int:
     report_dir = SCRIPT_DIR / "reports" / args.repo
     report_dir.mkdir(parents=True, exist_ok=True)
     date_str = datetime.now().strftime("%Y-%m-%d")
+    if args.matcher != DEFAULT_MATCHER:
+        date_str = f"{date_str}-{args.matcher}"
     report_path = report_dir / f"scorecard-{date_str}.json"
 
     report = build_report(repo_id, commit_sha, timestamp, all_scorecards, multirun_cards)
+    report["matcher_version"] = args.matcher
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
 
@@ -576,7 +587,8 @@ def main() -> int:
     md_content = build_markdown(
         repo_id, commit_sha, timestamp, ground_truth, all_scorecards, multirun_cards
     )
-    md_path.write_text(md_content)
+    title, newline, body = md_content.partition("\n")
+    md_path.write_text(f"{title}{newline}\nMatcher: `{args.matcher}`\n{body}")
 
     print(f"Report written to: {report_path}")
     print(f"Markdown written to: {md_path}")
